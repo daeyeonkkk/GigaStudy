@@ -15,6 +15,7 @@ from gigastudy_api.api.schemas.guides import (
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Artifact, Project, Track, TrackRole, TrackStatus
 from gigastudy_api.services.processing import (
+    get_track_canonical_artifact,
     get_track_playback_artifact,
     get_track_preview_data,
     process_uploaded_track,
@@ -128,9 +129,15 @@ def get_latest_guide(session: Session, project_id: UUID) -> Track | None:
 
 def build_guide_response(track: Track, request: Request) -> GuideTrackResponse:
     source_artifact = get_track_playback_artifact(track)
+    canonical_artifact = get_track_canonical_artifact(track)
     download_url = (
         str(request.url_for("download_track_source_audio", track_id=str(track.track_id)))
         if source_artifact is not None
+        else None
+    )
+    canonical_download_url = (
+        str(request.url_for("download_track_canonical_audio", track_id=str(track.track_id)))
+        if canonical_artifact is not None
         else None
     )
     preview_data = get_track_preview_data(track)
@@ -146,6 +153,7 @@ def build_guide_response(track: Track, request: Request) -> GuideTrackResponse:
         storage_key=track.storage_key,
         checksum=track.checksum,
         source_artifact_url=download_url,
+        guide_wav_artifact_url=canonical_download_url,
         preview_data=preview_data,
         created_at=track.created_at,
         updated_at=track.updated_at,
@@ -170,3 +178,23 @@ def get_track_source_path(session: Session, track_id: UUID) -> tuple[Track, Arti
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
 
     return track, source_artifact
+
+
+def get_track_canonical_path(session: Session, track_id: UUID) -> tuple[Track, Artifact]:
+    track = session.scalar(
+        select(Track)
+        .options(joinedload(Track.artifacts))
+        .where(Track.track_id == track_id)
+    )
+    if track is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Track not found")
+
+    canonical_artifact = get_track_canonical_artifact(track)
+    if canonical_artifact is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canonical WAV not found")
+
+    canonical_path = Path(canonical_artifact.storage_key)
+    if not canonical_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored WAV file not found")
+
+    return track, canonical_artifact

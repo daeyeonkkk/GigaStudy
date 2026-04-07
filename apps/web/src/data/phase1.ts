@@ -34,9 +34,9 @@ export const priorityCards = [
 ] as const
 
 export const currentLaneTickets = [
-  'Phase 4',
-  'Rule arrangement',
-  'Candidate A/B/C',
-  'Range and leap rules',
-  'Editable arrangement draft',
+  'Phase 6',
+  'OSMD score render',
+  'Separated playback',
+  'Guide WAV export',
+  'MusicXML and MIDI export',
 ] as const

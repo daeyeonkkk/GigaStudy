@@ -15,6 +15,7 @@ from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.arrangements import (
     generate_arrangements,
     get_arrangement_midi_path,
+    get_arrangement_musicxml_path,
     list_arrangements_response,
     update_arrangement,
 )
@@ -76,4 +77,21 @@ def download_arrangement_midi_endpoint(
         path=arrangement.midi_storage_key,
         media_type="audio/midi",
         filename=f"{arrangement.arrangement_id}.mid",
+    )
+
+
+@router.get(
+    "/arrangements/{arrangement_id}/musicxml",
+    name="download_arrangement_musicxml",
+)
+def download_arrangement_musicxml_endpoint(
+    arrangement_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> FileResponse:
+    arrangement = get_arrangement_musicxml_path(session, arrangement_id)
+
+    return FileResponse(
+        path=arrangement.musicxml_storage_key,
+        media_type="application/vnd.recordare.musicxml+xml",
+        filename=f"{arrangement.arrangement_id}.musicxml",
     )

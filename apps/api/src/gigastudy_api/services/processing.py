@@ -76,6 +76,10 @@ def get_track_playback_artifact(track: Track) -> Artifact | None:
     return _get_track_artifact(track, ArtifactType.CANONICAL_AUDIO)
 
 
+def get_track_canonical_artifact(track: Track) -> Artifact | None:
+    return _get_track_artifact(track, ArtifactType.CANONICAL_AUDIO)
+
+
 def get_track_preview_data(track: Track) -> AudioPreviewResponse | None:
     peaks_artifact = _get_track_artifact(track, ArtifactType.WAVEFORM_PEAKS)
     if peaks_artifact is None or not isinstance(peaks_artifact.meta_json, dict):

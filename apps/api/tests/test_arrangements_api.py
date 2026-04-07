@@ -88,10 +88,16 @@ def test_generate_arrangements_creates_candidate_batch_and_snapshot(client: Test
     assert {item["candidate_code"] for item in payload["items"]} == {"A", "B", "C"}
     assert any(item["part_count"] >= 5 for item in payload["items"])
     assert payload["items"][0]["midi_artifact_url"] is not None
+    assert payload["items"][0]["musicxml_artifact_url"] is not None
 
     midi_response = client.get(payload["items"][0]["midi_artifact_url"])
     assert midi_response.status_code == 200
     assert midi_response.content[:4] == b"MThd"
+
+    musicxml_response = client.get(payload["items"][0]["musicxml_artifact_url"])
+    assert musicxml_response.status_code == 200
+    assert b"<score-partwise" in musicxml_response.content
+    assert b"<part-list>" in musicxml_response.content
 
     list_response = client.get(f"/api/projects/{project_id}/arrangements")
     assert list_response.status_code == 200
@@ -148,3 +154,4 @@ def test_update_arrangement_rewrites_candidate_parts(client: TestClient) -> None
     assert payload["title"] == "A • Edited Close Stack"
     assert payload["part_count"] == 1
     assert payload["parts_json"][0]["notes"][0]["pitch_midi"] == first_note["pitch_midi"] + 2
+    assert payload["musicxml_artifact_url"] is not None

@@ -73,6 +73,7 @@ def test_guide_upload_lifecycle(client: TestClient) -> None:
     assert complete_response.status_code == 200
     assert complete_response.json()["track_status"] == "READY"
     assert complete_response.json()["source_artifact_url"] is not None
+    assert complete_response.json()["guide_wav_artifact_url"] is not None
     assert complete_response.json()["actual_sample_rate"] == 22050
     assert complete_response.json()["preview_data"] is not None
 
@@ -84,6 +85,10 @@ def test_guide_upload_lifecycle(client: TestClient) -> None:
     download_response = client.get(get_response.json()["guide"]["source_artifact_url"])
     assert download_response.status_code == 200
     assert download_response.content == wav_bytes
+
+    wav_response = client.get(get_response.json()["guide"]["guide_wav_artifact_url"])
+    assert wav_response.status_code == 200
+    assert wav_response.headers["content-type"].startswith("audio/wav")
 
 
 def test_get_guide_returns_null_when_project_has_no_guide(client: TestClient) -> None:

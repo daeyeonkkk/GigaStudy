@@ -30,6 +30,7 @@ class ArrangementCandidateResponse(BaseModel):
     constraint_json: dict | None
     parts_json: list[ArrangementPartResponse]
     midi_artifact_url: str | None = None
+    musicxml_artifact_url: str | None = None
     created_at: datetime
     updated_at: datetime
 

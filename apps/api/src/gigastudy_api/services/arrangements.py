@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from html import escape
 from math import log2
 from pathlib import Path
 import struct
@@ -23,7 +24,9 @@ from gigastudy_api.db.models import Arrangement, MelodyDraft, Project
 
 
 PPQN = 480
+MUSICXML_DIVISIONS = 4
 NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+PART_COLORS = ("#2B6CB0", "#D97706", "#15803D", "#BE123C", "#6D28D9", "#475569")
 KEY_MAP = {
     "C": 0,
     "B#": 0,
@@ -54,6 +57,33 @@ MAX_LEAP_BY_DIFFICULTY = {
     "basic": 9,
     "strict": 5,
 }
+FIFTHS_BY_KEY = {
+    "C": 0,
+    "G": 1,
+    "D": 2,
+    "A": 3,
+    "E": 4,
+    "B": 5,
+    "F#": 6,
+    "C#": 7,
+    "F": -1,
+    "BB": -2,
+    "EB": -3,
+    "AB": -4,
+    "DB": -5,
+    "GB": -6,
+    "CB": -7,
+}
+NOTE_TYPE_SPECS = (
+    (16, "whole", 0),
+    (12, "half", 1),
+    (8, "half", 0),
+    (6, "quarter", 1),
+    (4, "quarter", 0),
+    (3, "eighth", 1),
+    (2, "eighth", 0),
+    (1, "16th", 0),
+)
 
 
 @dataclass(frozen=True)
@@ -386,6 +416,341 @@ def _build_candidate_parts(
     return parts
 
 
+def _sanitize_xml_id(value: str) -> str:
+    cleaned = "".join(character if character.isalnum() else "-" for character in value)
+    return cleaned or "part"
+
+
+def _parse_time_signature(value: str | None) -> tuple[int, int]:
+    if not value:
+        return 4, 4
+
+    try:
+        numerator_text, denominator_text = value.split("/", maxsplit=1)
+        numerator = max(1, int(numerator_text))
+        denominator = max(1, int(denominator_text))
+    except (TypeError, ValueError):
+        return 4, 4
+
+    return numerator, denominator
+
+
+def _parse_key_fifths(value: str | None) -> int:
+    if not value:
+        return 0
+
+    cleaned = value.strip().upper().replace(" ", "")
+    cleaned = cleaned.replace("MINOR", "").replace("MAJOR", "")
+    if len(cleaned) >= 2 and cleaned[:2] in FIFTHS_BY_KEY:
+        return FIFTHS_BY_KEY[cleaned[:2]]
+    if cleaned[:1] in FIFTHS_BY_KEY:
+        return FIFTHS_BY_KEY[cleaned[:1]]
+    return 0
+
+
+def _duration_to_musicxml_chunks(duration_units: int) -> list[tuple[int, str, int]]:
+    remaining = max(1, duration_units)
+    chunks: list[tuple[int, str, int]] = []
+
+    while remaining > 0:
+        for value, note_type, dots in NOTE_TYPE_SPECS:
+            if value <= remaining:
+                chunks.append((value, note_type, dots))
+                remaining -= value
+                break
+
+    return chunks
+
+
+def _midi_to_pitch_components(pitch_midi: int) -> tuple[str, int | None, int]:
+    pitch_class = pitch_midi % 12
+    octave = (pitch_midi // 12) - 1
+    mapping = {
+        0: ("C", None),
+        1: ("C", 1),
+        2: ("D", None),
+        3: ("D", 1),
+        4: ("E", None),
+        5: ("F", None),
+        6: ("F", 1),
+        7: ("G", None),
+        8: ("G", 1),
+        9: ("A", None),
+        10: ("A", 1),
+        11: ("B", None),
+    }
+    step, alter = mapping[pitch_class]
+    return step, alter, octave
+
+
+def _part_color(index: int) -> str:
+    return PART_COLORS[index % len(PART_COLORS)]
+
+
+def _part_clef(role: str) -> tuple[str, int]:
+    normalized_role = role.upper()
+    if normalized_role in {"BASS", "PERCUSSION"}:
+        return "F", 4
+    return "G", 2
+
+
+def _build_musicxml_events(
+    notes: list[dict],
+    measure_units: int,
+) -> list[dict[str, int | bool]]:
+    if not notes:
+        return []
+
+    sorted_notes = sorted(
+        notes,
+        key=lambda item: (int(item["start_units"]), int(item["pitch_midi"])),
+    )
+    events: list[dict[str, int | bool]] = []
+    cursor_units = 0
+
+    for item in sorted_notes:
+        start_units = max(0, int(item["start_units"]))
+        end_units = max(start_units + 1, int(item["end_units"]))
+        if start_units > cursor_units:
+            gap_units = start_units - cursor_units
+            measure_cursor = cursor_units
+            while gap_units > 0:
+                remaining_in_measure = measure_units - (measure_cursor % measure_units)
+                current_units = min(gap_units, remaining_in_measure)
+                events.append({"duration_units": current_units, "is_rest": True})
+                gap_units -= current_units
+                measure_cursor += current_units
+            cursor_units = start_units
+
+        note_units = end_units - start_units
+        measure_cursor = start_units
+        first_segment = True
+        while note_units > 0:
+            remaining_in_measure = measure_units - (measure_cursor % measure_units)
+            current_units = min(note_units, remaining_in_measure)
+            events.append(
+                {
+                    "duration_units": current_units,
+                    "is_rest": False,
+                    "pitch_midi": int(item["pitch_midi"]),
+                    "tie_start": note_units > current_units,
+                    "tie_stop": not first_segment,
+                }
+            )
+            note_units -= current_units
+            measure_cursor += current_units
+            first_segment = False
+        cursor_units = end_units
+
+    return events
+
+
+def _append_note_xml_lines(
+    lines: list[str],
+    event: dict[str, int | bool],
+    color: str,
+) -> None:
+    duration_units = int(event["duration_units"])
+    chunks = _duration_to_musicxml_chunks(duration_units)
+
+    for chunk_index, (chunk_units, note_type, dots) in enumerate(chunks):
+        is_rest = bool(event.get("is_rest"))
+        tie_stop = bool(event.get("tie_stop")) and chunk_index == 0
+        tie_start = bool(event.get("tie_start")) and chunk_index == len(chunks) - 1
+        if not is_rest and len(chunks) > 1:
+            if chunk_index > 0:
+                tie_stop = True
+            if chunk_index < len(chunks) - 1:
+                tie_start = True
+
+        note_open_tag = "      <note>" if is_rest else f'      <note color="{color}">'
+        lines.append(note_open_tag)
+        if is_rest:
+            lines.append("        <rest/>")
+        else:
+            step, alter, octave = _midi_to_pitch_components(int(event["pitch_midi"]))
+            lines.append("        <pitch>")
+            lines.append(f"          <step>{step}</step>")
+            if alter is not None:
+                lines.append(f"          <alter>{alter}</alter>")
+            lines.append(f"          <octave>{octave}</octave>")
+            lines.append("        </pitch>")
+        lines.append(f"        <duration>{chunk_units}</duration>")
+        lines.append(f"        <type>{note_type}</type>")
+        for _ in range(dots):
+            lines.append("        <dot/>")
+        if tie_stop:
+            lines.append('        <tie type="stop"/>')
+        if tie_start:
+            lines.append('        <tie type="start"/>')
+        if not is_rest and (tie_stop or tie_start):
+            lines.append("        <notations>")
+            if tie_stop:
+                lines.append('          <tied type="stop"/>')
+            if tie_start:
+                lines.append('          <tied type="start"/>')
+            lines.append("        </notations>")
+        lines.append("      </note>")
+
+
+def _build_part_musicxml(
+    part_id: str,
+    part_name: str,
+    role: str,
+    notes: list[dict],
+    bpm: int,
+    time_signature: str | None,
+    key_signature: str | None,
+    color: str,
+) -> str:
+    numerator, denominator = _parse_time_signature(time_signature)
+    measure_units = max(1, numerator * MUSICXML_DIVISIONS * 4 // denominator)
+    beat_ms = 60000 / max(1, bpm)
+
+    normalized_notes: list[dict] = []
+    for note in notes:
+        start_units = max(0, round((int(note["start_ms"]) / beat_ms) * MUSICXML_DIVISIONS))
+        end_units = max(start_units + 1, round((int(note["end_ms"]) / beat_ms) * MUSICXML_DIVISIONS))
+        normalized_notes.append(
+            {
+                **note,
+                "start_units": start_units,
+                "end_units": end_units,
+            }
+        )
+
+    events = _build_musicxml_events(normalized_notes, measure_units)
+    clef_sign, clef_line = _part_clef(role)
+    lines: list[str] = [f'  <part id="{part_id}">']
+
+    if not events:
+        lines.extend(
+            [
+                '    <measure number="1">',
+                "      <attributes>",
+                f"        <divisions>{MUSICXML_DIVISIONS}</divisions>",
+                f"        <key><fifths>{_parse_key_fifths(key_signature)}</fifths></key>",
+                "        <time>",
+                f"          <beats>{numerator}</beats>",
+                f"          <beat-type>{denominator}</beat-type>",
+                "        </time>",
+                f"        <clef><sign>{clef_sign}</sign><line>{clef_line}</line></clef>",
+                "      </attributes>",
+                f'      <direction placement="above"><direction-type><words>{escape(part_name)}</words></direction-type><sound tempo="{bpm}"/></direction>',
+            ]
+        )
+        _append_note_xml_lines(
+            lines,
+            {
+                "duration_units": measure_units,
+                "is_rest": True,
+            },
+            color,
+        )
+        lines.extend(["    </measure>", "  </part>"])
+        return "\n".join(lines)
+
+    current_measure_number = 1
+    consumed_units = 0
+    lines.append(f'    <measure number="{current_measure_number}">')
+    lines.append("      <attributes>")
+    lines.append(f"        <divisions>{MUSICXML_DIVISIONS}</divisions>")
+    lines.append(f"        <key><fifths>{_parse_key_fifths(key_signature)}</fifths></key>")
+    lines.append("        <time>")
+    lines.append(f"          <beats>{numerator}</beats>")
+    lines.append(f"          <beat-type>{denominator}</beat-type>")
+    lines.append("        </time>")
+    lines.append(f"        <clef><sign>{clef_sign}</sign><line>{clef_line}</line></clef>")
+    lines.append("      </attributes>")
+    lines.append(
+        f'      <direction placement="above"><direction-type><words>{escape(part_name)}</words></direction-type><sound tempo="{bpm}"/></direction>'
+    )
+
+    for event in events:
+        duration_units = int(event["duration_units"])
+        if consumed_units >= measure_units:
+            lines.append("    </measure>")
+            current_measure_number += 1
+            lines.append(f'    <measure number="{current_measure_number}">')
+            consumed_units = 0
+
+        _append_note_xml_lines(lines, event, color)
+        consumed_units += duration_units
+
+        if consumed_units == measure_units:
+            lines.append("    </measure>")
+            current_measure_number += 1
+            lines.append(f'    <measure number="{current_measure_number}">')
+            consumed_units = 0
+
+    if consumed_units == 0:
+        lines.pop()
+    else:
+        remaining_units = measure_units - consumed_units
+        if remaining_units > 0:
+            _append_note_xml_lines(
+                lines,
+                {
+                    "duration_units": remaining_units,
+                    "is_rest": True,
+                },
+                color,
+            )
+        lines.append("    </measure>")
+
+    lines.append("  </part>")
+    return "\n".join(lines)
+
+
+def _build_musicxml_bytes(
+    title: str,
+    parts_json: list[dict],
+    bpm: int,
+    time_signature: str | None,
+    key_signature: str | None,
+) -> bytes:
+    part_list_lines = ["  <part-list>"]
+    part_body_lines: list[str] = []
+
+    for index, part in enumerate(parts_json, start=1):
+        part_id = f"P{index}-{_sanitize_xml_id(str(part.get('part_name', index)))}"
+        part_name = str(part.get("part_name", f"Part {index}"))
+        part_list_lines.extend(
+            [
+                f'    <score-part id="{part_id}">',
+                f"      <part-name>{escape(part_name)}</part-name>",
+                "    </score-part>",
+            ]
+        )
+        part_body_lines.append(
+            _build_part_musicxml(
+                part_id=part_id,
+                part_name=part_name,
+                role=str(part.get("role", "HARMONY")),
+                notes=list(part.get("notes", [])),
+                bpm=bpm,
+                time_signature=time_signature,
+                key_signature=key_signature,
+                color=_part_color(index - 1),
+            )
+        )
+
+    part_list_lines.append("  </part-list>")
+    xml_text = "\n".join(
+        [
+            '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+            '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">',
+            '<score-partwise version="4.0">',
+            f"  <work><work-title>{escape(title)}</work-title></work>",
+            f"  <movement-title>{escape(title)}</movement-title>",
+            *part_list_lines,
+            *part_body_lines,
+            "</score-partwise>",
+        ]
+    )
+    return xml_text.encode("utf-8")
+
+
 def _encode_variable_length(value: int) -> bytes:
     buffer = [value & 0x7F]
     value >>= 7
@@ -437,10 +802,29 @@ def _write_arrangement_midi(path: Path, parts_json: list[dict], bpm: int) -> int
     return len(midi_bytes)
 
 
+def _write_arrangement_musicxml(
+    path: Path,
+    title: str,
+    parts_json: list[dict],
+    bpm: int,
+    time_signature: str | None,
+    key_signature: str | None,
+) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    musicxml_bytes = _build_musicxml_bytes(title, parts_json, bpm, time_signature, key_signature)
+    path.write_bytes(musicxml_bytes)
+    return len(musicxml_bytes)
+
+
 def _build_arrangement_response(arrangement: Arrangement, request: Request) -> ArrangementCandidateResponse:
     midi_artifact_url = (
         str(request.url_for("download_arrangement_midi", arrangement_id=str(arrangement.arrangement_id)))
         if arrangement.midi_storage_key
+        else None
+    )
+    musicxml_artifact_url = (
+        str(request.url_for("download_arrangement_musicxml", arrangement_id=str(arrangement.arrangement_id)))
+        if arrangement.musicxml_storage_key
         else None
     )
     parts_json = arrangement.parts_json if isinstance(arrangement.parts_json, list) else []
@@ -460,6 +844,7 @@ def _build_arrangement_response(arrangement: Arrangement, request: Request) -> A
         constraint_json=arrangement.constraint_json,
         parts_json=parts_json,
         midi_artifact_url=midi_artifact_url,
+        musicxml_artifact_url=musicxml_artifact_url,
         created_at=arrangement.created_at,
         updated_at=arrangement.updated_at,
     )
@@ -585,6 +970,23 @@ def generate_arrangements(
         )
         arrangement.midi_storage_key = str(midi_path)
         arrangement.midi_byte_size = _write_arrangement_midi(midi_path, parts_json, bpm)
+        musicxml_path = (
+            _get_storage_root()
+            / "projects"
+            / str(project.project_id)
+            / "derived"
+            / "arrangements"
+            / f"{arrangement.arrangement_id}.musicxml"
+        )
+        arrangement.musicxml_storage_key = str(musicxml_path)
+        _write_arrangement_musicxml(
+            musicxml_path,
+            arrangement.title,
+            parts_json,
+            bpm,
+            project.time_signature,
+            melody_draft.key_estimate or project.base_key,
+        )
         created_items.append(arrangement)
 
     session.commit()
@@ -634,6 +1036,15 @@ def update_arrangement(
             parts_json,
             arrangement.melody_draft.bpm or 90,
         )
+    if arrangement.musicxml_storage_key:
+        _write_arrangement_musicxml(
+            Path(arrangement.musicxml_storage_key),
+            arrangement.title,
+            parts_json,
+            arrangement.melody_draft.bpm or 90,
+            arrangement.project.time_signature,
+            arrangement.melody_draft.key_estimate or arrangement.project.base_key,
+        )
 
     session.commit()
     session.refresh(arrangement)
@@ -648,5 +1059,17 @@ def get_arrangement_midi_path(session: Session, arrangement_id: UUID) -> Arrange
     midi_path = Path(arrangement.midi_storage_key)
     if not midi_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MIDI file not found")
+
+    return arrangement
+
+
+def get_arrangement_musicxml_path(session: Session, arrangement_id: UUID) -> Arrangement:
+    arrangement = _get_arrangement_or_404(session, arrangement_id)
+    if not arrangement.musicxml_storage_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MusicXML is missing")
+
+    musicxml_path = Path(arrangement.musicxml_storage_key)
+    if not musicxml_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MusicXML file not found")
 
     return arrangement

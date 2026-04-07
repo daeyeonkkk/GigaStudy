@@ -1,11 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
 import { currentLaneTickets } from '../data/phase1'
 import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
 import { buildApiUrl } from '../lib/api'
+import {
+  startArrangementPlayback,
+  type ArrangementPlaybackController,
+  type ArrangementPlaybackMixerState,
+} from '../lib/arrangementPlayback'
+import {
+  getArrangementDurationMs,
+  getArrangementPartColor,
+  getDefaultArrangementPartVolume,
+} from '../lib/arrangementParts'
 import { renderOfflineMixdown, type RenderedMixdown } from '../lib/mixdownAudio'
 import {
   pickSupportedRecordingMimeType,
@@ -58,6 +69,7 @@ type GuideTrack = {
   storage_key: string | null
   checksum: string | null
   source_artifact_url: string | null
+  guide_wav_artifact_url: string | null
   preview_data: AudioPreviewData | null
   created_at: string
   updated_at: string
@@ -153,6 +165,7 @@ type ArrangementCandidate = {
   constraint_json: Record<string, unknown> | null
   parts_json: ArrangementPart[]
   midi_artifact_url: string | null
+  musicxml_artifact_url: string | null
   created_at: string
   updated_at: string
 }
@@ -292,6 +305,11 @@ type MixerTrackState = {
   solo: boolean
   volume: number
 }
+
+type ArrangementTransportState =
+  | { phase: 'idle'; message: string }
+  | { phase: 'playing'; message: string }
+  | { phase: 'error'; message: string }
 
 const defaultConstraintDraft: ConstraintDraft = {
   echoCancellation: true,
@@ -545,6 +563,36 @@ function syncMixerState(
   return next
 }
 
+function formatPlaybackClock(positionMs: number, durationMs: number): string {
+  const safePosition = Math.max(0, Math.round(positionMs / 1000))
+  const safeDuration = Math.max(0, Math.round(durationMs / 1000))
+  const positionMinutes = Math.floor(safePosition / 60)
+  const positionSeconds = safePosition % 60
+  const durationMinutes = Math.floor(safeDuration / 60)
+  const durationSeconds = safeDuration % 60
+
+  return `${positionMinutes}:${positionSeconds.toString().padStart(2, '0')} / ${durationMinutes}:${durationSeconds
+    .toString()
+    .padStart(2, '0')}`
+}
+
+function syncArrangementPartMixerState(
+  current: Record<string, ArrangementPlaybackMixerState>,
+  parts: ArrangementPart[],
+): Record<string, ArrangementPlaybackMixerState> {
+  const next: Record<string, ArrangementPlaybackMixerState> = {}
+
+  for (const part of parts) {
+    next[part.part_name] = current[part.part_name] ?? {
+      enabled: true,
+      solo: false,
+      volume: getDefaultArrangementPartVolume(part.role),
+    }
+  }
+
+  return next
+}
+
 export function StudioPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [studioState, setStudioState] = useState<StudioState>({ phase: 'loading' })
@@ -601,6 +649,17 @@ export function StudioPage() {
   const [arrangementJsonDraft, setArrangementJsonDraft] = useState('[]')
   const [arrangementConfig, setArrangementConfig] =
     useState<ArrangementConfig>(defaultArrangementConfig)
+  const [arrangementPartMixerState, setArrangementPartMixerState] = useState<
+    Record<string, ArrangementPlaybackMixerState>
+  >({})
+  const [guideModeEnabled, setGuideModeEnabled] = useState(false)
+  const [guideFocusPartName, setGuideFocusPartName] = useState<string | null>(null)
+  const [arrangementTransportState, setArrangementTransportState] =
+    useState<ArrangementTransportState>({
+      phase: 'idle',
+      message: 'Select a candidate to render the score and preview the harmony stack.',
+    })
+  const [arrangementPlaybackPositionMs, setArrangementPlaybackPositionMs] = useState(0)
   const [mixerState, setMixerState] = useState<Record<string, MixerTrackState>>({})
   const [mixdownSummary, setMixdownSummary] = useState<MixdownTrack | null>(null)
   const [mixdownPreviewState, setMixdownPreviewState] = useState<ActionState>({ phase: 'idle' })
@@ -614,6 +673,7 @@ export function StudioPage() {
   const recordingStartedAtRef = useRef<Date | null>(null)
   const recordingMimeTypeRef = useRef('audio/webm')
   const metronomeControllerRef = useRef<MetronomeController | null>(null)
+  const arrangementPlaybackRef = useRef<ArrangementPlaybackController | null>(null)
   const mixdownPreviewUrlRef = useRef<string | null>(null)
   const takePreviewUrlsRef = useRef<Record<string, string>>({})
   const applyStudioSnapshotRef = useRef<(snapshot: StudioSnapshotResponse) => void>(() => undefined)
@@ -710,6 +770,21 @@ export function StudioPage() {
     if (activeMetronome) {
       await activeMetronome.stop()
     }
+  }
+
+  async function stopArrangementPlayback(resetPosition = true): Promise<void> {
+    const activePlayback = arrangementPlaybackRef.current
+    arrangementPlaybackRef.current = null
+    if (activePlayback) {
+      await activePlayback.stop(resetPosition)
+    }
+    if (resetPosition) {
+      setArrangementPlaybackPositionMs(0)
+    }
+    setArrangementTransportState({
+      phase: 'idle',
+      message: 'Arrangement playback is ready.',
+    })
   }
 
   async function cleanupRecordingResources(): Promise<void> {
@@ -978,6 +1053,51 @@ export function StudioPage() {
     setArrangementTitleDraft(selectedArrangement?.title ?? '')
     setArrangementJsonDraft(JSON.stringify(selectedArrangement?.parts_json ?? [], null, 2))
   }, [arrangements, selectedArrangementId])
+
+  useEffect(() => {
+    const selectedArrangement =
+      arrangements.find((item) => item.arrangement_id === selectedArrangementId) ?? arrangements[0] ?? null
+    const arrangementParts = selectedArrangement?.parts_json ?? []
+    setArrangementPartMixerState((current) =>
+      syncArrangementPartMixerState(current, arrangementParts),
+    )
+    if (arrangementParts.length === 0) {
+      setGuideFocusPartName(null)
+      setGuideModeEnabled(false)
+      setArrangementPlaybackPositionMs(0)
+      setArrangementTransportState({
+        phase: 'idle',
+        message: 'Select a candidate to render the score and preview the harmony stack.',
+      })
+      return
+    }
+
+    setGuideFocusPartName((current) =>
+      current && arrangementParts.some((part) => part.part_name === current)
+        ? current
+        : arrangementParts.find((part) => part.role === 'MELODY')?.part_name ?? arrangementParts[0]?.part_name ?? null,
+    )
+    const activePlayback = arrangementPlaybackRef.current
+    arrangementPlaybackRef.current = null
+    if (activePlayback) {
+      void activePlayback.stop()
+    }
+    setArrangementPlaybackPositionMs(0)
+    setArrangementTransportState({
+      phase: 'idle',
+      message: 'Arrangement playback is ready.',
+    })
+  }, [arrangements, selectedArrangementId])
+
+  useEffect(() => {
+    return () => {
+      const activePlayback = arrangementPlaybackRef.current
+      arrangementPlaybackRef.current = null
+      if (activePlayback) {
+        void activePlayback.stop()
+      }
+    }
+  }, [])
 
   async function refreshTakes(): Promise<TakeTrack[]> {
     const snapshot = await refreshStudioSnapshot()
@@ -1278,6 +1398,76 @@ export function StudioPage() {
       setArrangementSaveState({
         phase: 'error',
         message: error instanceof Error ? error.message : 'Unable to save arrangement edits.',
+      })
+    }
+  }
+
+  function updateArrangementPartMixer(
+    partName: string,
+    nextValue: Partial<ArrangementPlaybackMixerState>,
+  ): void {
+    setArrangementPartMixerState((current) => ({
+      ...current,
+      [partName]: current[partName]
+        ? {
+            ...current[partName],
+            ...nextValue,
+          }
+        : {
+            enabled: true,
+            solo: false,
+            volume: 0.8,
+            ...nextValue,
+          },
+    }))
+  }
+
+  async function handlePlayArrangement(): Promise<void> {
+    if (!selectedArrangement) {
+      setArrangementTransportState({
+        phase: 'error',
+        message: 'Select an arrangement candidate before starting playback.',
+      })
+      return
+    }
+
+    const playableParts = selectedArrangement.parts_json.filter((part) => part.notes.length > 0)
+    if (playableParts.length === 0) {
+      setArrangementTransportState({
+        phase: 'error',
+        message: 'This arrangement does not contain playable notes yet.',
+      })
+      return
+    }
+
+    try {
+      await stopArrangementPlayback()
+      setArrangementPlaybackPositionMs(0)
+
+      const controller = await startArrangementPlayback({
+        parts: playableParts,
+        mixerState: arrangementPartMixerState,
+        guideModeEnabled,
+        guideFocusPartName,
+        onPositionChange: setArrangementPlaybackPositionMs,
+        onEnded: () => {
+          arrangementPlaybackRef.current = null
+          setArrangementTransportState({
+            phase: 'idle',
+            message: 'Arrangement playback finished. Tweak parts or export from here.',
+          })
+        },
+      })
+
+      arrangementPlaybackRef.current = controller
+      setArrangementTransportState({
+        phase: 'playing',
+        message: 'Playback is running through the separate arrangement preview engine.',
+      })
+    } catch (error) {
+      setArrangementTransportState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Arrangement playback failed.',
       })
     }
   }
@@ -2050,7 +2240,15 @@ export function StudioPage() {
   const selectedTakeMelody = selectedTake?.latest_melody ?? null
   const selectedArrangement =
     arrangements.find((item) => item.arrangement_id === selectedArrangementId) ?? arrangements[0] ?? null
+  const arrangementDurationMs = selectedArrangement
+    ? getArrangementDurationMs(selectedArrangement.parts_json)
+    : 0
+  const arrangementPlaybackRatio =
+    arrangementDurationMs > 0
+      ? Math.min(1, arrangementPlaybackPositionMs / arrangementDurationMs)
+      : 0
   const guideMixer = guide ? mixerState[guide.track_id] : null
+  const guideWavExportUrl = guide?.guide_wav_artifact_url ?? null
   const mixdownPlaybackUrl = mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null
   const mixdownSourceLabel = mixdownPreview
     ? 'Local offline render'
@@ -3762,6 +3960,250 @@ export function StudioPage() {
               <div className="empty-card">
                 <p>No arrangement candidate is selected.</p>
                 <p>Generate candidates and choose one to inspect or tweak its parts JSON.</p>
+              </div>
+            )}
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Phase 6</p>
+          <h2>Score rendering, guide playback, and export</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Score View</p>
+                <h2>Render the selected candidate as MusicXML</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  selectedArrangement?.musicxml_artifact_url
+                    ? 'status-pill--ready'
+                    : 'status-pill--loading'
+                }`}
+              >
+                {selectedArrangement?.musicxml_artifact_url ? 'MusicXML ready' : 'Waiting for MusicXML'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              FOUNDATION Phase 6 asks for OSMD-based score rendering while keeping playback
+              separate. This panel stays focused on the score artifact and export surface.
+            </p>
+
+            <div className="button-row">
+              {selectedArrangement?.musicxml_artifact_url ? (
+                <a className="button-primary" href={selectedArrangement.musicxml_artifact_url}>
+                  Export MusicXML
+                </a>
+              ) : null}
+
+              {selectedArrangement?.midi_artifact_url ? (
+                <a className="button-secondary" href={selectedArrangement.midi_artifact_url}>
+                  Export arrangement MIDI
+                </a>
+              ) : null}
+
+              {guideWavExportUrl ? (
+                <a className="button-secondary" href={guideWavExportUrl}>
+                  Export guide WAV
+                </a>
+              ) : null}
+            </div>
+
+            {selectedArrangement ? (
+              <ArrangementScore
+                musicXmlUrl={selectedArrangement.musicxml_artifact_url}
+                playheadRatio={arrangementPlaybackRatio}
+                renderKey={`${selectedArrangement.arrangement_id}:${selectedArrangement.updated_at}`}
+              />
+            ) : (
+              <div className="empty-card">
+                <p>No arrangement candidate is selected.</p>
+                <p>Generate or choose a candidate before opening the score and export tools.</p>
+              </div>
+            )}
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Playback Engine</p>
+                <h2>Preview parts with guide mode and synchronized transport</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  arrangementTransportState.phase === 'playing'
+                    ? 'status-pill--ready'
+                    : arrangementTransportState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {arrangementTransportState.phase === 'playing'
+                  ? 'Playing'
+                  : arrangementTransportState.phase === 'error'
+                    ? 'Playback error'
+                    : 'Playback ready'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              Playback stays outside the score renderer on purpose. Solo, guide focus, and
+              part balance all route through a separate Web Audio preview engine.
+            </p>
+
+            <div className="transport-card">
+              <div className="transport-card__row">
+                <strong>
+                  {formatPlaybackClock(arrangementPlaybackPositionMs, arrangementDurationMs)}
+                </strong>
+                <span>
+                  {selectedArrangement
+                    ? `${selectedArrangement.part_count} parts`
+                    : 'No arrangement selected'}
+                </span>
+              </div>
+              <div className="transport-progress" aria-hidden="true">
+                <div
+                  className="transport-progress__fill"
+                  style={{ width: `${Math.min(100, arrangementPlaybackRatio * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={selectedArrangement === null}
+                onClick={() => void handlePlayArrangement()}
+              >
+                Play arrangement preview
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={arrangementPlaybackPositionMs === 0 && arrangementTransportState.phase !== 'playing'}
+                onClick={() => void stopArrangementPlayback()}
+              >
+                Stop playback
+              </button>
+            </div>
+
+            <label className="toggle-card">
+              <input
+                type="checkbox"
+                checked={guideModeEnabled}
+                onChange={(event) => setGuideModeEnabled(event.target.checked)}
+              />
+              <div>
+                <strong>Guide mode</strong>
+                <span>Keep the guide-focus part loud while the rest of the stack drops back.</span>
+              </div>
+            </label>
+
+            <p
+              className={
+                arrangementTransportState.phase === 'error' ? 'form-error' : 'status-card__hint'
+              }
+            >
+              {arrangementTransportState.message}
+            </p>
+
+            {selectedArrangement ? (
+              <div className="arrangement-part-list">
+                {selectedArrangement.parts_json.map((part, index) => {
+                  const partMixer = arrangementPartMixerState[part.part_name] ?? {
+                    enabled: true,
+                    solo: false,
+                    volume: getDefaultArrangementPartVolume(part.role),
+                  }
+                  const isGuideFocus = guideFocusPartName === part.part_name
+                  return (
+                    <div className="arrangement-part-row" key={part.part_name}>
+                      <div className="arrangement-part-row__identity">
+                        <span
+                          className="arrangement-part-swatch"
+                          style={{ backgroundColor: getArrangementPartColor(part.role, index) }}
+                        />
+                        <div>
+                          <strong>{part.part_name}</strong>
+                          <span>
+                            {part.role} | {part.notes.length} notes
+                          </span>
+                        </div>
+                      </div>
+
+                      <label className="toggle-inline">
+                        <input
+                          type="checkbox"
+                          checked={partMixer.enabled}
+                          onChange={(event) =>
+                            updateArrangementPartMixer(part.part_name, {
+                              enabled: event.target.checked,
+                            })
+                          }
+                        />
+                        <span>Active</span>
+                      </label>
+
+                      <button
+                        className={`button-secondary button-secondary--small ${
+                          partMixer.solo ? 'button-secondary--active' : ''
+                        }`}
+                        type="button"
+                        onClick={() =>
+                          updateArrangementPartMixer(part.part_name, {
+                            solo: !partMixer.solo,
+                          })
+                        }
+                      >
+                        {partMixer.solo ? 'Solo on' : 'Solo'}
+                      </button>
+
+                      <button
+                        className={`button-secondary button-secondary--small ${
+                          isGuideFocus ? 'button-secondary--active' : ''
+                        }`}
+                        type="button"
+                        onClick={() =>
+                          setGuideFocusPartName((current) =>
+                            current === part.part_name ? null : part.part_name,
+                          )
+                        }
+                      >
+                        {isGuideFocus ? 'Guide focus' : 'Focus'}
+                      </button>
+
+                      <label className="arrangement-part-volume">
+                        <span>{partMixer.volume.toFixed(2)}</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={partMixer.volume}
+                          onChange={(event) =>
+                            updateArrangementPartMixer(part.part_name, {
+                              volume: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No candidate is selected for playback.</p>
+                <p>Choose a candidate to enable part solo, guide focus, and transport sync.</p>
               </div>
             )}
           </article>

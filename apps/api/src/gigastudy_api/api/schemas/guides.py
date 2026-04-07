@@ -38,6 +38,7 @@ class GuideTrackResponse(BaseModel):
     storage_key: str | None
     checksum: str | None
     source_artifact_url: str | None = None
+    guide_wav_artifact_url: str | None = None
     preview_data: AudioPreviewResponse | None = None
     created_at: datetime
     updated_at: datetime

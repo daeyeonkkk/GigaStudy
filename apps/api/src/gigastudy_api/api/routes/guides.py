@@ -17,6 +17,7 @@ from gigastudy_api.services.guides import (
     complete_guide_upload,
     create_guide_upload_session,
     get_latest_guide,
+    get_track_canonical_path,
     get_track_source_path,
     store_track_upload,
 )
@@ -104,4 +105,21 @@ def download_track_source_audio_endpoint(
         path=source_path,
         media_type=source_artifact.mime_type or "application/octet-stream",
         filename=track.storage_key.rsplit("/", maxsplit=1)[-1] if track.storage_key else None,
+    )
+
+
+@router.get(
+    "/uploads/tracks/{track_id}/canonical",
+    name="download_track_canonical_audio",
+)
+def download_track_canonical_audio_endpoint(
+    track_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> FileResponse:
+    track, canonical_artifact = get_track_canonical_path(session, track_id)
+
+    return FileResponse(
+        path=canonical_artifact.storage_key,
+        media_type=canonical_artifact.mime_type or "audio/wav",
+        filename=f"{track.track_id}.wav",
     )

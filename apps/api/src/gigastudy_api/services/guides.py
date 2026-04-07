@@ -19,6 +19,7 @@ from gigastudy_api.services.processing import (
     get_track_playback_artifact,
     get_track_preview_data,
     process_uploaded_track,
+    validate_upload_session_window,
 )
 
 
@@ -83,16 +84,25 @@ def store_track_upload(session: Session, track_id: UUID, payload: bytes) -> Trac
     if not track.storage_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track storage key is missing")
 
-    storage_root = _get_storage_root()
-    file_path = storage_root / track.storage_key
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_bytes(payload)
+    try:
+        validate_upload_session_window(track)
+        storage_root = _get_storage_root()
+        file_path = storage_root / track.storage_key
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(payload)
 
-    track.track_status = TrackStatus.UPLOADING
-    track.updated_at = datetime.now(timezone.utc)
-    session.commit()
-    session.refresh(track)
-    return track
+        track.track_status = TrackStatus.UPLOADING
+        track.failure_message = None
+        track.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        session.refresh(track)
+        return track
+    except HTTPException as error:
+        track.track_status = TrackStatus.FAILED
+        track.failure_message = error.detail if isinstance(error.detail, str) else "Upload failed"
+        track.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        raise
 def complete_guide_upload(
     session: Session,
     project_id: UUID,
@@ -152,6 +162,7 @@ def build_guide_response(track: Track, request: Request) -> GuideTrackResponse:
         actual_sample_rate=track.actual_sample_rate,
         storage_key=track.storage_key,
         checksum=track.checksum,
+        failure_message=track.failure_message,
         source_artifact_url=download_url,
         guide_wav_artifact_url=canonical_download_url,
         preview_data=preview_data,

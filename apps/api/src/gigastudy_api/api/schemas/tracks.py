@@ -57,6 +57,7 @@ class TakeTrackResponse(BaseModel):
     actual_sample_rate: int | None
     storage_key: str | None
     checksum: str | None
+    failure_message: str | None
     alignment_offset_ms: int | None
     alignment_confidence: float | None
     recording_started_at: datetime | None

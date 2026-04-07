@@ -71,6 +71,7 @@ def test_retry_processing_recovers_failed_take_after_upload_arrives(client: Test
     payload = retry_response.json()
     assert payload["track_role"] == "VOCAL_TAKE"
     assert payload["track_status"] == "READY"
+    assert payload["failure_message"] is None
     assert payload["source_artifact_url"] is not None
 
 

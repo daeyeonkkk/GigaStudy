@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from math import log2
 from pathlib import Path
+from time import perf_counter
 import wave
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from gigastudy_api.api.schemas.analysis import (
     TrackAnalysisResponse,
     TrackScoreResponse,
 )
+from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import (
     AnalysisJob,
     AnalysisJobStatus,
@@ -498,6 +500,14 @@ def _get_track_or_404(session: Session, track_id: UUID) -> Track:
     return track
 
 
+def _get_analysis_job_or_404(session: Session, job_id: UUID) -> AnalysisJob:
+    job = session.get(AnalysisJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis job not found")
+
+    return job
+
+
 def _get_latest_guide_track(session: Session, project_id: UUID) -> Track:
     guide_track = (
         session.execute(
@@ -591,6 +601,7 @@ def build_track_analysis_response(track: Track, guide_track_id: UUID) -> TrackAn
 
 
 def run_track_analysis(session: Session, project_id: UUID, track_id: UUID) -> TrackAnalysisResponse:
+    settings = get_settings()
     project = _get_project_or_404(session, project_id)
     track = _get_track_or_404(session, track_id)
     if track.project_id != project.project_id:
@@ -614,9 +625,19 @@ def run_track_analysis(session: Session, project_id: UUID, track_id: UUID) -> Tr
     session.commit()
 
     try:
+        started_at = perf_counter()
         track = _get_track_or_404(session, track_id)
         guide_track = _get_latest_guide_track(session, project_id)
         computation = _compute_analysis(project, guide_track, track)
+        if settings.analysis_timeout_seconds > 0:
+            elapsed_seconds = perf_counter() - started_at
+            if elapsed_seconds > settings.analysis_timeout_seconds:
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                    detail=(
+                        "Analysis exceeded the timeout policy. Retry the job or reduce the input length."
+                    ),
+                )
         finished_at = datetime.now(timezone.utc)
 
         track.alignment_offset_ms = computation.alignment_offset_ms
@@ -677,3 +698,14 @@ def get_track_analysis(session: Session, project_id: UUID, track_id: UUID) -> Tr
 
     guide_track = _get_latest_guide_track(session, project_id)
     return build_track_analysis_response(track, guide_track.track_id)
+
+
+def retry_analysis_job(session: Session, job_id: UUID) -> TrackAnalysisResponse:
+    job = _get_analysis_job_or_404(session, job_id)
+    if job.status != AnalysisJobStatus.FAILED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only FAILED analysis jobs can be retried.",
+        )
+
+    return run_track_analysis(session, job.project_id, job.track_id)

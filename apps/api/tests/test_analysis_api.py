@@ -148,3 +148,35 @@ def test_analysis_distinguishes_matching_and_mismatched_takes(client: TestClient
 
     assert matching_score["pitch_score"] > mismatched_score["pitch_score"]
     assert matching_score["total_score"] > mismatched_score["total_score"]
+
+
+def test_retry_failed_analysis_job_after_reprocessing(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=440.0, sample_rate=32000)
+    take_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=440.0, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Retry Analysis", "base_key": "C", "bpm": 92},
+    ).json()["project_id"]
+
+    guide_id = upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=take_bytes, filename="take.wav")
+
+    storage_root = Path(get_settings().storage_root).resolve()
+    canonical_path = storage_root / "projects" / project_id / "derived" / f"{guide_id}-canonical.wav"
+    canonical_path.unlink()
+
+    failed_response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+    assert failed_response.status_code == 400
+
+    snapshot_response = client.get(f"/api/projects/{project_id}/studio")
+    assert snapshot_response.status_code == 200
+    latest_job = snapshot_response.json()["takes"][0]["latest_analysis_job"]
+    assert latest_job["status"] == "FAILED"
+    assert latest_job["error_message"] is not None
+
+    guide_retry = client.post(f"/api/tracks/{guide_id}/retry-processing")
+    assert guide_retry.status_code == 200
+
+    retry_response = client.post(f"/api/analysis-jobs/{latest_job['job_id']}/retry")
+    assert retry_response.status_code == 200
+    assert retry_response.json()["latest_job"]["status"] == "SUCCEEDED"

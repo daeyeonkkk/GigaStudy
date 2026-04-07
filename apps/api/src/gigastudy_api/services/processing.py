@@ -80,6 +80,43 @@ def get_track_canonical_artifact(track: Track) -> Artifact | None:
     return _get_track_artifact(track, ArtifactType.CANONICAL_AUDIO)
 
 
+def _mark_track_failed(session: Session, track: Track, message: str) -> None:
+    track.track_status = TrackStatus.FAILED
+    track.failure_message = message
+    track.updated_at = datetime.now(timezone.utc)
+    session.commit()
+
+
+def _validate_upload_session_window(track: Track) -> None:
+    settings = get_settings()
+    if settings.upload_session_expiry_minutes <= 0:
+        return
+
+    if track.storage_key:
+        source_path = _get_storage_root() / track.storage_key
+        if source_path.exists():
+            return
+
+    window_started_at = track.updated_at or track.created_at
+    if window_started_at is None:
+        return
+    if window_started_at.tzinfo is None:
+        window_started_at = window_started_at.replace(tzinfo=timezone.utc)
+
+    age_seconds = (datetime.now(timezone.utc) - window_started_at).total_seconds()
+    if age_seconds > settings.upload_session_expiry_minutes * 60:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "Upload session expired. Start a new upload URL before retrying this track."
+            ),
+        )
+
+
+def validate_upload_session_window(track: Track) -> None:
+    _validate_upload_session_window(track)
+
+
 def get_track_preview_data(track: Track) -> AudioPreviewResponse | None:
     peaks_artifact = _get_track_artifact(track, ArtifactType.WAVEFORM_PEAKS)
     if peaks_artifact is None or not isinstance(peaks_artifact.meta_json, dict):
@@ -307,17 +344,24 @@ def process_uploaded_track(session: Session, track_id: UUID) -> Track:
     now = datetime.now(timezone.utc)
 
     try:
+        _validate_upload_session_window(track)
         probe = _probe_audio_file(track)
-    except HTTPException:
-        track.track_status = TrackStatus.FAILED
-        track.updated_at = now
-        session.commit()
+    except HTTPException as error:
+        _mark_track_failed(
+            session,
+            track,
+            error.detail if isinstance(error.detail, str) else "Track processing failed",
+        )
+        raise
+    except Exception as error:
+        _mark_track_failed(session, track, str(error))
         raise
 
     mime_type = track.source_format or mimetypes.guess_type(probe.source_path.name)[0] or "application/octet-stream"
     uploaded_artifact_type = _get_uploaded_audio_artifact_type(track)
 
     track.track_status = TrackStatus.READY
+    track.failure_message = None
     track.source_format = mime_type
     track.duration_ms = probe.duration_ms
     track.actual_sample_rate = probe.sample_rate
@@ -420,6 +464,7 @@ def build_processing_retry_response(
         project_id=track.project_id,
         track_role=track.track_role.value,
         track_status=track.track_status.value,
+        failure_message=track.failure_message,
         source_artifact_url=download_url,
         updated_at=track.updated_at,
     )

@@ -108,6 +108,7 @@ def create_take_upload_session(
     track.storage_key = f"projects/{track.project_id}/takes/take-{track.take_no or 'x'}-{filename}"
     track.source_format = payload.content_type
     track.track_status = TrackStatus.PENDING_UPLOAD
+    track.failure_message = None
     track.updated_at = datetime.now(timezone.utc)
     session.commit()
     session.refresh(track)
@@ -176,6 +177,7 @@ def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
         actual_sample_rate=track.actual_sample_rate,
         storage_key=track.storage_key,
         checksum=track.checksum,
+        failure_message=track.failure_message,
         alignment_offset_ms=track.alignment_offset_ms,
         alignment_confidence=track.alignment_confidence,
         recording_started_at=track.recording_started_at,

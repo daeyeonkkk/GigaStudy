@@ -530,6 +530,36 @@
   width: 100%;
 }
 
+.ops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ops-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+}
+
+.ops-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ops-card__header span {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: var(--accent-strong);
@@ -1042,6 +1072,7 @@
   .studio-header,
   .take-card__header,
   .candidate-card__header,
+  .ops-card__header,
   .transport-card__row,
   .track-row,
   .ticket-list li,

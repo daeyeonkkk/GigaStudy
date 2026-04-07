@@ -25,6 +25,7 @@ from gigastudy_api.db.models import Arrangement, MelodyDraft, Project
 
 PPQN = 480
 MUSICXML_DIVISIONS = 4
+ARRANGEMENT_ENGINE_VERSION = "rule-stack-v1"
 NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 PART_COLORS = ("#2B6CB0", "#D97706", "#15803D", "#BE123C", "#6D28D9", "#475569")
 KEY_MAP = {
@@ -948,6 +949,7 @@ def generate_arrangements(
             voice_mode=candidate_spec.voice_mode,
             part_count=len(parts_json),
             constraint_json={
+                "engine_version": ARRANGEMENT_ENGINE_VERSION,
                 "include_percussion": payload.include_percussion,
                 "max_leap": max_leap,
                 "parallel_avoidance": True,

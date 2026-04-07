@@ -37,6 +37,7 @@ class GuideTrackResponse(BaseModel):
     actual_sample_rate: int | None
     storage_key: str | None
     checksum: str | None
+    failure_message: str | None = None
     source_artifact_url: str | None = None
     guide_wav_artifact_url: str | None = None
     preview_data: AudioPreviewResponse | None = None

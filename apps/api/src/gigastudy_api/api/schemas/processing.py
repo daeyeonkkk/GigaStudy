@@ -9,5 +9,6 @@ class TrackProcessingRetryResponse(BaseModel):
     project_id: UUID
     track_role: str
     track_status: str
+    failure_message: str | None
     source_artifact_url: str | None
     updated_at: datetime

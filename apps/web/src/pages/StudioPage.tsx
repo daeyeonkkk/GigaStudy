@@ -68,6 +68,7 @@ type GuideTrack = {
   actual_sample_rate: number | null
   storage_key: string | null
   checksum: string | null
+  failure_message: string | null
   source_artifact_url: string | null
   guide_wav_artifact_url: string | null
   preview_data: AudioPreviewData | null
@@ -182,6 +183,7 @@ type TakeTrack = {
   actual_sample_rate: number | null
   storage_key: string | null
   checksum: string | null
+  failure_message: string | null
   alignment_offset_ms: number | null
   alignment_confidence: number | null
   recording_started_at: string | null
@@ -212,6 +214,7 @@ type MixdownTrack = {
   actual_sample_rate: number | null
   storage_key: string | null
   checksum: string | null
+  failure_message: string | null
   source_artifact_url: string | null
   preview_data: AudioPreviewData | null
   created_at: string
@@ -1398,6 +1401,45 @@ export function StudioPage() {
       setArrangementSaveState({
         phase: 'error',
         message: error instanceof Error ? error.message : 'Unable to save arrangement edits.',
+      })
+    }
+  }
+
+  async function handleRetryAnalysisJob(): Promise<void> {
+    if (!selectedTakeAnalysisJob || selectedTakeAnalysisJob.status !== 'FAILED') {
+      setAnalysisState({
+        phase: 'error',
+        message: 'Select a take with a FAILED analysis job before retrying.',
+      })
+      return
+    }
+
+    setAnalysisState({
+      phase: 'submitting',
+      message: 'Retrying the failed analysis job with the same track and guide...',
+    })
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/analysis-jobs/${selectedTakeAnalysisJob.job_id}/retry`),
+        {
+          method: 'POST',
+        },
+      )
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to retry the analysis job.'))
+      }
+
+      const analysis = (await response.json()) as TrackAnalysisResponse
+      await refreshStudioSnapshot().catch(() => null)
+      setAnalysisState({
+        phase: 'success',
+        message: `Retried analysis with model ${analysis.latest_job.model_version} and stored a fresh score.`,
+      })
+    } catch (error) {
+      setAnalysisState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to retry the analysis job.',
       })
     }
   }
@@ -2691,6 +2733,10 @@ export function StudioPage() {
                   <strong>{guide.checksum ?? 'Not available'}</strong>
                 </div>
 
+                {guide.failure_message ? (
+                  <p className="form-error">{guide.failure_message}</p>
+                ) : null}
+
                 {guide.source_artifact_url ? (
                   <div className="audio-preview">
                     <p className="json-label">Guide playback</p>
@@ -3229,6 +3275,10 @@ export function StudioPage() {
                   </div>
                 </div>
 
+                {selectedTake.failure_message ? (
+                  <p className="form-error">{selectedTake.failure_message}</p>
+                ) : null}
+
                 {waveformState.phase === 'error' ? (
                   <p className="form-error">{waveformState.message}</p>
                 ) : (
@@ -3349,6 +3399,18 @@ export function StudioPage() {
                   <button
                     className="button-secondary"
                     type="button"
+                    disabled={
+                      selectedTakeAnalysisJob?.status !== 'FAILED' ||
+                      analysisState.phase === 'submitting'
+                    }
+                    onClick={() => void handleRetryAnalysisJob()}
+                  >
+                    Retry failed job
+                  </button>
+
+                  <button
+                    className="button-secondary"
+                    type="button"
                     onClick={() => void refreshStudioSnapshot().catch(() => undefined)}
                   >
                     Refresh snapshot
@@ -3364,10 +3426,21 @@ export function StudioPage() {
                     {analysisState.message}
                   </p>
                 ) : selectedTakeAnalysisJob ? (
-                  <p className="status-card__hint">
-                    Latest job used model {selectedTakeAnalysisJob.model_version} at{' '}
-                    {formatDate(selectedTakeAnalysisJob.requested_at)}.
-                  </p>
+                  <div className="support-stack">
+                    <p
+                      className={
+                        selectedTakeAnalysisJob.status === 'FAILED'
+                          ? 'form-error'
+                          : 'status-card__hint'
+                      }
+                    >
+                      Latest job used model {selectedTakeAnalysisJob.model_version} at{' '}
+                      {formatDate(selectedTakeAnalysisJob.requested_at)}.
+                    </p>
+                    {selectedTakeAnalysisJob.error_message ? (
+                      <p className="form-error">{selectedTakeAnalysisJob.error_message}</p>
+                    ) : null}
+                  </div>
                 ) : (
                   <p className="status-card__hint">
                     Run analysis after recording so the studio can store alignment confidence,

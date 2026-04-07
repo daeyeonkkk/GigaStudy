@@ -130,3 +130,4 @@ def test_take_complete_marks_failed_when_upload_is_missing(client: TestClient) -
     list_response = client.get(f"/api/projects/{project_id}/tracks")
     assert list_response.status_code == 200
     assert list_response.json()["items"][0]["track_status"] == "FAILED"
+    assert list_response.json()["items"][0]["failure_message"] is not None

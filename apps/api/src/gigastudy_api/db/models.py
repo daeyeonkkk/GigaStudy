@@ -123,6 +123,7 @@ class Track(TimestampMixin, Base):
     source_format: Mapped[str | None] = mapped_column(String(64))
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     checksum: Mapped[str | None] = mapped_column(String(128))
+    failure_message: Mapped[str | None] = mapped_column(String(1024))
     alignment_offset_ms: Mapped[int | None] = mapped_column(Integer)
     alignment_confidence: Mapped[float | None] = mapped_column(Float)
     recording_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

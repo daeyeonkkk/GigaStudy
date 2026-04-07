@@ -1,42 +1,42 @@
 export const priorityCards = [
   {
-    title: 'Project and guide connection',
+    title: 'Failure visibility',
     items: [
-      'Create a project with stable musical metadata.',
-      'Connect one guide track to the project and keep it reloadable.',
-      'Keep the studio entry flow fast enough for repeated retries.',
+      'Keep failed track state visible after upload or processing problems.',
+      'Show the latest analysis failure reason instead of hiding it behind a generic error.',
+      'Make retry paths obvious from both studio and admin views.',
     ],
   },
   {
-    title: 'Device settings and DeviceProfile',
+    title: 'Retry workflows',
     items: [
-      'Request mic permission and list input devices.',
-      'Show requested constraints beside the real getSettings() result.',
-      'Save one reusable profile keyed by browser, OS, input device, and output route.',
+      'Retry failed analysis jobs without recreating the whole project context.',
+      'Retry track processing after the source audio or canonical artifact is fixed.',
+      'Refresh operations state immediately after recovery actions.',
     ],
   },
   {
-    title: 'Take recording and upload',
+    title: 'Policies and traceability',
     items: [
-      'Prepare the studio for repeated take capture.',
-      'Keep upload status visible after each recording attempt.',
-      'Make guide and take status easy to scan from one screen.',
+      'Expose timeout and upload-expiry policy values in one place.',
+      'Track which analysis, melody, and arrangement engine versions are active.',
+      'Keep release-gate signals small enough to scan quickly.',
     ],
   },
   {
-    title: 'Processing readiness',
+    title: 'Admin monitoring baseline',
     items: [
-      'Preserve enough metadata for later worker jobs.',
-      'Keep source, canonical, peaks, and mixdown artifacts linkable.',
-      'Leave room for alignment and scoring without reworking the schema.',
+      'List recent failed tracks and recent analysis jobs together.',
+      'Show project counts, ready-take counts, and failure counts at a glance.',
+      'Leave room for a fuller dashboard without reworking the API shape.',
     ],
   },
 ] as const
 
 export const currentLaneTickets = [
-  'Phase 6',
-  'OSMD score render',
-  'Separated playback',
-  'Guide WAV export',
-  'MusicXML and MIDI export',
+  'Phase 7',
+  'Failure visibility',
+  'Analysis retry',
+  'Ops dashboard',
+  'Timeout and expiry policy',
 ] as const

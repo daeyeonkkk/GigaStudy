@@ -7,6 +7,7 @@ from gigastudy_api.api.routes.guides import router as guides_router
 from gigastudy_api.api.routes.health import router as health_router
 from gigastudy_api.api.routes.melody import router as melody_router
 from gigastudy_api.api.routes.mixdowns import router as mixdowns_router
+from gigastudy_api.api.routes.ops import router as ops_router
 from gigastudy_api.api.routes.processing import router as processing_router
 from gigastudy_api.api.routes.projects import router as projects_router
 from gigastudy_api.api.routes.studio import router as studio_router
@@ -20,6 +21,7 @@ api_router.include_router(guides_router, tags=["guides"])
 api_router.include_router(health_router, tags=["health"])
 api_router.include_router(melody_router, tags=["melody"])
 api_router.include_router(mixdowns_router, tags=["mixdowns"])
+api_router.include_router(ops_router, tags=["ops"])
 api_router.include_router(processing_router, tags=["processing"])
 api_router.include_router(projects_router, tags=["projects"])
 api_router.include_router(studio_router, tags=["studio"])

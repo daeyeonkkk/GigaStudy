@@ -107,3 +107,4 @@ def test_mixdown_complete_marks_track_failed_when_upload_is_missing(client: Test
     studio_response = client.get(f"/api/projects/{project_id}/studio")
     assert studio_response.status_code == 200
     assert studio_response.json()["mixdown"]["track_status"] == "FAILED"
+    assert studio_response.json()["mixdown"]["failure_message"] is not None

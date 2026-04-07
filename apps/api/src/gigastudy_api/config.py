@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     database_echo: bool = False
     default_user_nickname: str = "local-dev"
     storage_root: str = "./storage"
+    analysis_timeout_seconds: int = 15
+    upload_session_expiry_minutes: int = 30
+    ops_recent_limit: int = 8
     cors_origins: list[str] = [
         "http://127.0.0.1:5173",
         "http://localhost:5173",

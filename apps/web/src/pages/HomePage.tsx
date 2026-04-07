@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { currentLaneTickets, priorityCards } from '../data/phase1'
 import { apiBaseUrl, buildApiUrl } from '../lib/api'
@@ -122,19 +122,25 @@ export function HomePage() {
     <div className="page-shell">
       <section className="hero">
         <div className="hero__copy">
-          <p className="eyebrow">GigaStudy Phase 1</p>
-          <h1>Build the recording foundation before the analysis layer.</h1>
+          <p className="eyebrow">GigaStudy Phase 7</p>
+          <h1>Close the release gate with retry paths and operations visibility.</h1>
           <p className="hero__summary">
-            This workspace follows the PROJECT_FOUNDATION plan: create a project,
-            attach a guide, store real device settings, and prepare repeatable take
-            uploads before alignment and scoring work starts.
+            This workspace follows the PROJECT_FOUNDATION plan through the release gate:
+            create and analyze projects in the studio, then keep failures explainable,
+            retryable, and visible from one admin overview.
           </p>
 
           <div className="chip-row" aria-label="current scope">
             <span className="chip">React 19 + Vite</span>
             <span className="chip">FastAPI</span>
-            <span className="chip">Guide upload</span>
-            <span className="chip">DeviceProfile</span>
+            <span className="chip">Ops overview</span>
+            <span className="chip">Retry workflows</span>
+          </div>
+
+          <div className="button-row">
+            <Link className="button-secondary" to="/ops">
+              Open ops overview
+            </Link>
           </div>
         </div>
 
@@ -301,7 +307,7 @@ export function HomePage() {
 
         <article className="panel">
           <p className="eyebrow">Current Lane</p>
-          <h2>Phase 1 tickets in motion</h2>
+          <h2>Phase 7 tickets in motion</h2>
           <ul className="ticket-list">
             {currentLaneTickets.map((ticket) => (
               <li key={ticket}>
@@ -315,7 +321,7 @@ export function HomePage() {
 
       <section className="section">
         <div className="section__header">
-          <p className="eyebrow">Phase 1 Scope</p>
+          <p className="eyebrow">Release Gate</p>
           <h2>What this repo is tightening right now</h2>
         </div>
 

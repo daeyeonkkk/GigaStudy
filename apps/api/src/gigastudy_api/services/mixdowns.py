@@ -116,6 +116,7 @@ def build_mixdown_response(track: Track, request: Request) -> MixdownTrackRespon
         actual_sample_rate=track.actual_sample_rate,
         storage_key=track.storage_key,
         checksum=track.checksum,
+        failure_message=track.failure_message,
         source_artifact_url=download_url,
         preview_data=preview_data,
         created_at=track.created_at,

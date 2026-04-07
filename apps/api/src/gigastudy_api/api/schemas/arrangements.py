@@ -13,6 +13,14 @@ class ArrangementPartResponse(BaseModel):
     notes: list[MelodyNoteResponse] = Field(default_factory=list)
 
 
+class ArrangementComparisonSummaryResponse(BaseModel):
+    lead_range_fit_percent: float
+    support_max_leap: int
+    parallel_motion_alerts: int
+    support_part_count: int
+    beatbox_note_count: int
+
+
 class ArrangementCandidateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -27,7 +35,10 @@ class ArrangementCandidateResponse(BaseModel):
     difficulty: str
     voice_mode: str
     part_count: int
+    voice_range_preset: str | None = None
+    beatbox_template: str | None = None
     constraint_json: dict | None
+    comparison_summary: ArrangementComparisonSummaryResponse | None = None
     parts_json: list[ArrangementPartResponse]
     midi_artifact_url: str | None = None
     musicxml_artifact_url: str | None = None
@@ -40,6 +51,8 @@ class ArrangementGenerateRequest(BaseModel):
     style: str = Field(default="contemporary", max_length=32)
     difficulty: str = Field(default="basic", max_length=32)
     include_percussion: bool = False
+    voice_range_preset: str = Field(default="alto", max_length=32)
+    beatbox_template: str | None = Field(default=None, max_length=32)
     candidate_count: int = Field(default=3, ge=1, le=3)
 
 

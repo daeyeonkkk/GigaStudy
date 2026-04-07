@@ -122,19 +122,19 @@ export function HomePage() {
     <div className="page-shell">
       <section className="hero">
         <div className="hero__copy">
-          <p className="eyebrow">GigaStudy Phase 7</p>
-          <h1>Close the release gate with retry paths and operations visibility.</h1>
+          <p className="eyebrow">GigaStudy Phase 8</p>
+          <h1>Sharpen the arrangement workflow with presets, compare views, and beatbox options.</h1>
           <p className="hero__summary">
-            This workspace follows the PROJECT_FOUNDATION plan through the release gate:
-            create and analyze projects in the studio, then keep failures explainable,
-            retryable, and visible from one admin overview.
+            This workspace follows the PROJECT_FOUNDATION post-launch lane:
+            keep the core studio flow intact while making arrangement choices easier to compare
+            and easier to aim at a real singer range.
           </p>
 
           <div className="chip-row" aria-label="current scope">
             <span className="chip">React 19 + Vite</span>
             <span className="chip">FastAPI</span>
-            <span className="chip">Ops overview</span>
-            <span className="chip">Retry workflows</span>
+            <span className="chip">Voice presets</span>
+            <span className="chip">Beatbox templates</span>
           </div>
 
           <div className="button-row">
@@ -307,7 +307,7 @@ export function HomePage() {
 
         <article className="panel">
           <p className="eyebrow">Current Lane</p>
-          <h2>Phase 7 tickets in motion</h2>
+          <h2>Phase 8 tickets in motion</h2>
           <ul className="ticket-list">
             {currentLaneTickets.map((ticket) => (
               <li key={ticket}>

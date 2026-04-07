@@ -77,7 +77,8 @@ def test_generate_arrangements_creates_candidate_batch_and_snapshot(client: Test
             "melody_draft_id": melody["melody_draft_id"],
             "style": "contemporary",
             "difficulty": "basic",
-            "include_percussion": True,
+            "voice_range_preset": "tenor",
+            "beatbox_template": "drive",
             "candidate_count": 3,
         },
     )
@@ -89,6 +90,16 @@ def test_generate_arrangements_creates_candidate_batch_and_snapshot(client: Test
     assert any(item["part_count"] >= 5 for item in payload["items"])
     assert payload["items"][0]["midi_artifact_url"] is not None
     assert payload["items"][0]["musicxml_artifact_url"] is not None
+    assert payload["items"][0]["voice_range_preset"] == "tenor"
+    assert payload["items"][0]["beatbox_template"] == "drive"
+    assert payload["items"][0]["comparison_summary"]["beatbox_note_count"] > 0
+    assert payload["items"][0]["comparison_summary"]["support_part_count"] >= 3
+    assert payload["items"][0]["constraint_json"]["voice_range_preset"] == "tenor"
+    assert payload["items"][0]["constraint_json"]["beatbox_template"] == "drive"
+    assert any(
+        part["role"] == "PERCUSSION" and "Drive" in part["part_name"]
+        for part in payload["items"][0]["parts_json"]
+    )
 
     midi_response = client.get(payload["items"][0]["midi_artifact_url"])
     assert midi_response.status_code == 200
@@ -155,3 +166,5 @@ def test_update_arrangement_rewrites_candidate_parts(client: TestClient) -> None
     assert payload["part_count"] == 1
     assert payload["parts_json"][0]["notes"][0]["pitch_midi"] == first_note["pitch_midi"] + 2
     assert payload["musicxml_artifact_url"] is not None
+    assert payload["comparison_summary"]["support_part_count"] == 0
+    assert payload["voice_range_preset"] == "alto"

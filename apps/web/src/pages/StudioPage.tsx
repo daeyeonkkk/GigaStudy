@@ -151,6 +151,14 @@ type ArrangementPart = {
   notes: MelodyNote[]
 }
 
+type ArrangementComparisonSummary = {
+  lead_range_fit_percent: number
+  support_max_leap: number
+  parallel_motion_alerts: number
+  support_part_count: number
+  beatbox_note_count: number
+}
+
 type ArrangementCandidate = {
   arrangement_id: string
   generation_id: string
@@ -163,7 +171,10 @@ type ArrangementCandidate = {
   difficulty: string
   voice_mode: string
   part_count: number
+  voice_range_preset: string | null
+  beatbox_template: string | null
   constraint_json: Record<string, unknown> | null
+  comparison_summary: ArrangementComparisonSummary | null
   parts_json: ArrangementPart[]
   midi_artifact_url: string | null
   musicxml_artifact_url: string | null
@@ -251,7 +262,8 @@ type TrackAnalysisResponse = {
 type ArrangementConfig = {
   style: string
   difficulty: string
-  includePercussion: boolean
+  voiceRangePreset: string
+  beatboxTemplate: string
 }
 
 type DeviceProfileState =
@@ -324,7 +336,8 @@ const defaultConstraintDraft: ConstraintDraft = {
 const defaultArrangementConfig: ArrangementConfig = {
   style: 'contemporary',
   difficulty: 'basic',
-  includePercussion: false,
+  voiceRangePreset: 'alto',
+  beatboxTemplate: 'off',
 }
 
 const outputRouteOptions = [
@@ -334,6 +347,84 @@ const outputRouteOptions = [
 ] as const
 
 const noteNamesSharp = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
+const arrangementDifficultyOptions = [
+  {
+    value: 'beginner',
+    label: 'Beginner',
+    description: 'Shorter leaps and safer support motion for first-pass rehearsal.',
+  },
+  {
+    value: 'basic',
+    label: 'Basic',
+    description: 'Balanced default preset with room for moderate movement.',
+  },
+  {
+    value: 'strict',
+    label: 'Strict',
+    description: 'Tighter leap control and stronger parallel-motion avoidance.',
+  },
+] as const
+const voiceRangePresetOptions = [
+  {
+    value: 'soprano',
+    label: 'S (Soprano)',
+    description: 'Bright top-line preset for higher lead takes.',
+  },
+  {
+    value: 'alto',
+    label: 'A (Alto)',
+    description: 'Balanced default preset that matches the current MVP stack best.',
+  },
+  {
+    value: 'tenor',
+    label: 'T (Tenor)',
+    description: 'Lower lead preset for tenor-centered practice takes.',
+  },
+  {
+    value: 'bass',
+    label: 'B (Bass)',
+    description: 'Lowest lead preset with deeper support spacing.',
+  },
+  {
+    value: 'baritone',
+    label: 'Baritone',
+    description: 'Middle-low lead preset between tenor agility and bass weight.',
+  },
+] as const
+const beatboxTemplateOptions = [
+  {
+    value: 'off',
+    label: 'Off',
+    description: 'No beatbox layer in the candidate batch.',
+  },
+  {
+    value: 'pulse',
+    label: 'Pulse',
+    description: 'Simple kick and snare pulse for rehearsal timing.',
+  },
+  {
+    value: 'drive',
+    label: 'Drive',
+    description: 'Busier groove with hats and extra kick support.',
+  },
+  {
+    value: 'halftime',
+    label: 'Half-Time',
+    description: 'Slower backbeat that leaves more space around phrases.',
+  },
+  {
+    value: 'syncopated',
+    label: 'Syncopated',
+    description: 'Off-beat accents for a livelier comparison candidate.',
+  },
+] as const
+
+function getOptionMeta<T extends { value: string; label: string; description: string }>(
+  options: readonly T[],
+  value: string | null | undefined,
+): T {
+  return options.find((option) => option.value === value) ?? options[0]!
+}
 
 function detectBrowserName(userAgent: string): string {
   if (/Edg\//.test(userAgent)) {
@@ -388,6 +479,14 @@ function formatPercent(value: number | null): string {
   }
 
   return `${value.toFixed(1)} / 100`
+}
+
+function formatCompactPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return 'n/a'
+  }
+
+  return `${Math.round(value)}%`
 }
 
 function formatConfidence(value: number | null): string {
@@ -1311,7 +1410,8 @@ export function StudioPage() {
           melody_draft_id: selectedTakeMelody.melody_draft_id,
           style: arrangementConfig.style,
           difficulty: arrangementConfig.difficulty,
-          include_percussion: arrangementConfig.includePercussion,
+          voice_range_preset: arrangementConfig.voiceRangePreset,
+          beatbox_template: arrangementConfig.beatboxTemplate,
           candidate_count: 3,
         }),
       })
@@ -2282,6 +2382,18 @@ export function StudioPage() {
   const selectedTakeMelody = selectedTake?.latest_melody ?? null
   const selectedArrangement =
     arrangements.find((item) => item.arrangement_id === selectedArrangementId) ?? arrangements[0] ?? null
+  const selectedDifficultyMeta = getOptionMeta(
+    arrangementDifficultyOptions,
+    arrangementConfig.difficulty,
+  )
+  const selectedVoiceRangeMeta = getOptionMeta(
+    voiceRangePresetOptions,
+    arrangementConfig.voiceRangePreset,
+  )
+  const selectedBeatboxMeta = getOptionMeta(
+    beatboxTemplateOptions,
+    arrangementConfig.beatboxTemplate,
+  )
   const arrangementDurationMs = selectedArrangement
     ? getArrangementDurationMs(selectedArrangement.parts_json)
     : 0
@@ -3762,8 +3874,9 @@ export function StudioPage() {
 
             <p className="panel__summary">
               FOUNDATION Phase 5 asks for 2-3 arrangement candidates with range, leap, and
-              parallel-motion constraints. This pass keeps it rule-based and editable, with
-              optional beatbox support.
+              parallel-motion constraints. Phase 8 polish adds difficulty presets, voice-range
+              presets, and 3-5 beatbox template choices so the compare pass feels closer to the
+              roadmap.
             </p>
 
             <div className="field-grid">
@@ -3802,25 +3915,69 @@ export function StudioPage() {
                   <option value="strict">Strict</option>
                 </select>
               </label>
-            </div>
 
-            <div className="toggle-grid">
-              <label className="toggle-card">
-                <input
-                  type="checkbox"
-                  checked={arrangementConfig.includePercussion}
+              <label className="field">
+                <span>Lead range preset</span>
+                <select
+                  className="text-input"
+                  value={arrangementConfig.voiceRangePreset}
                   onChange={(event) =>
                     setArrangementConfig((current) => ({
                       ...current,
-                      includePercussion: event.target.checked,
+                      voiceRangePreset: event.target.value,
                     }))
                   }
-                />
-                <div>
-                  <strong>Beatbox template</strong>
-                  <span>Add a simple kick/snare support part to each candidate batch.</span>
-                </div>
+                >
+                  {voiceRangePresetOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
+
+              <label className="field">
+                <span>Beatbox template</span>
+                <select
+                  className="text-input"
+                  value={arrangementConfig.beatboxTemplate}
+                  onChange={(event) =>
+                    setArrangementConfig((current) => ({
+                      ...current,
+                      beatboxTemplate: event.target.value,
+                    }))
+                  }
+                >
+                  {beatboxTemplateOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mini-grid">
+              <div className="mini-card mini-card--stack">
+                <span>Difficulty preset</span>
+                <strong>{selectedDifficultyMeta.label}</strong>
+                <small>{selectedDifficultyMeta.description}</small>
+              </div>
+              <div className="mini-card mini-card--stack">
+                <span>Lead range</span>
+                <strong>{selectedVoiceRangeMeta.label}</strong>
+                <small>{selectedVoiceRangeMeta.description}</small>
+              </div>
+              <div className="mini-card mini-card--stack">
+                <span>Beatbox</span>
+                <strong>{selectedBeatboxMeta.label}</strong>
+                <small>{selectedBeatboxMeta.description}</small>
+              </div>
+              <div className="mini-card mini-card--stack">
+                <span>Candidate batch</span>
+                <strong>A / B / C compare</strong>
+                <small>Generate three rule-based variations from the same melody draft.</small>
+              </div>
             </div>
 
             <div className="button-row">
@@ -3899,10 +4056,10 @@ export function StudioPage() {
                     <div className="candidate-card__header">
                       <div>
                         <strong>
-                          {arrangement.candidate_code} • {arrangement.title}
+                          {arrangement.candidate_code} - {arrangement.title}
                         </strong>
                         <span>
-                          {arrangement.voice_mode} | {arrangement.difficulty}
+                          {arrangement.voice_mode} | {getOptionMeta(arrangementDifficultyOptions, arrangement.difficulty).label}
                         </span>
                       </div>
 
@@ -3919,30 +4076,48 @@ export function StudioPage() {
 
                     <div className="mini-grid">
                       <div className="mini-card">
-                        <span>Parts</span>
-                        <strong>{arrangement.part_count}</strong>
+                        <span>Lead fit</span>
+                        <strong>{formatCompactPercent(arrangement.comparison_summary?.lead_range_fit_percent)}</strong>
                       </div>
                       <div className="mini-card">
-                        <span>Style</span>
-                        <strong>{arrangement.style}</strong>
+                        <span>Max leap</span>
+                        <strong>{arrangement.comparison_summary?.support_max_leap ?? 'n/a'}</strong>
                       </div>
                       <div className="mini-card">
-                        <span>Updated</span>
-                        <strong>{formatDate(arrangement.updated_at)}</strong>
+                        <span>Parallel alerts</span>
+                        <strong>{arrangement.comparison_summary?.parallel_motion_alerts ?? 0}</strong>
                       </div>
                       <div className="mini-card">
-                        <span>Generation</span>
-                        <strong>{arrangementGenerationId ? arrangementGenerationId.slice(0, 8) : 'n/a'}</strong>
+                        <span>Beatbox hits</span>
+                        <strong>{arrangement.comparison_summary?.beatbox_note_count ?? 0}</strong>
                       </div>
                     </div>
 
+                    <div className="candidate-chip-row">
+                      <span className="candidate-chip">
+                        {getOptionMeta(voiceRangePresetOptions, arrangement.voice_range_preset).label}
+                      </span>
+                      <span className="candidate-chip">
+                        {getOptionMeta(beatboxTemplateOptions, arrangement.beatbox_template).label}
+                      </span>
+                      <span className="candidate-chip">{arrangement.style}</span>
+                      <span className="candidate-chip">
+                        {arrangementGenerationId
+                          ? arrangementGenerationId.slice(0, 8)
+                          : arrangement.generation_id.slice(0, 8)}
+                      </span>
+                    </div>
+
                     <div className="mini-card mini-card--stack">
-                      <span>Parts overview</span>
+                      <span>Comparison summary</span>
                       <strong>
                         {arrangement.parts_json
                           .map((part) => `${part.part_name} (${part.notes.length})`)
-                          .join(' • ')}
+                          .join(' / ')}
                       </strong>
+                      <small>
+                        {getOptionMeta(voiceRangePresetOptions, arrangement.voice_range_preset).description}
+                      </small>
                     </div>
 
                     {arrangement.midi_artifact_url ? (
@@ -4009,15 +4184,37 @@ export function StudioPage() {
                     </strong>
                   </div>
                   <div className="mini-card">
-                    <span>Percussion</span>
+                    <span>Lead range preset</span>
                     <strong>
-                      {selectedArrangement.constraint_json?.include_percussion ? 'Included' : 'Off'}
+                      {getOptionMeta(voiceRangePresetOptions, selectedArrangement.voice_range_preset).label}
                     </strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Beatbox template</span>
+                    <strong>
+                      {getOptionMeta(beatboxTemplateOptions, selectedArrangement.beatbox_template).label}
+                    </strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Lead fit</span>
+                    <strong>{formatCompactPercent(selectedArrangement.comparison_summary?.lead_range_fit_percent)}</strong>
                   </div>
                   <div className="mini-card">
                     <span>Candidate parts</span>
                     <strong>{selectedArrangement.part_count}</strong>
                   </div>
+                </div>
+
+                <div className="mini-card mini-card--stack">
+                  <span>Compare readout</span>
+                  <strong>
+                    {selectedArrangement.comparison_summary?.parallel_motion_alerts ?? 0} parallel alerts,{' '}
+                    {selectedArrangement.comparison_summary?.support_max_leap ?? 0} semitone max leap,{' '}
+                    {selectedArrangement.comparison_summary?.beatbox_note_count ?? 0} beatbox hits
+                  </strong>
+                  <small>
+                    {getOptionMeta(voiceRangePresetOptions, selectedArrangement.voice_range_preset).description}
+                  </small>
                 </div>
 
                 <div className="support-stack">
@@ -4496,3 +4693,4 @@ export function StudioPage() {
     </div>
   )
 }
+

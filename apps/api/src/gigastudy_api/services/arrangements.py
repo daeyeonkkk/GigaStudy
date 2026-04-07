@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.arrangements import (
     ArrangementCandidateResponse,
+    ArrangementComparisonSummaryResponse,
     ArrangementGenerateRequest,
     ArrangementGenerateResponse,
     ArrangementListResponse,
@@ -85,6 +86,105 @@ NOTE_TYPE_SPECS = (
     (2, "eighth", 0),
     (1, "16th", 0),
 )
+VOICE_RANGE_PRESETS = {
+    "soprano": {
+        "label": "S (Soprano)",
+        "description": "Highest lead range with compact upper support for bright ensemble stacks.",
+        "bands": {
+            "lead": (60, 81, "C4-A5"),
+            "high": (55, 76, "G3-E5"),
+            "mid": (50, 71, "D3-B4"),
+            "low": (45, 67, "A2-G4"),
+            "bass": (38, 60, "D2-C4"),
+        },
+    },
+    "alto": {
+        "label": "A (Alto)",
+        "description": "Balanced default range with stable inner voices for most MVP practice takes.",
+        "bands": {
+            "lead": (55, 76, "G3-E5"),
+            "high": (50, 71, "D3-B4"),
+            "mid": (45, 67, "A2-G4"),
+            "low": (40, 62, "E2-D4"),
+            "bass": (36, 57, "C2-A3"),
+        },
+    },
+    "tenor": {
+        "label": "T (Tenor)",
+        "description": "Lower lead preset that keeps the harmony stack comfortable for male ensemble practice.",
+        "bands": {
+            "lead": (48, 69, "C3-A4"),
+            "high": (43, 64, "G2-E4"),
+            "mid": (38, 59, "D2-B3"),
+            "low": (33, 53, "A1-F3"),
+            "bass": (28, 48, "E1-C3"),
+        },
+    },
+    "bass": {
+        "label": "B (Bass)",
+        "description": "Lowest lead preset with wide lower support spacing and conservative leap limits.",
+        "bands": {
+            "lead": (40, 60, "E2-C4"),
+            "high": (35, 55, "B1-G3"),
+            "mid": (30, 50, "F1-D3"),
+            "low": (26, 45, "D1-A2"),
+            "bass": (24, 43, "C1-G2"),
+        },
+    },
+    "baritone": {
+        "label": "Baritone",
+        "description": "Middle-low lead preset that sits between tenor agility and bass support depth.",
+        "bands": {
+            "lead": (45, 65, "A2-F4"),
+            "high": (40, 60, "E2-C4"),
+            "mid": (35, 55, "B1-G3"),
+            "low": (30, 50, "F1-D3"),
+            "bass": (26, 45, "D1-A2"),
+        },
+    },
+}
+VOICE_RANGE_PRESET_ALIASES = {
+    "s": "soprano",
+    "soprano": "soprano",
+    "a": "alto",
+    "alto": "alto",
+    "t": "tenor",
+    "tenor": "tenor",
+    "b": "bass",
+    "bass": "bass",
+    "baritone": "baritone",
+    "bar": "baritone",
+}
+BEATBOX_TEMPLATES = {
+    "off": {
+        "label": "Off",
+        "description": "No percussion layer.",
+    },
+    "pulse": {
+        "label": "Pulse",
+        "description": "Quarter-note kick and snare pulse for steady practice timing.",
+    },
+    "drive": {
+        "label": "Drive",
+        "description": "Busier groove with eighth-note hats and extra kick support.",
+    },
+    "halftime": {
+        "label": "Half-Time",
+        "description": "Wider backbeat with slower snare emphasis.",
+    },
+    "syncopated": {
+        "label": "Syncopated",
+        "description": "Off-beat accents for more rhythmic lift without full drum programming.",
+    },
+}
+BEATBOX_TEMPLATE_ALIASES = {
+    "off": "off",
+    "none": "off",
+    "pulse": "pulse",
+    "drive": "drive",
+    "halftime": "halftime",
+    "syncopated": "syncopated",
+}
 
 
 @dataclass(frozen=True)
@@ -120,6 +220,7 @@ class ArrangementNote:
 class VoiceSpec:
     part_name: str
     role: str
+    slot_key: str
     range_label: str
     min_pitch: int
     max_pitch: int
@@ -142,10 +243,10 @@ CANDIDATE_SPECS = (
         title="Close Stack",
         voice_mode="FOUR_PART_CLOSE",
         voices=(
-            VoiceSpec("Lead Melody", "MELODY", "Source melody", 36, 96, (0,), is_melody=True),
-            VoiceSpec("High Harmony", "HARMONY", "G3-E5", 55, 76, (-3, -4, -5, -7)),
-            VoiceSpec("Mid Harmony", "HARMONY", "C3-C5", 48, 72, (-7, -8, -9, -12)),
-            VoiceSpec("Bass", "BASS", "E2-C4", 40, 60, (-12, -15, -17, -19, -24)),
+            VoiceSpec("Lead Melody", "MELODY", "lead", "Source melody", 36, 96, (0,), is_melody=True),
+            VoiceSpec("High Harmony", "HARMONY", "high", "G3-E5", 55, 76, (-3, -4, -5, -7)),
+            VoiceSpec("Mid Harmony", "HARMONY", "mid", "C3-C5", 48, 72, (-7, -8, -9, -12)),
+            VoiceSpec("Bass", "BASS", "bass", "E2-C4", 40, 60, (-12, -15, -17, -19, -24)),
         ),
     ),
     CandidateSpec(
@@ -153,10 +254,10 @@ CANDIDATE_SPECS = (
         title="Open Stack",
         voice_mode="FOUR_PART_OPEN",
         voices=(
-            VoiceSpec("Lead Melody", "MELODY", "Source melody", 36, 96, (0,), is_melody=True),
-            VoiceSpec("High Harmony", "HARMONY", "G3-E5", 55, 76, (-5, -7, -8, -10)),
-            VoiceSpec("Low Harmony", "HARMONY", "A2-A4", 45, 69, (-10, -12, -14, -17)),
-            VoiceSpec("Bass", "BASS", "E2-C4", 40, 60, (-17, -19, -24)),
+            VoiceSpec("Lead Melody", "MELODY", "lead", "Source melody", 36, 96, (0,), is_melody=True),
+            VoiceSpec("High Harmony", "HARMONY", "high", "G3-E5", 55, 76, (-5, -7, -8, -10)),
+            VoiceSpec("Low Harmony", "HARMONY", "low", "A2-A4", 45, 69, (-10, -12, -14, -17)),
+            VoiceSpec("Bass", "BASS", "bass", "E2-C4", 40, 60, (-17, -19, -24)),
         ),
     ),
     CandidateSpec(
@@ -164,11 +265,11 @@ CANDIDATE_SPECS = (
         title="Five-Part Lift",
         voice_mode="FIVE_PART_STACK",
         voices=(
-            VoiceSpec("Lead Melody", "MELODY", "Source melody", 36, 96, (0,), is_melody=True),
-            VoiceSpec("Top Harmony", "HARMONY", "A3-F5", 57, 77, (-3, -4, -5)),
-            VoiceSpec("Mid Harmony", "HARMONY", "F3-D5", 53, 74, (-6, -7, -8, -9)),
-            VoiceSpec("Low Harmony", "HARMONY", "C3-A4", 48, 69, (-10, -12, -14)),
-            VoiceSpec("Bass", "BASS", "E2-C4", 40, 60, (-17, -19, -24)),
+            VoiceSpec("Lead Melody", "MELODY", "lead", "Source melody", 36, 96, (0,), is_melody=True),
+            VoiceSpec("Top Harmony", "HARMONY", "high", "A3-F5", 57, 77, (-3, -4, -5)),
+            VoiceSpec("Mid Harmony", "HARMONY", "mid", "F3-D5", 53, 74, (-6, -7, -8, -9)),
+            VoiceSpec("Low Harmony", "HARMONY", "low", "C3-A4", 48, 69, (-10, -12, -14)),
+            VoiceSpec("Bass", "BASS", "bass", "E2-C4", 40, 60, (-17, -19, -24)),
         ),
     ),
 )
@@ -234,6 +335,56 @@ def _sign(value: int) -> int:
     return 0
 
 
+def _normalize_voice_range_preset(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    return VOICE_RANGE_PRESET_ALIASES.get(normalized, "alto")
+
+
+def _normalize_beatbox_template(value: str | None, include_percussion: bool) -> str:
+    if value is None:
+        return "pulse" if include_percussion else "off"
+
+    normalized = (value or "").strip().lower()
+    normalized = BEATBOX_TEMPLATE_ALIASES.get(normalized, normalized)
+    if normalized not in BEATBOX_TEMPLATES:
+        return "pulse" if include_percussion else "off"
+
+    return normalized
+
+
+def _apply_voice_range_preset(candidate_spec: CandidateSpec, preset_key: str) -> CandidateSpec:
+    preset = VOICE_RANGE_PRESETS[preset_key]
+    bands = preset["bands"]
+    voices: list[VoiceSpec] = []
+
+    for spec in candidate_spec.voices:
+        if spec.slot_key not in bands:
+            voices.append(spec)
+            continue
+
+        min_pitch, max_pitch, range_label = bands[spec.slot_key]
+        voices.append(
+            VoiceSpec(
+                part_name=spec.part_name,
+                role=spec.role,
+                slot_key=spec.slot_key,
+                range_label=range_label,
+                min_pitch=min_pitch,
+                max_pitch=max_pitch,
+                preferred_offsets=spec.preferred_offsets,
+                is_melody=spec.is_melody,
+                is_percussion=spec.is_percussion,
+            )
+        )
+
+    return CandidateSpec(
+        candidate_code=candidate_spec.candidate_code,
+        title=candidate_spec.title,
+        voice_mode=candidate_spec.voice_mode,
+        voices=tuple(voices),
+    )
+
+
 def _build_note_objects(notes_json: list[dict] | dict) -> list[ArrangementNote]:
     if not isinstance(notes_json, list):
         return []
@@ -251,6 +402,79 @@ def _build_note_objects(notes_json: list[dict] | dict) -> list[ArrangementNote]:
         )
 
     return sorted(notes, key=lambda note: (note.start_ms, note.pitch_midi))
+
+
+def _measure_max_leap(notes: list[ArrangementNote]) -> int:
+    if len(notes) < 2:
+        return 0
+
+    return max(abs(current.pitch_midi - previous.pitch_midi) for previous, current in zip(notes, notes[1:]))
+
+
+def _count_parallel_motion_alerts(
+    melody_notes: list[ArrangementNote],
+    support_notes: list[ArrangementNote],
+) -> int:
+    alert_count = 0
+    limit = min(len(melody_notes), len(support_notes))
+    if limit < 2:
+        return 0
+
+    for index in range(1, limit):
+        previous_melody = melody_notes[index - 1]
+        current_melody = melody_notes[index]
+        previous_support = support_notes[index - 1]
+        current_support = support_notes[index]
+        previous_interval = abs(previous_melody.pitch_midi - previous_support.pitch_midi) % 12
+        current_interval = abs(current_melody.pitch_midi - current_support.pitch_midi) % 12
+        melody_motion = _sign(current_melody.pitch_midi - previous_melody.pitch_midi)
+        support_motion = _sign(current_support.pitch_midi - previous_support.pitch_midi)
+        if melody_motion == support_motion != 0 and previous_interval in {0, 7} and current_interval == previous_interval:
+            alert_count += 1
+
+    return alert_count
+
+
+def _build_comparison_summary(
+    parts_json: list[dict],
+    voice_range_preset: str,
+    beatbox_template: str,
+) -> ArrangementComparisonSummaryResponse:
+    preset = VOICE_RANGE_PRESETS[voice_range_preset]
+    lead_min_pitch, lead_max_pitch, _ = preset["bands"]["lead"]
+    lead_part = next((part for part in parts_json if str(part.get("role", "")).upper() == "MELODY"), None)
+    lead_notes = _build_note_objects(lead_part.get("notes", [])) if isinstance(lead_part, dict) else []
+    support_parts = [
+        part for part in parts_json if str(part.get("role", "")).upper() not in {"MELODY", "PERCUSSION"}
+    ]
+    support_notes = [_build_note_objects(part.get("notes", [])) for part in support_parts]
+    lead_range_fit_percent = (
+        round(
+            100
+            * sum(1 for note in lead_notes if lead_min_pitch <= note.pitch_midi <= lead_max_pitch)
+            / len(lead_notes),
+            1,
+        )
+        if lead_notes
+        else 0.0
+    )
+    support_max_leap = max((_measure_max_leap(notes) for notes in support_notes), default=0)
+    parallel_motion_alerts = sum(
+        _count_parallel_motion_alerts(lead_notes, notes) for notes in support_notes
+    )
+    beatbox_note_count = sum(
+        len(_build_note_objects(part.get("notes", [])))
+        for part in parts_json
+        if str(part.get("role", "")).upper() == "PERCUSSION"
+    )
+
+    return ArrangementComparisonSummaryResponse(
+        lead_range_fit_percent=lead_range_fit_percent,
+        support_max_leap=support_max_leap,
+        parallel_motion_alerts=parallel_motion_alerts,
+        support_part_count=len(support_parts),
+        beatbox_note_count=beatbox_note_count if beatbox_template != "off" else 0,
+    )
 
 
 def _candidate_pitches(spec: VoiceSpec, melody_pitch: int, upper_pitch: int | None) -> list[int]:
@@ -342,29 +566,67 @@ def _generate_support_part(
     return generated
 
 
-def _generate_percussion_part(melody_notes: list[ArrangementNote], bpm: int) -> list[ArrangementNote]:
+def _generate_percussion_part(
+    melody_notes: list[ArrangementNote],
+    bpm: int,
+    beatbox_template: str,
+) -> list[ArrangementNote]:
     if not melody_notes:
         return []
 
     beat_ms = max(200, round(60000 / max(1, bpm)))
     end_ms = melody_notes[-1].end_ms
     notes: list[ArrangementNote] = []
-    current_start = 0
-    beat_index = 0
-    while current_start < end_ms:
-        pitch = 36 if beat_index % 4 in {0, 2} else 38
-        note_end = min(end_ms, current_start + max(90, beat_ms // 2))
+    step_ms = max(80, beat_ms // 2)
+    step_count = max(1, (end_ms + step_ms - 1) // step_ms)
+
+    def append_hit(start_ms: int, pitch_midi: int, velocity: int, duration_divisor: int = 2) -> None:
+        note_end = min(end_ms, start_ms + max(70, beat_ms // duration_divisor))
         notes.append(
             ArrangementNote(
-                pitch_midi=pitch,
-                start_ms=current_start,
+                pitch_midi=pitch_midi,
+                start_ms=start_ms,
                 end_ms=note_end,
                 phrase_index=0,
-                velocity=96,
+                velocity=velocity,
             )
         )
-        current_start += beat_ms
-        beat_index += 1
+
+    for step_index in range(step_count):
+        start_ms = step_index * step_ms
+        beat_index = step_index // 2
+        within_beat = step_index % 2
+        beat_in_bar = beat_index % 4
+
+        if beatbox_template == "drive":
+            append_hit(start_ms, 42, 64, duration_divisor=3)
+            if beat_in_bar in {0, 2} and within_beat == 0:
+                append_hit(start_ms, 36, 108)
+            if beat_in_bar in {1, 3} and within_beat == 0:
+                append_hit(start_ms, 38, 102)
+            if beat_in_bar == 2 and within_beat == 1:
+                append_hit(start_ms, 36, 88)
+        elif beatbox_template == "halftime":
+            if within_beat == 0:
+                append_hit(start_ms, 42, 58, duration_divisor=3)
+            if beat_in_bar == 0 and within_beat == 0:
+                append_hit(start_ms, 36, 106)
+            if beat_in_bar == 2 and within_beat == 0:
+                append_hit(start_ms, 38, 110)
+            if beat_in_bar == 1 and within_beat == 1:
+                append_hit(start_ms, 36, 84)
+        elif beatbox_template == "syncopated":
+            if within_beat == 0:
+                append_hit(start_ms, 42, 60, duration_divisor=3)
+            if (beat_in_bar, within_beat) in {(0, 0), (1, 1), (2, 1), (3, 0)}:
+                append_hit(start_ms, 36, 100)
+            if beat_in_bar in {1, 3} and within_beat == 0:
+                append_hit(start_ms, 38, 96)
+        else:
+            if within_beat == 0:
+                pitch = 36 if beat_in_bar in {0, 2} else 38
+                velocity = 100 if pitch == 36 else 94
+                append_hit(start_ms, pitch, velocity)
 
     return notes
 
@@ -372,7 +634,7 @@ def _generate_percussion_part(melody_notes: list[ArrangementNote], bpm: int) -> 
 def _build_candidate_parts(
     melody_notes: list[ArrangementNote],
     candidate_spec: CandidateSpec,
-    include_percussion: bool,
+    beatbox_template: str,
     bpm: int,
     tonic: int | None,
     scale_intervals: set[int],
@@ -404,13 +666,16 @@ def _build_candidate_parts(
         )
         upper_part_notes = current_part_notes
 
-    if include_percussion:
+    if beatbox_template != "off":
         parts.append(
             {
-                "part_name": "Beatbox Template",
+                "part_name": f"Beatbox {BEATBOX_TEMPLATES[beatbox_template]['label']}",
                 "role": "PERCUSSION",
-                "range_label": "Kick / snare pulse",
-                "notes": [note.to_payload() for note in _generate_percussion_part(melody_notes, bpm)],
+                "range_label": BEATBOX_TEMPLATES[beatbox_template]["description"],
+                "notes": [
+                    note.to_payload()
+                    for note in _generate_percussion_part(melody_notes, bpm, beatbox_template)
+                ],
             }
         )
 
@@ -768,10 +1033,17 @@ def _build_midi_bytes(parts_json: list[dict], bpm: int) -> bytes:
     events: list[tuple[int, int, bytes]] = [
         (0, 0, bytes([0xFF, 0x51, 0x03]) + microseconds_per_quarter.to_bytes(3, "big"))
     ]
+    melodic_channel = 0
 
-    for channel, part in enumerate(parts_json):
+    for part in parts_json:
         notes = part.get("notes", [])
-        midi_channel = channel % 16
+        if str(part.get("role", "")).upper() == "PERCUSSION":
+            midi_channel = 9
+        else:
+            if melodic_channel == 9:
+                melodic_channel += 1
+            midi_channel = melodic_channel % 16
+            melodic_channel += 1
         for item in notes:
             pitch_midi = int(item["pitch_midi"])
             start_tick = int(round((int(item["start_ms"]) / beat_ms) * PPQN))
@@ -817,6 +1089,19 @@ def _write_arrangement_musicxml(
     return len(musicxml_bytes)
 
 
+def _normalize_comparison_summary(value: dict | None) -> ArrangementComparisonSummaryResponse | None:
+    if not isinstance(value, dict):
+        return None
+
+    return ArrangementComparisonSummaryResponse(
+        lead_range_fit_percent=float(value.get("lead_range_fit_percent", 0.0)),
+        support_max_leap=int(value.get("support_max_leap", 0)),
+        parallel_motion_alerts=int(value.get("parallel_motion_alerts", 0)),
+        support_part_count=int(value.get("support_part_count", 0)),
+        beatbox_note_count=int(value.get("beatbox_note_count", 0)),
+    )
+
+
 def _build_arrangement_response(arrangement: Arrangement, request: Request) -> ArrangementCandidateResponse:
     midi_artifact_url = (
         str(request.url_for("download_arrangement_midi", arrangement_id=str(arrangement.arrangement_id)))
@@ -829,6 +1114,19 @@ def _build_arrangement_response(arrangement: Arrangement, request: Request) -> A
         else None
     )
     parts_json = arrangement.parts_json if isinstance(arrangement.parts_json, list) else []
+    constraint_json = arrangement.constraint_json if isinstance(arrangement.constraint_json, dict) else {}
+    voice_range_preset = _normalize_voice_range_preset(
+        str(constraint_json.get("voice_range_preset", "alto"))
+    )
+    beatbox_template = _normalize_beatbox_template(
+        str(constraint_json.get("beatbox_template")) if constraint_json.get("beatbox_template") is not None else None,
+        bool(constraint_json.get("include_percussion")),
+    )
+    comparison_summary = _normalize_comparison_summary(
+        constraint_json.get("comparison_summary") if isinstance(constraint_json, dict) else None
+    )
+    if comparison_summary is None:
+        comparison_summary = _build_comparison_summary(parts_json, voice_range_preset, beatbox_template)
 
     return ArrangementCandidateResponse(
         arrangement_id=arrangement.arrangement_id,
@@ -842,7 +1140,10 @@ def _build_arrangement_response(arrangement: Arrangement, request: Request) -> A
         difficulty=arrangement.difficulty,
         voice_mode=arrangement.voice_mode,
         part_count=arrangement.part_count,
+        voice_range_preset=voice_range_preset,
+        beatbox_template=beatbox_template,
         constraint_json=arrangement.constraint_json,
+        comparison_summary=comparison_summary,
         parts_json=parts_json,
         midi_artifact_url=midi_artifact_url,
         musicxml_artifact_url=musicxml_artifact_url,
@@ -922,43 +1223,51 @@ def generate_arrangements(
     generation_id = uuid4()
     difficulty_key = payload.difficulty.lower()
     max_leap = MAX_LEAP_BY_DIFFICULTY.get(difficulty_key, MAX_LEAP_BY_DIFFICULTY["basic"])
+    voice_range_preset = _normalize_voice_range_preset(payload.voice_range_preset)
+    beatbox_template = _normalize_beatbox_template(payload.beatbox_template, payload.include_percussion)
     tonic, scale_intervals = _normalize_key_name(melody_draft.key_estimate or project.base_key)
     bpm = melody_draft.bpm or project.bpm or 90
     now = datetime.now(timezone.utc)
     created_items: list[Arrangement] = []
 
     for candidate_spec in CANDIDATE_SPECS[: payload.candidate_count]:
+        resolved_candidate_spec = _apply_voice_range_preset(candidate_spec, voice_range_preset)
         parts_json = _build_candidate_parts(
             melody_notes,
-            candidate_spec,
-            payload.include_percussion,
+            resolved_candidate_spec,
+            beatbox_template,
             bpm,
             tonic,
             scale_intervals,
             max_leap,
         )
+        comparison_summary = _build_comparison_summary(parts_json, voice_range_preset, beatbox_template)
         arrangement = Arrangement(
             generation_id=generation_id,
             project_id=project.project_id,
             melody_draft_id=melody_draft.melody_draft_id,
-            candidate_code=candidate_spec.candidate_code,
-            title=f"{candidate_spec.candidate_code} • {candidate_spec.title}",
+            candidate_code=resolved_candidate_spec.candidate_code,
+            title=resolved_candidate_spec.title,
             input_source_type="MELODY_DRAFT",
             style=payload.style,
             difficulty=payload.difficulty,
-            voice_mode=candidate_spec.voice_mode,
+            voice_mode=resolved_candidate_spec.voice_mode,
             part_count=len(parts_json),
             constraint_json={
                 "engine_version": ARRANGEMENT_ENGINE_VERSION,
-                "include_percussion": payload.include_percussion,
+                "include_percussion": beatbox_template != "off",
+                "beatbox_template": beatbox_template,
+                "voice_range_preset": voice_range_preset,
                 "max_leap": max_leap,
                 "parallel_avoidance": True,
                 "source_key": melody_draft.key_estimate or project.base_key,
+                "comparison_summary": comparison_summary.model_dump(),
             },
             parts_json=parts_json,
             created_at=now,
             updated_at=now,
         )
+        arrangement.title = resolved_candidate_spec.title
         session.add(arrangement)
         session.flush()
 
@@ -1028,9 +1337,26 @@ def update_arrangement(
     if not parts_json:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="parts_json cannot be empty")
 
+    constraint_json = arrangement.constraint_json if isinstance(arrangement.constraint_json, dict) else {}
+    voice_range_preset = _normalize_voice_range_preset(str(constraint_json.get("voice_range_preset", "alto")))
+    beatbox_template = _normalize_beatbox_template(
+        str(constraint_json.get("beatbox_template")) if constraint_json.get("beatbox_template") is not None else None,
+        bool(constraint_json.get("include_percussion")),
+    )
     arrangement.parts_json = parts_json
     arrangement.part_count = len(parts_json)
     arrangement.title = payload.title or arrangement.title
+    arrangement.constraint_json = {
+        **constraint_json,
+        "voice_range_preset": voice_range_preset,
+        "beatbox_template": beatbox_template,
+        "include_percussion": beatbox_template != "off",
+        "comparison_summary": _build_comparison_summary(
+            parts_json,
+            voice_range_preset,
+            beatbox_template,
+        ).model_dump(),
+    }
     arrangement.updated_at = datetime.now(timezone.utc)
     if arrangement.midi_storage_key:
         arrangement.midi_byte_size = _write_arrangement_midi(
@@ -1075,3 +1401,4 @@ def get_arrangement_musicxml_path(session: Session, arrangement_id: UUID) -> Arr
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MusicXML file not found")
 
     return arrangement
+

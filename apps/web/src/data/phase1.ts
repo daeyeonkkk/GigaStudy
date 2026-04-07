@@ -1,42 +1,42 @@
 export const priorityCards = [
   {
-    title: 'Failure visibility',
+    title: 'Difficulty presets',
     items: [
-      'Keep failed track state visible after upload or processing problems.',
-      'Show the latest analysis failure reason instead of hiding it behind a generic error.',
-      'Make retry paths obvious from both studio and admin views.',
+      'Keep beginner, basic, and strict presets attached to the arrangement generator.',
+      'Explain what each preset changes before the user generates a candidate batch.',
+      'Use the selected preset when comparing A/B/C instead of hiding it in JSON.',
     ],
   },
   {
-    title: 'Retry workflows',
+    title: 'Voice range presets',
     items: [
-      'Retry failed analysis jobs without recreating the whole project context.',
-      'Retry track processing after the source audio or canonical artifact is fixed.',
-      'Refresh operations state immediately after recovery actions.',
+      'Offer S, A, T, B, and Baritone lead presets directly in the studio.',
+      'Push the selected preset into the rule-based arrangement engine.',
+      'Show whether each candidate still fits the chosen lead range well.',
     ],
   },
   {
-    title: 'Policies and traceability',
+    title: 'Candidate comparison',
     items: [
-      'Expose timeout and upload-expiry policy values in one place.',
-      'Track which analysis, melody, and arrangement engine versions are active.',
-      'Keep release-gate signals small enough to scan quickly.',
+      'Surface lead-fit, max leap, and parallel-motion warnings on the compare cards.',
+      'Make candidate A/B/C feel like a real choice, not three opaque JSON blobs.',
+      'Keep the editable arrangement JSON available after the compare pass.',
     ],
   },
   {
-    title: 'Admin monitoring baseline',
+    title: 'Beatbox templates',
     items: [
-      'List recent failed tracks and recent analysis jobs together.',
-      'Show project counts, ready-take counts, and failure counts at a glance.',
-      'Leave room for a fuller dashboard without reworking the API shape.',
+      'Expand from a single on/off percussion toggle to multiple beatbox templates.',
+      'Keep template selection lightweight and rule-based for P1.',
+      'Carry the chosen template through comparison, playback, and export.',
     ],
   },
 ] as const
 
 export const currentLaneTickets = [
-  'Phase 7',
-  'Failure visibility',
-  'Analysis retry',
-  'Ops dashboard',
-  'Timeout and expiry policy',
+  'Phase 8',
+  'Difficulty presets',
+  'Voice range presets',
+  'Candidate compare UI',
+  'Beatbox templates',
 ] as const

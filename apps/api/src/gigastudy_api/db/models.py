@@ -96,6 +96,10 @@ class Project(TimestampMixin, Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
+    arrangements: Mapped[list["Arrangement"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
 
 class Track(TimestampMixin, Base):
@@ -256,3 +260,31 @@ class MelodyDraft(TimestampMixin, Base):
 
     project: Mapped["Project"] = relationship(back_populates="melody_drafts")
     track: Mapped["Track"] = relationship(back_populates="melody_drafts")
+    arrangements: Mapped[list["Arrangement"]] = relationship(
+        back_populates="melody_draft",
+        cascade="all, delete-orphan",
+    )
+
+
+class Arrangement(TimestampMixin, Base):
+    __tablename__ = "arrangements"
+
+    arrangement_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    generation_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False, index=True)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    melody_draft_id: Mapped[UUID] = mapped_column(ForeignKey("melody_drafts.melody_draft_id"), nullable=False, index=True)
+    candidate_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    input_source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    style: Mapped[str] = mapped_column(String(32), nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(32), nullable=False)
+    voice_mode: Mapped[str] = mapped_column(String(24), nullable=False)
+    part_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    constraint_json: Mapped[dict | None] = mapped_column(JSON)
+    parts_json: Mapped[list[dict] | dict] = mapped_column(JSON, nullable=False)
+    midi_storage_key: Mapped[str | None] = mapped_column(String(512))
+    midi_byte_size: Mapped[int | None] = mapped_column(Integer)
+    musicxml_storage_key: Mapped[str | None] = mapped_column(String(512))
+
+    project: Mapped["Project"] = relationship(back_populates="arrangements")
+    melody_draft: Mapped["MelodyDraft"] = relationship(back_populates="arrangements")

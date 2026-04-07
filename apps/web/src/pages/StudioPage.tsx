@@ -131,6 +131,32 @@ type MelodyDraft = {
   updated_at: string
 }
 
+type ArrangementPart = {
+  part_name: string
+  role: string
+  range_label: string
+  notes: MelodyNote[]
+}
+
+type ArrangementCandidate = {
+  arrangement_id: string
+  generation_id: string
+  project_id: string
+  melody_draft_id: string
+  candidate_code: string
+  title: string
+  input_source_type: string
+  style: string
+  difficulty: string
+  voice_mode: string
+  part_count: number
+  constraint_json: Record<string, unknown> | null
+  parts_json: ArrangementPart[]
+  midi_artifact_url: string | null
+  created_at: string
+  updated_at: string
+}
+
 type TakeTrack = {
   track_id: string
   project_id: string
@@ -192,6 +218,8 @@ type StudioSnapshotResponse = {
   takes: TakeTrack[]
   latest_device_profile: DeviceProfile | null
   mixdown: MixdownTrack | null
+  arrangement_generation_id: string | null
+  arrangements: ArrangementCandidate[]
 }
 
 type TrackAnalysisResponse = {
@@ -202,6 +230,12 @@ type TrackAnalysisResponse = {
   alignment_confidence: number | null
   latest_job: AnalysisJobSummary
   latest_score: TrackScoreSummary
+}
+
+type ArrangementConfig = {
+  style: string
+  difficulty: string
+  includePercussion: boolean
 }
 
 type DeviceProfileState =
@@ -264,6 +298,12 @@ const defaultConstraintDraft: ConstraintDraft = {
   autoGainControl: true,
   noiseSuppression: true,
   channelCount: 1,
+}
+
+const defaultArrangementConfig: ArrangementConfig = {
+  style: 'contemporary',
+  difficulty: 'basic',
+  includePercussion: false,
 }
 
 const outputRouteOptions = [
@@ -552,6 +592,15 @@ export function StudioPage() {
   const [melodyState, setMelodyState] = useState<ActionState>({ phase: 'idle' })
   const [melodySaveState, setMelodySaveState] = useState<ActionState>({ phase: 'idle' })
   const [melodyNotesDraft, setMelodyNotesDraft] = useState<MelodyNote[]>([])
+  const [arrangementState, setArrangementState] = useState<ActionState>({ phase: 'idle' })
+  const [arrangementSaveState, setArrangementSaveState] = useState<ActionState>({ phase: 'idle' })
+  const [arrangementGenerationId, setArrangementGenerationId] = useState<string | null>(null)
+  const [arrangements, setArrangements] = useState<ArrangementCandidate[]>([])
+  const [selectedArrangementId, setSelectedArrangementId] = useState<string | null>(null)
+  const [arrangementTitleDraft, setArrangementTitleDraft] = useState('')
+  const [arrangementJsonDraft, setArrangementJsonDraft] = useState('[]')
+  const [arrangementConfig, setArrangementConfig] =
+    useState<ArrangementConfig>(defaultArrangementConfig)
   const [mixerState, setMixerState] = useState<Record<string, MixerTrackState>>({})
   const [mixdownSummary, setMixdownSummary] = useState<MixdownTrack | null>(null)
   const [mixdownPreviewState, setMixdownPreviewState] = useState<ActionState>({ phase: 'idle' })
@@ -682,6 +731,8 @@ export function StudioPage() {
     setGuideState({ phase: 'ready', guide: snapshot.guide })
     setTakesState({ phase: 'ready', items: snapshot.takes })
     setMixdownSummary(snapshot.mixdown)
+    setArrangementGenerationId(snapshot.arrangement_generation_id)
+    setArrangements(snapshot.arrangements)
     setAudioPreviews((current) => {
       const next = { ...current }
 
@@ -900,13 +951,33 @@ export function StudioPage() {
   useEffect(() => {
     setMelodyState({ phase: 'idle' })
     setMelodySaveState({ phase: 'idle' })
+    setArrangementState({ phase: 'idle' })
   }, [selectedTakeId])
+
+  useEffect(() => {
+    setArrangementSaveState({ phase: 'idle' })
+  }, [selectedArrangementId])
 
   useEffect(() => {
     const selectedTrack =
       takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
     setMelodyNotesDraft(selectedTrack?.latest_melody?.notes_json ?? [])
   }, [selectedTakeId, takesState.items])
+
+  useEffect(() => {
+    if (selectedArrangementId && arrangements.some((item) => item.arrangement_id === selectedArrangementId)) {
+      return
+    }
+
+    setSelectedArrangementId(arrangements[0]?.arrangement_id ?? null)
+  }, [arrangements, selectedArrangementId])
+
+  useEffect(() => {
+    const selectedArrangement =
+      arrangements.find((item) => item.arrangement_id === selectedArrangementId) ?? arrangements[0] ?? null
+    setArrangementTitleDraft(selectedArrangement?.title ?? '')
+    setArrangementJsonDraft(JSON.stringify(selectedArrangement?.parts_json ?? [], null, 2))
+  }, [arrangements, selectedArrangementId])
 
   async function refreshTakes(): Promise<TakeTrack[]> {
     const snapshot = await refreshStudioSnapshot()
@@ -1084,6 +1155,129 @@ export function StudioPage() {
       setMelodySaveState({
         phase: 'error',
         message: error instanceof Error ? error.message : 'Unable to save melody draft.',
+      })
+    }
+  }
+
+  async function handleGenerateArrangements(): Promise<void> {
+    if (!projectId) {
+      setArrangementState({ phase: 'error', message: 'Project id is missing.' })
+      return
+    }
+
+    if (!selectedTakeMelody) {
+      setArrangementState({
+        phase: 'error',
+        message: 'Extract a melody draft before generating arrangement candidates.',
+      })
+      return
+    }
+
+    setArrangementState({
+      phase: 'submitting',
+      message: 'Generating arrangement candidates from the latest melody draft...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl(`/api/projects/${projectId}/arrangements/generate`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          melody_draft_id: selectedTakeMelody.melody_draft_id,
+          style: arrangementConfig.style,
+          difficulty: arrangementConfig.difficulty,
+          include_percussion: arrangementConfig.includePercussion,
+          candidate_count: 3,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to generate arrangements.'))
+      }
+
+      const payload = (await response.json()) as {
+        generation_id: string
+        items: ArrangementCandidate[]
+      }
+      setArrangementGenerationId(payload.generation_id)
+      setArrangements(payload.items)
+      setSelectedArrangementId(payload.items[0]?.arrangement_id ?? null)
+      await refreshStudioSnapshot().catch(() => null)
+      setArrangementState({
+        phase: 'success',
+        message: `${payload.items.length} arrangement candidates are ready for comparison.`,
+      })
+    } catch (error) {
+      setArrangementState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to generate arrangements.',
+      })
+    }
+  }
+
+  async function handleSaveArrangement(): Promise<void> {
+    if (!selectedArrangement) {
+      setArrangementSaveState({
+        phase: 'error',
+        message: 'Select an arrangement candidate before saving edits.',
+      })
+      return
+    }
+
+    let parsedParts: ArrangementPart[]
+    try {
+      parsedParts = JSON.parse(arrangementJsonDraft) as ArrangementPart[]
+      if (!Array.isArray(parsedParts) || parsedParts.length === 0) {
+        throw new Error('Arrangement JSON must contain at least one part.')
+      }
+    } catch (error) {
+      setArrangementSaveState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Arrangement JSON could not be parsed.',
+      })
+      return
+    }
+
+    setArrangementSaveState({
+      phase: 'submitting',
+      message: 'Saving arrangement edits and rebuilding the MIDI artifact...',
+    })
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/arrangements/${selectedArrangement.arrangement_id}`),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: arrangementTitleDraft,
+            parts_json: parsedParts,
+          }),
+        },
+      )
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to save arrangement edits.'))
+      }
+
+      const updatedArrangement = (await response.json()) as ArrangementCandidate
+      setArrangements((current) =>
+        current.map((item) =>
+          item.arrangement_id === updatedArrangement.arrangement_id ? updatedArrangement : item,
+        ),
+      )
+      setSelectedArrangementId(updatedArrangement.arrangement_id)
+      await refreshStudioSnapshot().catch(() => null)
+      setArrangementSaveState({
+        phase: 'success',
+        message: `Saved arrangement ${updatedArrangement.candidate_code} and rebuilt its MIDI file.`,
+      })
+    } catch (error) {
+      setArrangementSaveState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to save arrangement edits.',
       })
     }
   }
@@ -1854,6 +2048,8 @@ export function StudioPage() {
   const selectedTakeScore = selectedTake?.latest_score ?? null
   const selectedTakeAnalysisJob = selectedTake?.latest_analysis_job ?? null
   const selectedTakeMelody = selectedTake?.latest_melody ?? null
+  const selectedArrangement =
+    arrangements.find((item) => item.arrangement_id === selectedArrangementId) ?? arrangements[0] ?? null
   const guideMixer = guide ? mixerState[guide.track_id] : null
   const mixdownPlaybackUrl = mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null
   const mixdownSourceLabel = mixdownPreview
@@ -3257,6 +3453,315 @@ export function StudioPage() {
               <div className="empty-card">
                 <p>No melody notes are loaded yet.</p>
                 <p>Extract a melody draft to review the quantized note list here.</p>
+              </div>
+            )}
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Phase 4</p>
+          <h2>Rule-based arrangement candidates</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Arrangement Engine</p>
+                <h2>Generate candidate A/B/C from the latest melody draft</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  arrangements.length > 0
+                    ? 'status-pill--ready'
+                    : arrangementState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {arrangementState.phase === 'submitting'
+                  ? 'Generating'
+                  : arrangements.length > 0
+                    ? `${arrangements.length} candidates`
+                    : 'No candidates'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              FOUNDATION Phase 5 asks for 2-3 arrangement candidates with range, leap, and
+              parallel-motion constraints. This pass keeps it rule-based and editable, with
+              optional beatbox support.
+            </p>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Style</span>
+                <select
+                  className="text-input"
+                  value={arrangementConfig.style}
+                  onChange={(event) =>
+                    setArrangementConfig((current) => ({
+                      ...current,
+                      style: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="contemporary">Contemporary</option>
+                  <option value="ballad">Ballad</option>
+                  <option value="anthem">Anthem</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Difficulty</span>
+                <select
+                  className="text-input"
+                  value={arrangementConfig.difficulty}
+                  onChange={(event) =>
+                    setArrangementConfig((current) => ({
+                      ...current,
+                      difficulty: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="basic">Basic</option>
+                  <option value="strict">Strict</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="toggle-grid">
+              <label className="toggle-card">
+                <input
+                  type="checkbox"
+                  checked={arrangementConfig.includePercussion}
+                  onChange={(event) =>
+                    setArrangementConfig((current) => ({
+                      ...current,
+                      includePercussion: event.target.checked,
+                    }))
+                  }
+                />
+                <div>
+                  <strong>Beatbox template</strong>
+                  <span>Add a simple kick/snare support part to each candidate batch.</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={arrangementState.phase === 'submitting'}
+                onClick={() => void handleGenerateArrangements()}
+              >
+                {arrangementState.phase === 'submitting'
+                  ? 'Generating arrangements...'
+                  : 'Generate arrangement candidates'}
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={selectedArrangement === null || arrangementSaveState.phase === 'submitting'}
+                onClick={() => void handleSaveArrangement()}
+              >
+                {arrangementSaveState.phase === 'submitting'
+                  ? 'Saving arrangement...'
+                  : 'Save arrangement edits'}
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => void refreshStudioSnapshot().catch(() => undefined)}
+              >
+                Refresh snapshot
+              </button>
+            </div>
+
+            {arrangementState.phase === 'success' || arrangementState.phase === 'error' ? (
+              <p
+                className={
+                  arrangementState.phase === 'error' ? 'form-error' : 'status-card__hint'
+                }
+              >
+                {arrangementState.message}
+              </p>
+            ) : (
+              <p className="status-card__hint">
+                Generate candidates after melody cleanup so the rule engine can stack harmony
+                parts around the cleaned draft.
+              </p>
+            )}
+
+            {arrangementSaveState.phase === 'success' || arrangementSaveState.phase === 'error' ? (
+              <p
+                className={
+                  arrangementSaveState.phase === 'error' ? 'form-error' : 'status-card__hint'
+                }
+              >
+                {arrangementSaveState.message}
+              </p>
+            ) : null}
+
+            <div className="candidate-grid">
+              {arrangements.length === 0 ? (
+                <div className="empty-card">
+                  <p>No arrangement candidates yet.</p>
+                  <p>Extract a melody draft, then generate candidate A/B/C from it.</p>
+                </div>
+              ) : (
+                arrangements.map((arrangement) => (
+                  <article
+                    className={`candidate-card ${
+                      selectedArrangement?.arrangement_id === arrangement.arrangement_id
+                        ? 'candidate-card--selected'
+                        : ''
+                    }`}
+                    key={arrangement.arrangement_id}
+                  >
+                    <div className="candidate-card__header">
+                      <div>
+                        <strong>
+                          {arrangement.candidate_code} • {arrangement.title}
+                        </strong>
+                        <span>
+                          {arrangement.voice_mode} | {arrangement.difficulty}
+                        </span>
+                      </div>
+
+                      <button
+                        className="button-secondary button-secondary--small"
+                        type="button"
+                        onClick={() => setSelectedArrangementId(arrangement.arrangement_id)}
+                      >
+                        {selectedArrangement?.arrangement_id === arrangement.arrangement_id
+                          ? 'Selected'
+                          : 'Select'}
+                      </button>
+                    </div>
+
+                    <div className="mini-grid">
+                      <div className="mini-card">
+                        <span>Parts</span>
+                        <strong>{arrangement.part_count}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Style</span>
+                        <strong>{arrangement.style}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Updated</span>
+                        <strong>{formatDate(arrangement.updated_at)}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Generation</span>
+                        <strong>{arrangementGenerationId ? arrangementGenerationId.slice(0, 8) : 'n/a'}</strong>
+                      </div>
+                    </div>
+
+                    <div className="mini-card mini-card--stack">
+                      <span>Parts overview</span>
+                      <strong>
+                        {arrangement.parts_json
+                          .map((part) => `${part.part_name} (${part.notes.length})`)
+                          .join(' • ')}
+                      </strong>
+                    </div>
+
+                    {arrangement.midi_artifact_url ? (
+                      <a className="button-secondary" href={arrangement.midi_artifact_url}>
+                        Download arrangement MIDI
+                      </a>
+                    ) : null}
+                  </article>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Arrangement Editor</p>
+                <h2>Review and edit the selected candidate JSON</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  selectedArrangement ? 'status-pill--ready' : 'status-pill--loading'
+                }`}
+              >
+                {selectedArrangement ? selectedArrangement.candidate_code : 'Waiting'}
+              </span>
+            </div>
+
+            {selectedArrangement ? (
+              <div className="support-stack">
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Candidate title</span>
+                    <input
+                      className="text-input"
+                      value={arrangementTitleDraft}
+                      onChange={(event) => setArrangementTitleDraft(event.target.value)}
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Source melody draft</span>
+                    <input
+                      className="text-input"
+                      value={selectedArrangement.melody_draft_id}
+                      readOnly
+                    />
+                  </label>
+                </div>
+
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Constraint max leap</span>
+                    <strong>
+                      {typeof selectedArrangement.constraint_json?.max_leap === 'number'
+                        ? selectedArrangement.constraint_json.max_leap
+                        : 'n/a'}
+                    </strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Parallel avoidance</span>
+                    <strong>
+                      {selectedArrangement.constraint_json?.parallel_avoidance ? 'On' : 'Off'}
+                    </strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Percussion</span>
+                    <strong>
+                      {selectedArrangement.constraint_json?.include_percussion ? 'Included' : 'Off'}
+                    </strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Candidate parts</span>
+                    <strong>{selectedArrangement.part_count}</strong>
+                  </div>
+                </div>
+
+                <div className="support-stack">
+                  <p className="json-label">Editable parts JSON</p>
+                  <textarea
+                    className="json-card json-card--editor"
+                    value={arrangementJsonDraft}
+                    onChange={(event) => setArrangementJsonDraft(event.target.value)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No arrangement candidate is selected.</p>
+                <p>Generate candidates and choose one to inspect or tweak its parts JSON.</p>
               </div>
             )}
           </article>

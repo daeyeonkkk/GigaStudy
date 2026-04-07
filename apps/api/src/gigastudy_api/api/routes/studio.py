@@ -7,6 +7,7 @@ from gigastudy_api.api.schemas.device_profiles import DeviceProfileResponse
 from gigastudy_api.api.schemas.projects import ProjectResponse
 from gigastudy_api.api.schemas.studio import StudioSnapshotResponse
 from gigastudy_api.db.session import get_db_session
+from gigastudy_api.services.arrangements import build_arrangement_response
 from gigastudy_api.services.guides import build_guide_response
 from gigastudy_api.services.mixdowns import build_mixdown_response
 from gigastudy_api.services.studio import get_studio_snapshot
@@ -35,4 +36,6 @@ def get_studio_snapshot_endpoint(
             else None
         ),
         mixdown=build_mixdown_response(snapshot.mixdown, request) if snapshot.mixdown else None,
+        arrangement_generation_id=str(snapshot.arrangement_generation_id) if snapshot.arrangement_generation_id else None,
+        arrangements=[build_arrangement_response(item, request) for item in snapshot.arrangements],
     )

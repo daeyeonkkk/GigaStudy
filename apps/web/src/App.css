@@ -344,6 +344,49 @@
   font-size: 0.88rem;
 }
 
+.candidate-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.candidate-card {
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.candidate-card--selected {
+  border-color: rgba(194, 90, 39, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(194, 90, 39, 0.18);
+}
+
+.candidate-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.candidate-card__header span {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.json-card--editor {
+  width: 100%;
+  min-height: 360px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: var(--accent-strong);
@@ -855,6 +898,7 @@
   .panel-header,
   .studio-header,
   .take-card__header,
+  .candidate-card__header,
   .track-row,
   .ticket-list li,
   .command-stack div {

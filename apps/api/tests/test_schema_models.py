@@ -1,4 +1,5 @@
 from pathlib import Path
+from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
@@ -12,6 +13,7 @@ from gigastudy_api.db.models import (
     AnalysisJob,
     AnalysisJobStatus,
     AnalysisJobType,
+    Arrangement,
     Artifact,
     ArtifactType,
     DeviceProfile,
@@ -247,6 +249,78 @@ def test_track_can_store_editable_melody_draft(session: Session) -> None:
     assert take.melody_drafts[0].note_count == 2
 
 
+def test_project_can_store_arrangement_candidates(session: Session) -> None:
+    user = User(nickname="arranger")
+    project = Project(user=user, title="Arrangement Session", bpm=92, base_key="C")
+    take = Track(
+        project=project,
+        track_role=TrackRole.VOCAL_TAKE,
+        track_status=TrackStatus.READY,
+        take_no=1,
+    )
+    melody_draft = MelodyDraft(
+        project=project,
+        track=take,
+        model_version="heuristic-melody-v1",
+        key_estimate="C major",
+        bpm=92,
+        grid_division="1/16",
+        phrase_count=1,
+        note_count=1,
+        notes_json=[
+            {
+                "pitch_midi": 60,
+                "pitch_name": "C4",
+                "start_ms": 0,
+                "end_ms": 500,
+                "duration_ms": 500,
+                "phrase_index": 0,
+                "velocity": 84,
+            }
+        ],
+    )
+    arrangement = Arrangement(
+        generation_id=uuid4(),
+        project=project,
+        melody_draft=melody_draft,
+        candidate_code="A",
+        title="A • Close Stack",
+        input_source_type="MELODY_DRAFT",
+        style="contemporary",
+        difficulty="basic",
+        voice_mode="FOUR_PART_CLOSE",
+        part_count=4,
+        constraint_json={"max_leap": 9},
+        parts_json=[
+            {
+                "part_name": "Lead Melody",
+                "role": "MELODY",
+                "range_label": "Source melody",
+                "notes": [
+                    {
+                        "pitch_midi": 60,
+                        "pitch_name": "C4",
+                        "start_ms": 0,
+                        "end_ms": 500,
+                        "duration_ms": 500,
+                        "phrase_index": 0,
+                        "velocity": 84,
+                    }
+                ],
+            }
+        ],
+        midi_storage_key="C:/tmp/arrangement.mid",
+        midi_byte_size=256,
+    )
+    session.add_all([user, project, take, melody_draft, arrangement])
+    session.commit()
+    session.refresh(project)
+
+    assert len(project.arrangements) == 1
+    assert project.arrangements[0].candidate_code == "A"
+    assert project.arrangements[0].melody_draft_id == melody_draft.melody_draft_id
+
+
 def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "phase1.db"
     api_dir = Path(__file__).resolve().parents[1]
@@ -262,6 +336,7 @@ def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
 
     assert {
         "analysis_jobs",
+        "arrangements",
         "artifacts",
         "device_profiles",
         "melody_drafts",

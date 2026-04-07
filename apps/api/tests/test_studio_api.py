@@ -120,6 +120,8 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
     assert payload["takes"][1]["preview_data"] is not None
     assert payload["latest_device_profile"]["input_device_hash"] == "mic-b"
     assert payload["mixdown"] is None
+    assert payload["arrangement_generation_id"] is None
+    assert payload["arrangements"] == []
 
 
 def test_studio_snapshot_includes_latest_mixdown_details(client: TestClient) -> None:
@@ -170,6 +172,7 @@ def test_studio_snapshot_includes_latest_mixdown_details(client: TestClient) -> 
     assert mixdown["actual_sample_rate"] == 48000
     assert mixdown["source_artifact_url"] is not None
     assert mixdown["preview_data"] is not None
+    assert snapshot_response.json()["arrangements"] == []
 
 
 def test_studio_snapshot_returns_404_for_missing_project(client: TestClient) -> None:

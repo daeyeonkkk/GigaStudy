@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
+import { WaveformPreview } from '../components/WaveformPreview'
 import { currentLaneTickets } from '../data/phase1'
+import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
 import { buildApiUrl } from '../lib/api'
 import {
   pickSupportedRecordingMimeType,
@@ -43,10 +46,6 @@ type DeviceProfile = {
   updated_at: string
 }
 
-type DeviceProfileListResponse = {
-  items: DeviceProfile[]
-}
-
 type GuideTrack = {
   track_id: string
   project_id: string
@@ -60,10 +59,6 @@ type GuideTrack = {
   source_artifact_url: string | null
   created_at: string
   updated_at: string
-}
-
-type GuideLookupResponse = {
-  guide: GuideTrack | null
 }
 
 type GuideUploadInitResponse = {
@@ -92,15 +87,25 @@ type TakeTrack = {
   updated_at: string
 }
 
-type TakeTrackListResponse = {
-  items: TakeTrack[]
-}
-
 type TakeUploadInitResponse = {
   track_id: string
   upload_url: string
   method: 'PUT'
   storage_key: string
+}
+
+type StudioMixdownSummary = {
+  track_id: string
+  track_status: string
+  updated_at: string
+}
+
+type StudioSnapshotResponse = {
+  project: Project
+  guide: GuideTrack | null
+  takes: TakeTrack[]
+  latest_device_profile: DeviceProfile | null
+  mixdown: StudioMixdownSummary | null
 }
 
 type DeviceProfileState =
@@ -145,6 +150,12 @@ type FailedTakeUpload = {
   contentType: string
   durationMs: number | null
   actualSampleRate: number | null
+}
+
+type MixerTrackState = {
+  muted: boolean
+  solo: boolean
+  volume: number
 }
 
 const defaultConstraintDraft: ConstraintDraft = {
@@ -320,6 +331,26 @@ function getAccentEvery(timeSignature: string | null): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 4
 }
 
+function syncMixerState(
+  current: Record<string, MixerTrackState>,
+  trackIds: string[],
+  guideTrackId: string | null,
+): Record<string, MixerTrackState> {
+  const next: Record<string, MixerTrackState> = {}
+
+  for (const trackId of trackIds) {
+    next[trackId] =
+      current[trackId] ??
+      ({
+        muted: false,
+        solo: false,
+        volume: trackId === guideTrackId ? 0.85 : 1,
+      } satisfies MixerTrackState)
+  }
+
+  return next
+}
+
 export function StudioPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [studioState, setStudioState] = useState<StudioState>({ phase: 'loading' })
@@ -361,6 +392,10 @@ export function StudioPage() {
     Record<string, FailedTakeUpload>
   >({})
   const [takePreviewUrls, setTakePreviewUrls] = useState<Record<string, string>>({})
+  const [audioPreviews, setAudioPreviews] = useState<Record<string, AudioPreviewData>>({})
+  const [waveformState, setWaveformState] = useState<ActionState>({ phase: 'idle' })
+  const [mixerState, setMixerState] = useState<Record<string, MixerTrackState>>({})
+  const [mixdownSummary, setMixdownSummary] = useState<StudioMixdownSummary | null>(null)
   const [activeUploadTrackId, setActiveUploadTrackId] = useState<string | null>(null)
   const guideFileInputRef = useRef<HTMLInputElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -370,6 +405,7 @@ export function StudioPage() {
   const recordingMimeTypeRef = useRef('audio/webm')
   const metronomeControllerRef = useRef<MetronomeController | null>(null)
   const takePreviewUrlsRef = useRef<Record<string, string>>({})
+  const applyStudioSnapshotRef = useRef<(snapshot: StudioSnapshotResponse) => void>(() => undefined)
 
   function hydrateDeviceDraft(profile: DeviceProfile): void {
     setOutputRoute(profile.output_route)
@@ -459,6 +495,49 @@ export function StudioPage() {
     }
   }
 
+  applyStudioSnapshotRef.current = (snapshot: StudioSnapshotResponse) => {
+    setStudioState({ phase: 'ready', project: snapshot.project })
+    setGuideState({ phase: 'ready', guide: snapshot.guide })
+    setTakesState({ phase: 'ready', items: snapshot.takes })
+    setMixdownSummary(snapshot.mixdown)
+
+    if (snapshot.latest_device_profile) {
+      hydrateDeviceDraft(snapshot.latest_device_profile)
+      setAppliedSettingsPreview(snapshot.latest_device_profile.applied_settings_json)
+    }
+
+    setDeviceProfileState({
+      phase: 'ready',
+      profile: snapshot.latest_device_profile,
+    })
+
+    setMixerState((current) =>
+      syncMixerState(
+        current,
+        [
+          ...(snapshot.guide ? [snapshot.guide.track_id] : []),
+          ...snapshot.takes.map((track) => track.track_id),
+        ],
+        snapshot.guide?.track_id ?? null,
+      ),
+    )
+  }
+
+  async function refreshStudioSnapshot(): Promise<StudioSnapshotResponse | null> {
+    if (!projectId) {
+      return null
+    }
+
+    const response = await fetch(buildApiUrl(`/api/projects/${projectId}/studio`))
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, 'Unable to refresh the studio snapshot.'))
+    }
+
+    const snapshot = (await response.json()) as StudioSnapshotResponse
+    applyStudioSnapshotRef.current(snapshot)
+    return snapshot
+  }
+
   useEffect(() => {
     if (!projectId) {
       setStudioState({ phase: 'error', message: 'Project id is missing.' })
@@ -467,9 +546,9 @@ export function StudioPage() {
 
     const controller = new AbortController()
 
-    async function loadProject(): Promise<void> {
+    async function loadStudio(): Promise<void> {
       try {
-        const response = await fetch(buildApiUrl(`/api/projects/${projectId}`), {
+        const response = await fetch(buildApiUrl(`/api/projects/${projectId}/studio`), {
           signal: controller.signal,
         })
 
@@ -479,8 +558,8 @@ export function StudioPage() {
           )
         }
 
-        const project = (await response.json()) as Project
-        setStudioState({ phase: 'ready', project })
+        const snapshot = (await response.json()) as StudioSnapshotResponse
+        applyStudioSnapshotRef.current(snapshot)
       } catch (error) {
         if (controller.signal.aborted) {
           return
@@ -493,135 +572,14 @@ export function StudioPage() {
       }
     }
 
-    void loadProject()
+    void loadStudio()
 
     return () => controller.abort()
   }, [projectId])
-
-  useEffect(() => {
-    if (!projectId) {
-      return
-    }
-
-    const controller = new AbortController()
-
-    async function loadGuide(): Promise<void> {
-      setGuideState({ phase: 'loading', guide: null })
-
-      try {
-        const response = await fetch(buildApiUrl(`/api/projects/${projectId}/guide`), {
-          signal: controller.signal,
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const payload = (await response.json()) as GuideLookupResponse
-        setGuideState({ phase: 'ready', guide: payload.guide })
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return
-        }
-
-        setGuideState({
-          phase: 'error',
-          guide: null,
-          message:
-            error instanceof Error ? error.message : 'Unable to load guide information.',
-        })
-      }
-    }
-
-    void loadGuide()
-
-    return () => controller.abort()
-  }, [projectId])
-
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function loadLatestProfile(): Promise<void> {
-      setDeviceProfileState({ phase: 'loading', profile: null })
-
-      try {
-        const response = await fetch(buildApiUrl('/api/device-profiles?limit=1'), {
-          signal: controller.signal,
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const payload = (await response.json()) as DeviceProfileListResponse
-        const latestProfile = payload.items[0] ?? null
-        if (latestProfile) {
-          hydrateDeviceDraft(latestProfile)
-          setAppliedSettingsPreview(latestProfile.applied_settings_json)
-        }
-
-        setDeviceProfileState({ phase: 'ready', profile: latestProfile })
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return
-        }
-
-        setDeviceProfileState({
-          phase: 'error',
-          profile: null,
-          message:
-            error instanceof Error ? error.message : 'Unable to load the latest profile.',
-        })
-      }
-    }
-
-    void loadLatestProfile()
-
-    return () => controller.abort()
-  }, [])
 
   useEffect(() => {
     void refreshAudioInputs().catch(() => undefined)
   }, [])
-
-  useEffect(() => {
-    if (!projectId) {
-      return
-    }
-
-    const controller = new AbortController()
-
-    async function loadTakes(): Promise<void> {
-      setTakesState((current) => ({ phase: 'loading', items: current.items }))
-
-      try {
-        const response = await fetch(buildApiUrl(`/api/projects/${projectId}/tracks`), {
-          signal: controller.signal,
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const payload = (await response.json()) as TakeTrackListResponse
-        setTakesState({ phase: 'ready', items: payload.items })
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return
-        }
-
-        setTakesState((current) => ({
-          phase: 'error',
-          items: current.items,
-          message: error instanceof Error ? error.message : 'Unable to load take history.',
-        }))
-      }
-    }
-
-    void loadTakes()
-
-    return () => controller.abort()
-  }, [projectId])
 
   useEffect(() => {
     if (selectedTakeId) {
@@ -633,6 +591,19 @@ export function StudioPage() {
       setSelectedTakeId(firstTake.track_id)
     }
   }, [selectedTakeId, takesState.items])
+
+  useEffect(() => {
+    setMixerState((current) =>
+      syncMixerState(
+        current,
+        [
+          ...(guideState.guide ? [guideState.guide.track_id] : []),
+          ...takesState.items.map((track) => track.track_id),
+        ],
+        guideState.guide?.track_id ?? null,
+      ),
+    )
+  }, [guideState.guide, takesState.items])
 
   useEffect(() => {
     takePreviewUrlsRef.current = takePreviewUrls
@@ -654,19 +625,102 @@ export function StudioPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const selectedTrack = takesState.items.find((take) => take.track_id === selectedTakeId)
+    if (!selectedTrack) {
+      setWaveformState({ phase: 'idle' })
+      return
+    }
+
+    if (audioPreviews[selectedTrack.track_id]) {
+      setWaveformState({
+        phase: 'success',
+        message: 'Waveform and contour preview are ready.',
+      })
+      return
+    }
+
+    const failedUpload = failedTakeUploads[selectedTrack.track_id]
+    const previewTask = failedUpload
+      ? buildAudioPreviewFromBlob(failedUpload.blob)
+      : selectedTrack.source_artifact_url
+        ? buildAudioPreviewFromUrl(selectedTrack.source_artifact_url)
+        : null
+
+    if (!previewTask) {
+      setWaveformState({
+        phase: 'idle',
+      })
+      return
+    }
+
+    let cancelled = false
+    setWaveformState({ phase: 'submitting' })
+
+    void previewTask
+      .then((preview) => {
+        if (cancelled) {
+          return
+        }
+
+        setAudioPreviews((current) => ({
+          ...current,
+          [selectedTrack.track_id]: preview,
+        }))
+        setWaveformState({
+          phase: 'success',
+          message:
+            preview.source === 'local'
+              ? 'Waveform preview generated from the latest local take.'
+              : 'Waveform preview reloaded from stored source audio.',
+        })
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return
+        }
+
+        setWaveformState({
+          phase: 'error',
+          message: error instanceof Error ? error.message : 'Waveform preview failed.',
+        })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [audioPreviews, failedTakeUploads, selectedTakeId, takesState.items])
+
   async function refreshTakes(): Promise<TakeTrack[]> {
-    if (!projectId) {
-      return []
+    const snapshot = await refreshStudioSnapshot()
+    return snapshot?.takes ?? []
+  }
+
+  function updateMixerTrack(trackId: string, nextValue: Partial<MixerTrackState>): void {
+    const baseMixerState: MixerTrackState = {
+      muted: false,
+      solo: false,
+      volume: 1,
     }
 
-    const response = await fetch(buildApiUrl(`/api/projects/${projectId}/tracks`))
-    if (!response.ok) {
-      throw new Error(await readErrorMessage(response, 'Unable to refresh take history.'))
+    setMixerState((current) => ({
+      ...current,
+      [trackId]: { ...(current[trackId] ?? baseMixerState), ...nextValue },
+    }))
+  }
+
+  function isTrackMutedByMixer(trackId: string): boolean {
+    const anySolo = Object.values(mixerState).some((entry) => entry.solo)
+    const trackMixer = mixerState[trackId]
+    if (!trackMixer) {
+      return anySolo
     }
 
-    const payload = (await response.json()) as TakeTrackListResponse
-    setTakesState({ phase: 'ready', items: payload.items })
-    return payload.items
+    if (trackMixer.muted) {
+      return true
+    }
+
+    return anySolo && !trackMixer.solo
   }
 
   async function uploadTakeForTrack(
@@ -794,6 +848,14 @@ export function StudioPage() {
       createdTake = nextCreatedTake
       setSelectedTakeId(nextCreatedTake.track_id)
       setTakePreviewUrl(nextCreatedTake.track_id, blob)
+      void buildAudioPreviewFromBlob(blob)
+        .then((preview) => {
+          setAudioPreviews((current) => ({
+            ...current,
+            [nextCreatedTake.track_id]: preview,
+          }))
+        })
+        .catch(() => undefined)
       setTakesState((current) => ({
         phase: 'ready',
         items: [
@@ -1000,6 +1062,14 @@ export function StudioPage() {
     try {
       const completedTake = await uploadTakeForTrack(track, failedUpload)
       setSelectedTakeId(track.track_id)
+      void buildAudioPreviewFromBlob(failedUpload.blob)
+        .then((preview) => {
+          setAudioPreviews((current) => ({
+            ...current,
+            [track.track_id]: preview,
+          }))
+        })
+        .catch(() => undefined)
       setTakesState((current) => ({
         phase: 'ready',
         items: current.items.map((item) =>
@@ -1118,6 +1188,7 @@ export function StudioPage() {
       const savedProfile = (await response.json()) as DeviceProfile
       hydrateDeviceDraft(savedProfile)
       setDeviceProfileState({ phase: 'ready', profile: savedProfile })
+      await refreshStudioSnapshot().catch(() => null)
       setPermissionState({
         phase: 'granted',
         message: 'Microphone settings were captured and saved.',
@@ -1204,6 +1275,7 @@ export function StudioPage() {
 
       const guide = (await completeResponse.json()) as GuideTrack
       setGuideState({ phase: 'ready', guide })
+      await refreshStudioSnapshot().catch(() => null)
       setGuideUploadState({
         phase: 'success',
         message: 'Guide uploaded, finalized, and attached to this project.',
@@ -1258,6 +1330,8 @@ export function StudioPage() {
   const transportAccentEvery = getAccentEvery(project.time_signature)
   const selectedTake =
     takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
+  const selectedTakePreview = selectedTake ? audioPreviews[selectedTake.track_id] ?? null : null
+  const guideMixer = guide ? mixerState[guide.track_id] : null
   const isRecordingBusy =
     recordingState.phase === 'counting-in' ||
     recordingState.phase === 'recording' ||
@@ -1695,9 +1769,11 @@ export function StudioPage() {
                 {guide.source_artifact_url ? (
                   <div className="audio-preview">
                     <p className="json-label">Guide playback</p>
-                    <audio controls preload="metadata" src={guide.source_artifact_url}>
-                      Your browser does not support guide playback.
-                    </audio>
+                    <ManagedAudioPlayer
+                      muted={guide ? isTrackMutedByMixer(guide.track_id) : false}
+                      src={guide.source_artifact_url}
+                      volume={guideMixer?.volume ?? 0.85}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -1938,7 +2014,7 @@ export function StudioPage() {
                         <div>
                           <h3>Take {take.take_no ?? '?'}</h3>
                           <p className="take-card__subhead">
-                            {take.part_type ?? 'LEAD'} · {take.track_status}
+                            {take.part_type ?? 'LEAD'} | {take.track_status}
                           </p>
                         </div>
 
@@ -1978,9 +2054,11 @@ export function StudioPage() {
                       {previewUrl ? (
                         <div className="audio-preview">
                           <p className="json-label">Take preview</p>
-                          <audio controls preload="metadata" src={previewUrl}>
-                            Your browser does not support take preview playback.
-                          </audio>
+                          <ManagedAudioPlayer
+                            muted={isTrackMutedByMixer(take.track_id)}
+                            src={previewUrl}
+                            volume={mixerState[take.track_id]?.volume ?? 1}
+                          />
                         </div>
                       ) : null}
 
@@ -2009,6 +2087,248 @@ export function StudioPage() {
                 })
               )}
             </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">BE-05, FE-05, FE-06</p>
+          <h2>Studio snapshot, track lane, and preview</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Track Lane</p>
+                <h2>Manage guide and takes from one mixer view</h2>
+              </div>
+              <span className="status-pill status-pill--ready">
+                {guide ? takesState.items.length + 1 : takesState.items.length} tracks
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              This panel is driven by the studio snapshot endpoint so the studio can reload
+              guide state, take state, the latest DeviceProfile, and mixdown presence in one
+              request.
+            </p>
+
+            <div className="track-lane">
+              {guide ? (
+                <div className="track-row">
+                  <div className="track-row__meta">
+                    <strong>Guide</strong>
+                    <span>{guide.track_status}</span>
+                  </div>
+
+                  <div className="track-row__controls">
+                    <button
+                      className="button-secondary button-secondary--small"
+                      type="button"
+                      onClick={() =>
+                        updateMixerTrack(guide.track_id, {
+                          muted: !(mixerState[guide.track_id]?.muted ?? false),
+                        })
+                      }
+                    >
+                      {(mixerState[guide.track_id]?.muted ?? false) ? 'Unmute' : 'Mute'}
+                    </button>
+
+                    <button
+                      className="button-secondary button-secondary--small"
+                      type="button"
+                      onClick={() =>
+                        updateMixerTrack(guide.track_id, {
+                          solo: !(mixerState[guide.track_id]?.solo ?? false),
+                        })
+                      }
+                    >
+                      {(mixerState[guide.track_id]?.solo ?? false) ? 'Unsolo' : 'Solo'}
+                    </button>
+
+                    <label className="track-row__slider">
+                      <span>Volume</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={mixerState[guide.track_id]?.volume ?? 0.85}
+                        onChange={(event) =>
+                          updateMixerTrack(guide.track_id, {
+                            volume: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+
+              {takesState.items.map((take) => (
+                <div
+                  className={`track-row ${
+                    selectedTake?.track_id === take.track_id ? 'track-row--selected' : ''
+                  }`}
+                  key={`track-lane-${take.track_id}`}
+                >
+                  <div className="track-row__meta">
+                    <strong>Take {take.take_no ?? '?'}</strong>
+                    <span>{take.track_status}</span>
+                  </div>
+
+                  <div className="track-row__controls">
+                    <button
+                      className="button-secondary button-secondary--small"
+                      type="button"
+                      onClick={() => setSelectedTakeId(take.track_id)}
+                    >
+                      {selectedTake?.track_id === take.track_id ? 'Selected' : 'Select'}
+                    </button>
+
+                    <button
+                      className="button-secondary button-secondary--small"
+                      type="button"
+                      onClick={() =>
+                        updateMixerTrack(take.track_id, {
+                          muted: !(mixerState[take.track_id]?.muted ?? false),
+                        })
+                      }
+                    >
+                      {(mixerState[take.track_id]?.muted ?? false) ? 'Unmute' : 'Mute'}
+                    </button>
+
+                    <button
+                      className="button-secondary button-secondary--small"
+                      type="button"
+                      onClick={() =>
+                        updateMixerTrack(take.track_id, {
+                          solo: !(mixerState[take.track_id]?.solo ?? false),
+                        })
+                      }
+                    >
+                      {(mixerState[take.track_id]?.solo ?? false) ? 'Unsolo' : 'Solo'}
+                    </button>
+
+                    <label className="track-row__slider">
+                      <span>Volume</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={mixerState[take.track_id]?.volume ?? 1}
+                        onChange={(event) =>
+                          updateMixerTrack(take.track_id, {
+                            volume: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Snapshot guide</span>
+                <strong>{guide ? guide.track_status : 'Missing'}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Snapshot takes</span>
+                <strong>{takesState.items.length}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Latest DeviceProfile</span>
+                <strong>{latestProfile ? formatDate(latestProfile.updated_at) : 'Missing'}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Mixdown</span>
+                <strong>{mixdownSummary ? mixdownSummary.track_status : 'Not created yet'}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Waveform</p>
+                <h2>Preview the selected take immediately and after reload</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  waveformState.phase === 'success'
+                    ? 'status-pill--ready'
+                    : waveformState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {waveformState.phase === 'success'
+                  ? 'Preview ready'
+                  : waveformState.phase === 'error'
+                    ? 'Preview error'
+                    : waveformState.phase === 'submitting'
+                      ? 'Loading preview'
+                      : 'Preview idle'}
+              </span>
+            </div>
+
+            {selectedTake ? (
+              <div className="support-stack">
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Selected take</span>
+                    <strong>Take {selectedTake.take_no ?? '?'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Status</span>
+                    <strong>{selectedTake.track_status}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Duration</span>
+                    <strong>{formatDuration(selectedTake.duration_ms)}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Source</span>
+                    <strong>
+                      {selectedTakePreview
+                        ? selectedTakePreview.source === 'local'
+                          ? 'Latest local blob'
+                          : 'Stored server audio'
+                        : 'Waiting for preview'}
+                    </strong>
+                  </div>
+                </div>
+
+                {waveformState.phase === 'error' ? (
+                  <p className="form-error">{waveformState.message}</p>
+                ) : (
+                  <p className="status-card__hint">
+                    {waveformState.phase === 'success'
+                      ? waveformState.message
+                      : 'Preview generation starts from the recorded blob, then falls back to stored audio on reload.'}
+                  </p>
+                )}
+
+                {selectedTakePreview ? (
+                  <WaveformPreview preview={selectedTakePreview} />
+                ) : (
+                  <div className="empty-card">
+                    <p>No waveform preview is available yet.</p>
+                    <p>Record a take or select one with stored source audio to generate it.</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No take is selected.</p>
+                <p>Select a take from the lane to inspect its waveform and contour.</p>
+              </div>
+            )}
           </article>
         </div>
       </section>

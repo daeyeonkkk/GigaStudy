@@ -27,6 +27,7 @@ npm run dev:web
 ```bash
 cd apps/api
 uv sync
+uv run alembic upgrade head
 uv run uvicorn gigastudy_api.main:app --reload --app-dir src
 ```
 

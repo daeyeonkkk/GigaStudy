@@ -1,0 +1,84 @@
+from collections.abc import Iterator
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from gigastudy_api.db.base import Base
+from gigastudy_api.db.models import Project, User
+from gigastudy_api.db.session import get_db_session
+from gigastudy_api.main import app
+
+
+@pytest.fixture
+def client(tmp_path: Path) -> Iterator[TestClient]:
+    database_path = tmp_path / "projects-api.db"
+    engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(engine)
+
+    def override_session() -> Iterator[Session]:
+        session = SessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db_session] = override_session
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
+
+
+def test_create_and_get_project(client: TestClient) -> None:
+    create_response = client.post(
+        "/api/projects",
+        json={
+            "title": "Morning Warmup",
+            "bpm": 104,
+            "base_key": "G",
+            "time_signature": "4/4",
+            "mode": "practice",
+        },
+    )
+
+    assert create_response.status_code == 201
+    created_project = create_response.json()
+    assert created_project["title"] == "Morning Warmup"
+    assert created_project["bpm"] == 104
+
+    get_response = client.get(f"/api/projects/{created_project['project_id']}")
+
+    assert get_response.status_code == 200
+    assert get_response.json()["project_id"] == created_project["project_id"]
+
+
+def test_project_creation_reuses_default_user(client: TestClient, tmp_path: Path) -> None:
+    client.post("/api/projects", json={"title": "Session A"})
+    client.post("/api/projects", json={"title": "Session B"})
+
+    database_path = tmp_path / "projects-api.db"
+    engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
+
+    with Session(engine) as session:
+        users = session.scalars(select(User)).all()
+        projects = session.scalars(select(Project)).all()
+
+    assert len(users) == 1
+    assert len(projects) == 2
+
+
+def test_get_project_returns_404_for_unknown_id(client: TestClient) -> None:
+    response = client.get("/api/projects/2afef2ab-15ef-4584-a951-7b22fd0dc2e6")
+
+    assert response.status_code == 404
+
+
+def test_create_project_rejects_blank_title(client: TestClient) -> None:
+    response = client.post("/api/projects", json={"title": "   "})
+
+    assert response.status_code == 422

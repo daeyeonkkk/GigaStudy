@@ -58,6 +58,7 @@ type GuideTrack = {
   storage_key: string | null
   checksum: string | null
   source_artifact_url: string | null
+  preview_data: AudioPreviewData | null
   created_at: string
   updated_at: string
 }
@@ -84,6 +85,7 @@ type TakeTrack = {
   recording_started_at: string | null
   recording_finished_at: string | null
   source_artifact_url: string | null
+  preview_data: AudioPreviewData | null
   created_at: string
   updated_at: string
 }
@@ -106,6 +108,7 @@ type MixdownTrack = {
   storage_key: string | null
   checksum: string | null
   source_artifact_url: string | null
+  preview_data: AudioPreviewData | null
   created_at: string
   updated_at: string
 }
@@ -170,6 +173,7 @@ type FailedTakeUpload = {
 }
 
 type MixdownPreview = RenderedMixdown & {
+  preview_data: AudioPreviewData
   url: string
 }
 
@@ -498,7 +502,7 @@ export function StudioPage() {
     })
   }
 
-  function replaceMixdownPreview(nextPreview: RenderedMixdown | null): void {
+  function replaceMixdownPreview(nextPreview: (RenderedMixdown & { preview_data: AudioPreviewData }) | null): void {
     setMixdownPreview((current) => {
       if (current?.url) {
         URL.revokeObjectURL(current.url)
@@ -545,6 +549,17 @@ export function StudioPage() {
     setGuideState({ phase: 'ready', guide: snapshot.guide })
     setTakesState({ phase: 'ready', items: snapshot.takes })
     setMixdownSummary(snapshot.mixdown)
+    setAudioPreviews((current) => {
+      const next = { ...current }
+
+      for (const track of snapshot.takes) {
+        if (track.preview_data && !next[track.track_id]) {
+          next[track.track_id] = track.preview_data
+        }
+      }
+
+      return next
+    })
 
     if (snapshot.latest_device_profile) {
       hydrateDeviceDraft(snapshot.latest_device_profile)
@@ -815,7 +830,11 @@ export function StudioPage() {
 
     try {
       const renderedPreview = await renderOfflineMixdown(mixdownSources)
-      replaceMixdownPreview(renderedPreview)
+      const previewData = await buildAudioPreviewFromBlob(renderedPreview.blob)
+      replaceMixdownPreview({
+        ...renderedPreview,
+        preview_data: previewData,
+      })
       setMixdownPreviewState({
         phase: 'success',
         message: `Offline mixdown ready from ${renderedPreview.labels.join(' + ')}.`,
@@ -1516,6 +1535,8 @@ export function StudioPage() {
     : mixdownSummary
       ? 'Saved project artifact'
       : 'Not generated yet'
+  const mixdownPreviewSource =
+    mixdownPreview?.preview_data ?? mixdownSummary?.preview_data ?? null
   const isRecordingBusy =
     recordingState.phase === 'counting-in' ||
     recordingState.phase === 'recording' ||
@@ -2708,6 +2729,8 @@ export function StudioPage() {
                   <p className="json-label">Mixdown playback</p>
                   <ManagedAudioPlayer muted={false} src={mixdownPlaybackUrl} volume={1} />
                 </div>
+
+                {mixdownPreviewSource ? <WaveformPreview preview={mixdownPreviewSource} /> : null}
 
                 {mixdownSummary ? (
                   <div className="mini-card mini-card--stack">

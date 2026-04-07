@@ -10,6 +10,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.main import app
+from audio_fixtures import build_test_wav_bytes
 
 
 @pytest.fixture
@@ -40,6 +41,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
 
 def test_guide_upload_lifecycle(client: TestClient) -> None:
+    wav_bytes = build_test_wav_bytes(duration_ms=1200, sample_rate=22050)
     project_response = client.post("/api/projects", json={"title": "Guide Session"})
     project_id = project_response.json()["project_id"]
 
@@ -54,7 +56,7 @@ def test_guide_upload_lifecycle(client: TestClient) -> None:
 
     upload_response = client.put(
         init_payload["upload_url"],
-        content=b"fake-wave-data",
+        content=wav_bytes,
         headers={"Content-Type": "audio/wav"},
     )
     assert upload_response.status_code == 204
@@ -71,14 +73,17 @@ def test_guide_upload_lifecycle(client: TestClient) -> None:
     assert complete_response.status_code == 200
     assert complete_response.json()["track_status"] == "READY"
     assert complete_response.json()["source_artifact_url"] is not None
+    assert complete_response.json()["actual_sample_rate"] == 22050
+    assert complete_response.json()["preview_data"] is not None
 
     get_response = client.get(f"/api/projects/{project_id}/guide")
     assert get_response.status_code == 200
-    assert get_response.json()["guide"]["duration_ms"] == 12000
+    assert get_response.json()["guide"]["duration_ms"] >= 1100
+    assert get_response.json()["guide"]["preview_data"] is not None
 
     download_response = client.get(get_response.json()["guide"]["source_artifact_url"])
     assert download_response.status_code == 200
-    assert download_response.content == b"fake-wave-data"
+    assert download_response.content == wav_bytes
 
 
 def test_get_guide_returns_null_when_project_has_no_guide(client: TestClient) -> None:

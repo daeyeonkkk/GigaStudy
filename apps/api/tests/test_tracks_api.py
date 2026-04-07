@@ -10,6 +10,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.main import app
+from audio_fixtures import build_test_wav_bytes
 
 
 @pytest.fixture
@@ -40,6 +41,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
 
 def test_take_upload_lifecycle_and_list(client: TestClient) -> None:
+    wav_bytes = build_test_wav_bytes(duration_ms=900, sample_rate=24000)
     project_response = client.post("/api/projects", json={"title": "Take Session"})
     project_id = project_response.json()["project_id"]
 
@@ -58,21 +60,21 @@ def test_take_upload_lifecycle_and_list(client: TestClient) -> None:
 
     init_response = client.post(
         f"/api/tracks/{first_take['track_id']}/upload-url",
-        json={"filename": "take-one.webm", "content_type": "audio/webm"},
+        json={"filename": "take-one.wav", "content_type": "audio/wav"},
     )
     assert init_response.status_code == 200
 
     upload_response = client.put(
         init_response.json()["upload_url"],
-        content=b"fake-take-one",
-        headers={"Content-Type": "audio/webm"},
+        content=wav_bytes,
+        headers={"Content-Type": "audio/wav"},
     )
     assert upload_response.status_code == 204
 
     complete_response = client.post(
         f"/api/tracks/{first_take['track_id']}/complete",
         json={
-            "source_format": "audio/webm",
+            "source_format": "audio/wav",
             "duration_ms": 4100,
             "actual_sample_rate": 48000,
         },
@@ -80,6 +82,8 @@ def test_take_upload_lifecycle_and_list(client: TestClient) -> None:
     assert complete_response.status_code == 200
     assert complete_response.json()["track_status"] == "READY"
     assert complete_response.json()["source_artifact_url"] is not None
+    assert complete_response.json()["actual_sample_rate"] == 24000
+    assert complete_response.json()["preview_data"] is not None
 
     second_take_response = client.post(
         f"/api/projects/{project_id}/tracks",
@@ -113,12 +117,12 @@ def test_take_complete_marks_failed_when_upload_is_missing(client: TestClient) -
 
     client.post(
         f"/api/tracks/{track_id}/upload-url",
-        json={"filename": "missing.webm", "content_type": "audio/webm"},
+        json={"filename": "missing.wav", "content_type": "audio/wav"},
     )
 
     complete_response = client.post(
         f"/api/tracks/{track_id}/complete",
-        json={"source_format": "audio/webm"},
+        json={"source_format": "audio/wav"},
     )
 
     assert complete_response.status_code == 400

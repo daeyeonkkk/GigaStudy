@@ -1,7 +1,5 @@
 from datetime import datetime, timezone
-from hashlib import sha256
 from pathlib import Path
-import mimetypes
 import re
 from uuid import UUID
 
@@ -16,7 +14,12 @@ from gigastudy_api.api.schemas.tracks import (
     TakeUploadInitRequest,
 )
 from gigastudy_api.config import get_settings
-from gigastudy_api.db.models import Artifact, ArtifactType, Project, Track, TrackRole, TrackStatus
+from gigastudy_api.db.models import Project, Track, TrackRole, TrackStatus
+from gigastudy_api.services.processing import (
+    get_track_playback_artifact,
+    get_track_preview_data,
+    process_uploaded_track,
+)
 
 
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -50,33 +53,6 @@ def _get_track_or_404(session: Session, track_id: UUID) -> Track:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Track not found")
 
     return track
-
-
-def _get_track_source_artifact(track: Track) -> Artifact | None:
-    for artifact in track.artifacts:
-        if artifact.artifact_type == ArtifactType.SOURCE_AUDIO:
-            return artifact
-
-    return None
-
-
-def _probe_stored_upload(track: Track) -> tuple[Path, int, str]:
-    if not track.storage_key:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track storage key is missing")
-
-    file_path = _get_storage_root() / track.storage_key
-    if not file_path.exists():
-        track.track_status = TrackStatus.FAILED
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file not found")
-
-    file_bytes = file_path.read_bytes()
-    if not file_bytes:
-        track.track_status = TrackStatus.FAILED
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
-
-    return file_path, len(file_bytes), sha256(file_bytes).hexdigest()
-
-
 def _get_next_take_no(session: Session, project_id: UUID) -> int:
     current_max = session.scalar(
         select(func.max(Track.take_no)).where(
@@ -139,53 +115,16 @@ def complete_take_upload(
     track = _get_track_or_404(session, track_id)
     if track.track_role != TrackRole.VOCAL_TAKE:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track is not a vocal take")
-
-    try:
-        file_path, byte_size, checksum = _probe_stored_upload(track)
-    except HTTPException:
-        track.updated_at = datetime.now(timezone.utc)
-        session.commit()
-        raise
-
-    source_format = payload.source_format or track.source_format or mimetypes.guess_type(file_path.name)[0]
-    track.track_status = TrackStatus.READY
-    track.source_format = source_format
-    track.duration_ms = payload.duration_ms
-    track.actual_sample_rate = payload.actual_sample_rate
-    track.checksum = checksum
+    if payload.source_format:
+        track.source_format = payload.source_format
+    if payload.duration_ms is not None:
+        track.duration_ms = payload.duration_ms
+    if payload.actual_sample_rate is not None:
+        track.actual_sample_rate = payload.actual_sample_rate
     track.updated_at = datetime.now(timezone.utc)
-
-    source_artifact = _get_track_source_artifact(track)
-    if source_artifact is None:
-        source_artifact = Artifact(
-            project_id=track.project_id,
-            track=track,
-            artifact_type=ArtifactType.SOURCE_AUDIO,
-            storage_key=str(file_path),
-            created_at=track.updated_at,
-            updated_at=track.updated_at,
-        )
-        session.add(source_artifact)
-
-    source_artifact.storage_key = str(file_path)
-    source_artifact.mime_type = source_format
-    source_artifact.byte_size = byte_size
-    source_artifact.updated_at = track.updated_at
-    source_artifact.meta_json = {
-        "project_storage_key": track.storage_key,
-        "checksum": checksum,
-        "take_no": track.take_no,
-    }
-
     session.commit()
 
-    refreshed_track = session.scalar(
-        select(Track)
-        .options(joinedload(Track.artifacts))
-        .where(Track.track_id == track.track_id)
-    )
-    assert refreshed_track is not None
-    return refreshed_track
+    return process_uploaded_track(session, track.track_id)
 
 
 def list_take_tracks(session: Session, project_id: UUID) -> list[Track]:
@@ -202,12 +141,13 @@ def list_take_tracks(session: Session, project_id: UUID) -> list[Track]:
 
 
 def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
-    source_artifact = _get_track_source_artifact(track)
+    source_artifact = get_track_playback_artifact(track)
     download_url = (
         str(request.url_for("download_track_source_audio", track_id=str(track.track_id)))
         if source_artifact is not None
         else None
     )
+    preview_data = get_track_preview_data(track)
 
     return TakeTrackResponse(
         track_id=track.track_id,
@@ -224,6 +164,7 @@ def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
         recording_started_at=track.recording_started_at,
         recording_finished_at=track.recording_finished_at,
         source_artifact_url=download_url,
+        preview_data=preview_data,
         created_at=track.created_at,
         updated_at=track.updated_at,
     )

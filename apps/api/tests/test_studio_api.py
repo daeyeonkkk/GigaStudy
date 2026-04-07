@@ -10,6 +10,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.main import app
+from audio_fixtures import build_test_wav_bytes
 
 
 @pytest.fixture
@@ -40,6 +41,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
 
 def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=2000, sample_rate=48000)
+    take_bytes = build_test_wav_bytes(duration_ms=1500, sample_rate=32000)
     project_response = client.post("/api/projects", json={"title": "Snapshot Session", "bpm": 96})
     project_id = project_response.json()["project_id"]
 
@@ -75,7 +78,7 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
         f"/api/projects/{project_id}/guide/upload-url",
         json={"filename": "guide.wav", "content_type": "audio/wav"},
     ).json()
-    client.put(guide_init["upload_url"], content=b"guide-audio")
+    client.put(guide_init["upload_url"], content=guide_bytes)
     client.post(
         f"/api/projects/{project_id}/guide/complete",
         json={
@@ -92,12 +95,12 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
     ).json()
     first_take_upload = client.post(
         f"/api/tracks/{first_take['track_id']}/upload-url",
-        json={"filename": "take-1.webm", "content_type": "audio/webm"},
+        json={"filename": "take-1.wav", "content_type": "audio/wav"},
     ).json()
-    client.put(first_take_upload["upload_url"], content=b"take-one")
+    client.put(first_take_upload["upload_url"], content=take_bytes)
     client.post(
         f"/api/tracks/{first_take['track_id']}/complete",
-        json={"source_format": "audio/webm", "duration_ms": 1500, "actual_sample_rate": 48000},
+        json={"source_format": "audio/wav", "duration_ms": 1500, "actual_sample_rate": 48000},
     )
 
     second_take = client.post(
@@ -114,11 +117,14 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
     assert [item["take_no"] for item in payload["takes"]] == [2, 1]
     assert payload["takes"][0]["track_status"] == second_take["track_status"]
     assert payload["takes"][1]["track_status"] == "READY"
+    assert payload["takes"][1]["preview_data"] is not None
     assert payload["latest_device_profile"]["input_device_hash"] == "mic-b"
     assert payload["mixdown"] is None
 
 
 def test_studio_snapshot_includes_latest_mixdown_details(client: TestClient) -> None:
+    first_mix_bytes = build_test_wav_bytes(duration_ms=1200, sample_rate=44100)
+    second_mix_bytes = build_test_wav_bytes(duration_ms=2400, sample_rate=48000)
     project_response = client.post("/api/projects", json={"title": "Snapshot Mixdown"})
     project_id = project_response.json()["project_id"]
 
@@ -126,7 +132,7 @@ def test_studio_snapshot_includes_latest_mixdown_details(client: TestClient) -> 
         f"/api/projects/{project_id}/mixdown/upload-url",
         json={"filename": "mix-a.wav", "content_type": "audio/wav"},
     ).json()
-    client.put(first_mixdown["upload_url"], content=b"mix-a")
+    client.put(first_mixdown["upload_url"], content=first_mix_bytes)
     client.post(
         f"/api/projects/{project_id}/mixdown/complete",
         json={
@@ -141,7 +147,7 @@ def test_studio_snapshot_includes_latest_mixdown_details(client: TestClient) -> 
         f"/api/projects/{project_id}/mixdown/upload-url",
         json={"filename": "mix-b.wav", "content_type": "audio/wav"},
     ).json()
-    client.put(second_mixdown["upload_url"], content=b"mix-b")
+    client.put(second_mixdown["upload_url"], content=second_mix_bytes)
     complete_response = client.post(
         f"/api/projects/{project_id}/mixdown/complete",
         json={
@@ -163,6 +169,7 @@ def test_studio_snapshot_includes_latest_mixdown_details(client: TestClient) -> 
     assert mixdown["duration_ms"] == 2400
     assert mixdown["actual_sample_rate"] == 48000
     assert mixdown["source_artifact_url"] is not None
+    assert mixdown["preview_data"] is not None
 
 
 def test_studio_snapshot_returns_404_for_missing_project(client: TestClient) -> None:

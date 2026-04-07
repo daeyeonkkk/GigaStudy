@@ -10,6 +10,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.main import app
+from audio_fixtures import build_test_wav_bytes
 
 
 @pytest.fixture
@@ -40,6 +41,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
 
 def test_mixdown_upload_lifecycle_updates_studio_snapshot(client: TestClient) -> None:
+    wav_bytes = build_test_wav_bytes(duration_ms=2800, sample_rate=44100)
     project_response = client.post("/api/projects", json={"title": "Mixdown Session", "bpm": 104})
     project_id = project_response.json()["project_id"]
 
@@ -51,7 +53,7 @@ def test_mixdown_upload_lifecycle_updates_studio_snapshot(client: TestClient) ->
 
     upload_response = client.put(
         init_response.json()["upload_url"],
-        content=b"mixdown-wave-data",
+        content=wav_bytes,
         headers={"Content-Type": "audio/wav"},
     )
     assert upload_response.status_code == 204
@@ -70,15 +72,17 @@ def test_mixdown_upload_lifecycle_updates_studio_snapshot(client: TestClient) ->
     assert mixdown["track_role"] == "MIXDOWN"
     assert mixdown["track_status"] == "READY"
     assert mixdown["source_artifact_url"] is not None
+    assert mixdown["preview_data"] is not None
 
     studio_response = client.get(f"/api/projects/{project_id}/studio")
     assert studio_response.status_code == 200
     assert studio_response.json()["mixdown"]["track_id"] == mixdown["track_id"]
     assert studio_response.json()["mixdown"]["source_artifact_url"] == mixdown["source_artifact_url"]
+    assert studio_response.json()["mixdown"]["preview_data"] is not None
 
     download_response = client.get(mixdown["source_artifact_url"])
     assert download_response.status_code == 200
-    assert download_response.content == b"mixdown-wave-data"
+    assert download_response.content == wav_bytes
 
 
 def test_mixdown_complete_marks_track_failed_when_upload_is_missing(client: TestClient) -> None:

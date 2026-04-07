@@ -1,8 +1,5 @@
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from hashlib import sha256
 from pathlib import Path
-import mimetypes
 import re
 from uuid import UUID
 
@@ -16,17 +13,15 @@ from gigastudy_api.api.schemas.guides import (
     GuideUploadInitRequest,
 )
 from gigastudy_api.config import get_settings
-from gigastudy_api.db.models import Artifact, ArtifactType, Project, Track, TrackRole, TrackStatus
+from gigastudy_api.db.models import Artifact, Project, Track, TrackRole, TrackStatus
+from gigastudy_api.services.processing import (
+    get_track_playback_artifact,
+    get_track_preview_data,
+    process_uploaded_track,
+)
 
 
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-
-
-@dataclass
-class StoredUpload:
-    file_path: Path
-    byte_size: int
-    checksum: str
 
 
 def _get_storage_root() -> Path:
@@ -57,28 +52,6 @@ def _get_track_or_404(session: Session, track_id: UUID) -> Track:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Track not found")
 
     return track
-
-
-def _get_track_source_artifact(track: Track) -> Artifact | None:
-    for artifact in track.artifacts:
-        if artifact.artifact_type == ArtifactType.SOURCE_AUDIO:
-            return artifact
-
-    return None
-
-
-def get_track_playback_artifact(track: Track) -> Artifact | None:
-    source_artifact = _get_track_source_artifact(track)
-    if source_artifact is not None:
-        return source_artifact
-
-    for artifact in track.artifacts:
-        if artifact.artifact_type == ArtifactType.MIXDOWN_AUDIO:
-            return artifact
-
-    return None
-
-
 def create_guide_upload_session(
     session: Session,
     project_id: UUID,
@@ -119,27 +92,6 @@ def store_track_upload(session: Session, track_id: UUID, payload: bytes) -> Trac
     session.commit()
     session.refresh(track)
     return track
-
-
-def _probe_stored_upload(track: Track) -> StoredUpload:
-    if not track.storage_key:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track storage key is missing")
-
-    file_path = _get_storage_root() / track.storage_key
-    if not file_path.exists():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file not found")
-
-    file_bytes = file_path.read_bytes()
-    if not file_bytes:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
-
-    return StoredUpload(
-        file_path=file_path,
-        byte_size=len(file_bytes),
-        checksum=sha256(file_bytes).hexdigest(),
-    )
-
-
 def complete_guide_upload(
     session: Session,
     project_id: UUID,
@@ -150,56 +102,16 @@ def complete_guide_upload(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Guide track does not match project")
     if track.track_role != TrackRole.GUIDE:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track is not a guide")
-
-    try:
-        stored_upload = _probe_stored_upload(track)
-    except HTTPException:
-        track.track_status = TrackStatus.FAILED
-        track.updated_at = datetime.now(timezone.utc)
-        session.commit()
-        raise
-
-    source_format = payload.source_format or track.source_format or mimetypes.guess_type(
-        stored_upload.file_path.name
-    )[0]
-
-    track.track_status = TrackStatus.READY
-    track.source_format = source_format
-    track.duration_ms = payload.duration_ms
-    track.actual_sample_rate = payload.actual_sample_rate
-    track.checksum = stored_upload.checksum
+    if payload.source_format:
+        track.source_format = payload.source_format
+    if payload.duration_ms is not None:
+        track.duration_ms = payload.duration_ms
+    if payload.actual_sample_rate is not None:
+        track.actual_sample_rate = payload.actual_sample_rate
     track.updated_at = datetime.now(timezone.utc)
-
-    source_artifact = _get_track_source_artifact(track)
-    if source_artifact is None:
-        source_artifact = Artifact(
-            project_id=track.project_id,
-            track=track,
-            artifact_type=ArtifactType.SOURCE_AUDIO,
-            storage_key=str(stored_upload.file_path),
-            created_at=track.updated_at,
-            updated_at=track.updated_at,
-        )
-        session.add(source_artifact)
-
-    source_artifact.storage_key = str(stored_upload.file_path)
-    source_artifact.mime_type = source_format
-    source_artifact.byte_size = stored_upload.byte_size
-    source_artifact.updated_at = track.updated_at
-    source_artifact.meta_json = {
-        "project_storage_key": track.storage_key,
-        "checksum": stored_upload.checksum,
-    }
-
     session.commit()
 
-    refreshed_track = session.scalar(
-        select(Track)
-        .options(joinedload(Track.artifacts))
-        .where(Track.track_id == track.track_id)
-    )
-    assert refreshed_track is not None
-    return refreshed_track
+    return process_uploaded_track(session, track.track_id)
 
 
 def get_latest_guide(session: Session, project_id: UUID) -> Track | None:
@@ -215,12 +127,13 @@ def get_latest_guide(session: Session, project_id: UUID) -> Track | None:
 
 
 def build_guide_response(track: Track, request: Request) -> GuideTrackResponse:
-    source_artifact = _get_track_source_artifact(track)
+    source_artifact = get_track_playback_artifact(track)
     download_url = (
         str(request.url_for("download_track_source_audio", track_id=str(track.track_id)))
         if source_artifact is not None
         else None
     )
+    preview_data = get_track_preview_data(track)
 
     return GuideTrackResponse(
         track_id=track.track_id,
@@ -233,6 +146,7 @@ def build_guide_response(track: Track, request: Request) -> GuideTrackResponse:
         storage_key=track.storage_key,
         checksum=track.checksum,
         source_artifact_url=download_url,
+        preview_data=preview_data,
         created_at=track.created_at,
         updated_at=track.updated_at,
     )

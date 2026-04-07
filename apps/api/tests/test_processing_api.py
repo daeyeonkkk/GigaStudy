@@ -10,6 +10,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.main import app
+from audio_fixtures import build_test_wav_bytes
 
 
 @pytest.fixture
@@ -40,6 +41,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
 
 def test_retry_processing_recovers_failed_take_after_upload_arrives(client: TestClient) -> None:
+    wav_bytes = build_test_wav_bytes(duration_ms=1100, sample_rate=16000)
     project_response = client.post("/api/projects", json={"title": "Retry Take"})
     project_id = project_response.json()["project_id"]
 
@@ -51,17 +53,17 @@ def test_retry_processing_recovers_failed_take_after_upload_arrives(client: Test
 
     init_response = client.post(
         f"/api/tracks/{track['track_id']}/upload-url",
-        json={"filename": "retry-take.webm", "content_type": "audio/webm"},
+        json={"filename": "retry-take.wav", "content_type": "audio/wav"},
     )
     upload_url = init_response.json()["upload_url"]
 
     complete_response = client.post(
         f"/api/tracks/{track['track_id']}/complete",
-        json={"source_format": "audio/webm"},
+        json={"source_format": "audio/wav"},
     )
     assert complete_response.status_code == 400
 
-    client.put(upload_url, content=b"late-audio-upload", headers={"Content-Type": "audio/webm"})
+    client.put(upload_url, content=wav_bytes, headers={"Content-Type": "audio/wav"})
 
     retry_response = client.post(f"/api/tracks/{track['track_id']}/retry-processing")
 
@@ -73,6 +75,7 @@ def test_retry_processing_recovers_failed_take_after_upload_arrives(client: Test
 
 
 def test_retry_processing_is_safe_for_ready_mixdown(client: TestClient) -> None:
+    wav_bytes = build_test_wav_bytes(duration_ms=1000, sample_rate=44100)
     project_response = client.post("/api/projects", json={"title": "Retry Mixdown"})
     project_id = project_response.json()["project_id"]
 
@@ -82,7 +85,7 @@ def test_retry_processing_is_safe_for_ready_mixdown(client: TestClient) -> None:
     )
     client.put(
         init_response.json()["upload_url"],
-        content=b"mixdown-audio",
+        content=wav_bytes,
         headers={"Content-Type": "audio/wav"},
     )
     client.post(

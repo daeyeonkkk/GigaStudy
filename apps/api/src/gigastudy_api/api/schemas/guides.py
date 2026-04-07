@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from gigastudy_api.api.schemas.audio_preview import AudioPreviewResponse
+
 
 class GuideUploadInitRequest(BaseModel):
     filename: str | None = Field(default=None, max_length=255)
@@ -36,6 +38,7 @@ class GuideTrackResponse(BaseModel):
     storage_key: str | None
     checksum: str | None
     source_artifact_url: str | None = None
+    preview_data: AudioPreviewResponse | None = None
     created_at: datetime
     updated_at: datetime
 

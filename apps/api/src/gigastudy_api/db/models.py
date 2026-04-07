@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, JSON, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -38,6 +38,15 @@ class AnalysisJobStatus(str, enum.Enum):
     RUNNING = "RUNNING"
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
+
+
+class ProjectVersionSource(str, enum.Enum):
+    MANUAL_SNAPSHOT = "MANUAL_SNAPSHOT"
+    SHARE_LINK = "SHARE_LINK"
+
+
+class ShareAccessScope(str, enum.Enum):
+    READ_ONLY = "READ_ONLY"
 
 
 class TimestampMixin:
@@ -97,6 +106,14 @@ class Project(TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     arrangements: Mapped[list["Arrangement"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    versions: Mapped[list["ProjectVersion"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    share_links: Mapped[list["ShareLink"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
     )
@@ -289,3 +306,44 @@ class Arrangement(TimestampMixin, Base):
 
     project: Mapped["Project"] = relationship(back_populates="arrangements")
     melody_draft: Mapped["MelodyDraft"] = relationship(back_populates="arrangements")
+
+
+class ProjectVersion(TimestampMixin, Base):
+    __tablename__ = "project_versions"
+
+    version_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    source_type: Mapped[ProjectVersionSource] = mapped_column(
+        Enum(ProjectVersionSource, name="project_version_source", native_enum=False),
+        nullable=False,
+    )
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(400))
+    snapshot_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    project: Mapped["Project"] = relationship(back_populates="versions")
+    share_links: Mapped[list["ShareLink"]] = relationship(
+        back_populates="version",
+        cascade="all, delete-orphan",
+    )
+
+
+class ShareLink(TimestampMixin, Base):
+    __tablename__ = "share_links"
+
+    share_link_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    version_id: Mapped[UUID] = mapped_column(ForeignKey("project_versions.version_id"), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    access_scope: Mapped[ShareAccessScope] = mapped_column(
+        Enum(ShareAccessScope, name="share_access_scope", native_enum=False),
+        nullable=False,
+        default=ShareAccessScope.READ_ONLY,
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    project: Mapped["Project"] = relationship(back_populates="share_links")
+    version: Mapped["ProjectVersion"] = relationship(back_populates="share_links")

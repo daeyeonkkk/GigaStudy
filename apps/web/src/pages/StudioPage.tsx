@@ -249,6 +249,39 @@ type StudioSnapshotResponse = {
   arrangements: ArrangementCandidate[]
 }
 
+type SnapshotSummary = {
+  has_guide: boolean
+  take_count: number
+  ready_take_count: number
+  arrangement_count: number
+  has_mixdown: boolean
+}
+
+type ProjectVersionRecord = {
+  version_id: string
+  project_id: string
+  source_type: string
+  label: string
+  note: string | null
+  snapshot_summary: SnapshotSummary
+  created_at: string
+  updated_at: string
+}
+
+type ShareLinkRecord = {
+  share_link_id: string
+  project_id: string
+  version_id: string
+  label: string
+  access_scope: string
+  is_active: boolean
+  expires_at: string | null
+  last_accessed_at: string | null
+  share_url: string
+  created_at: string
+  updated_at: string
+}
+
 type TrackAnalysisResponse = {
   track_id: string
   project_id: string
@@ -325,6 +358,16 @@ type ArrangementTransportState =
   | { phase: 'idle'; message: string }
   | { phase: 'playing'; message: string }
   | { phase: 'error'; message: string }
+
+type VersionsState =
+  | { phase: 'loading'; items: ProjectVersionRecord[] }
+  | { phase: 'ready'; items: ProjectVersionRecord[] }
+  | { phase: 'error'; items: ProjectVersionRecord[]; message: string }
+
+type ShareLinksState =
+  | { phase: 'loading'; items: ShareLinkRecord[] }
+  | { phase: 'ready'; items: ShareLinkRecord[] }
+  | { phase: 'error'; items: ShareLinkRecord[]; message: string }
 
 const defaultConstraintDraft: ConstraintDraft = {
   echoCancellation: true,
@@ -767,6 +810,22 @@ export function StudioPage() {
   const [mixdownPreviewState, setMixdownPreviewState] = useState<ActionState>({ phase: 'idle' })
   const [mixdownSaveState, setMixdownSaveState] = useState<ActionState>({ phase: 'idle' })
   const [mixdownPreview, setMixdownPreview] = useState<MixdownPreview | null>(null)
+  const [versionsState, setVersionsState] = useState<VersionsState>({
+    phase: 'loading',
+    items: [],
+  })
+  const [shareLinksState, setShareLinksState] = useState<ShareLinksState>({
+    phase: 'loading',
+    items: [],
+  })
+  const [versionCreateState, setVersionCreateState] = useState<ActionState>({ phase: 'idle' })
+  const [shareCreateState, setShareCreateState] = useState<ActionState>({ phase: 'idle' })
+  const [shareDeactivateState, setShareDeactivateState] = useState<ActionState>({ phase: 'idle' })
+  const [shareCopyState, setShareCopyState] = useState<ActionState>({ phase: 'idle' })
+  const [versionLabelDraft, setVersionLabelDraft] = useState('')
+  const [versionNoteDraft, setVersionNoteDraft] = useState('')
+  const [shareLabelDraft, setShareLabelDraft] = useState('')
+  const [shareExpiryDays, setShareExpiryDays] = useState(7)
   const [activeUploadTrackId, setActiveUploadTrackId] = useState<string | null>(null)
   const guideFileInputRef = useRef<HTMLInputElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -959,6 +1018,36 @@ export function StudioPage() {
     return snapshot
   }
 
+  async function refreshProjectVersions(): Promise<ProjectVersionRecord[]> {
+    if (!projectId) {
+      return []
+    }
+
+    const response = await fetch(buildApiUrl(`/api/projects/${projectId}/versions`))
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, 'Unable to load project versions.'))
+    }
+
+    const payload = (await response.json()) as { items: ProjectVersionRecord[] }
+    setVersionsState({ phase: 'ready', items: payload.items })
+    return payload.items
+  }
+
+  async function refreshShareLinks(): Promise<ShareLinkRecord[]> {
+    if (!projectId) {
+      return []
+    }
+
+    const response = await fetch(buildApiUrl(`/api/projects/${projectId}/share-links`))
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, 'Unable to load share links.'))
+    }
+
+    const payload = (await response.json()) as { items: ShareLinkRecord[] }
+    setShareLinksState({ phase: 'ready', items: payload.items })
+    return payload.items
+  }
+
   useEffect(() => {
     if (!projectId) {
       setStudioState({ phase: 'error', message: 'Project id is missing.' })
@@ -996,6 +1085,90 @@ export function StudioPage() {
     void loadStudio()
 
     return () => controller.abort()
+  }, [projectId])
+
+  useEffect(() => {
+    if (!projectId) {
+      setVersionsState({ phase: 'error', items: [], message: 'Project id is missing.' })
+      return
+    }
+
+    let isActive = true
+    setVersionsState({ phase: 'loading', items: [] })
+
+    async function loadVersions(): Promise<void> {
+      try {
+        const response = await fetch(buildApiUrl(`/api/projects/${projectId}/versions`))
+        if (!response.ok) {
+          throw new Error(await readErrorMessage(response, 'Unable to load project versions.'))
+        }
+
+        const payload = (await response.json()) as { items: ProjectVersionRecord[] }
+        if (!isActive) {
+          return
+        }
+
+        setVersionsState({ phase: 'ready', items: payload.items })
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+
+        setVersionsState({
+          phase: 'error',
+          items: [],
+          message: error instanceof Error ? error.message : 'Unable to load project versions.',
+        })
+      }
+    }
+
+    void loadVersions()
+
+    return () => {
+      isActive = false
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    if (!projectId) {
+      setShareLinksState({ phase: 'error', items: [], message: 'Project id is missing.' })
+      return
+    }
+
+    let isActive = true
+    setShareLinksState({ phase: 'loading', items: [] })
+
+    async function loadShareLinks(): Promise<void> {
+      try {
+        const response = await fetch(buildApiUrl(`/api/projects/${projectId}/share-links`))
+        if (!response.ok) {
+          throw new Error(await readErrorMessage(response, 'Unable to load share links.'))
+        }
+
+        const payload = (await response.json()) as { items: ShareLinkRecord[] }
+        if (!isActive) {
+          return
+        }
+
+        setShareLinksState({ phase: 'ready', items: payload.items })
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+
+        setShareLinksState({
+          phase: 'error',
+          items: [],
+          message: error instanceof Error ? error.message : 'Unable to load share links.',
+        })
+      }
+    }
+
+    void loadShareLinks()
+
+    return () => {
+      isActive = false
+    }
   }, [projectId])
 
   useEffect(() => {
@@ -1204,6 +1377,146 @@ export function StudioPage() {
   async function refreshTakes(): Promise<TakeTrack[]> {
     const snapshot = await refreshStudioSnapshot()
     return snapshot?.takes ?? []
+  }
+
+  async function handleCaptureVersion(): Promise<void> {
+    if (!projectId) {
+      setVersionCreateState({ phase: 'error', message: 'Project id is missing.' })
+      return
+    }
+
+    setVersionCreateState({
+      phase: 'submitting',
+      message: 'Capturing the current studio snapshot into project history...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl(`/api/projects/${projectId}/versions`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          label: versionLabelDraft || undefined,
+          note: versionNoteDraft || undefined,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to capture project version.'))
+      }
+
+      const version = (await response.json()) as ProjectVersionRecord
+      await refreshProjectVersions().catch(() => undefined)
+      setVersionCreateState({
+        phase: 'success',
+        message: `Saved version "${version.label}" with ${version.snapshot_summary.take_count} take snapshot(s).`,
+      })
+      if (!versionLabelDraft) {
+        setVersionLabelDraft(version.label)
+      }
+    } catch (error) {
+      setVersionCreateState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to capture project version.',
+      })
+    }
+  }
+
+  async function handleCreateShareLink(): Promise<void> {
+    if (!projectId) {
+      setShareCreateState({ phase: 'error', message: 'Project id is missing.' })
+      return
+    }
+
+    setShareCreateState({
+      phase: 'submitting',
+      message: 'Creating a read-only share link from the current studio snapshot...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl(`/api/projects/${projectId}/share-links`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          label: shareLabelDraft || undefined,
+          expires_in_days: shareExpiryDays,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to create share link.'))
+      }
+
+      const shareLink = (await response.json()) as ShareLinkRecord
+      await Promise.all([
+        refreshShareLinks().catch(() => undefined),
+        refreshProjectVersions().catch(() => undefined),
+      ])
+      setShareCreateState({
+        phase: 'success',
+        message: `Created read-only share link "${shareLink.label}" through ${formatDate(shareLink.expires_at ?? shareLink.created_at)}.`,
+      })
+      if (!shareLabelDraft) {
+        setShareLabelDraft(shareLink.label)
+      }
+    } catch (error) {
+      setShareCreateState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to create share link.',
+      })
+    }
+  }
+
+  async function handleDeactivateShareLink(shareLinkId: string): Promise<void> {
+    setShareDeactivateState({
+      phase: 'submitting',
+      message: 'Deactivating the selected share link...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl(`/api/share-links/${shareLinkId}/deactivate`), {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to deactivate share link.'))
+      }
+
+      const shareLink = (await response.json()) as ShareLinkRecord
+      await refreshShareLinks().catch(() => undefined)
+      setShareDeactivateState({
+        phase: 'success',
+        message: `Deactivated "${shareLink.label}". Existing recipients will lose access immediately.`,
+      })
+    } catch (error) {
+      setShareDeactivateState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to deactivate share link.',
+      })
+    }
+  }
+
+  async function handleCopyShareLink(shareUrl: string): Promise<void> {
+    if (!navigator.clipboard?.writeText) {
+      setShareCopyState({
+        phase: 'error',
+        message: 'Clipboard access is unavailable in this browser.',
+      })
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareCopyState({
+        phase: 'success',
+        message: 'Share URL copied to the clipboard.',
+      })
+    } catch (error) {
+      setShareCopyState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to copy share URL.',
+      })
+    }
   }
 
   async function handleRunAnalysis(): Promise<void> {
@@ -4687,6 +5000,302 @@ export function StudioPage() {
                 <p>Render the current guide and selected take to open the preview and save flow.</p>
               </div>
             )}
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Phase 8</p>
+          <h2>Project history and read-only sharing</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Version History</p>
+                <h2>Capture project snapshots before larger edits or reviews</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  versionsState.phase === 'ready'
+                    ? 'status-pill--ready'
+                    : versionsState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {versionsState.phase === 'ready'
+                  ? `${versionsState.items.length} versions`
+                  : versionsState.phase === 'error'
+                    ? 'Versions error'
+                    : 'Loading versions'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              FOUNDATION Phase 8 calls for lightweight project version history. This pass stores
+              a snapshot of the current studio state so we can keep a readable trail before
+              sharing or major arrangement edits.
+            </p>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Snapshot label</span>
+                <input
+                  className="text-input"
+                  value={versionLabelDraft}
+                  onChange={(event) => setVersionLabelDraft(event.target.value)}
+                  placeholder="Phase 8 check-in"
+                />
+              </label>
+
+              <label className="field">
+                <span>Snapshot note</span>
+                <input
+                  className="text-input"
+                  value={versionNoteDraft}
+                  onChange={(event) => setVersionNoteDraft(event.target.value)}
+                  placeholder="What changed or why this snapshot matters"
+                />
+              </label>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={versionCreateState.phase === 'submitting'}
+                onClick={() => void handleCaptureVersion()}
+              >
+                {versionCreateState.phase === 'submitting'
+                  ? 'Capturing snapshot...'
+                  : 'Capture project snapshot'}
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => void refreshProjectVersions().catch(() => undefined)}
+              >
+                Refresh versions
+              </button>
+            </div>
+
+            {versionCreateState.phase === 'success' || versionCreateState.phase === 'error' ? (
+              <p className={versionCreateState.phase === 'error' ? 'form-error' : 'status-card__hint'}>
+                {versionCreateState.message}
+              </p>
+            ) : versionsState.phase === 'error' ? (
+              <p className="form-error">{versionsState.message}</p>
+            ) : null}
+
+            <div className="history-list">
+              {versionsState.items.length === 0 ? (
+                <div className="empty-card">
+                  <p>No project versions yet.</p>
+                  <p>Capture a snapshot before sharing or before larger arrangement edits.</p>
+                </div>
+              ) : (
+                versionsState.items.map((version) => (
+                  <article className="history-card" key={version.version_id}>
+                    <div className="history-card__header">
+                      <div>
+                        <strong>{version.label}</strong>
+                        <span>{version.source_type} | {formatDate(version.created_at)}</span>
+                      </div>
+                      <span className="candidate-chip">{version.version_id.slice(0, 8)}</span>
+                    </div>
+
+                    {version.note ? <p className="status-card__hint">{version.note}</p> : null}
+
+                    <div className="mini-grid">
+                      <div className="mini-card">
+                        <span>Guide</span>
+                        <strong>{version.snapshot_summary.has_guide ? 'Yes' : 'No'}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Takes</span>
+                        <strong>{version.snapshot_summary.take_count}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Ready takes</span>
+                        <strong>{version.snapshot_summary.ready_take_count}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Arrangements</span>
+                        <strong>{version.snapshot_summary.arrangement_count}</strong>
+                      </div>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Share Links</p>
+                <h2>Create read-only share URLs tied to a frozen snapshot</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  shareLinksState.phase === 'ready'
+                    ? 'status-pill--ready'
+                    : shareLinksState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {shareLinksState.phase === 'ready'
+                  ? `${shareLinksState.items.length} links`
+                  : shareLinksState.phase === 'error'
+                    ? 'Share error'
+                    : 'Loading shares'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              The master plan leaves the sharing scope open, so this slice assumes read-only links.
+              Each link freezes a version first, then opens a public viewer route without editing
+              controls.
+            </p>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Share label</span>
+                <input
+                  className="text-input"
+                  value={shareLabelDraft}
+                  onChange={(event) => setShareLabelDraft(event.target.value)}
+                  placeholder="Coach review"
+                />
+              </label>
+
+              <label className="field field--compact">
+                <span>Expires in days</span>
+                <input
+                  className="text-input"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={shareExpiryDays}
+                  onChange={(event) => setShareExpiryDays(Number(event.target.value) || 7)}
+                />
+              </label>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={shareCreateState.phase === 'submitting'}
+                onClick={() => void handleCreateShareLink()}
+              >
+                {shareCreateState.phase === 'submitting'
+                  ? 'Creating share link...'
+                  : 'Create read-only share link'}
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => void refreshShareLinks().catch(() => undefined)}
+              >
+                Refresh share links
+              </button>
+            </div>
+
+            {shareCreateState.phase === 'success' || shareCreateState.phase === 'error' ? (
+              <p className={shareCreateState.phase === 'error' ? 'form-error' : 'status-card__hint'}>
+                {shareCreateState.message}
+              </p>
+            ) : shareLinksState.phase === 'error' ? (
+              <p className="form-error">{shareLinksState.message}</p>
+            ) : null}
+
+            {shareDeactivateState.phase === 'success' || shareDeactivateState.phase === 'error' ? (
+              <p className={shareDeactivateState.phase === 'error' ? 'form-error' : 'status-card__hint'}>
+                {shareDeactivateState.message}
+              </p>
+            ) : null}
+
+            {shareCopyState.phase === 'success' || shareCopyState.phase === 'error' ? (
+              <p className={shareCopyState.phase === 'error' ? 'form-error' : 'status-card__hint'}>
+                {shareCopyState.message}
+              </p>
+            ) : null}
+
+            <div className="history-list">
+              {shareLinksState.items.length === 0 ? (
+                <div className="empty-card">
+                  <p>No share links yet.</p>
+                  <p>Create a read-only share URL to send the current studio snapshot to reviewers.</p>
+                </div>
+              ) : (
+                shareLinksState.items.map((shareLink) => (
+                  <article className="history-card" key={shareLink.share_link_id}>
+                    <div className="history-card__header">
+                      <div>
+                        <strong>{shareLink.label}</strong>
+                        <span>
+                          {shareLink.is_active ? 'Active' : 'Inactive'} | expires{' '}
+                          {shareLink.expires_at ? formatDate(shareLink.expires_at) : 'never'}
+                        </span>
+                      </div>
+                      <span className="candidate-chip">{shareLink.access_scope}</span>
+                    </div>
+
+                    <div className="mini-card mini-card--stack">
+                      <span>Share URL</span>
+                      <strong>{shareLink.share_url}</strong>
+                    </div>
+
+                    <div className="mini-grid">
+                      <div className="mini-card">
+                        <span>Version</span>
+                        <strong>{shareLink.version_id.slice(0, 8)}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Last opened</span>
+                        <strong>{shareLink.last_accessed_at ? formatDate(shareLink.last_accessed_at) : 'Not yet'}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Created</span>
+                        <strong>{formatDate(shareLink.created_at)}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>Status</span>
+                        <strong>{shareLink.is_active ? 'Live' : 'Closed'}</strong>
+                      </div>
+                    </div>
+
+                    <div className="button-row">
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        onClick={() => void handleCopyShareLink(shareLink.share_url)}
+                      >
+                        Copy URL
+                      </button>
+                      <a className="button-secondary" href={shareLink.share_url} target="_blank" rel="noreferrer">
+                        Open share view
+                      </a>
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        disabled={!shareLink.is_active || shareDeactivateState.phase === 'submitting'}
+                        onClick={() => void handleDeactivateShareLink(shareLink.share_link_id)}
+                      >
+                        {shareLink.is_active ? 'Deactivate' : 'Already inactive'}
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
           </article>
         </div>
       </section>

@@ -1,42 +1,42 @@
 export const priorityCards = [
   {
-    title: 'Difficulty presets',
+    title: 'Project history',
     items: [
-      'Keep beginner, basic, and strict presets attached to the arrangement generator.',
-      'Explain what each preset changes before the user generates a candidate batch.',
-      'Use the selected preset when comparing A/B/C instead of hiding it in JSON.',
+      'Capture the current studio state as a lightweight snapshot before larger edits.',
+      'Show guide, take, mixdown, and arrangement counts in the version history list.',
+      'Keep the history readable enough to use as a real review trail.',
     ],
   },
   {
-    title: 'Voice range presets',
+    title: 'Read-only sharing',
     items: [
-      'Offer S, A, T, B, and Baritone lead presets directly in the studio.',
-      'Push the selected preset into the rule-based arrangement engine.',
-      'Show whether each candidate still fits the chosen lead range well.',
+      'Create share links from a frozen snapshot instead of a moving live project state.',
+      'Keep the first share scope read-only so product promises stay conservative.',
+      'Expose expiry and deactivation controls directly in the studio.',
     ],
   },
   {
-    title: 'Candidate comparison',
+    title: 'Shared review view',
     items: [
-      'Surface lead-fit, max leap, and parallel-motion warnings on the compare cards.',
-      'Make candidate A/B/C feel like a real choice, not three opaque JSON blobs.',
-      'Keep the editable arrangement JSON available after the compare pass.',
+      'Render a public-facing review page that can play the frozen guide, takes, and mixdown.',
+      'Leave editing controls out of the shared route.',
+      'Keep export links available for arrangement review.',
     ],
   },
   {
-    title: 'Beatbox templates',
+    title: 'Phase 8 closeout',
     items: [
-      'Expand from a single on/off percussion toggle to multiple beatbox templates.',
-      'Keep template selection lightweight and rule-based for P1.',
-      'Carry the chosen template through comparison, playback, and export.',
+      'Finish the remaining P1 collaboration surface after arrangement polish.',
+      'Keep the implementation small enough to stay inside the existing studio architecture.',
+      'Leave room for fuller restore or permission controls in a later phase.',
     ],
   },
 ] as const
 
 export const currentLaneTickets = [
   'Phase 8',
-  'Difficulty presets',
-  'Voice range presets',
-  'Candidate compare UI',
-  'Beatbox templates',
+  'Project version history',
+  'Read-only share links',
+  'Shared review page',
+  'P1 collaboration polish',
 ] as const

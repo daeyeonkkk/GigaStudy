@@ -123,18 +123,18 @@ export function HomePage() {
       <section className="hero">
         <div className="hero__copy">
           <p className="eyebrow">GigaStudy Phase 8</p>
-          <h1>Sharpen the arrangement workflow with presets, compare views, and beatbox options.</h1>
+          <h1>Finish Phase 8 with snapshot history and read-only sharing.</h1>
           <p className="hero__summary">
             This workspace follows the PROJECT_FOUNDATION post-launch lane:
-            keep the core studio flow intact while making arrangement choices easier to compare
-            and easier to aim at a real singer range.
+            keep the core studio flow intact while adding review-safe history and share surfaces
+            around the studio.
           </p>
 
           <div className="chip-row" aria-label="current scope">
             <span className="chip">React 19 + Vite</span>
             <span className="chip">FastAPI</span>
-            <span className="chip">Voice presets</span>
-            <span className="chip">Beatbox templates</span>
+            <span className="chip">Version history</span>
+            <span className="chip">Read-only shares</span>
           </div>
 
           <div className="button-row">

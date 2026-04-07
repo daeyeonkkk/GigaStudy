@@ -21,6 +21,7 @@ from gigastudy_api.services.analysis import (
     get_latest_analysis_job,
     get_latest_score,
 )
+from gigastudy_api.services.melody import build_melody_draft_response, get_latest_melody_draft
 from gigastudy_api.services.processing import (
     get_track_playback_artifact,
     get_track_preview_data,
@@ -141,6 +142,7 @@ def list_take_tracks(session: Session, project_id: UUID) -> list[Track]:
         .options(
             joinedload(Track.artifacts),
             joinedload(Track.analysis_jobs),
+            joinedload(Track.melody_drafts),
             joinedload(Track.scores),
         )
         .where(Track.project_id == project_id, Track.track_role == TrackRole.VOCAL_TAKE)
@@ -160,6 +162,7 @@ def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
     preview_data = get_track_preview_data(track)
     latest_score = get_latest_score(track)
     latest_analysis_job = get_latest_analysis_job(track)
+    latest_melody = get_latest_melody_draft(track)
 
     return TakeTrackResponse(
         track_id=track.track_id,
@@ -183,6 +186,7 @@ def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
         latest_analysis_job=(
             build_analysis_job_response(latest_analysis_job) if latest_analysis_job else None
         ),
+        latest_melody=build_melody_draft_response(latest_melody, request) if latest_melody else None,
         created_at=track.created_at,
         updated_at=track.updated_at,
     )

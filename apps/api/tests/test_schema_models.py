@@ -15,6 +15,7 @@ from gigastudy_api.db.models import (
     Artifact,
     ArtifactType,
     DeviceProfile,
+    MelodyDraft,
     Project,
     Score,
     Track,
@@ -190,6 +191,62 @@ def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) ->
     assert len(take.scores) == 1
 
 
+def test_track_can_store_editable_melody_draft(session: Session) -> None:
+    user = User(nickname="melodist")
+    project = Project(user=user, title="Melody Session", bpm=96, base_key="G")
+    take = Track(
+        project=project,
+        track_role=TrackRole.VOCAL_TAKE,
+        track_status=TrackStatus.READY,
+        take_no=1,
+    )
+    session.add_all(
+        [
+            user,
+            project,
+            take,
+            MelodyDraft(
+                project=project,
+                track=take,
+                model_version="heuristic-melody-v1",
+                key_estimate="G major",
+                bpm=96,
+                grid_division="1/16",
+                phrase_count=1,
+                note_count=2,
+                notes_json=[
+                    {
+                        "pitch_midi": 67,
+                        "pitch_name": "G4",
+                        "start_ms": 0,
+                        "end_ms": 500,
+                        "duration_ms": 500,
+                        "phrase_index": 0,
+                        "velocity": 84,
+                    },
+                    {
+                        "pitch_midi": 69,
+                        "pitch_name": "A4",
+                        "start_ms": 500,
+                        "end_ms": 1000,
+                        "duration_ms": 500,
+                        "phrase_index": 0,
+                        "velocity": 84,
+                    },
+                ],
+                midi_storage_key="C:/tmp/test.mid",
+                midi_byte_size=128,
+            ),
+        ]
+    )
+    session.commit()
+    session.refresh(take)
+
+    assert len(take.melody_drafts) == 1
+    assert take.melody_drafts[0].key_estimate == "G major"
+    assert take.melody_drafts[0].note_count == 2
+
+
 def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "phase1.db"
     api_dir = Path(__file__).resolve().parents[1]
@@ -207,6 +264,7 @@ def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
         "analysis_jobs",
         "artifacts",
         "device_profiles",
+        "melody_drafts",
         "projects",
         "scores",
         "tracks",

@@ -34,9 +34,9 @@ export const priorityCards = [
 ] as const
 
 export const currentLaneTickets = [
-  'Phase 2',
-  'Alignment confidence',
-  '3-axis scoring',
-  'Feedback JSON',
-  'Studio snapshot sync',
+  'Phase 3',
+  'Audio to MIDI',
+  'Quantize',
+  'Key estimate',
+  'Editable melody draft',
 ] as const

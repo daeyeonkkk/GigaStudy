@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from gigastudy_api.api.schemas.analysis import AnalysisJobResponse, TrackScoreResponse
 from gigastudy_api.api.schemas.audio_preview import AudioPreviewResponse
+from gigastudy_api.api.schemas.melody import MelodyDraftResponse
 
 
 class TakeCreateRequest(BaseModel):
@@ -64,6 +65,7 @@ class TakeTrackResponse(BaseModel):
     preview_data: AudioPreviewResponse | None = None
     latest_score: TrackScoreResponse | None = None
     latest_analysis_job: AnalysisJobResponse | None = None
+    latest_melody: MelodyDraftResponse | None = None
     created_at: datetime
     updated_at: datetime
 

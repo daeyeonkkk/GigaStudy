@@ -105,6 +105,32 @@ type TrackScoreSummary = {
   updated_at: string
 }
 
+type MelodyNote = {
+  pitch_midi: number
+  pitch_name: string
+  start_ms: number
+  end_ms: number
+  duration_ms: number
+  phrase_index: number
+  velocity: number
+}
+
+type MelodyDraft = {
+  melody_draft_id: string
+  project_id: string
+  track_id: string
+  model_version: string
+  key_estimate: string | null
+  bpm: number | null
+  grid_division: string
+  phrase_count: number
+  note_count: number
+  notes_json: MelodyNote[]
+  midi_artifact_url: string | null
+  created_at: string
+  updated_at: string
+}
+
 type TakeTrack = {
   track_id: string
   project_id: string
@@ -125,6 +151,7 @@ type TakeTrack = {
   preview_data: AudioPreviewData | null
   latest_score: TrackScoreSummary | null
   latest_analysis_job: AnalysisJobSummary | null
+  latest_melody: MelodyDraft | null
   created_at: string
   updated_at: string
 }
@@ -245,6 +272,8 @@ const outputRouteOptions = [
   { value: 'unknown', label: 'Unknown route' },
 ] as const
 
+const noteNamesSharp = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
+
 function detectBrowserName(userAgent: string): string {
   if (/Edg\//.test(userAgent)) {
     return 'Edge'
@@ -318,6 +347,29 @@ function formatOffsetMs(value: number | null): string {
   }
 
   return `${value > 0 ? '+' : ''}${value} ms`
+}
+
+function midiToPitchName(pitchMidi: number): string {
+  const octave = Math.floor(pitchMidi / 12) - 1
+  return `${noteNamesSharp[((pitchMidi % 12) + 12) % 12]}${octave}`
+}
+
+function normalizeMelodyNote(note: MelodyNote): MelodyNote {
+  const safeStart = Math.max(0, note.start_ms)
+  const safeEnd = Math.max(safeStart + 1, note.end_ms)
+  const safePitch = Math.min(127, Math.max(0, note.pitch_midi))
+  const safeVelocity = Math.min(127, Math.max(1, note.velocity))
+  const safePhrase = Math.max(0, note.phrase_index)
+
+  return {
+    pitch_midi: safePitch,
+    pitch_name: midiToPitchName(safePitch),
+    start_ms: safeStart,
+    end_ms: safeEnd,
+    duration_ms: safeEnd - safeStart,
+    phrase_index: safePhrase,
+    velocity: safeVelocity,
+  }
 }
 
 function pickNumber(value: unknown): number | null {
@@ -497,6 +549,9 @@ export function StudioPage() {
   const [audioPreviews, setAudioPreviews] = useState<Record<string, AudioPreviewData>>({})
   const [waveformState, setWaveformState] = useState<ActionState>({ phase: 'idle' })
   const [analysisState, setAnalysisState] = useState<ActionState>({ phase: 'idle' })
+  const [melodyState, setMelodyState] = useState<ActionState>({ phase: 'idle' })
+  const [melodySaveState, setMelodySaveState] = useState<ActionState>({ phase: 'idle' })
+  const [melodyNotesDraft, setMelodyNotesDraft] = useState<MelodyNote[]>([])
   const [mixerState, setMixerState] = useState<Record<string, MixerTrackState>>({})
   const [mixdownSummary, setMixdownSummary] = useState<MixdownTrack | null>(null)
   const [mixdownPreviewState, setMixdownPreviewState] = useState<ActionState>({ phase: 'idle' })
@@ -842,6 +897,17 @@ export function StudioPage() {
     setAnalysisState({ phase: 'idle' })
   }, [selectedTakeId])
 
+  useEffect(() => {
+    setMelodyState({ phase: 'idle' })
+    setMelodySaveState({ phase: 'idle' })
+  }, [selectedTakeId])
+
+  useEffect(() => {
+    const selectedTrack =
+      takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
+    setMelodyNotesDraft(selectedTrack?.latest_melody?.notes_json ?? [])
+  }, [selectedTakeId, takesState.items])
+
   async function refreshTakes(): Promise<TakeTrack[]> {
     const snapshot = await refreshStudioSnapshot()
     return snapshot?.takes ?? []
@@ -887,6 +953,137 @@ export function StudioPage() {
       setAnalysisState({
         phase: 'error',
         message: error instanceof Error ? error.message : 'Unable to run track analysis.',
+      })
+    }
+  }
+
+  async function handleExtractMelody(): Promise<void> {
+    if (!projectId) {
+      setMelodyState({ phase: 'error', message: 'Project id is missing.' })
+      return
+    }
+
+    if (!selectedTake) {
+      setMelodyState({
+        phase: 'error',
+        message: 'Select a take before extracting a melody draft.',
+      })
+      return
+    }
+
+    setMelodyState({
+      phase: 'submitting',
+      message: 'Extracting a quantized melody draft from the selected take...',
+    })
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/projects/${projectId}/tracks/${selectedTake.track_id}/melody`),
+        {
+          method: 'POST',
+        },
+      )
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to extract melody draft.'))
+      }
+
+      const melodyDraft = (await response.json()) as MelodyDraft
+      setMelodyNotesDraft(melodyDraft.notes_json)
+      await refreshStudioSnapshot().catch(() => null)
+      setMelodyState({
+        phase: 'success',
+        message: `Melody draft saved with ${melodyDraft.note_count} notes and key ${melodyDraft.key_estimate ?? 'estimate pending'}.`,
+      })
+    } catch (error) {
+      setMelodyState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to extract melody draft.',
+      })
+    }
+  }
+
+  function updateMelodyNote(index: number, key: keyof MelodyNote, value: number): void {
+    setMelodyNotesDraft((current) =>
+      current.map((note, noteIndex) => {
+        if (noteIndex !== index) {
+          return note
+        }
+
+        return normalizeMelodyNote({
+          ...note,
+          [key]: value,
+        })
+      }),
+    )
+  }
+
+  function handleAddMelodyNote(): void {
+    setMelodyNotesDraft((current) => {
+      const previous = current[current.length - 1]
+      const startMs = previous ? previous.end_ms : 0
+      const endMs = startMs + 250
+      return [
+        ...current,
+        normalizeMelodyNote({
+          pitch_midi: previous?.pitch_midi ?? 60,
+          pitch_name: midiToPitchName(previous?.pitch_midi ?? 60),
+          start_ms: startMs,
+          end_ms: endMs,
+          duration_ms: endMs - startMs,
+          phrase_index: previous?.phrase_index ?? 0,
+          velocity: previous?.velocity ?? 84,
+        }),
+      ]
+    })
+  }
+
+  function handleRemoveMelodyNote(index: number): void {
+    setMelodyNotesDraft((current) => current.filter((_, noteIndex) => noteIndex !== index))
+  }
+
+  async function handleSaveMelodyDraft(): Promise<void> {
+    if (!selectedTake?.latest_melody) {
+      setMelodySaveState({
+        phase: 'error',
+        message: 'Extract a melody draft before saving note edits.',
+      })
+      return
+    }
+
+    setMelodySaveState({
+      phase: 'submitting',
+      message: 'Saving note edits and rebuilding the MIDI draft...',
+    })
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/melody-drafts/${selectedTake.latest_melody.melody_draft_id}`),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            key_estimate: selectedTake.latest_melody.key_estimate,
+            notes: melodyNotesDraft.map((note) => normalizeMelodyNote(note)),
+          }),
+        },
+      )
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to save melody draft.'))
+      }
+
+      const melodyDraft = (await response.json()) as MelodyDraft
+      setMelodyNotesDraft(melodyDraft.notes_json)
+      await refreshStudioSnapshot().catch(() => null)
+      setMelodySaveState({
+        phase: 'success',
+        message: `Saved ${melodyDraft.note_count} melody notes and rebuilt the MIDI draft.`,
+      })
+    } catch (error) {
+      setMelodySaveState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to save melody draft.',
       })
     }
   }
@@ -1656,6 +1853,7 @@ export function StudioPage() {
   const selectedTakePlaybackUrl = getSelectedTakePlaybackUrl(selectedTake)
   const selectedTakeScore = selectedTake?.latest_score ?? null
   const selectedTakeAnalysisJob = selectedTake?.latest_analysis_job ?? null
+  const selectedTakeMelody = selectedTake?.latest_melody ?? null
   const guideMixer = guide ? mixerState[guide.track_id] : null
   const mixdownPlaybackUrl = mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null
   const mixdownSourceLabel = mixdownPreview
@@ -2835,6 +3033,230 @@ export function StudioPage() {
               <div className="empty-card">
                 <p>No score feedback is available yet.</p>
                 <p>Run post-recording analysis to store the feedback JSON in the project.</p>
+              </div>
+            )}
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Phase 3</p>
+          <h2>Audio-to-MIDI melody draft</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Melody Extraction</p>
+                <h2>Turn the selected take into a quantized melody draft</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  selectedTakeMelody
+                    ? 'status-pill--ready'
+                    : melodyState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {melodyState.phase === 'submitting'
+                  ? 'Extracting'
+                  : selectedTakeMelody
+                    ? 'Draft ready'
+                    : 'No draft'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              PROJECT_FOUNDATION puts melody extraction after scoring: build a usable MIDI
+              draft, quantize it to the project grid, estimate the key, and leave the note
+              list editable before arrangement starts.
+            </p>
+
+            {selectedTake ? (
+              <div className="support-stack">
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Selected take</span>
+                    <strong>Take {selectedTake.take_no ?? '?'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Key estimate</span>
+                    <strong>{selectedTakeMelody?.key_estimate ?? 'Pending'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Grid</span>
+                    <strong>{selectedTakeMelody?.grid_division ?? '1/16 draft'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Notes</span>
+                    <strong>{selectedTakeMelody?.note_count ?? 0}</strong>
+                  </div>
+                </div>
+
+                <div className="button-row">
+                  <button
+                    className="button-primary"
+                    type="button"
+                    disabled={melodyState.phase === 'submitting'}
+                    onClick={() => void handleExtractMelody()}
+                  >
+                    {melodyState.phase === 'submitting'
+                      ? 'Extracting melody...'
+                      : 'Extract melody draft'}
+                  </button>
+
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    disabled={selectedTakeMelody === null || melodySaveState.phase === 'submitting'}
+                    onClick={() => void handleSaveMelodyDraft()}
+                  >
+                    {melodySaveState.phase === 'submitting' ? 'Saving draft...' : 'Save note edits'}
+                  </button>
+
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={handleAddMelodyNote}
+                  >
+                    Add note
+                  </button>
+
+                  {selectedTakeMelody?.midi_artifact_url ? (
+                    <a
+                      className="button-secondary"
+                      href={selectedTakeMelody.midi_artifact_url}
+                    >
+                      Download MIDI
+                    </a>
+                  ) : null}
+                </div>
+
+                {melodyState.phase === 'success' || melodyState.phase === 'error' ? (
+                  <p
+                    className={melodyState.phase === 'error' ? 'form-error' : 'status-card__hint'}
+                  >
+                    {melodyState.message}
+                  </p>
+                ) : (
+                  <p className="status-card__hint">
+                    Extract once to generate a quantized note draft and downloadable MIDI file
+                    for this take.
+                  </p>
+                )}
+
+                {melodySaveState.phase === 'success' || melodySaveState.phase === 'error' ? (
+                  <p
+                    className={
+                      melodySaveState.phase === 'error' ? 'form-error' : 'status-card__hint'
+                    }
+                  >
+                    {melodySaveState.message}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No take is selected.</p>
+                <p>Select a take before extracting a melody draft.</p>
+              </div>
+            )}
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Melody Editor</p>
+                <h2>Review and adjust quantized notes before arrangement</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  melodyNotesDraft.length > 0 ? 'status-pill--ready' : 'status-pill--loading'
+                }`}
+              >
+                {melodyNotesDraft.length} notes
+              </span>
+            </div>
+
+            {melodyNotesDraft.length > 0 ? (
+              <div className="melody-note-list">
+                {melodyNotesDraft.map((note, index) => (
+                  <div className="melody-note-row" key={`melody-note-${index}`}>
+                    <label>
+                      <span>Pitch</span>
+                      <input
+                        className="text-input"
+                        min={0}
+                        max={127}
+                        type="number"
+                        value={note.pitch_midi}
+                        onChange={(event) =>
+                          updateMelodyNote(index, 'pitch_midi', Number(event.target.value))
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      <span>Start</span>
+                      <input
+                        className="text-input"
+                        min={0}
+                        type="number"
+                        value={note.start_ms}
+                        onChange={(event) =>
+                          updateMelodyNote(index, 'start_ms', Number(event.target.value))
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      <span>End</span>
+                      <input
+                        className="text-input"
+                        min={1}
+                        type="number"
+                        value={note.end_ms}
+                        onChange={(event) =>
+                          updateMelodyNote(index, 'end_ms', Number(event.target.value))
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      <span>Phrase</span>
+                      <input
+                        className="text-input"
+                        min={0}
+                        type="number"
+                        value={note.phrase_index}
+                        onChange={(event) =>
+                          updateMelodyNote(index, 'phrase_index', Number(event.target.value))
+                        }
+                      />
+                    </label>
+
+                    <div className="melody-note-meta">
+                      <strong>{note.pitch_name}</strong>
+                      <span>{note.duration_ms} ms</span>
+                    </div>
+
+                    <button
+                      className="button-secondary button-secondary--small"
+                      type="button"
+                      onClick={() => handleRemoveMelodyNote(index)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No melody notes are loaded yet.</p>
+                <p>Extract a melody draft to review the quantized note list here.</p>
               </div>
             )}
           </article>

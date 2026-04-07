@@ -92,6 +92,10 @@ class Project(TimestampMixin, Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
+    melody_drafts: Mapped[list["MelodyDraft"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
 
 class Track(TimestampMixin, Base):
@@ -130,6 +134,10 @@ class Track(TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     scores: Mapped[list["Score"]] = relationship(
+        back_populates="track",
+        cascade="all, delete-orphan",
+    )
+    melody_drafts: Mapped[list["MelodyDraft"]] = relationship(
         back_populates="track",
         cascade="all, delete-orphan",
     )
@@ -228,3 +236,23 @@ class Score(TimestampMixin, Base):
 
     project: Mapped["Project"] = relationship(back_populates="scores")
     track: Mapped["Track"] = relationship(back_populates="scores")
+
+
+class MelodyDraft(TimestampMixin, Base):
+    __tablename__ = "melody_drafts"
+
+    melody_draft_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    track_id: Mapped[UUID] = mapped_column(ForeignKey("tracks.track_id"), nullable=False, index=True)
+    model_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    key_estimate: Mapped[str | None] = mapped_column(String(32))
+    bpm: Mapped[int | None] = mapped_column(Integer)
+    grid_division: Mapped[str] = mapped_column(String(16), nullable=False)
+    phrase_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    note_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    notes_json: Mapped[list[dict] | dict] = mapped_column(JSON, nullable=False)
+    midi_storage_key: Mapped[str | None] = mapped_column(String(512))
+    midi_byte_size: Mapped[int | None] = mapped_column(Integer)
+
+    project: Mapped["Project"] = relationship(back_populates="melody_drafts")
+    track: Mapped["Track"] = relationship(back_populates="melody_drafts")

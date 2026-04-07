@@ -238,6 +238,70 @@
   font-size: 0.78rem;
 }
 
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.score-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.score-card span {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.score-card strong {
+  font-size: 1.2rem;
+  color: var(--ink-strong);
+}
+
+.score-card--highlight {
+  background:
+    radial-gradient(circle at top right, rgba(239, 139, 98, 0.22), transparent 44%),
+    rgba(255, 255, 255, 0.72);
+}
+
+.feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.feedback-card {
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feedback-card__header,
+.feedback-card__scores {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.feedback-card__header span,
+.feedback-card__scores span {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: var(--accent-strong);

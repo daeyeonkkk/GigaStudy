@@ -15,6 +15,12 @@ from gigastudy_api.api.schemas.tracks import (
 )
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Project, Track, TrackRole, TrackStatus
+from gigastudy_api.services.analysis import (
+    build_analysis_job_response,
+    build_track_score_response,
+    get_latest_analysis_job,
+    get_latest_score,
+)
 from gigastudy_api.services.processing import (
     get_track_playback_artifact,
     get_track_preview_data,
@@ -132,7 +138,11 @@ def list_take_tracks(session: Session, project_id: UUID) -> list[Track]:
 
     query = (
         select(Track)
-        .options(joinedload(Track.artifacts))
+        .options(
+            joinedload(Track.artifacts),
+            joinedload(Track.analysis_jobs),
+            joinedload(Track.scores),
+        )
         .where(Track.project_id == project_id, Track.track_role == TrackRole.VOCAL_TAKE)
         .order_by(Track.take_no.desc(), Track.created_at.desc())
     )
@@ -148,6 +158,8 @@ def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
         else None
     )
     preview_data = get_track_preview_data(track)
+    latest_score = get_latest_score(track)
+    latest_analysis_job = get_latest_analysis_job(track)
 
     return TakeTrackResponse(
         track_id=track.track_id,
@@ -161,10 +173,16 @@ def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
         actual_sample_rate=track.actual_sample_rate,
         storage_key=track.storage_key,
         checksum=track.checksum,
+        alignment_offset_ms=track.alignment_offset_ms,
+        alignment_confidence=track.alignment_confidence,
         recording_started_at=track.recording_started_at,
         recording_finished_at=track.recording_finished_at,
         source_artifact_url=download_url,
         preview_data=preview_data,
+        latest_score=build_track_score_response(latest_score) if latest_score else None,
+        latest_analysis_job=(
+            build_analysis_job_response(latest_analysis_job) if latest_analysis_job else None
+        ),
         created_at=track.created_at,
         updated_at=track.updated_at,
     )

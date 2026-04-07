@@ -23,7 +23,7 @@ type StudioState =
 
 type ActionState =
   | { phase: 'idle' }
-  | { phase: 'submitting' }
+  | { phase: 'submitting'; message?: string }
   | { phase: 'success'; message: string }
   | { phase: 'error'; message: string }
 
@@ -70,6 +70,41 @@ type GuideUploadInitResponse = {
   storage_key: string
 }
 
+type AnalysisFeedbackItem = {
+  segment_index: number
+  start_ms: number
+  end_ms: number
+  pitch_score: number
+  rhythm_score: number
+  harmony_fit_score: number
+  message: string
+}
+
+type AnalysisJobSummary = {
+  job_id: string
+  project_id: string
+  track_id: string
+  job_type: string
+  status: string
+  model_version: string
+  requested_at: string
+  finished_at: string | null
+  error_message: string | null
+}
+
+type TrackScoreSummary = {
+  score_id: string
+  project_id: string
+  track_id: string
+  pitch_score: number
+  rhythm_score: number
+  harmony_fit_score: number
+  total_score: number
+  feedback_json: AnalysisFeedbackItem[]
+  created_at: string
+  updated_at: string
+}
+
 type TakeTrack = {
   track_id: string
   project_id: string
@@ -82,10 +117,14 @@ type TakeTrack = {
   actual_sample_rate: number | null
   storage_key: string | null
   checksum: string | null
+  alignment_offset_ms: number | null
+  alignment_confidence: number | null
   recording_started_at: string | null
   recording_finished_at: string | null
   source_artifact_url: string | null
   preview_data: AudioPreviewData | null
+  latest_score: TrackScoreSummary | null
+  latest_analysis_job: AnalysisJobSummary | null
   created_at: string
   updated_at: string
 }
@@ -126,6 +165,16 @@ type StudioSnapshotResponse = {
   takes: TakeTrack[]
   latest_device_profile: DeviceProfile | null
   mixdown: MixdownTrack | null
+}
+
+type TrackAnalysisResponse = {
+  track_id: string
+  project_id: string
+  guide_track_id: string
+  alignment_offset_ms: number | null
+  alignment_confidence: number | null
+  latest_job: AnalysisJobSummary
+  latest_score: TrackScoreSummary
 }
 
 type DeviceProfileState =
@@ -241,6 +290,34 @@ function formatDuration(durationMs: number | null): string {
   }
 
   return `${(durationMs / 1000).toFixed(2)} sec`
+}
+
+function formatPercent(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return 'Not scored yet'
+  }
+
+  return `${value.toFixed(1)} / 100`
+}
+
+function formatConfidence(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return 'Pending'
+  }
+
+  return `${Math.round(value * 100)}%`
+}
+
+function formatOffsetMs(value: number | null): string {
+  if (value === null) {
+    return 'Pending'
+  }
+
+  if (value === 0) {
+    return 'Aligned'
+  }
+
+  return `${value > 0 ? '+' : ''}${value} ms`
 }
 
 function pickNumber(value: unknown): number | null {
@@ -419,6 +496,7 @@ export function StudioPage() {
   const [takePreviewUrls, setTakePreviewUrls] = useState<Record<string, string>>({})
   const [audioPreviews, setAudioPreviews] = useState<Record<string, AudioPreviewData>>({})
   const [waveformState, setWaveformState] = useState<ActionState>({ phase: 'idle' })
+  const [analysisState, setAnalysisState] = useState<ActionState>({ phase: 'idle' })
   const [mixerState, setMixerState] = useState<Record<string, MixerTrackState>>({})
   const [mixdownSummary, setMixdownSummary] = useState<MixdownTrack | null>(null)
   const [mixdownPreviewState, setMixdownPreviewState] = useState<ActionState>({ phase: 'idle' })
@@ -760,9 +838,57 @@ export function StudioPage() {
     setMixdownSaveState({ phase: 'idle' })
   }, [guideState.guide, mixerState, selectedTakeId, takePreviewUrls, takesState.items])
 
+  useEffect(() => {
+    setAnalysisState({ phase: 'idle' })
+  }, [selectedTakeId])
+
   async function refreshTakes(): Promise<TakeTrack[]> {
     const snapshot = await refreshStudioSnapshot()
     return snapshot?.takes ?? []
+  }
+
+  async function handleRunAnalysis(): Promise<void> {
+    if (!projectId) {
+      setAnalysisState({ phase: 'error', message: 'Project id is missing.' })
+      return
+    }
+
+    if (!selectedTake) {
+      setAnalysisState({
+        phase: 'error',
+        message: 'Select a take before running post-recording analysis.',
+      })
+      return
+    }
+
+    setAnalysisState({
+      phase: 'submitting',
+      message: 'Running coarse/fine alignment and score generation on the server...',
+    })
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/api/projects/${projectId}/tracks/${selectedTake.track_id}/analysis`),
+        {
+          method: 'POST',
+        },
+      )
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to run track analysis.'))
+      }
+
+      const analysis = (await response.json()) as TrackAnalysisResponse
+      await refreshStudioSnapshot().catch(() => null)
+      setAnalysisState({
+        phase: 'success',
+        message: `Analysis saved. Total ${analysis.latest_score.total_score.toFixed(1)}, alignment confidence ${Math.round((analysis.alignment_confidence ?? 0) * 100)}%.`,
+      })
+    } catch (error) {
+      setAnalysisState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to run track analysis.',
+      })
+    }
   }
 
   function updateMixerTrack(trackId: string, nextValue: Partial<MixerTrackState>): void {
@@ -1528,6 +1654,8 @@ export function StudioPage() {
     takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
   const selectedTakePreview = selectedTake ? audioPreviews[selectedTake.track_id] ?? null : null
   const selectedTakePlaybackUrl = getSelectedTakePlaybackUrl(selectedTake)
+  const selectedTakeScore = selectedTake?.latest_score ?? null
+  const selectedTakeAnalysisJob = selectedTake?.latest_analysis_job ?? null
   const guideMixer = guide ? mixerState[guide.track_id] : null
   const mixdownPlaybackUrl = mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null
   const mixdownSourceLabel = mixdownPreview
@@ -2532,6 +2660,181 @@ export function StudioPage() {
               <div className="empty-card">
                 <p>No take is selected.</p>
                 <p>Select a take from the lane to inspect its waveform and contour.</p>
+              </div>
+            )}
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Phase 2</p>
+          <h2>Post-recording alignment and scoring</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Alignment Engine</p>
+                <h2>Run coarse/fine alignment and score the selected take</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  selectedTakeAnalysisJob?.status === 'SUCCEEDED'
+                    ? 'status-pill--ready'
+                    : analysisState.phase === 'error' || selectedTakeAnalysisJob?.status === 'FAILED'
+                      ? 'status-pill--error'
+                      : analysisState.phase === 'submitting'
+                        ? 'status-pill--loading'
+                        : 'status-pill--loading'
+                }`}
+              >
+                {analysisState.phase === 'submitting'
+                  ? 'Analyzing'
+                  : selectedTakeAnalysisJob?.status ?? 'Not analyzed'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              PROJECT_FOUNDATION puts post-recording alignment ahead of real-time scoring.
+              This pass stores alignment confidence, three score axes, and segment feedback
+              back into the studio snapshot.
+            </p>
+
+            {selectedTake ? (
+              <div className="support-stack">
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Selected take</span>
+                    <strong>Take {selectedTake.take_no ?? '?'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Alignment confidence</span>
+                    <strong>{formatConfidence(selectedTake.alignment_confidence)}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Offset estimate</span>
+                    <strong>{formatOffsetMs(selectedTake.alignment_offset_ms)}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Latest job</span>
+                    <strong>{selectedTakeAnalysisJob?.status ?? 'Not started'}</strong>
+                  </div>
+                </div>
+
+                <div className="score-grid">
+                  <div className="score-card">
+                    <span>Pitch</span>
+                    <strong>{formatPercent(selectedTakeScore?.pitch_score ?? null)}</strong>
+                  </div>
+                  <div className="score-card">
+                    <span>Rhythm</span>
+                    <strong>{formatPercent(selectedTakeScore?.rhythm_score ?? null)}</strong>
+                  </div>
+                  <div className="score-card">
+                    <span>Harmony fit</span>
+                    <strong>{formatPercent(selectedTakeScore?.harmony_fit_score ?? null)}</strong>
+                  </div>
+                  <div className="score-card score-card--highlight">
+                    <span>Total</span>
+                    <strong>{formatPercent(selectedTakeScore?.total_score ?? null)}</strong>
+                  </div>
+                </div>
+
+                <div className="button-row">
+                  <button
+                    className="button-primary"
+                    type="button"
+                    disabled={analysisState.phase === 'submitting'}
+                    onClick={() => void handleRunAnalysis()}
+                  >
+                    {analysisState.phase === 'submitting'
+                      ? 'Running analysis...'
+                      : 'Run post-recording analysis'}
+                  </button>
+
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => void refreshStudioSnapshot().catch(() => undefined)}
+                  >
+                    Refresh snapshot
+                  </button>
+                </div>
+
+                {analysisState.phase === 'success' || analysisState.phase === 'error' ? (
+                  <p
+                    className={
+                      analysisState.phase === 'error' ? 'form-error' : 'status-card__hint'
+                    }
+                  >
+                    {analysisState.message}
+                  </p>
+                ) : selectedTakeAnalysisJob ? (
+                  <p className="status-card__hint">
+                    Latest job used model {selectedTakeAnalysisJob.model_version} at{' '}
+                    {formatDate(selectedTakeAnalysisJob.requested_at)}.
+                  </p>
+                ) : (
+                  <p className="status-card__hint">
+                    Run analysis after recording so the studio can store alignment confidence,
+                    pitch, rhythm, harmony-fit, and segment feedback.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No take is selected.</p>
+                <p>Select a take before running post-recording analysis.</p>
+              </div>
+            )}
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Feedback JSON</p>
+                <h2>Inspect phrase-by-phrase feedback from the latest score</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  selectedTakeScore ? 'status-pill--ready' : 'status-pill--loading'
+                }`}
+              >
+                {selectedTakeScore
+                  ? `${selectedTakeScore.feedback_json.length} phrases`
+                  : 'Waiting for score'}
+              </span>
+            </div>
+
+            {selectedTakeScore ? (
+              <div className="feedback-list">
+                {selectedTakeScore.feedback_json.map((item) => (
+                  <article className="feedback-card" key={`${selectedTakeScore.score_id}-${item.segment_index}`}>
+                    <div className="feedback-card__header">
+                      <strong>
+                        Phrase {item.segment_index + 1}:{' '}
+                        {formatDuration(item.start_ms).replace(' sec', '')} -{' '}
+                        {formatDuration(item.end_ms).replace(' sec', '')}
+                      </strong>
+                      <span>{item.end_ms - item.start_ms} ms</span>
+                    </div>
+
+                    <div className="feedback-card__scores">
+                      <span>Pitch {item.pitch_score.toFixed(1)}</span>
+                      <span>Rhythm {item.rhythm_score.toFixed(1)}</span>
+                      <span>Harmony {item.harmony_fit_score.toFixed(1)}</span>
+                    </div>
+
+                    <p>{item.message}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No score feedback is available yet.</p>
+                <p>Run post-recording analysis to store the feedback JSON in the project.</p>
               </div>
             )}
           </article>

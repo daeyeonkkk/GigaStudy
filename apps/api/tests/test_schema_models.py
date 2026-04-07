@@ -8,7 +8,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from gigastudy_api.db.base import Base
-from gigastudy_api.db.models import Artifact, ArtifactType, DeviceProfile, Project, Track, TrackRole, TrackStatus, User
+from gigastudy_api.db.models import (
+    AnalysisJob,
+    AnalysisJobStatus,
+    AnalysisJobType,
+    Artifact,
+    ArtifactType,
+    DeviceProfile,
+    Project,
+    Score,
+    Track,
+    TrackRole,
+    TrackStatus,
+    User,
+)
 
 
 @pytest.fixture
@@ -124,6 +137,59 @@ def test_device_profile_unique_key_is_enforced(session: Session) -> None:
     assert session.query(DeviceProfile).count() == 2
 
 
+def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) -> None:
+    user = User(nickname="analyst")
+    project = Project(user=user, title="Analysis Session", base_key="C")
+    take = Track(
+        project=project,
+        track_role=TrackRole.VOCAL_TAKE,
+        track_status=TrackStatus.READY,
+        take_no=1,
+        alignment_offset_ms=35,
+        alignment_confidence=0.91,
+    )
+    session.add_all(
+        [
+            user,
+            project,
+            take,
+            AnalysisJob(
+                project=project,
+                track=take,
+                job_type=AnalysisJobType.POST_RECORDING_SCORE,
+                status=AnalysisJobStatus.SUCCEEDED,
+                model_version="heuristic-alignment-v1",
+            ),
+            Score(
+                project=project,
+                track=take,
+                pitch_score=92.0,
+                rhythm_score=87.5,
+                harmony_fit_score=84.0,
+                total_score=88.6,
+                feedback_json=[
+                    {
+                        "segment_index": 0,
+                        "start_ms": 0,
+                        "end_ms": 500,
+                        "pitch_score": 92.0,
+                        "rhythm_score": 87.5,
+                        "harmony_fit_score": 84.0,
+                        "message": "Stable phrase",
+                    }
+                ],
+            ),
+        ]
+    )
+    session.commit()
+    session.refresh(take)
+
+    assert take.alignment_offset_ms == 35
+    assert take.alignment_confidence == pytest.approx(0.91)
+    assert len(take.analysis_jobs) == 1
+    assert len(take.scores) == 1
+
+
 def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "phase1.db"
     api_dir = Path(__file__).resolve().parents[1]
@@ -137,4 +203,12 @@ def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
     engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
     table_names = set(inspect(engine).get_table_names())
 
-    assert {"artifacts", "device_profiles", "projects", "tracks", "users"} <= table_names
+    assert {
+        "analysis_jobs",
+        "artifacts",
+        "device_profiles",
+        "projects",
+        "scores",
+        "tracks",
+        "users",
+    } <= table_names

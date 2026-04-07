@@ -34,9 +34,9 @@ export const priorityCards = [
 ] as const
 
 export const currentLaneTickets = [
-  'WK-01',
-  'WK-02',
-  'BE-06',
-  'FE-07',
-  'WK-03',
+  'Phase 2',
+  'Alignment confidence',
+  '3-axis scoring',
+  'Feedback JSON',
+  'Studio snapshot sync',
 ] as const

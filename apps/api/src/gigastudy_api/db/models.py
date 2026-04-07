@@ -29,6 +29,17 @@ class ArtifactType(str, enum.Enum):
     MIXDOWN_AUDIO = "MIXDOWN_AUDIO"
 
 
+class AnalysisJobType(str, enum.Enum):
+    POST_RECORDING_SCORE = "POST_RECORDING_SCORE"
+
+
+class AnalysisJobStatus(str, enum.Enum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -73,6 +84,14 @@ class Project(TimestampMixin, Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
+    analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    scores: Mapped[list["Score"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
 
 class Track(TimestampMixin, Base):
@@ -96,11 +115,21 @@ class Track(TimestampMixin, Base):
     source_format: Mapped[str | None] = mapped_column(String(64))
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     checksum: Mapped[str | None] = mapped_column(String(128))
+    alignment_offset_ms: Mapped[int | None] = mapped_column(Integer)
+    alignment_confidence: Mapped[float | None] = mapped_column(Float)
     recording_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     recording_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     project: Mapped["Project"] = relationship(back_populates="tracks")
     artifacts: Mapped[list["Artifact"]] = relationship(
+        back_populates="track",
+        cascade="all, delete-orphan",
+    )
+    analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
+        back_populates="track",
+        cascade="all, delete-orphan",
+    )
+    scores: Mapped[list["Score"]] = relationship(
         back_populates="track",
         cascade="all, delete-orphan",
     )
@@ -155,3 +184,47 @@ class DeviceProfile(TimestampMixin, Base):
     calibration_confidence: Mapped[float | None] = mapped_column(Float)
 
     user: Mapped["User"] = relationship(back_populates="device_profiles")
+
+
+class AnalysisJob(Base):
+    __tablename__ = "analysis_jobs"
+
+    job_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    track_id: Mapped[UUID] = mapped_column(ForeignKey("tracks.track_id"), nullable=False, index=True)
+    job_type: Mapped[AnalysisJobType] = mapped_column(
+        Enum(AnalysisJobType, name="analysis_job_type", native_enum=False),
+        nullable=False,
+    )
+    status: Mapped[AnalysisJobStatus] = mapped_column(
+        Enum(AnalysisJobStatus, name="analysis_job_status", native_enum=False),
+        nullable=False,
+        default=AnalysisJobStatus.QUEUED,
+    )
+    model_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[str | None] = mapped_column(String(1024))
+
+    project: Mapped["Project"] = relationship(back_populates="analysis_jobs")
+    track: Mapped["Track"] = relationship(back_populates="analysis_jobs")
+
+
+class Score(TimestampMixin, Base):
+    __tablename__ = "scores"
+
+    score_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    track_id: Mapped[UUID] = mapped_column(ForeignKey("tracks.track_id"), nullable=False, index=True)
+    pitch_score: Mapped[float] = mapped_column(Float, nullable=False)
+    rhythm_score: Mapped[float] = mapped_column(Float, nullable=False)
+    harmony_fit_score: Mapped[float] = mapped_column(Float, nullable=False)
+    total_score: Mapped[float] = mapped_column(Float, nullable=False)
+    feedback_json: Mapped[list[dict] | dict] = mapped_column(JSON, nullable=False)
+
+    project: Mapped["Project"] = relationship(back_populates="scores")
+    track: Mapped["Track"] = relationship(back_populates="scores")

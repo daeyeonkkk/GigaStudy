@@ -1,0 +1,150 @@
+from collections.abc import Iterator
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from audio_fixtures import build_test_wav_bytes
+from gigastudy_api.config import get_settings
+from gigastudy_api.db.base import Base
+from gigastudy_api.db.session import get_db_session
+from gigastudy_api.main import app
+
+
+@pytest.fixture
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    database_path = tmp_path / "analysis.db"
+    storage_root = tmp_path / "storage"
+    monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", storage_root.as_posix())
+    get_settings.cache_clear()
+
+    engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(engine)
+
+    def override_session() -> Iterator[Session]:
+        session = session_local()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db_session] = override_session
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
+    get_settings.cache_clear()
+
+
+def upload_ready_track(
+    client: TestClient,
+    project_id: str,
+    *,
+    role: str,
+    wav_bytes: bytes,
+    filename: str,
+    part_type: str = "LEAD",
+) -> str:
+    if role == "guide":
+        init_response = client.post(
+            f"/api/projects/{project_id}/guide/upload-url",
+            json={"filename": filename, "content_type": "audio/wav"},
+        )
+        track_id = init_response.json()["track_id"]
+        client.put(init_response.json()["upload_url"], content=wav_bytes)
+        complete_response = client.post(
+            f"/api/projects/{project_id}/guide/complete",
+            json={"track_id": track_id, "source_format": "audio/wav"},
+        )
+        assert complete_response.status_code == 200
+        return track_id
+
+    create_response = client.post(
+        f"/api/projects/{project_id}/tracks",
+        json={"part_type": part_type},
+    )
+    track_id = create_response.json()["track_id"]
+    upload_response = client.post(
+        f"/api/tracks/{track_id}/upload-url",
+        json={"filename": filename, "content_type": "audio/wav"},
+    )
+    client.put(upload_response.json()["upload_url"], content=wav_bytes)
+    complete_response = client.post(
+        f"/api/tracks/{track_id}/complete",
+        json={"source_format": "audio/wav"},
+    )
+    assert complete_response.status_code == 200
+    return track_id
+
+
+def test_run_track_analysis_persists_scores_and_snapshot_summary(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1800, frequency_hz=440.0, sample_rate=32000)
+    take_bytes = build_test_wav_bytes(duration_ms=1800, frequency_hz=440.0, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Alignment Session", "base_key": "C", "bpm": 90},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=take_bytes, filename="take.wav")
+
+    analysis_response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+
+    assert analysis_response.status_code == 200
+    payload = analysis_response.json()
+    assert payload["track_id"] == take_id
+    assert payload["latest_job"]["status"] == "SUCCEEDED"
+    assert payload["alignment_confidence"] >= 0.6
+    assert payload["latest_score"]["pitch_score"] >= 90
+    assert payload["latest_score"]["rhythm_score"] >= 90
+    assert payload["latest_score"]["total_score"] >= 88
+    assert len(payload["latest_score"]["feedback_json"]) == 4
+
+    snapshot_response = client.get(f"/api/projects/{project_id}/studio")
+    assert snapshot_response.status_code == 200
+    take_payload = snapshot_response.json()["takes"][0]
+    assert take_payload["latest_score"] is not None
+    assert take_payload["latest_analysis_job"]["status"] == "SUCCEEDED"
+    assert take_payload["alignment_confidence"] == payload["alignment_confidence"]
+
+
+def test_analysis_distinguishes_matching_and_mismatched_takes(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=440.0, sample_rate=32000)
+    matching_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=440.0, sample_rate=32000)
+    mismatched_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=659.25, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Compare Session", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    matching_take_id = upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=matching_bytes,
+        filename="matching.wav",
+    )
+    mismatched_take_id = upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=mismatched_bytes,
+        filename="mismatched.wav",
+    )
+
+    matching_response = client.post(f"/api/projects/{project_id}/tracks/{matching_take_id}/analysis")
+    mismatched_response = client.post(f"/api/projects/{project_id}/tracks/{mismatched_take_id}/analysis")
+
+    assert matching_response.status_code == 200
+    assert mismatched_response.status_code == 200
+
+    matching_score = matching_response.json()["latest_score"]
+    mismatched_score = mismatched_response.json()["latest_score"]
+
+    assert matching_score["pitch_score"] > mismatched_score["pitch_score"]
+    assert matching_score["total_score"] > mismatched_score["total_score"]

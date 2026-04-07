@@ -1,28 +1,27 @@
 # GigaStudy
 
-GigaStudy는 웹에서 보컬 take를 녹음하고, 사후 정렬과 채점을 거쳐 반자동 아카펠라 편곡까지 이어지는 학습 스튜디오를 만드는 프로젝트다.
-
-현재 레포는 Phase 1인 녹음 파이프라인과 DeviceProfile 기반을 시작할 수 있는 최소 실행 구조를 포함한다.
+GigaStudy is a web studio for guided vocal practice.
+It lets a user record multiple takes against a guide, run post-recording alignment and scoring, extract an editable melody draft, generate rule-based 4-5 part arrangement candidates, render the score, and export practice artifacts.
 
 ## Repository Layout
 
 - `apps/web`
-  React 19 + Vite 기반 웹 스튜디오
+  React 19 + Vite studio client.
 - `apps/api`
-  FastAPI 기반 API와 향후 분석 워커의 시작점
+  FastAPI backend for project, audio, analysis, melody, arrangement, sharing, and ops flows.
 - `PROJECT_FOUNDATION`
-  제품 기준, 로드맵, 체크리스트, Phase 1 백로그
+  Product plan, roadmap, backlog, checklist, and current foundation audit.
 
 ## Quick Start
 
-### 1. Web
+### Web
 
 ```bash
 npm install
 npm run dev:web
 ```
 
-### 2. API
+### API
 
 ```bash
 cd apps/api
@@ -31,21 +30,26 @@ uv run alembic upgrade head
 uv run uvicorn gigastudy_api.main:app --reload --app-dir src
 ```
 
-API는 기본적으로 로컬 개발용 저장소를 `apps/api/storage` 아래에 만들고, guide 업로드 파일을 여기에 저장한다.
+By default the API uses local development storage under `apps/api/storage`.
 
-### 3. API Test
+### API Test
 
 ```bash
 cd apps/api
 uv run pytest
 ```
 
-## Current Focus
+## Current Product State
 
-- 프로젝트 생성과 스튜디오 진입 흐름
-- 마이크 권한, 장치 선택, 실제 오디오 설정값 저장
-- guide / take 업로드 수명주기
-- 기본 믹서와 mixdown 저장 경로
+- P0 MVP flow is implemented from project creation through export.
+- P1 reinforcement features are implemented, including presets, candidate comparison polish, project history, share links, and ops monitoring.
+- Analysis and melody extraction now use `librosa.pyin`-based pitch support on the backend.
+
+## Current Hardening Focus
+
+- Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
+- Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
+- Add release-gate smoke coverage for the main studio journey.
 
 ## Foundation Docs
 
@@ -53,3 +57,4 @@ uv run pytest
 - [Roadmap](./PROJECT_FOUNDATION/ROADMAP.md)
 - [Phase 1 Backlog](./PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
 - [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
+- [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)

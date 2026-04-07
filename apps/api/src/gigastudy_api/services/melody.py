@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from math import log2
 from pathlib import Path
 import struct
 import wave
@@ -14,13 +13,10 @@ from sqlalchemy.orm import Session, joinedload
 from gigastudy_api.api.schemas.melody import MelodyDraftResponse, MelodyDraftUpdateRequest
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Artifact, ArtifactType, MelodyDraft, Project, Track, TrackRole, TrackStatus
+from gigastudy_api.services.audio_features import PitchFrame, extract_pitch_frames
 
 
-MELODY_MODEL_VERSION = "heuristic-melody-v1"
-FRAME_HOP_MS = 20
-FRAME_WINDOW_MS = 40
-MIN_FREQUENCY_HZ = 80.0
-MAX_FREQUENCY_HZ = 1100.0
+MELODY_MODEL_VERSION = "librosa-pyin-melody-v2"
 MIN_NOTE_MS = 80
 REST_SPLIT_BEATS = 1.0
 GRID_DIVISION = "1/16"
@@ -28,13 +24,6 @@ PPQN = 480
 NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 MAJOR_INTERVALS = {0, 2, 4, 5, 7, 9, 11}
 MINOR_INTERVALS = {0, 2, 3, 5, 7, 8, 10}
-
-
-@dataclass
-class FramePitch:
-    start_ms: int
-    end_ms: int
-    pitch_midi: int | None
 
 
 @dataclass
@@ -139,58 +128,11 @@ def _read_canonical_samples(track: Track) -> tuple[np.ndarray, int]:
     return samples, sample_rate
 
 
-def _estimate_frame_frequency(window_samples: np.ndarray, sample_rate: int) -> float | None:
-    if window_samples.size == 0:
-        return None
-
-    centered = window_samples - float(np.mean(window_samples))
-    rms = float(np.sqrt(np.mean(np.square(centered))))
-    if rms < 0.01:
-        return None
-
-    min_lag = max(1, int(sample_rate / MAX_FREQUENCY_HZ))
-    max_lag = max(min_lag + 1, int(sample_rate / MIN_FREQUENCY_HZ))
-    autocorrelation = np.correlate(centered, centered, mode="full")[centered.size - 1 :]
-    if autocorrelation.size <= max_lag:
-        return None
-
-    search_window = autocorrelation[min_lag:max_lag]
-    if search_window.size == 0:
-        return None
-
-    peak_lag = int(np.argmax(search_window)) + min_lag
-    peak_value = float(autocorrelation[peak_lag])
-    if peak_value <= 0:
-        return None
-
-    return round(sample_rate / peak_lag, 3)
+def _extract_pitch_frames(samples: np.ndarray, sample_rate: int) -> list[PitchFrame]:
+    return _smooth_pitch_frames(extract_pitch_frames(samples, sample_rate))
 
 
-def _extract_pitch_frames(samples: np.ndarray, sample_rate: int) -> list[FramePitch]:
-    hop_samples = max(1, round(sample_rate * (FRAME_HOP_MS / 1000)))
-    window_samples = max(hop_samples * 2, round(sample_rate * (FRAME_WINDOW_MS / 1000)))
-    frames: list[FramePitch] = []
-
-    for start in range(0, len(samples), hop_samples):
-        end = min(len(samples), start + window_samples)
-        frequency = _estimate_frame_frequency(samples[start:end], sample_rate)
-        pitch_midi = None
-        if frequency is not None:
-            pitch_midi = int(round(69 + (12 * log2(frequency / 440.0))))
-
-        frame_end = min(len(samples), start + hop_samples)
-        frames.append(
-            FramePitch(
-                start_ms=round((start / sample_rate) * 1000),
-                end_ms=max(round((frame_end / sample_rate) * 1000), round((start / sample_rate) * 1000) + FRAME_HOP_MS),
-                pitch_midi=pitch_midi,
-            )
-        )
-
-    return _smooth_pitch_frames(frames)
-
-
-def _smooth_pitch_frames(frames: list[FramePitch]) -> list[FramePitch]:
+def _smooth_pitch_frames(frames: list[PitchFrame]) -> list[PitchFrame]:
     if len(frames) < 3:
         return frames
 
@@ -201,16 +143,17 @@ def _smooth_pitch_frames(frames: list[FramePitch]) -> list[FramePitch]:
         next_pitch = frames[index + 1].pitch_midi
 
         if prev_pitch is not None and prev_pitch == next_pitch and current_pitch != prev_pitch:
-            smoothed[index] = FramePitch(
+            smoothed[index] = PitchFrame(
                 start_ms=frames[index].start_ms,
                 end_ms=frames[index].end_ms,
+                frequency_hz=frames[index].frequency_hz,
                 pitch_midi=prev_pitch,
             )
 
     return smoothed
 
 
-def _merge_frame_notes(frames: list[FramePitch]) -> list[MelodyNote]:
+def _merge_frame_notes(frames: list[PitchFrame]) -> list[MelodyNote]:
     notes: list[MelodyNote] = []
     current_pitch: int | None = None
     current_start_ms = 0

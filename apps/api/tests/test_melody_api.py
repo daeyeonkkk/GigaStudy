@@ -75,7 +75,7 @@ def test_extract_melody_draft_returns_notes_and_midi(client: TestClient) -> None
     assert response.status_code == 200
     payload = response.json()
     assert payload["track_id"] == take_id
-    assert payload["model_version"] == "heuristic-melody-v1"
+    assert payload["model_version"] == "librosa-pyin-melody-v2"
     assert payload["note_count"] >= 1
     assert payload["notes_json"][0]["pitch_midi"] == 69
     assert payload["midi_artifact_url"] is not None

@@ -17,6 +17,7 @@ from gigastudy_api.api.schemas.audio_preview import AudioPreviewResponse
 from gigastudy_api.api.schemas.processing import TrackProcessingRetryResponse
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Artifact, ArtifactType, Track, TrackRole, TrackStatus
+from gigastudy_api.services.audio_features import build_preview_contour
 
 
 CANONICAL_SAMPLE_RATE = 16000
@@ -163,45 +164,12 @@ def _build_waveform(samples: np.ndarray, bins: int = WAVEFORM_BINS) -> list[floa
     return waveform
 
 
-def _estimate_window_pitch(
-    samples: np.ndarray,
-    sample_rate: int,
-    start: int,
-    end: int,
-) -> float | None:
-    window = samples[start:end]
-    if window.size == 0:
-        return None
-
-    rms = float(np.sqrt(np.mean(np.square(window))))
-    if rms < 0.01:
-        return None
-
-    crossings = int(np.count_nonzero(np.diff(np.signbit(window))))
-    estimated_frequency = (crossings * sample_rate) / (2 * window.size)
-    if estimated_frequency < 60 or estimated_frequency > 1200:
-        return None
-
-    return round(float(estimated_frequency), 3)
-
-
 def _build_pitch_contour(
     samples: np.ndarray,
     sample_rate: int,
     points: int = CONTOUR_POINTS,
 ) -> list[float | None]:
-    if samples.size == 0:
-        return [None] * points
-
-    window_size = max(2048, samples.size // points)
-    contour: list[float | None] = []
-
-    for point in range(points):
-        start = point * window_size
-        end = min(samples.size, start + window_size)
-        contour.append(_estimate_window_pitch(samples, sample_rate, start, end))
-
-    return contour
+    return build_preview_contour(samples, sample_rate, points=points)
 
 
 def _compute_duration_ms(

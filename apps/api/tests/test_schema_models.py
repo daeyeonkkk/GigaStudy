@@ -161,7 +161,7 @@ def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) ->
                 track=take,
                 job_type=AnalysisJobType.POST_RECORDING_SCORE,
                 status=AnalysisJobStatus.SUCCEEDED,
-                model_version="heuristic-alignment-v1",
+                model_version="librosa-pyin-alignment-v2",
             ),
             Score(
                 project=project,
@@ -210,7 +210,7 @@ def test_track_can_store_editable_melody_draft(session: Session) -> None:
             MelodyDraft(
                 project=project,
                 track=take,
-                model_version="heuristic-melody-v1",
+                model_version="librosa-pyin-melody-v2",
                 key_estimate="G major",
                 bpm=96,
                 grid_division="1/16",
@@ -261,7 +261,7 @@ def test_project_can_store_arrangement_candidates(session: Session) -> None:
     melody_draft = MelodyDraft(
         project=project,
         track=take,
-        model_version="heuristic-melody-v1",
+        model_version="librosa-pyin-melody-v2",
         key_estimate="C major",
         bpm=92,
         grid_division="1/16",

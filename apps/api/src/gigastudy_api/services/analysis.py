@@ -30,13 +30,11 @@ from gigastudy_api.db.models import (
     TrackRole,
     TrackStatus,
 )
+from gigastudy_api.services.audio_features import ONSET_HOP_LENGTH, build_onset_envelope
 from gigastudy_api.services.processing import get_track_preview_data
 
 
-ANALYSIS_MODEL_VERSION = "heuristic-alignment-v1"
-CANONICAL_SAMPLE_RATE = 16000
-ENVELOPE_HOP_SAMPLES = 160
-ENVELOPE_WINDOW_SAMPLES = 320
+ANALYSIS_MODEL_VERSION = "librosa-pyin-alignment-v2"
 MAX_ALIGNMENT_MS = 2000
 MIN_ALIGNMENT_OVERLAP_FRAMES = 24
 SEGMENT_COUNT = 4
@@ -93,7 +91,7 @@ def _get_track_artifact(track: Track, artifact_type: ArtifactType) -> Artifact |
     return None
 
 
-def _read_canonical_samples(track: Track) -> np.ndarray:
+def _read_canonical_samples(track: Track) -> tuple[np.ndarray, int]:
     canonical_artifact = _get_track_artifact(track, ArtifactType.CANONICAL_AUDIO)
     if canonical_artifact is None:
         raise HTTPException(
@@ -110,31 +108,10 @@ def _read_canonical_samples(track: Track) -> np.ndarray:
 
     with wave.open(canonical_path.as_posix(), "rb") as wav_file:
         raw_frames = wav_file.readframes(wav_file.getnframes())
+        sample_rate = wav_file.getframerate()
         samples = np.frombuffer(raw_frames, dtype=np.int16).astype(np.float32) / 32767.0
 
-    return samples
-
-
-def _build_energy_envelope(samples: np.ndarray) -> np.ndarray:
-    if samples.size == 0:
-        return np.zeros(1, dtype=np.float32)
-
-    frame_count = max(1, int(np.ceil(samples.size / ENVELOPE_HOP_SAMPLES)))
-    envelope = np.zeros(frame_count, dtype=np.float32)
-
-    for frame_index in range(frame_count):
-        start = frame_index * ENVELOPE_HOP_SAMPLES
-        end = min(samples.size, start + ENVELOPE_WINDOW_SAMPLES)
-        window_samples = samples[start:end]
-        if window_samples.size == 0:
-            continue
-        envelope[frame_index] = float(np.sqrt(np.mean(np.square(window_samples))))
-
-    peak = float(np.max(envelope)) if envelope.size else 0.0
-    if peak > 0:
-        envelope /= peak
-
-    return envelope
+    return samples, sample_rate
 
 
 def _get_overlap_slices(guide_length: int, take_length: int, shift: int) -> AlignmentSlices | None:
@@ -151,11 +128,15 @@ def _get_overlap_slices(guide_length: int, take_length: int, shift: int) -> Alig
     )
 
 
-def _calculate_alignment(guide_envelope: np.ndarray, take_envelope: np.ndarray) -> tuple[int, float]:
+def _calculate_alignment(
+    guide_envelope: np.ndarray,
+    take_envelope: np.ndarray,
+    frame_ms: int,
+) -> tuple[int, float]:
     if guide_envelope.size == 0 or take_envelope.size == 0:
         return 0, 0.0
 
-    max_shift_frames = max(1, MAX_ALIGNMENT_MS // 10)
+    max_shift_frames = max(1, MAX_ALIGNMENT_MS // max(1, frame_ms))
     best_shift = 0
     best_score = -1.0
     best_coverage = 0.0
@@ -189,7 +170,7 @@ def _calculate_alignment(guide_envelope: np.ndarray, take_envelope: np.ndarray) 
         return 0, 0.0
 
     confidence = float(np.clip(best_score * (0.6 + (0.4 * best_coverage)), 0.0, 1.0))
-    return best_shift * 10, round(confidence, 4)
+    return best_shift * frame_ms, round(confidence, 4)
 
 
 def _align_numeric_arrays(
@@ -424,11 +405,16 @@ def _compute_analysis(project: Project, guide_track: Track, take_track: Track) -
             detail="Guide and take previews must exist before running analysis.",
         )
 
-    guide_samples = _read_canonical_samples(guide_track)
-    take_samples = _read_canonical_samples(take_track)
-    guide_envelope = _build_energy_envelope(guide_samples)
-    take_envelope = _build_energy_envelope(take_samples)
-    alignment_offset_ms, alignment_confidence = _calculate_alignment(guide_envelope, take_envelope)
+    guide_samples, guide_sample_rate = _read_canonical_samples(guide_track)
+    take_samples, take_sample_rate = _read_canonical_samples(take_track)
+    guide_envelope = build_onset_envelope(guide_samples, guide_sample_rate, hop_length=ONSET_HOP_LENGTH)
+    take_envelope = build_onset_envelope(take_samples, take_sample_rate, hop_length=ONSET_HOP_LENGTH)
+    frame_ms = max(1, round((ONSET_HOP_LENGTH / max(1, guide_sample_rate)) * 1000))
+    alignment_offset_ms, alignment_confidence = _calculate_alignment(
+        guide_envelope,
+        take_envelope,
+        frame_ms,
+    )
 
     pitch_pairs = _align_pitch_contours(
         guide_preview.contour,

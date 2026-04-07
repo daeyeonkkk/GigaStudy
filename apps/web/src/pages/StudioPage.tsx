@@ -3,6 +3,13 @@ import { Link, useParams } from 'react-router-dom'
 
 import { currentLaneTickets } from '../data/phase1'
 import { buildApiUrl } from '../lib/api'
+import {
+  pickSupportedRecordingMimeType,
+  playCountInSequence,
+  startMetronomeLoop,
+  uploadBlobWithProgress,
+  type MetronomeController,
+} from '../lib/studioAudio'
 import type { Project } from '../types/project'
 
 type StudioState =
@@ -66,6 +73,36 @@ type GuideUploadInitResponse = {
   storage_key: string
 }
 
+type TakeTrack = {
+  track_id: string
+  project_id: string
+  track_role: string
+  track_status: string
+  take_no: number | null
+  part_type: string | null
+  source_format: string | null
+  duration_ms: number | null
+  actual_sample_rate: number | null
+  storage_key: string | null
+  checksum: string | null
+  recording_started_at: string | null
+  recording_finished_at: string | null
+  source_artifact_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+type TakeTrackListResponse = {
+  items: TakeTrack[]
+}
+
+type TakeUploadInitResponse = {
+  track_id: string
+  upload_url: string
+  method: 'PUT'
+  storage_key: string
+}
+
 type DeviceProfileState =
   | { phase: 'loading'; profile: null }
   | { phase: 'ready'; profile: DeviceProfile | null }
@@ -82,11 +119,32 @@ type PermissionState =
   | { phase: 'granted'; message: string }
   | { phase: 'error'; message: string }
 
+type TakesState =
+  | { phase: 'loading'; items: TakeTrack[] }
+  | { phase: 'ready'; items: TakeTrack[] }
+  | { phase: 'error'; items: TakeTrack[]; message: string }
+
+type RecordingState =
+  | { phase: 'idle'; message: string }
+  | { phase: 'counting-in'; message: string }
+  | { phase: 'recording'; message: string }
+  | { phase: 'uploading'; message: string }
+  | { phase: 'success'; message: string }
+  | { phase: 'error'; message: string }
+
 type ConstraintDraft = {
   echoCancellation: boolean
   autoGainControl: boolean
   noiseSuppression: boolean
   channelCount: number
+}
+
+type FailedTakeUpload = {
+  blob: Blob
+  fileName: string
+  contentType: string
+  durationMs: number | null
+  actualSampleRate: number | null
 }
 
 const defaultConstraintDraft: ConstraintDraft = {
@@ -237,6 +295,31 @@ async function extractAudioFileMetadata(file: File): Promise<{
   }
 }
 
+function buildRequestedAudioConstraints(
+  constraintDraft: ConstraintDraft,
+  selectedInputId: string,
+): MediaStreamConstraints {
+  return {
+    audio: {
+      echoCancellation: constraintDraft.echoCancellation,
+      autoGainControl: constraintDraft.autoGainControl,
+      noiseSuppression: constraintDraft.noiseSuppression,
+      channelCount: constraintDraft.channelCount,
+      ...(selectedInputId ? { deviceId: { exact: selectedInputId } } : {}),
+    },
+  }
+}
+
+function getAccentEvery(timeSignature: string | null): number {
+  if (!timeSignature) {
+    return 4
+  }
+
+  const [numerator] = timeSignature.split('/')
+  const parsed = Number(numerator)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 4
+}
+
 export function StudioPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [studioState, setStudioState] = useState<StudioState>({ phase: 'loading' })
@@ -252,6 +335,17 @@ export function StudioPage() {
     profile: null,
   })
   const [saveDeviceState, setSaveDeviceState] = useState<ActionState>({ phase: 'idle' })
+  const [takesState, setTakesState] = useState<TakesState>({
+    phase: 'loading',
+    items: [],
+  })
+  const [recordingState, setRecordingState] = useState<RecordingState>({
+    phase: 'idle',
+    message: 'Ready to record the next take.',
+  })
+  const [metronomePreviewState, setMetronomePreviewState] = useState<ActionState>({
+    phase: 'idle',
+  })
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([])
   const [selectedInputId, setSelectedInputId] = useState('')
   const [outputRoute, setOutputRoute] = useState('headphones')
@@ -259,7 +353,23 @@ export function StudioPage() {
     useState<ConstraintDraft>(defaultConstraintDraft)
   const [appliedSettingsPreview, setAppliedSettingsPreview] =
     useState<Record<string, unknown> | null>(null)
+  const [countInBeats, setCountInBeats] = useState(4)
+  const [metronomeEnabled, setMetronomeEnabled] = useState(true)
+  const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null)
+  const [takeUploadProgress, setTakeUploadProgress] = useState<Record<string, number>>({})
+  const [failedTakeUploads, setFailedTakeUploads] = useState<
+    Record<string, FailedTakeUpload>
+  >({})
+  const [takePreviewUrls, setTakePreviewUrls] = useState<Record<string, string>>({})
+  const [activeUploadTrackId, setActiveUploadTrackId] = useState<string | null>(null)
   const guideFileInputRef = useRef<HTMLInputElement | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordingStreamRef = useRef<MediaStream | null>(null)
+  const recordingChunksRef = useRef<Blob[]>([])
+  const recordingStartedAtRef = useRef<Date | null>(null)
+  const recordingMimeTypeRef = useRef('audio/webm')
+  const metronomeControllerRef = useRef<MetronomeController | null>(null)
+  const takePreviewUrlsRef = useRef<Record<string, string>>({})
 
   function hydrateDeviceDraft(profile: DeviceProfile): void {
     setOutputRoute(profile.output_route)
@@ -309,6 +419,44 @@ export function StudioPage() {
 
       return inputs[0]?.deviceId ?? ''
     })
+  }
+
+  function setTakePreviewUrl(trackId: string, blob: Blob): void {
+    setTakePreviewUrls((current) => {
+      const previousUrl = current[trackId]
+      if (previousUrl) {
+        URL.revokeObjectURL(previousUrl)
+      }
+
+      const next = {
+        ...current,
+        [trackId]: URL.createObjectURL(blob),
+      }
+      takePreviewUrlsRef.current = next
+      return next
+    })
+  }
+
+  async function stopActiveMetronome(): Promise<void> {
+    const activeMetronome = metronomeControllerRef.current
+    metronomeControllerRef.current = null
+    if (activeMetronome) {
+      await activeMetronome.stop()
+    }
+  }
+
+  async function cleanupRecordingResources(): Promise<void> {
+    await stopActiveMetronome()
+
+    mediaRecorderRef.current = null
+    recordingChunksRef.current = []
+    recordingStartedAtRef.current = null
+
+    const activeStream = recordingStreamRef.current
+    if (activeStream) {
+      activeStream.getTracks().forEach((streamTrack) => streamTrack.stop())
+      recordingStreamRef.current = null
+    }
   }
 
   useEffect(() => {
@@ -436,6 +584,442 @@ export function StudioPage() {
     void refreshAudioInputs().catch(() => undefined)
   }, [])
 
+  useEffect(() => {
+    if (!projectId) {
+      return
+    }
+
+    const controller = new AbortController()
+
+    async function loadTakes(): Promise<void> {
+      setTakesState((current) => ({ phase: 'loading', items: current.items }))
+
+      try {
+        const response = await fetch(buildApiUrl(`/api/projects/${projectId}/tracks`), {
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const payload = (await response.json()) as TakeTrackListResponse
+        setTakesState({ phase: 'ready', items: payload.items })
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setTakesState((current) => ({
+          phase: 'error',
+          items: current.items,
+          message: error instanceof Error ? error.message : 'Unable to load take history.',
+        }))
+      }
+    }
+
+    void loadTakes()
+
+    return () => controller.abort()
+  }, [projectId])
+
+  useEffect(() => {
+    if (selectedTakeId) {
+      return
+    }
+
+    const firstTake = takesState.items[0]
+    if (firstTake) {
+      setSelectedTakeId(firstTake.track_id)
+    }
+  }, [selectedTakeId, takesState.items])
+
+  useEffect(() => {
+    takePreviewUrlsRef.current = takePreviewUrls
+  }, [takePreviewUrls])
+
+  useEffect(() => {
+    return () => {
+      const activeMetronome = metronomeControllerRef.current
+      if (activeMetronome) {
+        void activeMetronome.stop()
+      }
+
+      const activeStream = recordingStreamRef.current
+      if (activeStream) {
+        activeStream.getTracks().forEach((streamTrack) => streamTrack.stop())
+      }
+
+      Object.values(takePreviewUrlsRef.current).forEach((previewUrl) => URL.revokeObjectURL(previewUrl))
+    }
+  }, [])
+
+  async function refreshTakes(): Promise<TakeTrack[]> {
+    if (!projectId) {
+      return []
+    }
+
+    const response = await fetch(buildApiUrl(`/api/projects/${projectId}/tracks`))
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, 'Unable to refresh take history.'))
+    }
+
+    const payload = (await response.json()) as TakeTrackListResponse
+    setTakesState({ phase: 'ready', items: payload.items })
+    return payload.items
+  }
+
+  async function uploadTakeForTrack(
+    track: TakeTrack,
+    upload: FailedTakeUpload,
+  ): Promise<TakeTrack> {
+    setActiveUploadTrackId(track.track_id)
+    setTakeUploadProgress((current) => ({
+      ...current,
+      [track.track_id]: 0,
+    }))
+
+    try {
+      const initResponse = await fetch(buildApiUrl(`/api/tracks/${track.track_id}/upload-url`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: upload.fileName,
+          content_type: upload.contentType,
+        }),
+      })
+
+      if (!initResponse.ok) {
+        throw new Error(await readErrorMessage(initResponse, 'Take upload could not start.'))
+      }
+
+      const uploadSession = (await initResponse.json()) as TakeUploadInitResponse
+
+      await uploadBlobWithProgress({
+        url: uploadSession.upload_url,
+        method: uploadSession.method,
+        blob: upload.blob,
+        contentType: upload.contentType,
+        onProgress: (progress) =>
+          setTakeUploadProgress((current) => ({
+            ...current,
+            [track.track_id]: progress,
+          })),
+      })
+
+      const completeResponse = await fetch(buildApiUrl(`/api/tracks/${track.track_id}/complete`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source_format: upload.contentType,
+          duration_ms: upload.durationMs,
+          actual_sample_rate: upload.actualSampleRate,
+        }),
+      })
+
+      if (!completeResponse.ok) {
+        throw new Error(
+          await readErrorMessage(completeResponse, 'Take upload could not be finalized.'),
+        )
+      }
+
+      const completedTake = (await completeResponse.json()) as TakeTrack
+      setFailedTakeUploads((current) => {
+        const next = { ...current }
+        delete next[track.track_id]
+        return next
+      })
+      return completedTake
+    } finally {
+      setActiveUploadTrackId(null)
+    }
+  }
+
+  async function finalizeRecordedTake(
+    blob: Blob,
+    contentType: string,
+    startedAt: Date,
+    finishedAt: Date,
+  ): Promise<void> {
+    await cleanupRecordingResources()
+
+    if (!projectId) {
+      setRecordingState({
+        phase: 'error',
+        message: 'Project id is missing, so the take could not be saved.',
+      })
+      return
+    }
+
+    setRecordingState({
+      phase: 'uploading',
+      message: 'Creating a take record and uploading audio...',
+    })
+
+    const safeContentType = contentType || 'audio/webm'
+    const extension = safeContentType.includes('ogg')
+      ? 'ogg'
+      : safeContentType.includes('mp4')
+        ? 'm4a'
+        : 'webm'
+    const fileName = `take-${finishedAt.getTime()}.${extension}`
+    const metadata = await extractAudioFileMetadata(
+      new File([blob], fileName, { type: safeContentType }),
+    )
+
+    let createdTake: TakeTrack | null = null
+
+    try {
+      const createResponse = await fetch(buildApiUrl(`/api/projects/${projectId}/tracks`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          part_type: 'LEAD',
+          recording_started_at: startedAt.toISOString(),
+          recording_finished_at: finishedAt.toISOString(),
+        }),
+      })
+
+      if (!createResponse.ok) {
+        throw new Error(await readErrorMessage(createResponse, 'Take creation failed.'))
+      }
+
+      const nextCreatedTake = (await createResponse.json()) as TakeTrack
+      createdTake = nextCreatedTake
+      setSelectedTakeId(nextCreatedTake.track_id)
+      setTakePreviewUrl(nextCreatedTake.track_id, blob)
+      setTakesState((current) => ({
+        phase: 'ready',
+        items: [
+          nextCreatedTake,
+          ...current.items.filter((item) => item.track_id !== nextCreatedTake.track_id),
+        ],
+      }))
+
+      const completedTake = await uploadTakeForTrack(nextCreatedTake, {
+        blob,
+        fileName,
+        contentType: safeContentType,
+        durationMs: metadata.durationMs,
+        actualSampleRate: metadata.actualSampleRate,
+      })
+
+      setTakesState((current) => ({
+        phase: 'ready',
+        items: current.items.map((item) =>
+          item.track_id === completedTake.track_id ? completedTake : item,
+        ),
+      }))
+      await refreshTakes().catch(() => undefined)
+      setRecordingState({
+        phase: 'success',
+        message: `Take ${completedTake.take_no ?? '?'} uploaded and ready.`,
+      })
+    } catch (error) {
+      if (createdTake) {
+        const failedTake = createdTake
+        setFailedTakeUploads((current) => ({
+          ...current,
+          [failedTake.track_id]: {
+            blob,
+            fileName,
+            contentType: safeContentType,
+            durationMs: metadata.durationMs,
+            actualSampleRate: metadata.actualSampleRate,
+          },
+        }))
+        await refreshTakes().catch(() => undefined)
+        setRecordingState({
+          phase: 'error',
+          message: `Take ${failedTake.take_no ?? '?'} upload failed. Retry it or record a new take.`,
+        })
+        return
+      }
+
+      setRecordingState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Recording upload failed.',
+      })
+    }
+  }
+
+  async function handlePreviewMetronome(): Promise<void> {
+    if (studioState.phase !== 'ready') {
+      return
+    }
+
+    setMetronomePreviewState({ phase: 'submitting' })
+
+    try {
+      const accentEvery = getAccentEvery(studioState.project.time_signature)
+      await playCountInSequence({
+        bpm: studioState.project.bpm ?? 92,
+        beats: countInBeats > 0 ? countInBeats : accentEvery,
+        accentEvery,
+      })
+      setMetronomePreviewState({
+        phase: 'success',
+        message: 'Metronome preview finished.',
+      })
+    } catch (error) {
+      setMetronomePreviewState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Metronome preview failed.',
+      })
+    }
+  }
+
+  async function handleStartRecording(): Promise<void> {
+    if (studioState.phase !== 'ready') {
+      return
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setRecordingState({
+        phase: 'error',
+        message: 'getUserMedia is not available in this browser.',
+      })
+      return
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      setRecordingState({
+        phase: 'error',
+        message: 'MediaRecorder is not available in this browser.',
+      })
+      return
+    }
+
+    try {
+      const requestedConstraints = buildRequestedAudioConstraints(
+        constraintDraft,
+        selectedInputId,
+      )
+      const stream = await navigator.mediaDevices.getUserMedia(requestedConstraints)
+      recordingStreamRef.current = stream
+
+      if (countInBeats > 0) {
+        setRecordingState({
+          phase: 'counting-in',
+          message: `Count-in ${countInBeats} beats...`,
+        })
+        await playCountInSequence({
+          bpm: studioState.project.bpm ?? 92,
+          beats: countInBeats,
+          accentEvery: getAccentEvery(studioState.project.time_signature),
+        })
+      }
+
+      const mimeType = pickSupportedRecordingMimeType()
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+
+      recordingChunksRef.current = []
+      recordingMimeTypeRef.current = recorder.mimeType || mimeType || 'audio/webm'
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordingChunksRef.current.push(event.data)
+        }
+      }
+      recorder.onerror = () => {
+        void cleanupRecordingResources()
+        setRecordingState({
+          phase: 'error',
+          message: 'The browser recorder reported an error.',
+        })
+      }
+      recorder.onstop = () => {
+        const blob = new Blob(recordingChunksRef.current, {
+          type: recorder.mimeType || recordingMimeTypeRef.current,
+        })
+        const startedAt = recordingStartedAtRef.current ?? new Date()
+        const finishedAt = new Date()
+        void finalizeRecordedTake(
+          blob,
+          recorder.mimeType || recordingMimeTypeRef.current,
+          startedAt,
+          finishedAt,
+        )
+      }
+
+      mediaRecorderRef.current = recorder
+      recordingStartedAtRef.current = new Date()
+
+      if (metronomeEnabled) {
+        metronomeControllerRef.current = startMetronomeLoop({
+          bpm: studioState.project.bpm ?? 92,
+          beats: getAccentEvery(studioState.project.time_signature),
+          accentEvery: getAccentEvery(studioState.project.time_signature),
+        })
+      }
+
+      recorder.start(250)
+      setRecordingState({
+        phase: 'recording',
+        message: 'Recording in progress. Stop when the take is done.',
+      })
+    } catch (error) {
+      await cleanupRecordingResources()
+      setRecordingState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to start recording.',
+      })
+    }
+  }
+
+  async function handleStopRecording(): Promise<void> {
+    const recorder = mediaRecorderRef.current
+    if (!recorder || recorder.state !== 'recording') {
+      return
+    }
+
+    await stopActiveMetronome()
+    setRecordingState({
+      phase: 'uploading',
+      message: 'Stopping the take and preparing upload...',
+    })
+    recorder.stop()
+  }
+
+  async function handleRetryTakeUpload(track: TakeTrack): Promise<void> {
+    const failedUpload = failedTakeUploads[track.track_id]
+    if (!failedUpload) {
+      return
+    }
+
+    setRecordingState({
+      phase: 'uploading',
+      message: `Retrying take ${track.take_no ?? '?'} upload...`,
+    })
+
+    try {
+      const completedTake = await uploadTakeForTrack(track, failedUpload)
+      setSelectedTakeId(track.track_id)
+      setTakesState((current) => ({
+        phase: 'ready',
+        items: current.items.map((item) =>
+          item.track_id === completedTake.track_id ? completedTake : item,
+        ),
+      }))
+      await refreshTakes().catch(() => undefined)
+      setRecordingState({
+        phase: 'success',
+        message: `Take ${completedTake.take_no ?? '?'} uploaded and ready.`,
+      })
+    } catch (error) {
+      setRecordingState({
+        phase: 'error',
+        message:
+          error instanceof Error ? error.message : 'Retry upload failed. You can record a new take.',
+      })
+    }
+  }
+
   async function handleRequestMicrophoneAccess(): Promise<void> {
     if (!navigator.mediaDevices?.getUserMedia) {
       setPermissionState({
@@ -482,15 +1066,10 @@ export function StudioPage() {
 
     setSaveDeviceState({ phase: 'submitting' })
 
-    const requestedConstraints = {
-      audio: {
-        echoCancellation: constraintDraft.echoCancellation,
-        autoGainControl: constraintDraft.autoGainControl,
-        noiseSuppression: constraintDraft.noiseSuppression,
-        channelCount: constraintDraft.channelCount,
-        ...(selectedInputId ? { deviceId: { exact: selectedInputId } } : {}),
-      },
-    }
+    const requestedConstraints = buildRequestedAudioConstraints(
+      constraintDraft,
+      selectedInputId,
+    )
 
     let captureStream: MediaStream | null = null
     let audioContext: AudioContext | null = null
@@ -675,6 +1254,14 @@ export function StudioPage() {
   const guide = guideState.guide
   const inputSelectionDisabled =
     permissionState.phase === 'requesting' || saveDeviceState.phase === 'submitting'
+  const transportBpm = project.bpm ?? 92
+  const transportAccentEvery = getAccentEvery(project.time_signature)
+  const selectedTake =
+    takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
+  const isRecordingBusy =
+    recordingState.phase === 'counting-in' ||
+    recordingState.phase === 'recording' ||
+    recordingState.phase === 'uploading'
 
   return (
     <div className="page-shell">
@@ -1120,6 +1707,308 @@ export function StudioPage() {
                 <p>The next ticket after this will add metronome and count-in controls.</p>
               </div>
             )}
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">FE-03 and FE-04</p>
+          <h2>Transport prep and take recording</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Transport</p>
+                <h2>Set tempo, count-in, and metronome before recording</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  metronomeEnabled ? 'status-pill--ready' : 'status-pill--loading'
+                }`}
+              >
+                {metronomeEnabled ? 'Metronome on' : 'Metronome off'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              FE-03 calls for guide playback plus toggles that let the singer prepare before
+              recording. Tempo, key, metronome, and count-in stay visible in one place here.
+            </p>
+
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Tempo</span>
+                <strong>{transportBpm} BPM</strong>
+              </div>
+              <div className="mini-card">
+                <span>Key</span>
+                <strong>{project.base_key ?? 'Unset'}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Time signature</span>
+                <strong>{project.time_signature ?? '4/4'}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Accent cycle</span>
+                <strong>{transportAccentEvery} beats</strong>
+              </div>
+            </div>
+
+            <div className="toggle-grid">
+              <label className="toggle-card">
+                <input
+                  type="checkbox"
+                  checked={metronomeEnabled}
+                  onChange={(event) => setMetronomeEnabled(event.target.checked)}
+                />
+                <div>
+                  <strong>Metronome during recording</strong>
+                  <span>Keep guide tempo in the headphones while a take is being captured.</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Count-in length</span>
+                <select
+                  className="text-input"
+                  value={countInBeats}
+                  onChange={(event) => setCountInBeats(Number(event.target.value))}
+                >
+                  <option value={0}>Off</option>
+                  <option value={2}>2 beats</option>
+                  <option value={4}>4 beats</option>
+                  <option value={8}>8 beats</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Selected take</span>
+                <input
+                  className="text-input"
+                  value={selectedTake ? `Take ${selectedTake.take_no ?? '?'}` : 'No take yet'}
+                  readOnly
+                />
+              </label>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={metronomePreviewState.phase === 'submitting'}
+                onClick={() => void handlePreviewMetronome()}
+              >
+                {metronomePreviewState.phase === 'submitting'
+                  ? 'Playing preview...'
+                  : 'Preview metronome'}
+              </button>
+            </div>
+
+            {metronomePreviewState.phase === 'success' || metronomePreviewState.phase === 'error' ? (
+              <p
+                className={
+                  metronomePreviewState.phase === 'error'
+                    ? 'form-error'
+                    : 'status-card__hint'
+                }
+              >
+                {metronomePreviewState.message}
+              </p>
+            ) : (
+              <p className="status-card__hint">
+                Use preview to sanity-check beat feel before the next take.
+              </p>
+            )}
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Recorder</p>
+                <h2>Capture repeated takes and upload them with status</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  recordingState.phase === 'recording' || recordingState.phase === 'success'
+                    ? 'status-pill--ready'
+                    : recordingState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {recordingState.phase}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              FE-04 closes the loop here: start recording, stop recording, create a take,
+              upload audio, keep progress visible, and retry failed uploads without losing the
+              take slot.
+            </p>
+
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={isRecordingBusy}
+                onClick={() => void handleStartRecording()}
+              >
+                {recordingState.phase === 'counting-in'
+                  ? 'Counting in...'
+                  : recordingState.phase === 'uploading'
+                    ? 'Uploading...'
+                    : 'Start take'}
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={recordingState.phase !== 'recording'}
+                onClick={() => void handleStopRecording()}
+              >
+                Stop take
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => void refreshTakes().catch(() => undefined)}
+              >
+                Refresh take list
+              </button>
+            </div>
+
+            <p
+              className={
+                recordingState.phase === 'error' ? 'form-error' : 'status-card__hint'
+              }
+            >
+              {recordingState.message}
+            </p>
+
+            <div className="take-summary-grid">
+              <div className="mini-card">
+                <span>Take count</span>
+                <strong>{takesState.items.length}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Latest ready take</span>
+                <strong>
+                  {takesState.items.find((take) => take.track_status === 'READY')?.take_no ??
+                    'None'}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Failed retries</span>
+                <strong>{Object.keys(failedTakeUploads).length}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Active upload</span>
+                <strong>{activeUploadTrackId ? 'Yes' : 'No'}</strong>
+              </div>
+            </div>
+
+            {takesState.phase === 'error' ? <p className="form-error">{takesState.message}</p> : null}
+
+            <div className="take-list">
+              {takesState.items.length === 0 ? (
+                <div className="empty-card">
+                  <p>No takes yet.</p>
+                  <p>Record one take to open the upload and retry flow.</p>
+                </div>
+              ) : (
+                takesState.items.map((take) => {
+                  const failedUpload = failedTakeUploads[take.track_id]
+                  const progress = takeUploadProgress[take.track_id]
+                  const previewUrl = take.source_artifact_url ?? takePreviewUrls[take.track_id] ?? null
+
+                  return (
+                    <article
+                      className={`take-card ${
+                        selectedTake?.track_id === take.track_id ? 'take-card--selected' : ''
+                      }`}
+                      key={take.track_id}
+                    >
+                      <div className="take-card__header">
+                        <div>
+                          <h3>Take {take.take_no ?? '?'}</h3>
+                          <p className="take-card__subhead">
+                            {take.part_type ?? 'LEAD'} · {take.track_status}
+                          </p>
+                        </div>
+
+                        <button
+                          className="button-secondary button-secondary--small"
+                          type="button"
+                          onClick={() => setSelectedTakeId(take.track_id)}
+                        >
+                          Select
+                        </button>
+                      </div>
+
+                      <div className="mini-grid">
+                        <div className="mini-card">
+                          <span>Recorded</span>
+                          <strong>
+                            {take.recording_finished_at
+                              ? formatDate(take.recording_finished_at)
+                              : 'Unknown'}
+                          </strong>
+                        </div>
+                        <div className="mini-card">
+                          <span>Duration</span>
+                          <strong>{formatDuration(take.duration_ms)}</strong>
+                        </div>
+                      </div>
+
+                      {typeof progress === 'number' && progress < 100 ? (
+                        <div className="progress-stack">
+                          <div className="progress-bar" aria-hidden="true">
+                            <span style={{ width: `${progress}%` }} />
+                          </div>
+                          <p className="status-card__hint">Upload progress: {progress}%</p>
+                        </div>
+                      ) : null}
+
+                      {previewUrl ? (
+                        <div className="audio-preview">
+                          <p className="json-label">Take preview</p>
+                          <audio controls preload="metadata" src={previewUrl}>
+                            Your browser does not support take preview playback.
+                          </audio>
+                        </div>
+                      ) : null}
+
+                      {failedUpload ? (
+                        <div className="support-stack">
+                          <p className="form-error">
+                            Upload was not completed for this take. Retry the same audio or
+                            record another one.
+                          </p>
+                          <div className="button-row">
+                            <button
+                              className="button-primary"
+                              type="button"
+                              disabled={activeUploadTrackId === take.track_id}
+                              onClick={() => void handleRetryTakeUpload(take)}
+                            >
+                              {activeUploadTrackId === take.track_id
+                                ? 'Retrying...'
+                                : 'Retry upload'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </article>
+                  )
+                })
+              )}
+            </div>
           </article>
         </div>
       </section>

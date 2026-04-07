@@ -34,11 +34,10 @@ export const priorityCards = [
 ] as const
 
 export const currentLaneTickets = [
-  'SC-03',
-  'BE-02',
-  'BE-03',
-  'BE-04',
-  'FE-02',
-  'FE-03',
-  'FE-04',
+  'BE-05',
+  'FE-05',
+  'FE-06',
+  'BE-06',
+  'FE-07',
+  'WK-03',
 ] as const

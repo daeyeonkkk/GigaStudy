@@ -118,6 +118,53 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
     assert payload["mixdown"] is None
 
 
+def test_studio_snapshot_includes_latest_mixdown_details(client: TestClient) -> None:
+    project_response = client.post("/api/projects", json={"title": "Snapshot Mixdown"})
+    project_id = project_response.json()["project_id"]
+
+    first_mixdown = client.post(
+        f"/api/projects/{project_id}/mixdown/upload-url",
+        json={"filename": "mix-a.wav", "content_type": "audio/wav"},
+    ).json()
+    client.put(first_mixdown["upload_url"], content=b"mix-a")
+    client.post(
+        f"/api/projects/{project_id}/mixdown/complete",
+        json={
+            "track_id": first_mixdown["track_id"],
+            "source_format": "audio/wav",
+            "duration_ms": 1200,
+            "actual_sample_rate": 44100,
+        },
+    )
+
+    second_mixdown = client.post(
+        f"/api/projects/{project_id}/mixdown/upload-url",
+        json={"filename": "mix-b.wav", "content_type": "audio/wav"},
+    ).json()
+    client.put(second_mixdown["upload_url"], content=b"mix-b")
+    complete_response = client.post(
+        f"/api/projects/{project_id}/mixdown/complete",
+        json={
+            "track_id": second_mixdown["track_id"],
+            "source_format": "audio/wav",
+            "duration_ms": 2400,
+            "actual_sample_rate": 48000,
+        },
+    )
+
+    assert complete_response.status_code == 200
+
+    snapshot_response = client.get(f"/api/projects/{project_id}/studio")
+
+    assert snapshot_response.status_code == 200
+    mixdown = snapshot_response.json()["mixdown"]
+    assert mixdown["track_id"] == second_mixdown["track_id"]
+    assert mixdown["track_status"] == "READY"
+    assert mixdown["duration_ms"] == 2400
+    assert mixdown["actual_sample_rate"] == 48000
+    assert mixdown["source_artifact_url"] is not None
+
+
 def test_studio_snapshot_returns_404_for_missing_project(client: TestClient) -> None:
     response = client.get("/api/projects/00000000-0000-0000-0000-000000000001/studio")
 

@@ -67,6 +67,18 @@ def _get_track_source_artifact(track: Track) -> Artifact | None:
     return None
 
 
+def get_track_playback_artifact(track: Track) -> Artifact | None:
+    source_artifact = _get_track_source_artifact(track)
+    if source_artifact is not None:
+        return source_artifact
+
+    for artifact in track.artifacts:
+        if artifact.artifact_type == ArtifactType.MIXDOWN_AUDIO:
+            return artifact
+
+    return None
+
+
 def create_guide_upload_session(
     session: Session,
     project_id: UUID,
@@ -118,6 +130,9 @@ def _probe_stored_upload(track: Track) -> StoredUpload:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file not found")
 
     file_bytes = file_path.read_bytes()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
+
     return StoredUpload(
         file_path=file_path,
         byte_size=len(file_bytes),
@@ -136,7 +151,14 @@ def complete_guide_upload(
     if track.track_role != TrackRole.GUIDE:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track is not a guide")
 
-    stored_upload = _probe_stored_upload(track)
+    try:
+        stored_upload = _probe_stored_upload(track)
+    except HTTPException:
+        track.track_status = TrackStatus.FAILED
+        track.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        raise
+
     source_format = payload.source_format or track.source_format or mimetypes.guess_type(
         stored_upload.file_path.name
     )[0]
@@ -225,9 +247,9 @@ def get_track_source_path(session: Session, track_id: UUID) -> tuple[Track, Arti
     if track is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Track not found")
 
-    source_artifact = _get_track_source_artifact(track)
+    source_artifact = get_track_playback_artifact(track)
     if source_artifact is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source audio not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playable audio not found")
 
     source_path = Path(source_artifact.storage_key)
     if not source_path.exists():

@@ -6,6 +6,7 @@ import { WaveformPreview } from '../components/WaveformPreview'
 import { currentLaneTickets } from '../data/phase1'
 import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
 import { buildApiUrl } from '../lib/api'
+import { renderOfflineMixdown, type RenderedMixdown } from '../lib/mixdownAudio'
 import {
   pickSupportedRecordingMimeType,
   playCountInSequence,
@@ -94,10 +95,26 @@ type TakeUploadInitResponse = {
   storage_key: string
 }
 
-type StudioMixdownSummary = {
+type MixdownTrack = {
   track_id: string
+  project_id: string
+  track_role: string
   track_status: string
+  source_format: string | null
+  duration_ms: number | null
+  actual_sample_rate: number | null
+  storage_key: string | null
+  checksum: string | null
+  source_artifact_url: string | null
+  created_at: string
   updated_at: string
+}
+
+type MixdownUploadInitResponse = {
+  track_id: string
+  upload_url: string
+  method: 'PUT'
+  storage_key: string
 }
 
 type StudioSnapshotResponse = {
@@ -105,7 +122,7 @@ type StudioSnapshotResponse = {
   guide: GuideTrack | null
   takes: TakeTrack[]
   latest_device_profile: DeviceProfile | null
-  mixdown: StudioMixdownSummary | null
+  mixdown: MixdownTrack | null
 }
 
 type DeviceProfileState =
@@ -150,6 +167,10 @@ type FailedTakeUpload = {
   contentType: string
   durationMs: number | null
   actualSampleRate: number | null
+}
+
+type MixdownPreview = RenderedMixdown & {
+  url: string
 }
 
 type MixerTrackState = {
@@ -395,7 +416,10 @@ export function StudioPage() {
   const [audioPreviews, setAudioPreviews] = useState<Record<string, AudioPreviewData>>({})
   const [waveformState, setWaveformState] = useState<ActionState>({ phase: 'idle' })
   const [mixerState, setMixerState] = useState<Record<string, MixerTrackState>>({})
-  const [mixdownSummary, setMixdownSummary] = useState<StudioMixdownSummary | null>(null)
+  const [mixdownSummary, setMixdownSummary] = useState<MixdownTrack | null>(null)
+  const [mixdownPreviewState, setMixdownPreviewState] = useState<ActionState>({ phase: 'idle' })
+  const [mixdownSaveState, setMixdownSaveState] = useState<ActionState>({ phase: 'idle' })
+  const [mixdownPreview, setMixdownPreview] = useState<MixdownPreview | null>(null)
   const [activeUploadTrackId, setActiveUploadTrackId] = useState<string | null>(null)
   const guideFileInputRef = useRef<HTMLInputElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -404,6 +428,7 @@ export function StudioPage() {
   const recordingStartedAtRef = useRef<Date | null>(null)
   const recordingMimeTypeRef = useRef('audio/webm')
   const metronomeControllerRef = useRef<MetronomeController | null>(null)
+  const mixdownPreviewUrlRef = useRef<string | null>(null)
   const takePreviewUrlsRef = useRef<Record<string, string>>({})
   const applyStudioSnapshotRef = useRef<(snapshot: StudioSnapshotResponse) => void>(() => undefined)
 
@@ -470,6 +495,26 @@ export function StudioPage() {
       }
       takePreviewUrlsRef.current = next
       return next
+    })
+  }
+
+  function replaceMixdownPreview(nextPreview: RenderedMixdown | null): void {
+    setMixdownPreview((current) => {
+      if (current?.url) {
+        URL.revokeObjectURL(current.url)
+      }
+
+      if (nextPreview === null) {
+        mixdownPreviewUrlRef.current = null
+        return null
+      }
+
+      const nextUrl = URL.createObjectURL(nextPreview.blob)
+      mixdownPreviewUrlRef.current = nextUrl
+      return {
+        ...nextPreview,
+        url: nextUrl,
+      }
     })
   }
 
@@ -622,6 +667,9 @@ export function StudioPage() {
       }
 
       Object.values(takePreviewUrlsRef.current).forEach((previewUrl) => URL.revokeObjectURL(previewUrl))
+      if (mixdownPreviewUrlRef.current) {
+        URL.revokeObjectURL(mixdownPreviewUrlRef.current)
+      }
     }
   }, [])
 
@@ -691,6 +739,12 @@ export function StudioPage() {
     }
   }, [audioPreviews, failedTakeUploads, selectedTakeId, takesState.items])
 
+  useEffect(() => {
+    replaceMixdownPreview(null)
+    setMixdownPreviewState({ phase: 'idle' })
+    setMixdownSaveState({ phase: 'idle' })
+  }, [guideState.guide, mixerState, selectedTakeId, takePreviewUrls, takesState.items])
+
   async function refreshTakes(): Promise<TakeTrack[]> {
     const snapshot = await refreshStudioSnapshot()
     return snapshot?.takes ?? []
@@ -721,6 +775,129 @@ export function StudioPage() {
     }
 
     return anySolo && !trackMixer.solo
+  }
+
+  function getSelectedTakePlaybackUrl(track: TakeTrack | null): string | null {
+    if (!track) {
+      return null
+    }
+
+    return takePreviewUrls[track.track_id] ?? track.source_artifact_url ?? null
+  }
+
+  async function handleRenderMixdown(): Promise<void> {
+    const selectedTakeTrack =
+      takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
+    const selectedTakeUrl = getSelectedTakePlaybackUrl(selectedTakeTrack)
+    const mixdownSources = [
+      ...(guide?.source_artifact_url && !isTrackMutedByMixer(guide.track_id)
+        ? [
+            {
+              gain: guideMixer?.volume ?? 0.85,
+              label: 'Guide',
+              url: guide.source_artifact_url,
+            },
+          ]
+        : []),
+      ...(selectedTakeTrack && selectedTakeUrl && !isTrackMutedByMixer(selectedTakeTrack.track_id)
+        ? [
+            {
+              gain: mixerState[selectedTakeTrack.track_id]?.volume ?? 1,
+              label: `Take ${selectedTakeTrack.take_no ?? '?'}`,
+              url: selectedTakeUrl,
+            },
+          ]
+        : []),
+    ]
+
+    setMixdownPreviewState({ phase: 'submitting' })
+    setMixdownSaveState({ phase: 'idle' })
+
+    try {
+      const renderedPreview = await renderOfflineMixdown(mixdownSources)
+      replaceMixdownPreview(renderedPreview)
+      setMixdownPreviewState({
+        phase: 'success',
+        message: `Offline mixdown ready from ${renderedPreview.labels.join(' + ')}.`,
+      })
+    } catch (error) {
+      replaceMixdownPreview(null)
+      setMixdownPreviewState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Offline mixdown render failed.',
+      })
+    }
+  }
+
+  async function handleSaveMixdown(): Promise<void> {
+    if (!projectId || !mixdownPreview) {
+      setMixdownSaveState({
+        phase: 'error',
+        message: 'Render a local mixdown preview before saving it to the project.',
+      })
+      return
+    }
+
+    setMixdownSaveState({ phase: 'submitting' })
+
+    try {
+      const filename = `mixdown-${Date.now()}.wav`
+      const initResponse = await fetch(buildApiUrl(`/api/projects/${projectId}/mixdown/upload-url`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename,
+          content_type: 'audio/wav',
+        }),
+      })
+
+      if (!initResponse.ok) {
+        throw new Error(await readErrorMessage(initResponse, 'Mixdown upload could not start.'))
+      }
+
+      const uploadSession = (await initResponse.json()) as MixdownUploadInitResponse
+
+      await uploadBlobWithProgress({
+        url: uploadSession.upload_url,
+        method: uploadSession.method,
+        blob: mixdownPreview.blob,
+        contentType: 'audio/wav',
+      })
+
+      const completeResponse = await fetch(buildApiUrl(`/api/projects/${projectId}/mixdown/complete`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          track_id: uploadSession.track_id,
+          source_format: 'audio/wav',
+          duration_ms: mixdownPreview.durationMs,
+          actual_sample_rate: mixdownPreview.actualSampleRate,
+        }),
+      })
+
+      if (!completeResponse.ok) {
+        throw new Error(
+          await readErrorMessage(completeResponse, 'Mixdown upload could not be finalized.'),
+        )
+      }
+
+      const savedMixdown = (await completeResponse.json()) as MixdownTrack
+      setMixdownSummary(savedMixdown)
+      await refreshStudioSnapshot().catch(() => null)
+      setMixdownSaveState({
+        phase: 'success',
+        message: 'Mixdown saved to the project artifacts and refreshed in the studio snapshot.',
+      })
+    } catch (error) {
+      setMixdownSaveState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Mixdown save failed.',
+      })
+    }
   }
 
   async function uploadTakeForTrack(
@@ -1331,7 +1508,14 @@ export function StudioPage() {
   const selectedTake =
     takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
   const selectedTakePreview = selectedTake ? audioPreviews[selectedTake.track_id] ?? null : null
+  const selectedTakePlaybackUrl = getSelectedTakePlaybackUrl(selectedTake)
   const guideMixer = guide ? mixerState[guide.track_id] : null
+  const mixdownPlaybackUrl = mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null
+  const mixdownSourceLabel = mixdownPreview
+    ? 'Local offline render'
+    : mixdownSummary
+      ? 'Saved project artifact'
+      : 'Not generated yet'
   const isRecordingBusy =
     recordingState.phase === 'counting-in' ||
     recordingState.phase === 'recording' ||
@@ -1780,7 +1964,7 @@ export function StudioPage() {
             ) : (
               <div className="empty-card">
                 <p>No guide has been attached to this project yet.</p>
-                <p>The next ticket after this will add metronome and count-in controls.</p>
+                <p>Upload one guide so recording, comparison, and mixdown flows share the same base track.</p>
               </div>
             )}
           </article>
@@ -2327,6 +2511,215 @@ export function StudioPage() {
               <div className="empty-card">
                 <p>No take is selected.</p>
                 <p>Select a take from the lane to inspect its waveform and contour.</p>
+              </div>
+            )}
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">BE-06 and FE-07</p>
+          <h2>Offline mixdown preview and save</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Mixdown Render</p>
+                <h2>Render the current guide and selected take offline</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  mixdownPreviewState.phase === 'success'
+                    ? 'status-pill--ready'
+                    : mixdownPreviewState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {mixdownPreviewState.phase === 'success'
+                  ? 'Preview ready'
+                  : mixdownPreviewState.phase === 'error'
+                    ? 'Preview error'
+                    : mixdownPreviewState.phase === 'submitting'
+                      ? 'Rendering'
+                      : 'Preview idle'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              Foundation FE-07 keeps this intentionally simple: render the audible guide and
+              selected take with the current mixer values, listen locally, then save the
+              result as a project artifact when it sounds right.
+            </p>
+
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Guide source</span>
+                <strong>
+                  {guide?.source_artifact_url
+                    ? isTrackMutedByMixer(guide.track_id)
+                      ? 'Muted by mixer'
+                      : 'Included'
+                    : 'Missing'}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Selected take</span>
+                <strong>
+                  {selectedTake
+                    ? selectedTakePlaybackUrl
+                      ? isTrackMutedByMixer(selectedTake.track_id)
+                        ? 'Muted by mixer'
+                        : `Take ${selectedTake.take_no ?? '?'}`
+                      : 'No playable audio'
+                    : 'Missing'}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Guide volume</span>
+                <strong>{guide ? (guideMixer?.volume ?? 0.85).toFixed(2) : 'n/a'}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Take volume</span>
+                <strong>
+                  {selectedTake ? (mixerState[selectedTake.track_id]?.volume ?? 1).toFixed(2) : 'n/a'}
+                </strong>
+              </div>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={mixdownPreviewState.phase === 'submitting'}
+                onClick={() => void handleRenderMixdown()}
+              >
+                {mixdownPreviewState.phase === 'submitting'
+                  ? 'Rendering mixdown...'
+                  : 'Render mixdown preview'}
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={mixdownPreview === null || mixdownSaveState.phase === 'submitting'}
+                onClick={() => void handleSaveMixdown()}
+              >
+                {mixdownSaveState.phase === 'submitting' ? 'Saving mixdown...' : 'Save mixdown'}
+              </button>
+
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => void refreshStudioSnapshot().catch(() => undefined)}
+              >
+                Refresh studio snapshot
+              </button>
+            </div>
+
+            {mixdownPreviewState.phase === 'success' || mixdownPreviewState.phase === 'error' ? (
+              <p
+                className={
+                  mixdownPreviewState.phase === 'error'
+                    ? 'form-error'
+                    : 'status-card__hint'
+                }
+              >
+                {mixdownPreviewState.message}
+              </p>
+            ) : (
+              <p className="status-card__hint">
+                Re-render after changing take selection, mute or solo state, or volume.
+              </p>
+            )}
+
+            {mixdownSaveState.phase === 'success' || mixdownSaveState.phase === 'error' ? (
+              <p
+                className={
+                  mixdownSaveState.phase === 'error' ? 'form-error' : 'status-card__hint'
+                }
+              >
+                {mixdownSaveState.message}
+              </p>
+            ) : null}
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Mixdown Player</p>
+                <h2>Listen locally first, then keep the saved artifact in snapshot</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  mixdownSummary?.track_status === 'READY'
+                    ? 'status-pill--ready'
+                    : mixdownSaveState.phase === 'error'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {mixdownSummary?.track_status ?? 'Not saved'}
+              </span>
+            </div>
+
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Playback source</span>
+                <strong>{mixdownSourceLabel}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Duration</span>
+                <strong>
+                  {mixdownPreview
+                    ? formatDuration(mixdownPreview.durationMs)
+                    : formatDuration(mixdownSummary?.duration_ms ?? null)}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Sample rate</span>
+                <strong>
+                  {mixdownPreview?.actualSampleRate ?? mixdownSummary?.actual_sample_rate ?? 'Unknown'}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Updated</span>
+                <strong>{mixdownSummary ? formatDate(mixdownSummary.updated_at) : 'Not saved yet'}</strong>
+              </div>
+            </div>
+
+            {mixdownPlaybackUrl ? (
+              <div className="support-stack">
+                <div className="mini-card mini-card--stack">
+                  <span>Included tracks</span>
+                  <strong>
+                    {mixdownPreview
+                      ? mixdownPreview.labels.join(' + ')
+                      : mixdownSummary
+                        ? `Latest saved mixdown (${mixdownSummary.track_status})`
+                        : 'Render a preview to inspect the current source set.'}
+                  </strong>
+                </div>
+
+                <div className="audio-preview">
+                  <p className="json-label">Mixdown playback</p>
+                  <ManagedAudioPlayer muted={false} src={mixdownPlaybackUrl} volume={1} />
+                </div>
+
+                {mixdownSummary ? (
+                  <div className="mini-card mini-card--stack">
+                    <span>Storage key</span>
+                    <strong>{mixdownSummary.storage_key ?? 'Not available'}</strong>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No mixdown preview is ready yet.</p>
+                <p>Render the current guide and selected take to open the preview and save flow.</p>
               </div>
             )}
           </article>

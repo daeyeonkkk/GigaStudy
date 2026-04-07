@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.device_profiles import DeviceProfileResponse
 from gigastudy_api.api.schemas.projects import ProjectResponse
-from gigastudy_api.api.schemas.studio import StudioMixdownSummary, StudioSnapshotResponse
+from gigastudy_api.api.schemas.studio import StudioSnapshotResponse
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.guides import build_guide_response
+from gigastudy_api.services.mixdowns import build_mixdown_response
 from gigastudy_api.services.studio import get_studio_snapshot
 from gigastudy_api.services.takes import build_take_response
 
@@ -33,13 +34,5 @@ def get_studio_snapshot_endpoint(
             if snapshot.latest_device_profile
             else None
         ),
-        mixdown=(
-            StudioMixdownSummary(
-                track_id=snapshot.mixdown.track_id,
-                track_status=snapshot.mixdown.track_status.value,
-                updated_at=snapshot.mixdown.updated_at,
-            )
-            if snapshot.mixdown
-            else None
-        ),
+        mixdown=build_mixdown_response(snapshot.mixdown, request) if snapshot.mixdown else None,
     )

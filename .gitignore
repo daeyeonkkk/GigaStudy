@@ -22,3 +22,4 @@ Thumbs.db
 *.log
 *.db
 *.sqlite3
+apps/api/storage/

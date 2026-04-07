@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { priorityCards, starterTickets } from '../data/phase1'
+import { currentLaneTickets, priorityCards } from '../data/phase1'
 import { apiBaseUrl, buildApiUrl } from '../lib/api'
 import type { Project } from '../types/project'
 
@@ -61,7 +61,7 @@ export function HomePage() {
         setHealth({
           phase: 'error',
           message:
-            error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
+            error instanceof Error ? error.message : 'An unknown API error occurred.',
         })
       }
     }
@@ -97,7 +97,7 @@ export function HomePage() {
         throw new Error(
           typeof errorPayload.detail === 'string'
             ? errorPayload.detail
-            : '프로젝트 생성에 실패했습니다.',
+            : 'Project creation failed.',
         )
       }
 
@@ -106,36 +106,35 @@ export function HomePage() {
     } catch (error) {
       setCreateProjectState({
         phase: 'error',
-        message:
-          error instanceof Error ? error.message : '프로젝트 생성에 실패했습니다.',
+        message: error instanceof Error ? error.message : 'Project creation failed.',
       })
     }
   }
 
   const healthLabel =
     health.phase === 'loading'
-      ? 'API 확인 중'
+      ? 'Checking API'
       : health.phase === 'ready'
-        ? 'API 연결 완료'
-        : 'API 미연결'
+        ? 'API connected'
+        : 'API offline'
 
   return (
     <div className="page-shell">
       <section className="hero">
         <div className="hero__copy">
-          <p className="eyebrow">GigaStudy • Phase 1 Bootstrap</p>
-          <h1>녹음 파이프라인부터 정확하게 쌓는 보컬 학습 스튜디오</h1>
+          <p className="eyebrow">GigaStudy Phase 1</p>
+          <h1>Build the recording foundation before the analysis layer.</h1>
           <p className="hero__summary">
-            지금 단계의 목표는 화려한 AI 데모가 아니라, 프로젝트 생성과 guide 연결,
-            장치 설정 저장, take 업로드, mixdown 경로까지 흔들리지 않는 기반을 닫는
-            것이다.
+            This workspace follows the PROJECT_FOUNDATION plan: create a project,
+            attach a guide, store real device settings, and prepare repeatable take
+            uploads before alignment and scoring work starts.
           </p>
 
           <div className="chip-row" aria-label="current scope">
             <span className="chip">React 19 + Vite</span>
             <span className="chip">FastAPI</span>
+            <span className="chip">Guide upload</span>
             <span className="chip">DeviceProfile</span>
-            <span className="chip">Guide / Take Upload</span>
           </div>
         </div>
 
@@ -152,7 +151,7 @@ export function HomePage() {
             >
               {healthLabel}
             </span>
-            <p className="status-card__caption">로컬 연결 체크</p>
+            <p className="status-card__caption">Local API check</p>
           </div>
 
           <dl className="status-grid">
@@ -178,12 +177,12 @@ export function HomePage() {
 
           {health.phase === 'error' ? (
             <p className="status-card__error">
-              `/api/health` 연결에 실패했다. API 서버 실행 전에는 정상이다. 자세한
-              메시지: {health.message}
+              The API health check failed. Start the FastAPI server, then refresh this
+              page. Message: {health.message}
             </p>
           ) : (
             <p className="status-card__hint">
-              웹과 API를 동시에 켜면 상태 카드가 즉시 바뀐다.
+              When both apps are running, this card flips to connected immediately.
             </p>
           )}
         </aside>
@@ -192,19 +191,19 @@ export function HomePage() {
       <section className="section section--split">
         <article className="panel form-panel">
           <p className="eyebrow">FE-01</p>
-          <h2>프로젝트 생성 후 스튜디오로 진입</h2>
+          <h2>Create a project and enter the studio</h2>
           <p className="panel__summary">
-            이 화면은 foundation 기준의 첫 프론트엔드 티켓을 바로 확인하기 위한 최소
-            시작점이다.
+            This screen keeps the first foundation checkpoint small: capture the core
+            musical metadata, then move straight into the studio workspace.
           </p>
 
           <form className="project-form" onSubmit={handleSubmit}>
             <label className="field">
-              <span>프로젝트 제목</span>
+              <span>Project title</span>
               <input
                 className="text-input"
                 name="title"
-                placeholder="예: Morning Warmup"
+                placeholder="Morning warmup guide"
                 value={formState.title}
                 onChange={(event) =>
                   setFormState((current) => ({
@@ -234,7 +233,7 @@ export function HomePage() {
               </label>
 
               <label className="field">
-                <span>조성</span>
+                <span>Base key</span>
                 <input
                   className="text-input"
                   name="baseKey"
@@ -251,7 +250,7 @@ export function HomePage() {
 
             <div className="field-grid">
               <label className="field">
-                <span>박자</span>
+                <span>Time signature</span>
                 <input
                   className="text-input"
                   name="timeSignature"
@@ -266,7 +265,7 @@ export function HomePage() {
               </label>
 
               <label className="field">
-                <span>모드</span>
+                <span>Mode</span>
                 <select
                   className="text-input"
                   name="mode"
@@ -294,20 +293,20 @@ export function HomePage() {
               disabled={createProjectState.phase === 'submitting'}
             >
               {createProjectState.phase === 'submitting'
-                ? '프로젝트 생성 중...'
-                : '스튜디오 열기'}
+                ? 'Creating project...'
+                : 'Open studio'}
             </button>
           </form>
         </article>
 
         <article className="panel">
-          <p className="eyebrow">Start Here</p>
-          <h2>바로 시작할 티켓</h2>
+          <p className="eyebrow">Current Lane</p>
+          <h2>Phase 1 tickets in motion</h2>
           <ul className="ticket-list">
-            {starterTickets.map((ticket) => (
+            {currentLaneTickets.map((ticket) => (
               <li key={ticket}>
                 <strong>{ticket}</strong>
-                <span>Phase 1 backlog 기준 우선 착수 묶음</span>
+                <span>Active checkpoint from PROJECT_FOUNDATION</span>
               </li>
             ))}
           </ul>
@@ -317,7 +316,7 @@ export function HomePage() {
       <section className="section">
         <div className="section__header">
           <p className="eyebrow">Phase 1 Scope</p>
-          <h2>이번 단계에서 닫을 네 가지 축</h2>
+          <h2>What this repo is tightening right now</h2>
         </div>
 
         <div className="card-grid">

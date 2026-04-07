@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./gigastudy.db"
     database_echo: bool = False
     default_user_nickname: str = "local-dev"
+    storage_root: str = "./storage"
     cors_origins: list[str] = [
         "http://127.0.0.1:5173",
         "http://localhost:5173",

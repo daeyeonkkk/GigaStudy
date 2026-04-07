@@ -31,6 +31,8 @@ uv run alembic upgrade head
 uv run uvicorn gigastudy_api.main:app --reload --app-dir src
 ```
 
+API는 기본적으로 로컬 개발용 저장소를 `apps/api/storage` 아래에 만들고, guide 업로드 파일을 여기에 저장한다.
+
 ### 3. API Test
 
 ```bash

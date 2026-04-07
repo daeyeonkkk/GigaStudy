@@ -1,0 +1,13 @@
+{
+  "name": "gigastudy",
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace @gigastudy/web",
+    "build:web": "npm run build --workspace @gigastudy/web",
+    "lint:web": "npm run lint --workspace @gigastudy/web"
+  }
+}

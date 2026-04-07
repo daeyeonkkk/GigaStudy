@@ -1,0 +1,104 @@
+:root {
+  --page: #f6efe3;
+  --page-deep: #ead8c2;
+  --panel: rgba(255, 251, 245, 0.82);
+  --chip-bg: rgba(34, 62, 83, 0.08);
+  --line: rgba(34, 62, 83, 0.1);
+  --ink-strong: #1c3040;
+  --ink-soft: #51616d;
+  --accent-strong: #c25a27;
+  --panel-shadow: 0 22px 60px rgba(47, 57, 66, 0.12);
+  --code-bg: #ebe3d4;
+  --font-body: 'Segoe UI', 'Noto Sans KR', sans-serif;
+  --font-heading: Bahnschrift, 'Trebuchet MS', sans-serif;
+  --font-mono: 'Cascadia Code', Consolas, monospace;
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.55;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(239, 139, 98, 0.24), transparent 24%),
+    radial-gradient(circle at top right, rgba(91, 132, 184, 0.2), transparent 28%),
+    linear-gradient(180deg, var(--page) 0%, #fff9ef 54%, var(--page-deep) 100%);
+}
+
+#root {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 48px;
+}
+
+h1,
+h2,
+h3,
+dt,
+strong {
+  color: var(--ink-strong);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.02;
+}
+
+h1 {
+  font-size: clamp(2.6rem, 5vw, 4.9rem);
+  max-width: 12ch;
+  margin-bottom: 18px;
+}
+
+h2 {
+  font-size: clamp(1.55rem, 2.6vw, 2.3rem);
+}
+
+h3 {
+  font-size: 1.25rem;
+}
+
+p {
+  margin: 0;
+}
+
+code {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--code-bg);
+  color: var(--ink-strong);
+  font-family: var(--font-mono);
+  font-size: 0.93rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  :root {
+    font-size: 16px;
+  }
+
+  #root {
+    width: min(100% - 20px, 1180px);
+    padding-top: 20px;
+  }
+}

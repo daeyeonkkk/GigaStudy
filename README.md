@@ -34,6 +34,7 @@ By default the API uses local development storage under `apps/api/storage`.
 Melody extraction now calls a repo-local `@spotify/basic-pitch` helper, so keep the root `node_modules` installed with `npm install` even when you are focusing on API-only work.
 If the web client and API run on different origins, set `GIGASTUDY_API_PUBLIC_APP_URL` so share links open the frontend viewer route instead of the API origin.
 The API now also supports `GIGASTUDY_API_STORAGE_BACKEND=s3` for S3-compatible object storage, and the Python dependencies now include both `psycopg` for PostgreSQL and `boto3` for object storage.
+The developer fallback is still SQLite + local filesystem, but the default product deployment profile is now PostgreSQL + S3-compatible storage and has a repeatable smoke path.
 
 ### API Test
 
@@ -58,8 +59,18 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 docker compose -f docker-compose.infrastructure.yml up -d
 ```
 
-This starts a local PostgreSQL and MinIO pair so production-like storage settings can be exercised without changing the default developer path.
-Use `postgresql+psycopg://gigastudy:gigastudy@127.0.0.1:5432/gigastudy` for `GIGASTUDY_API_DATABASE_URL`, and pair it with `GIGASTUDY_API_STORAGE_BACKEND=s3`, `GIGASTUDY_API_S3_BUCKET`, and the MinIO endpoint credentials from `apps/api/.env.example`.
+This starts a local PostgreSQL and MinIO pair and also provisions the `gigastudy` bucket, so the production-like storage path can be exercised without changing the default developer fallback.
+Use `apps/api/.env.production.example` as the reference profile for `GIGASTUDY_API_DATABASE_URL` plus the S3-compatible settings.
+
+### Production-Stack Smoke
+
+```bash
+cd apps/api
+uv run python scripts/production_stack_smoke.py
+```
+
+Run this with the PostgreSQL + S3-compatible environment variables from `apps/api/.env.production.example`.
+It verifies project creation, guide/take upload, post-recording analysis, Basic Pitch melody extraction, arrangement generation, and export artifact reads against the product storage path.
 
 ## Current Product State
 
@@ -86,13 +97,13 @@ Use `postgresql+psycopg://gigastudy:gigastudy@127.0.0.1:5432/gigastudy` for `GIG
 - The browser release gate now also covers a cross-browser matrix for the seeded safe paths: Chromium, Firefox, and WebKit verify the core studio smoke, sharing, and arrangement export journeys, while arrangement playback is currently verified in Chromium and Firefox.
 - The browser release gate now also covers environment diagnostics report export in Chromium, Firefox, and WebKit.
 - The browser release gate now also covers manual environment validation run capture in Chromium, Firefox, and WebKit.
+- The PostgreSQL + S3-compatible product storage path is now exercised by a repeatable smoke script instead of staying an optional note.
 
 ## Current Hardening Focus
 
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
-- Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
-- Move the new PostgreSQL + S3-compatible support from optional hardening into the default deployment profile once the deployment path is exercised outside local development.
+- Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.
 - Follow the browser environment validation protocol in `PROJECT_FOUNDATION/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks.
 

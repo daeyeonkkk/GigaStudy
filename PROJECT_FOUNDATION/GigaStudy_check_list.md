@@ -18,7 +18,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Backend foundation exists on FastAPI with a tested API surface.
 - [x] The planned analysis stack is fully adopted at runtime across Basic Pitch + `librosa.pyin` + `music21` + `note-seq`.
 - [x] Score rendering and playback are separated so notation is not coupled to the playback engine.
-- [ ] The default product storage path is production-ready PostgreSQL + S3-compatible object storage rather than SQLite + local filesystem.
+- [x] The default product storage path is production-ready PostgreSQL + S3-compatible object storage rather than SQLite + local filesystem.
 - [x] Job state, artifact metadata, model versions, and failure reasons are stored and inspectable.
 
 ## 3. Recording Pipeline

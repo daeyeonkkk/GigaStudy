@@ -158,6 +158,28 @@ async function seedGuideOnly(
   await page.reload()
 }
 
+async function prepareBrowserRecording(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Request microphone access' }).click()
+  await expect(page.getByText(/Microphone access granted\./)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Save DeviceProfile' }).click()
+  await expect(page.getByText(/DeviceProfile saved with requested constraints and applied settings\./)).toBeVisible()
+
+  await page.getByLabel('Count-in length').selectOption('0')
+  await page.getByLabel('Metronome during recording').uncheck()
+}
+
+async function recordBrowserTake(page: Page, takeNumber: number): Promise<void> {
+  await page.getByRole('button', { name: 'Start take' }).click()
+  await expect(page.getByText('Recording in progress. Stop when the take is done.', { exact: true })).toBeVisible()
+  await page.waitForTimeout(1400)
+  await page.getByRole('button', { name: 'Stop take' }).click()
+  await expect(page.getByText(new RegExp(`Take ${takeNumber} uploaded and ready\\.`))).toBeVisible({
+    timeout: 20000,
+  })
+  await expect(page.getByRole('heading', { name: `Take ${takeNumber}` })).toBeVisible()
+}
+
 async function runChordAwareAnalysis(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Seed from current key' }).click()
   await page.getByRole('button', { name: 'Save chord timeline' }).click()
@@ -215,6 +237,13 @@ function getPlaybackPanel(page: Page) {
   return page
     .locator('article')
     .filter({ has: page.getByRole('heading', { name: 'Preview parts with guide mode and synchronized transport' }) })
+}
+
+function getTakeCard(page: Page, takeNumber: number) {
+  return page
+    .locator('article.take-card')
+    .filter({ has: page.getByRole('heading', { name: `Take ${takeNumber}` }) })
+    .first()
 }
 
 test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
@@ -327,27 +356,13 @@ test('release gate recording flow captures a take through browser microphone tra
 }) => {
   const projectId = await createStudioProject(page, 'Playwright recording gate session')
   await seedGuideOnly(page, request, projectId)
-
-  await page.getByRole('button', { name: 'Request microphone access' }).click()
-  await expect(page.getByText(/Microphone access granted\./)).toBeVisible()
-
-  await page.getByRole('button', { name: 'Save DeviceProfile' }).click()
-  await expect(page.getByText(/DeviceProfile saved with requested constraints and applied settings\./)).toBeVisible()
-
-  await page.getByLabel('Count-in length').selectOption('0')
-  await page.getByLabel('Metronome during recording').uncheck()
+  await prepareBrowserRecording(page)
 
   const recorderPanel = getRecorderPanel(page)
   await expect(recorderPanel.getByText('Take count', { exact: true })).toBeVisible()
   await expect(recorderPanel.getByText('No takes yet.', { exact: true })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Start take' }).click()
-  await expect(page.getByText('Recording in progress. Stop when the take is done.', { exact: true })).toBeVisible()
-  await page.waitForTimeout(1400)
-  await page.getByRole('button', { name: 'Stop take' }).click()
-
-  await expect(page.getByText(/Take 1 uploaded and ready\./)).toBeVisible({ timeout: 20000 })
-  await expect(page.getByRole('heading', { name: 'Take 1' })).toBeVisible()
+  await recordBrowserTake(page, 1)
   await expect(recorderPanel.getByText('Latest ready take', { exact: true })).toBeVisible()
 })
 
@@ -397,4 +412,54 @@ test('release gate arrangement playback shows transport progress and can be stop
   await expect(
     playbackPanel.getByText('Arrangement playback is ready.', { exact: true }),
   ).toBeVisible()
+})
+
+test('release gate long-session stability survives repeated take and analysis cycles', async ({
+  page,
+  request,
+}) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => {
+    pageErrors.push(error.message)
+  })
+
+  const projectId = await createStudioProject(page, 'Playwright endurance gate session')
+  await seedGuideOnly(page, request, projectId)
+  await prepareBrowserRecording(page)
+
+  const recorderPanel = getRecorderPanel(page)
+  await recordBrowserTake(page, 1)
+  await recordBrowserTake(page, 2)
+
+  await expect(getTakeCard(page, 1)).toBeVisible()
+  await expect(getTakeCard(page, 2)).toBeVisible()
+  await expect(recorderPanel.getByRole('heading', { name: 'Take 1' })).toBeVisible()
+  await expect(recorderPanel.getByRole('heading', { name: 'Take 2' })).toBeVisible()
+
+  await getTakeCard(page, 1).getByRole('button', { name: 'Select' }).click()
+  await page.getByRole('button', { name: 'Run post-recording analysis' }).click()
+  await expect(page.getByText(/Analysis saved\./)).toBeVisible()
+
+  await getTakeCard(page, 2).getByRole('button', { name: 'Select' }).click()
+  await page.getByRole('button', { name: 'Run post-recording analysis' }).click()
+  await expect(page.getByText(/Analysis saved\./)).toBeVisible()
+
+  await extractMelodyDraft(page)
+  await generateArrangementCandidates(page)
+
+  const playbackPanel = getPlaybackPanel(page)
+  await playbackPanel.getByRole('button', { name: 'Play arrangement preview' }).click()
+  await expect(playbackPanel.getByText('Playing', { exact: true })).toBeVisible()
+  await playbackPanel.getByRole('button', { name: 'Stop playback' }).click()
+  await expect(playbackPanel.getByText('Playback ready', { exact: true })).toBeVisible()
+
+  const shareLinksPanel = getShareLinksPanel(page)
+  await shareLinksPanel.getByLabel('Share label').fill('Session endurance review')
+  await page.getByRole('button', { name: 'Create read-only share link' }).click()
+  await expect(page.getByText(/Created read-only share link "Session endurance review"/)).toBeVisible()
+  await expect(
+    shareLinksPanel.locator('article.history-card').filter({ hasText: 'Session endurance review' }).first(),
+  ).toBeVisible()
+
+  expect(pageErrors).toEqual([])
 })

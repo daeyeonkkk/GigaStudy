@@ -278,6 +278,144 @@
   gap: 14px;
 }
 
+.note-timeline-card,
+.note-detail-card {
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.note-timeline-card__header,
+.note-detail-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.note-timeline-card__header p,
+.note-detail-card__header p {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.note-timeline {
+  position: relative;
+  min-height: 72px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 251, 246, 0.96), rgba(251, 247, 241, 0.92));
+  border: 1px solid rgba(34, 62, 83, 0.08);
+  overflow: hidden;
+}
+
+.note-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: rgba(34, 62, 83, 0.1);
+}
+
+.note-timeline__note {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 36px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.note-timeline__note--good {
+  background: rgba(47, 126, 95, 0.16);
+  color: #1d6d4f;
+}
+
+.note-timeline__note--warn {
+  background: rgba(188, 132, 42, 0.18);
+  color: #8a5c17;
+}
+
+.note-timeline__note--alert {
+  background: rgba(176, 66, 66, 0.16);
+  color: #993737;
+}
+
+.note-timeline__note--neutral {
+  background: rgba(34, 62, 83, 0.1);
+  color: var(--ink-soft);
+}
+
+.note-timeline__note--selected {
+  border-color: rgba(28, 48, 64, 0.35);
+  box-shadow: 0 0 0 2px rgba(28, 48, 64, 0.08);
+}
+
+.note-subscore-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.note-feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.note-feedback-row {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(34, 62, 83, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1fr) minmax(180px, 0.9fr);
+  gap: 14px;
+  align-items: center;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.note-feedback-row--selected {
+  border-color: rgba(194, 90, 39, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(194, 90, 39, 0.18);
+}
+
+.note-feedback-row__identity,
+.note-feedback-row__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.note-feedback-row__identity span,
+.note-feedback-row__summary span {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.note-feedback-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .feedback-card {
   padding: 18px;
   border-radius: 20px;
@@ -393,6 +531,26 @@
   background: rgba(34, 62, 83, 0.08);
   color: var(--ink-soft);
   font-size: 0.82rem;
+}
+
+.candidate-chip--good {
+  background: rgba(47, 126, 95, 0.14);
+  color: #1d6d4f;
+}
+
+.candidate-chip--warn {
+  background: rgba(188, 132, 42, 0.16);
+  color: #8a5c17;
+}
+
+.candidate-chip--alert {
+  background: rgba(176, 66, 66, 0.12);
+  color: #993737;
+}
+
+.candidate-chip--neutral {
+  background: rgba(34, 62, 83, 0.08);
+  color: var(--ink-soft);
 }
 
 .history-list {
@@ -939,6 +1097,12 @@
   border: 1px dashed rgba(34, 62, 83, 0.18);
 }
 
+.empty-card--warn {
+  border-style: solid;
+  border-color: rgba(188, 132, 42, 0.26);
+  background: rgba(255, 247, 230, 0.72);
+}
+
 .take-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1117,6 +1281,11 @@
   .panel {
     padding: 22px;
   }
+
+  .note-feedback-row,
+  .note-subscore-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1134,6 +1303,8 @@
   .studio-header,
   .take-card__header,
   .candidate-card__header,
+  .note-timeline-card__header,
+  .note-detail-card__header,
   .history-card__header,
   .ops-card__header,
   .transport-card__row,

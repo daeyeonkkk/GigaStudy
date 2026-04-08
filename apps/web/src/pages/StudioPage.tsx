@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ArrangementScore } from '../components/ArrangementScore'
@@ -105,6 +105,36 @@ type AnalysisJobSummary = {
   error_message: string | null
 }
 
+type NoteFeedbackItem = {
+  note_index: number
+  start_ms: number
+  end_ms: number
+  target_midi: number
+  target_frequency_hz: number
+  attack_start_ms: number
+  attack_end_ms: number
+  settle_start_ms: number | null
+  settle_end_ms: number | null
+  sustain_start_ms: number | null
+  sustain_end_ms: number | null
+  release_start_ms: number | null
+  release_end_ms: number | null
+  timing_offset_ms: number | null
+  attack_signed_cents: number | null
+  sustain_median_cents: number | null
+  sustain_mad_cents: number | null
+  max_sharp_cents: number | null
+  max_flat_cents: number | null
+  in_tune_ratio: number | null
+  confidence: number
+  attack_score: number
+  sustain_score: number
+  stability_score: number
+  timing_score: number
+  note_score: number
+  message: string
+}
+
 type TrackScoreSummary = {
   score_id: string
   project_id: string
@@ -113,7 +143,10 @@ type TrackScoreSummary = {
   rhythm_score: number
   harmony_fit_score: number
   total_score: number
+  pitch_quality_mode: string
+  harmony_reference_mode: string
   feedback_json: AnalysisFeedbackItem[]
+  note_feedback_json: NoteFeedbackItem[]
   created_at: string
   updated_at: string
 }
@@ -552,6 +585,147 @@ function formatOffsetMs(value: number | null): string {
   return `${value > 0 ? '+' : ''}${value} ms`
 }
 
+function formatTimeSpan(startMs: number, endMs: number): string {
+  return `${(startMs / 1000).toFixed(2)}s - ${(endMs / 1000).toFixed(2)}s`
+}
+
+function formatSignedCents(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return 'n/a'
+  }
+
+  if (Math.abs(value) < 1) {
+    return 'Centered'
+  }
+
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}c`
+}
+
+function formatSignedMs(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return 'n/a'
+  }
+
+  if (value === 0) {
+    return 'On time'
+  }
+
+  return `${value > 0 ? '+' : ''}${Math.round(value)} ms`
+}
+
+function formatRatio(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return 'n/a'
+  }
+
+  return `${Math.round(value * 100)}%`
+}
+
+function getPitchDirectionLabel(value: number | null): string {
+  if (value === null || Number.isNaN(value) || Math.abs(value) < 1) {
+    return 'Centered'
+  }
+
+  return value > 0 ? 'Sharp' : 'Flat'
+}
+
+function getPitchDirectionTone(value: number | null): 'good' | 'warn' | 'alert' | 'neutral' {
+  if (value === null || Number.isNaN(value)) {
+    return 'neutral'
+  }
+
+  const cents = Math.abs(value)
+  if (cents <= 8) {
+    return 'good'
+  }
+  if (cents <= 22) {
+    return 'warn'
+  }
+  return 'alert'
+}
+
+function getScoreTone(value: number | null): 'good' | 'warn' | 'alert' | 'neutral' {
+  if (value === null || Number.isNaN(value)) {
+    return 'neutral'
+  }
+
+  if (value >= 88) {
+    return 'good'
+  }
+  if (value >= 70) {
+    return 'warn'
+  }
+  return 'alert'
+}
+
+function getConfidenceTone(value: number | null): 'good' | 'warn' | 'alert' | 'neutral' {
+  if (value === null || Number.isNaN(value)) {
+    return 'neutral'
+  }
+
+  if (value >= 0.8) {
+    return 'good'
+  }
+  if (value >= 0.55) {
+    return 'warn'
+  }
+  return 'alert'
+}
+
+function getPitchQualityModeLabel(mode: string | null | undefined): string {
+  switch (mode) {
+    case 'NOTE_EVENT_V1':
+      return 'Note-level scorer'
+    case 'FRAME_PITCH_V1':
+      return 'Frame pitch scorer'
+    case 'COARSE_CONTOUR_V1':
+      return 'Coarse contour fallback'
+    default:
+      return mode ?? 'Unknown pitch mode'
+  }
+}
+
+function getPitchQualityModeHint(mode: string | null | undefined): string {
+  switch (mode) {
+    case 'NOTE_EVENT_V1':
+      return 'Signed cents, attack/sustain windows, and timing are coming from note events.'
+    case 'FRAME_PITCH_V1':
+      return 'Frame-level pitch is available, but note-event scoring is not attached yet.'
+    case 'COARSE_CONTOUR_V1':
+      return 'This is a fallback path. Treat phrase feedback as coarse guidance, not precise intonation review.'
+    default:
+      return 'Scoring mode is not labeled yet.'
+  }
+}
+
+function getHarmonyReferenceLabel(mode: string | null | undefined): string {
+  switch (mode) {
+    case 'CHORD_AWARE':
+      return 'Chord-aware harmony'
+    case 'KEY_ONLY':
+      return 'Key-only fallback'
+    default:
+      return mode ?? 'Unknown harmony mode'
+  }
+}
+
+function getHarmonyReferenceHint(
+  mode: string | null | undefined,
+  chordMarkerCount: number,
+): string {
+  if (mode === 'CHORD_AWARE') {
+    return `Harmony fit is using ${chordMarkerCount} chord marker${chordMarkerCount === 1 ? '' : 's'} from this project.`
+  }
+
+  if (mode === 'KEY_ONLY') {
+    return chordMarkerCount > 0
+      ? 'The project has chord markers, but this score still fell back to key-only harmony.'
+      : 'No chord timeline is attached, so harmony fit is using the project key instead of chords.'
+  }
+
+  return 'Harmony reference mode is not labeled yet.'
+}
+
 function midiToPitchName(pitchMidi: number): string {
   const octave = Math.floor(pitchMidi / 12) - 1
   return `${noteNamesSharp[((pitchMidi % 12) + 12) % 12]}${octave}`
@@ -782,6 +956,7 @@ export function StudioPage() {
   const [audioPreviews, setAudioPreviews] = useState<Record<string, AudioPreviewData>>({})
   const [waveformState, setWaveformState] = useState<ActionState>({ phase: 'idle' })
   const [analysisState, setAnalysisState] = useState<ActionState>({ phase: 'idle' })
+  const [selectedNoteFeedbackIndex, setSelectedNoteFeedbackIndex] = useState(0)
   const [melodyState, setMelodyState] = useState<ActionState>({ phase: 'idle' })
   const [melodySaveState, setMelodySaveState] = useState<ActionState>({ phase: 'idle' })
   const [melodyNotesDraft, setMelodyNotesDraft] = useState<MelodyNote[]>([])
@@ -1299,6 +1474,23 @@ export function StudioPage() {
   }, [selectedTakeId])
 
   useEffect(() => {
+    const selectedTrack =
+      takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
+    const noteFeedback = selectedTrack?.latest_score?.note_feedback_json ?? []
+
+    if (noteFeedback.length === 0) {
+      setSelectedNoteFeedbackIndex(0)
+      return
+    }
+
+    const lowestScoreIndex = noteFeedback.reduce((bestIndex, item, index, items) => {
+      return item.note_score < items[bestIndex]!.note_score ? index : bestIndex
+    }, 0)
+
+    setSelectedNoteFeedbackIndex(lowestScoreIndex)
+  }, [selectedTakeId, takesState.items])
+
+  useEffect(() => {
     setMelodyState({ phase: 'idle' })
     setMelodySaveState({ phase: 'idle' })
     setArrangementState({ phase: 'idle' })
@@ -1553,7 +1745,7 @@ export function StudioPage() {
       await refreshStudioSnapshot().catch(() => null)
       setAnalysisState({
         phase: 'success',
-        message: `Analysis saved. Total ${analysis.latest_score.total_score.toFixed(1)}, alignment confidence ${Math.round((analysis.alignment_confidence ?? 0) * 100)}%.`,
+        message: `Analysis saved. Total ${analysis.latest_score.total_score.toFixed(1)}, pitch mode ${getPitchQualityModeLabel(analysis.latest_score.pitch_quality_mode)}, harmony mode ${getHarmonyReferenceLabel(analysis.latest_score.harmony_reference_mode)}.`,
       })
     } catch (error) {
       setAnalysisState({
@@ -1847,7 +2039,7 @@ export function StudioPage() {
       await refreshStudioSnapshot().catch(() => null)
       setAnalysisState({
         phase: 'success',
-        message: `Retried analysis with model ${analysis.latest_job.model_version} and stored a fresh score.`,
+        message: `Retried analysis with model ${analysis.latest_job.model_version}. Stored ${getPitchQualityModeLabel(analysis.latest_score.pitch_quality_mode)} with ${getHarmonyReferenceLabel(analysis.latest_score.harmony_reference_mode)}.`,
       })
     } catch (error) {
       setAnalysisState({
@@ -2691,8 +2883,19 @@ export function StudioPage() {
   const selectedTakePreview = selectedTake ? audioPreviews[selectedTake.track_id] ?? null : null
   const selectedTakePlaybackUrl = getSelectedTakePlaybackUrl(selectedTake)
   const selectedTakeScore = selectedTake?.latest_score ?? null
+  const selectedTakeNoteFeedback = selectedTakeScore?.note_feedback_json ?? []
   const selectedTakeAnalysisJob = selectedTake?.latest_analysis_job ?? null
   const selectedTakeMelody = selectedTake?.latest_melody ?? null
+  const selectedNoteFeedback =
+    selectedTakeNoteFeedback[selectedNoteFeedbackIndex] ?? selectedTakeNoteFeedback[0] ?? null
+  const chordMarkerCount = project.chord_timeline_json?.length ?? 0
+  const noteFeedbackTimelineDurationMs =
+    selectedTakeNoteFeedback.length > 0
+      ? Math.max(
+          selectedTake?.duration_ms ?? 0,
+          ...selectedTakeNoteFeedback.map((item) => item.end_ms),
+        )
+      : Math.max(selectedTake?.duration_ms ?? 0, 1)
   const selectedArrangement =
     arrangements.find((item) => item.arrangement_id === selectedArrangementId) ?? arrangements[0] ?? null
   const selectedDifficultyMeta = getOptionMeta(
@@ -3765,8 +3968,8 @@ export function StudioPage() {
 
             <p className="panel__summary">
               PROJECT_FOUNDATION puts post-recording alignment ahead of real-time scoring.
-              This pass stores alignment confidence, three score axes, and segment feedback
-              back into the studio snapshot.
+              This pass now stores alignment confidence, three score axes, explicit scoring
+              modes, and both segment-level and note-level feedback back into the studio snapshot.
             </p>
 
             {selectedTake ? (
@@ -3787,6 +3990,21 @@ export function StudioPage() {
                   <div className="mini-card">
                     <span>Latest job</span>
                     <strong>{selectedTakeAnalysisJob?.status ?? 'Not started'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Pitch source</span>
+                    <strong>{getPitchQualityModeLabel(selectedTakeScore?.pitch_quality_mode)}</strong>
+                    <small>{getPitchQualityModeHint(selectedTakeScore?.pitch_quality_mode)}</small>
+                  </div>
+                  <div className="mini-card">
+                    <span>Harmony reference</span>
+                    <strong>{getHarmonyReferenceLabel(selectedTakeScore?.harmony_reference_mode)}</strong>
+                    <small>
+                      {getHarmonyReferenceHint(
+                        selectedTakeScore?.harmony_reference_mode,
+                        chordMarkerCount,
+                      )}
+                    </small>
                   </div>
                 </div>
 
@@ -3842,6 +4060,42 @@ export function StudioPage() {
                   </button>
                 </div>
 
+                {selectedTakeScore ? (
+                  <div className="candidate-chip-row">
+                    <span
+                      className={`candidate-chip candidate-chip--${getScoreTone(
+                        selectedTakeScore.total_score,
+                      )}`}
+                    >
+                      {getPitchQualityModeLabel(selectedTakeScore.pitch_quality_mode)}
+                    </span>
+                    <span
+                      className={`candidate-chip candidate-chip--${getConfidenceTone(
+                        selectedTake.alignment_confidence,
+                      )}`}
+                    >
+                      Alignment {formatConfidence(selectedTake.alignment_confidence)}
+                    </span>
+                    <span
+                      className={`candidate-chip candidate-chip--${
+                        selectedTakeScore.harmony_reference_mode === 'CHORD_AWARE' ? 'good' : 'warn'
+                      }`}
+                    >
+                      {getHarmonyReferenceLabel(selectedTakeScore.harmony_reference_mode)}
+                    </span>
+                  </div>
+                ) : null}
+
+                {selectedTakeScore?.harmony_reference_mode === 'KEY_ONLY' ? (
+                  <div className="empty-card empty-card--warn">
+                    <p>Harmony fit is still running in key-only fallback.</p>
+                    <p>
+                      Do not read this score like a chord-aware intonation check until the
+                      project carries a chord timeline.
+                    </p>
+                  </div>
+                ) : null}
+
                 {analysisState.phase === 'success' || analysisState.phase === 'error' ? (
                   <p
                     className={
@@ -3884,47 +4138,336 @@ export function StudioPage() {
           <article className="panel studio-block">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">Feedback JSON</p>
-                <h2>Inspect phrase-by-phrase feedback from the latest score</h2>
+                <p className="eyebrow">Note Feedback</p>
+                <h2>See which note was sharp, flat, late, or unstable</h2>
               </div>
               <span
                 className={`status-pill ${
-                  selectedTakeScore ? 'status-pill--ready' : 'status-pill--loading'
+                  selectedTakeNoteFeedback.length > 0
+                    ? 'status-pill--ready'
+                    : selectedTakeScore
+                      ? 'status-pill--loading'
+                      : 'status-pill--loading'
                 }`}
               >
                 {selectedTakeScore
-                  ? `${selectedTakeScore.feedback_json.length} phrases`
+                  ? selectedTakeNoteFeedback.length > 0
+                    ? `${selectedTakeNoteFeedback.length} notes`
+                    : 'Phrase fallback only'
                   : 'Waiting for score'}
               </span>
             </div>
 
             {selectedTakeScore ? (
-              <div className="feedback-list">
-                {selectedTakeScore.feedback_json.map((item) => (
-                  <article className="feedback-card" key={`${selectedTakeScore.score_id}-${item.segment_index}`}>
-                    <div className="feedback-card__header">
-                      <strong>
-                        Phrase {item.segment_index + 1}:{' '}
-                        {formatDuration(item.start_ms).replace(' sec', '')} -{' '}
-                        {formatDuration(item.end_ms).replace(' sec', '')}
-                      </strong>
-                      <span>{item.end_ms - item.start_ms} ms</span>
+              <div className="support-stack">
+                <p className="panel__summary">
+                  Phase 9 moves this panel from phrase-only summaries to note-level correction
+                  cues. Use the note list to see whether the issue lives in the attack,
+                  sustain, timing, or confidence of a specific note.
+                </p>
+
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Pitch mode</span>
+                    <strong>{getPitchQualityModeLabel(selectedTakeScore.pitch_quality_mode)}</strong>
+                    <small>{getPitchQualityModeHint(selectedTakeScore.pitch_quality_mode)}</small>
+                  </div>
+                  <div className="mini-card">
+                    <span>Harmony mode</span>
+                    <strong>{getHarmonyReferenceLabel(selectedTakeScore.harmony_reference_mode)}</strong>
+                    <small>
+                      {getHarmonyReferenceHint(
+                        selectedTakeScore.harmony_reference_mode,
+                        chordMarkerCount,
+                      )}
+                    </small>
+                  </div>
+                  <div className="mini-card">
+                    <span>Note feedback</span>
+                    <strong>
+                      {selectedTakeNoteFeedback.length > 0 ? 'Ready' : 'Not attached'}
+                    </strong>
+                    <small>
+                      {selectedTakeNoteFeedback.length > 0
+                        ? 'Signed cents and confidence are available for correction work.'
+                        : 'This score only has phrase feedback, so treat it as a coarse guide.'}
+                    </small>
+                  </div>
+                  <div className="mini-card">
+                    <span>Chord markers</span>
+                    <strong>
+                      {chordMarkerCount > 0 ? `${chordMarkerCount} markers` : 'Not attached'}
+                    </strong>
+                    <small>
+                      {chordMarkerCount > 0
+                        ? 'Chord-aware harmony can stay transparent about what it is grading against.'
+                        : 'Attach a chord timeline to move harmony-fit beyond key-only fallback.'}
+                    </small>
+                  </div>
+                </div>
+
+                {selectedTakeNoteFeedback.length > 0 ? (
+                  <>
+                    <div className="note-timeline-card">
+                      <div className="note-timeline-card__header">
+                        <div>
+                          <strong>Correction timeline</strong>
+                          <p>
+                            Click a note to inspect its direction, timing, sustain stability, and
+                            confidence.
+                          </p>
+                        </div>
+                        <div className="candidate-chip-row">
+                          <span className="candidate-chip candidate-chip--good">In tune</span>
+                          <span className="candidate-chip candidate-chip--warn">Review</span>
+                          <span className="candidate-chip candidate-chip--alert">Priority fix</span>
+                        </div>
+                      </div>
+
+                      <div className="note-timeline">
+                        {selectedTakeNoteFeedback.map((item, index) => {
+                          const leftPercent =
+                            noteFeedbackTimelineDurationMs > 0
+                              ? (item.start_ms / noteFeedbackTimelineDurationMs) * 100
+                              : 0
+                          const widthPercent =
+                            noteFeedbackTimelineDurationMs > 0
+                              ? Math.max(
+                                  4,
+                                  ((item.end_ms - item.start_ms) / noteFeedbackTimelineDurationMs) * 100,
+                                )
+                              : 8
+                          const noteTone = getScoreTone(item.note_score)
+                          const style = {
+                            left: `${leftPercent}%`,
+                            width: `${widthPercent}%`,
+                          } satisfies CSSProperties
+
+                          return (
+                            <button
+                              key={`${selectedTakeScore.score_id}-${item.note_index}`}
+                              className={`note-timeline__note note-timeline__note--${noteTone} ${
+                                selectedNoteFeedback?.note_index === item.note_index
+                                  ? 'note-timeline__note--selected'
+                                  : ''
+                              }`}
+                              style={style}
+                              type="button"
+                              onClick={() => setSelectedNoteFeedbackIndex(index)}
+                            >
+                              N{item.note_index + 1}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
 
-                    <div className="feedback-card__scores">
-                      <span>Pitch {item.pitch_score.toFixed(1)}</span>
-                      <span>Rhythm {item.rhythm_score.toFixed(1)}</span>
-                      <span>Harmony {item.harmony_fit_score.toFixed(1)}</span>
-                    </div>
+                    {selectedNoteFeedback ? (
+                      <article className="note-detail-card">
+                        <div className="note-detail-card__header">
+                          <div>
+                            <p className="eyebrow">Selected Note</p>
+                            <h3>
+                              Note {selectedNoteFeedback.note_index + 1} ·{' '}
+                              {midiToPitchName(selectedNoteFeedback.target_midi)}
+                            </h3>
+                            <p className="status-card__hint">
+                              {formatTimeSpan(
+                                selectedNoteFeedback.start_ms,
+                                selectedNoteFeedback.end_ms,
+                              )}
+                            </p>
+                          </div>
+                          <div className="candidate-chip-row">
+                            <span
+                              className={`candidate-chip candidate-chip--${getScoreTone(
+                                selectedNoteFeedback.note_score,
+                              )}`}
+                            >
+                              Note score {selectedNoteFeedback.note_score.toFixed(1)}
+                            </span>
+                            <span
+                              className={`candidate-chip candidate-chip--${getPitchDirectionTone(
+                                selectedNoteFeedback.sustain_median_cents ??
+                                  selectedNoteFeedback.attack_signed_cents,
+                              )}`}
+                            >
+                              {getPitchDirectionLabel(
+                                selectedNoteFeedback.sustain_median_cents ??
+                                  selectedNoteFeedback.attack_signed_cents,
+                              )}
+                            </span>
+                            <span
+                              className={`candidate-chip candidate-chip--${getConfidenceTone(
+                                selectedNoteFeedback.confidence,
+                              )}`}
+                            >
+                              Confidence {formatConfidence(selectedNoteFeedback.confidence)}
+                            </span>
+                          </div>
+                        </div>
 
-                    <p>{item.message}</p>
-                  </article>
-                ))}
+                        <p>{selectedNoteFeedback.message}</p>
+
+                        <div className="score-grid">
+                          <div className="score-card">
+                            <span>Attack</span>
+                            <strong>{formatSignedCents(selectedNoteFeedback.attack_signed_cents)}</strong>
+                          </div>
+                          <div className="score-card">
+                            <span>Sustain</span>
+                            <strong>{formatSignedCents(selectedNoteFeedback.sustain_median_cents)}</strong>
+                          </div>
+                          <div className="score-card">
+                            <span>Timing</span>
+                            <strong>{formatSignedMs(selectedNoteFeedback.timing_offset_ms)}</strong>
+                          </div>
+                          <div className="score-card score-card--highlight">
+                            <span>In-tune ratio</span>
+                            <strong>{formatRatio(selectedNoteFeedback.in_tune_ratio)}</strong>
+                          </div>
+                        </div>
+
+                        <div className="mini-grid">
+                          <div className="mini-card">
+                            <span>Attack window</span>
+                            <strong>
+                              {formatTimeSpan(
+                                selectedNoteFeedback.attack_start_ms,
+                                selectedNoteFeedback.attack_end_ms,
+                              )}
+                            </strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Sustain spread</span>
+                            <strong>{formatSignedCents(selectedNoteFeedback.sustain_mad_cents)}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Max sharp</span>
+                            <strong>{formatSignedCents(selectedNoteFeedback.max_sharp_cents)}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Max flat</span>
+                            <strong>{formatSignedCents(selectedNoteFeedback.max_flat_cents)}</strong>
+                          </div>
+                        </div>
+
+                        <div className="note-subscore-grid">
+                          <div className="mini-card">
+                            <span>Attack score</span>
+                            <strong>{selectedNoteFeedback.attack_score.toFixed(1)}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Sustain score</span>
+                            <strong>{selectedNoteFeedback.sustain_score.toFixed(1)}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Stability</span>
+                            <strong>{selectedNoteFeedback.stability_score.toFixed(1)}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Timing score</span>
+                            <strong>{selectedNoteFeedback.timing_score.toFixed(1)}</strong>
+                          </div>
+                        </div>
+                      </article>
+                    ) : null}
+
+                    <div className="note-feedback-list">
+                      {selectedTakeNoteFeedback.map((item, index) => (
+                        <button
+                          key={`${selectedTakeScore.score_id}-row-${item.note_index}`}
+                          className={`note-feedback-row note-feedback-row--${getScoreTone(item.note_score)} ${
+                            selectedNoteFeedback?.note_index === item.note_index
+                              ? 'note-feedback-row--selected'
+                              : ''
+                          }`}
+                          type="button"
+                          onClick={() => setSelectedNoteFeedbackIndex(index)}
+                        >
+                          <div className="note-feedback-row__identity">
+                            <strong>
+                              Note {item.note_index + 1} · {midiToPitchName(item.target_midi)}
+                            </strong>
+                            <span>{formatTimeSpan(item.start_ms, item.end_ms)}</span>
+                          </div>
+
+                          <div className="note-feedback-row__chips">
+                            <span
+                              className={`candidate-chip candidate-chip--${getPitchDirectionTone(
+                                item.attack_signed_cents,
+                              )}`}
+                            >
+                              Attack {formatSignedCents(item.attack_signed_cents)}
+                            </span>
+                            <span
+                              className={`candidate-chip candidate-chip--${getPitchDirectionTone(
+                                item.sustain_median_cents,
+                              )}`}
+                            >
+                              Sustain {formatSignedCents(item.sustain_median_cents)}
+                            </span>
+                            <span
+                              className={`candidate-chip candidate-chip--${getConfidenceTone(
+                                item.confidence,
+                              )}`}
+                            >
+                              Confidence {formatConfidence(item.confidence)}
+                            </span>
+                          </div>
+
+                          <div className="note-feedback-row__summary">
+                            <span>Timing {formatSignedMs(item.timing_offset_ms)}</span>
+                            <span>In tune {formatRatio(item.in_tune_ratio)}</span>
+                            <span>Score {item.note_score.toFixed(1)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty-card empty-card--warn">
+                    <p>No note-level correction payload is attached to this score yet.</p>
+                    <p>
+                      Rerun analysis on a processed take to get signed-cents note feedback.
+                      Until then, use the phrase summary below as a coarse guide only.
+                    </p>
+                  </div>
+                )}
+
+                {selectedTakeScore.feedback_json.length > 0 ? (
+                  <div className="support-stack">
+                    <p className="json-label">Phrase context</p>
+                    <div className="feedback-list">
+                      {selectedTakeScore.feedback_json.map((item) => (
+                        <article
+                          className="feedback-card"
+                          key={`${selectedTakeScore.score_id}-${item.segment_index}`}
+                        >
+                          <div className="feedback-card__header">
+                            <strong>
+                              Phrase {item.segment_index + 1} · {formatTimeSpan(item.start_ms, item.end_ms)}
+                            </strong>
+                            <span>{item.end_ms - item.start_ms} ms</span>
+                          </div>
+
+                          <div className="feedback-card__scores">
+                            <span>Pitch {item.pitch_score.toFixed(1)}</span>
+                            <span>Rhythm {item.rhythm_score.toFixed(1)}</span>
+                            <span>Harmony {item.harmony_fit_score.toFixed(1)}</span>
+                          </div>
+
+                          <p>{item.message}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="empty-card">
                 <p>No score feedback is available yet.</p>
-                <p>Run post-recording analysis to store the feedback JSON in the project.</p>
+                <p>Run post-recording analysis to store note-level and phrase-level feedback in the project.</p>
               </div>
             )}
           </article>

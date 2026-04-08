@@ -24,6 +24,7 @@ def prepare_environment() -> None:
     os.environ.setdefault("GIGASTUDY_API_APP_ENV", "e2e")
     os.environ.setdefault("GIGASTUDY_API_DATABASE_URL", f"sqlite:///{DB_PATH.as_posix()}")
     os.environ.setdefault("GIGASTUDY_API_STORAGE_ROOT", STORAGE_ROOT.as_posix())
+    os.environ.setdefault("GIGASTUDY_API_PUBLIC_APP_URL", "http://127.0.0.1:5173")
     os.environ.setdefault(
         "GIGASTUDY_API_CORS_ORIGINS",
         '["http://127.0.0.1:5173","http://localhost:5173"]',

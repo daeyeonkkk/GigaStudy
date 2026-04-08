@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_name: str = "GigaStudy API"
     api_prefix: str = "/api"
+    public_app_url: str | None = None
     database_url: str = "sqlite:///./gigastudy.db"
     database_echo: bool = False
     default_user_nickname: str = "local-dev"
@@ -33,6 +34,18 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
 
         return value
+
+    @field_validator("public_app_url", mode="before")
+    @classmethod
+    def normalize_public_app_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        if not normalized:
+            return None
+
+        return normalized.rstrip("/")
 
 
 @lru_cache

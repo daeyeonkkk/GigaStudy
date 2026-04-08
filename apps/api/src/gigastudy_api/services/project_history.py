@@ -19,6 +19,7 @@ from gigastudy_api.api.schemas.project_history import (
 )
 from gigastudy_api.api.schemas.projects import ProjectResponse
 from gigastudy_api.api.schemas.studio import StudioSnapshotResponse
+from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import (
     ProjectVersion,
     ProjectVersionSource,
@@ -127,6 +128,10 @@ def _build_version_response(version: ProjectVersion) -> ProjectVersionResponse:
 
 
 def _build_share_url(request: Request, token: str) -> str:
+    settings = get_settings()
+    if settings.public_app_url:
+        return f"{settings.public_app_url}/shared/{token}"
+
     return str(request.base_url.replace(path=f"shared/{token}"))
 
 

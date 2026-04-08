@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
 const apiBaseUrl = 'http://127.0.0.1:8000'
 const sampleRate = 32_000
@@ -116,15 +116,9 @@ async function uploadTake(
   expect(completeResponse.ok()).toBeTruthy()
 }
 
-test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
-  page,
-  request,
-}) => {
-  const guideBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
-  const takeBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
-
+async function createStudioProject(page: Page, title: string): Promise<string> {
   await page.goto('/')
-  await page.getByLabel('Project title').fill('Playwright release gate session')
+  await page.getByLabel('Project title').fill(title)
   await page.getByLabel('Base key').fill('A')
   await page.getByRole('button', { name: 'Open studio' }).click()
   await expect(page).toHaveURL(/\/projects\/[^/]+\/studio$/)
@@ -136,25 +130,99 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
     throw new Error('Expected project id in studio URL.')
   }
 
+  return projectId
+}
+
+async function seedGuideAndTake(
+  page: Page,
+  request: APIRequestContext,
+  projectId: string,
+): Promise<void> {
+  const guideBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
+  const takeBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
+
   await uploadGuide(request, projectId, guideBuffer)
   await uploadTake(request, projectId, takeBuffer)
 
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Take 1' })).toBeVisible()
+}
 
+async function runChordAwareAnalysis(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Seed from current key' }).click()
   await page.getByRole('button', { name: 'Save chord timeline' }).click()
   await expect(page.getByText(/Saved 1 chord marker/)).toBeVisible()
 
   await page.getByRole('button', { name: 'Run post-recording analysis' }).click()
   await expect(page.getByText(/Analysis saved\./)).toBeVisible()
+}
 
-  const noteFeedbackPanel = page
+function getNoteFeedbackPanel(page: Page) {
+  return page
     .locator('article')
     .filter({ has: page.getByRole('heading', { name: 'See which note was sharp, flat, late, or unstable' }) })
+}
 
+function getShareLinksPanel(page: Page) {
+  return page
+    .locator('article')
+    .filter({
+      has: page.getByRole('heading', {
+        name: 'Create read-only share URLs tied to a frozen snapshot',
+      }),
+    })
+}
+
+test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
+  page,
+  request,
+}) => {
+  const projectId = await createStudioProject(page, 'Playwright release gate session')
+  await seedGuideAndTake(page, request, projectId)
+  await runChordAwareAnalysis(page)
+
+  const noteFeedbackPanel = getNoteFeedbackPanel(page)
   await expect(noteFeedbackPanel.getByText('Chord-aware harmony', { exact: true })).toBeVisible()
   await expect(noteFeedbackPanel.getByText('Pitch mode', { exact: true })).toBeVisible()
   await expect(noteFeedbackPanel.getByRole('button', { name: 'N1' })).toBeVisible()
   await expect(noteFeedbackPanel.getByRole('heading', { name: /Note 1/i })).toBeVisible()
+})
+
+test('release gate share flow opens a frozen snapshot and loses access after deactivation', async ({
+  page,
+  request,
+}) => {
+  const projectId = await createStudioProject(page, 'Playwright share gate session')
+  await seedGuideAndTake(page, request, projectId)
+  await runChordAwareAnalysis(page)
+
+  const shareLinksPanel = getShareLinksPanel(page)
+  await shareLinksPanel.getByLabel('Share label').fill('Coach review')
+  await page.getByRole('button', { name: 'Create read-only share link' }).click()
+  await expect(page.getByText(/Created read-only share link "Coach review"/)).toBeVisible()
+
+  const shareCard = shareLinksPanel.locator('article.history-card').filter({ hasText: 'Coach review' }).first()
+  await expect(shareCard).toBeVisible()
+
+  const popupPromise = page.waitForEvent('popup')
+  await shareCard.getByRole('link', { name: 'Open share view' }).click()
+  const sharePage = await popupPromise
+  await sharePage.waitForLoadState('domcontentloaded')
+
+  await expect(sharePage).toHaveURL(/\/shared\//)
+  await expect(sharePage.getByRole('heading', { name: 'Playwright share gate session' })).toBeVisible()
+  await expect(sharePage.getByText('Read-Only Share', { exact: true })).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: 'Frozen review snapshot' })).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: 'Recorded take results' })).toBeVisible()
+  await expect(sharePage.getByText('Coach review', { exact: true })).toBeVisible()
+  await expect(sharePage.getByText('Take 1', { exact: false })).toBeVisible()
+  await expect(sharePage.getByRole('button', { name: 'Run post-recording analysis' })).toHaveCount(0)
+  await expect(sharePage.getByRole('button', { name: 'Create read-only share link' })).toHaveCount(0)
+
+  await shareCard.getByRole('button', { name: 'Deactivate' }).click()
+  await expect(page.getByText(/Deactivated "Coach review"/)).toBeVisible()
+
+  await sharePage.reload()
+  await expect(sharePage.getByRole('heading', { name: 'Shared project unavailable' })).toBeVisible()
+  await expect(sharePage.getByText('Share link is inactive')).toBeVisible()
 })

@@ -18,6 +18,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     database_path = tmp_path / "project-history.db"
     storage_root = tmp_path / "storage"
     monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", storage_root.as_posix())
+    monkeypatch.setenv("GIGASTUDY_API_PUBLIC_APP_URL", "http://frontend.test:5173")
     get_settings.cache_clear()
 
     engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
@@ -115,7 +116,7 @@ def test_share_link_creates_snapshot_and_serves_public_read_only_payload(client:
     share_link = create_response.json()
     assert share_link["label"] == "Coach review"
     assert share_link["access_scope"] == "READ_ONLY"
-    assert share_link["share_url"].endswith(f"/shared/{share_link['share_url'].split('/')[-1]}")
+    assert share_link["share_url"].startswith("http://frontend.test:5173/shared/")
 
     token = share_link["share_url"].rstrip("/").split("/")[-1]
     public_response = client.get(f"/api/shared/{token}")

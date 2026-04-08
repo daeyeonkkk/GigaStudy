@@ -48,10 +48,11 @@ uv run pytest
 - Processed takes now also generate note-event artifacts and signed-cents note feedback on the backend.
 - Runtime note scoring now down-weights low-confidence frames, and harmony-fit can switch to a chord-aware path when the project provides a chord timeline.
 - The studio now exposes note-level correction UI, confidence badges, and clear `note-level` versus `fallback` analysis mode labels.
+- The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
 
 ## Current Hardening Focus
 
-- Execute the remaining Phase 9 intonation quality track: real-vocal calibration, threshold tuning, and claim gating.
+- Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Add a studio-friendly chord-authoring path so chord-aware harmony is reachable without leaving the main workflow.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
@@ -63,6 +64,7 @@ uv run pytest
 - [Roadmap](./PROJECT_FOUNDATION/ROADMAP.md)
 - [Phase 1 Backlog](./PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
 - [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/PHASE9_INTONATION_BACKLOG.md)
+- [Intonation Calibration Report](./PROJECT_FOUNDATION/INTONATION_CALIBRATION_REPORT.md)
 - [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
 - [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
 - [Intonation Assessment](./PROJECT_FOUNDATION/INTONATION_ANALYSIS_ASSESSMENT.md)

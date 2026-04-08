@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from audio_fixtures import build_test_wav_bytes
+from audio_fixtures import VocalSegment, build_test_wav_bytes, build_vocalish_wav_bytes
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session
@@ -308,3 +308,200 @@ def test_retry_failed_analysis_job_after_reprocessing(client: TestClient) -> Non
     retry_response = client.post(f"/api/analysis-jobs/{latest_job['job_id']}/retry")
     assert retry_response.status_code == 200
     assert retry_response.json()["latest_job"]["status"] == "SUCCEEDED"
+
+
+def test_analysis_tracks_sharp_attack_then_settle_in_vocal_like_take(client: TestClient) -> None:
+    guide_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[
+            VocalSegment(duration_ms=1500, vibrato_cents=3.0, vibrato_hz=5.2, breath_noise=0.015),
+        ],
+    )
+    take_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[
+            VocalSegment(
+                duration_ms=260,
+                start_cents=32.0,
+                end_cents=12.0,
+                breath_noise=0.12,
+                voiced_mix=0.82,
+            ),
+            VocalSegment(
+                duration_ms=1240,
+                start_cents=10.0,
+                end_cents=1.0,
+                vibrato_cents=4.0,
+                vibrato_hz=5.4,
+                breath_noise=0.02,
+            ),
+        ],
+    )
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Sharp Attack Vocal Case", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=take_bytes, filename="take.wav")
+
+    response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+
+    assert response.status_code == 200
+    note = response.json()["latest_score"]["note_feedback_json"][0]
+    assert note["attack_signed_cents"] > 10
+    assert abs(note["sustain_median_cents"]) < abs(note["attack_signed_cents"])
+    assert note["max_sharp_cents"] > 20
+    assert "sharp" in note["message"].lower()
+
+
+def test_analysis_tracks_flat_sustain_in_vocal_like_take(client: TestClient) -> None:
+    guide_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[VocalSegment(duration_ms=1500, vibrato_cents=2.5, vibrato_hz=5.0, breath_noise=0.01)],
+    )
+    take_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[
+            VocalSegment(duration_ms=220, start_cents=-4.0, end_cents=-8.0, breath_noise=0.08, voiced_mix=0.9),
+            VocalSegment(
+                duration_ms=1280,
+                start_cents=-22.0,
+                end_cents=-28.0,
+                vibrato_cents=5.0,
+                vibrato_hz=4.8,
+                breath_noise=0.02,
+            ),
+        ],
+    )
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Flat Sustain Vocal Case", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=take_bytes, filename="take.wav")
+
+    response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+
+    assert response.status_code == 200
+    note = response.json()["latest_score"]["note_feedback_json"][0]
+    assert note["sustain_median_cents"] <= -18
+    assert note["max_flat_cents"] < -18
+    assert "flat" in note["message"].lower()
+
+
+def test_analysis_keeps_centered_vibrato_usable_in_vocal_like_take(client: TestClient) -> None:
+    guide_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[VocalSegment(duration_ms=1500, vibrato_cents=2.0, breath_noise=0.01)],
+    )
+    take_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[
+            VocalSegment(
+                duration_ms=1500,
+                start_cents=0.0,
+                end_cents=0.0,
+                vibrato_cents=16.0,
+                vibrato_hz=5.7,
+                breath_noise=0.025,
+            )
+        ],
+    )
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Centered Vibrato Vocal Case", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=take_bytes, filename="take.wav")
+
+    response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+
+    assert response.status_code == 200
+    note = response.json()["latest_score"]["note_feedback_json"][0]
+    assert abs(note["sustain_median_cents"]) < 10
+    assert note["max_sharp_cents"] > 10
+    assert note["note_score"] >= 60
+    assert note["confidence"] > 0.55
+
+
+def test_analysis_handles_portamento_toward_center_in_vocal_like_take(client: TestClient) -> None:
+    guide_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[VocalSegment(duration_ms=1500, breath_noise=0.01)],
+    )
+    take_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[
+            VocalSegment(duration_ms=360, start_cents=-42.0, end_cents=-5.0, breath_noise=0.05),
+            VocalSegment(duration_ms=1140, start_cents=-4.0, end_cents=0.0, vibrato_cents=3.5, breath_noise=0.02),
+        ],
+    )
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Portamento Vocal Case", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=take_bytes, filename="take.wav")
+
+    response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+
+    assert response.status_code == 200
+    note = response.json()["latest_score"]["note_feedback_json"][0]
+    assert note["attack_signed_cents"] < -12
+    assert abs(note["sustain_median_cents"]) < 10
+    assert "settled" in note["message"].lower()
+
+
+def test_breathy_onset_scores_with_higher_confidence_than_quiet_take(client: TestClient) -> None:
+    guide_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[VocalSegment(duration_ms=1500, breath_noise=0.01)],
+    )
+    breathy_take_bytes = build_vocalish_wav_bytes(
+        base_frequency_hz=440.0,
+        segments=[
+            VocalSegment(duration_ms=160, breath_noise=0.22, voiced_mix=0.42),
+            VocalSegment(duration_ms=1340, breath_noise=0.03, voiced_mix=0.98, vibrato_cents=4.0),
+        ],
+    )
+    quiet_take_bytes = build_test_wav_bytes(
+        duration_ms=1500,
+        frequency_hz=440.0,
+        amplitude=0.002,
+        sample_rate=32000,
+    )
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Breathy Versus Quiet", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    breathy_take_id = upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=breathy_take_bytes,
+        filename="breathy.wav",
+    )
+    quiet_take_id = upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=quiet_take_bytes,
+        filename="quiet.wav",
+    )
+
+    breathy_response = client.post(f"/api/projects/{project_id}/tracks/{breathy_take_id}/analysis")
+    quiet_response = client.post(f"/api/projects/{project_id}/tracks/{quiet_take_id}/analysis")
+
+    assert breathy_response.status_code == 200
+    assert quiet_response.status_code == 200
+    breathy_note = breathy_response.json()["latest_score"]["note_feedback_json"][0]
+    quiet_note = quiet_response.json()["latest_score"]["note_feedback_json"][0]
+    assert breathy_note["confidence"] > quiet_note["confidence"]
+    assert breathy_note["confidence"] > 0.45
+    assert "rough guide" not in breathy_note["message"].lower()

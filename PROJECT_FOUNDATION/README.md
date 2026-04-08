@@ -10,11 +10,12 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 1. `GigaStudy_master_plan.md`
 2. `ROADMAP.md`
 3. `INTONATION_ANALYSIS_ASSESSMENT.md`
-4. `PHASE1_BACKLOG.md`
-5. `PHASE9_INTONATION_BACKLOG.md`
-6. `GigaStudy_check_list.md`
-7. `FOUNDATION_STATUS.md`
-8. `WORKING_PRINCIPLES.md`
+4. `INTONATION_CALIBRATION_REPORT.md`
+5. `PHASE1_BACKLOG.md`
+6. `PHASE9_INTONATION_BACKLOG.md`
+7. `GigaStudy_check_list.md`
+8. `FOUNDATION_STATUS.md`
+9. `WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -26,6 +27,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Build backlog for the first recording pipeline and studio foundation slice.
 - `PHASE9_INTONATION_BACKLOG.md`
   Execution backlog for the note-level intonation quality track, including signed cents, note segmentation, confidence weighting, and calibration work.
+- `INTONATION_CALIBRATION_REPORT.md`
+  Current calibration evidence, provisional threshold bands, and the claim gate for what the intonation scorer can and cannot promise today.
 - `GigaStudy_check_list.md`
   Cross-check list for scope control, implementation readiness, and release gating.
 - `FOUNDATION_STATUS.md`

@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape
 from math import log2
-from pathlib import Path
 import struct
 from uuid import UUID, uuid4
 
@@ -20,8 +19,8 @@ from gigastudy_api.api.schemas.arrangements import (
     ArrangementUpdateRequest,
 )
 from gigastudy_api.api.schemas.melody import MelodyNoteResponse
-from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Arrangement, MelodyDraft, Project
+from gigastudy_api.services.storage import build_project_storage_key, get_storage_backend
 
 
 PPQN = 480
@@ -273,12 +272,6 @@ CANDIDATE_SPECS = (
         ),
     ),
 )
-
-
-def _get_storage_root() -> Path:
-    settings = get_settings()
-    return Path(settings.storage_root).resolve()
-
 
 def _get_project_or_404(session: Session, project_id: UUID) -> Project:
     project = session.get(Project, project_id)
@@ -1068,25 +1061,27 @@ def _build_midi_bytes(parts_json: list[dict], bpm: int) -> bytes:
     return header + track_chunk
 
 
-def _write_arrangement_midi(path: Path, parts_json: list[dict], bpm: int) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _store_arrangement_midi(storage_key: str, parts_json: list[dict], bpm: int) -> tuple[str, int]:
     midi_bytes = _build_midi_bytes(parts_json, bpm)
-    path.write_bytes(midi_bytes)
-    return len(midi_bytes)
+    stored_object = get_storage_backend().write_bytes(storage_key, midi_bytes, content_type="audio/midi")
+    return stored_object.storage_key, stored_object.byte_size
 
 
-def _write_arrangement_musicxml(
-    path: Path,
+def _store_arrangement_musicxml(
+    storage_key: str,
     title: str,
     parts_json: list[dict],
     bpm: int,
     time_signature: str | None,
     key_signature: str | None,
-) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
+) -> tuple[str, int]:
     musicxml_bytes = _build_musicxml_bytes(title, parts_json, bpm, time_signature, key_signature)
-    path.write_bytes(musicxml_bytes)
-    return len(musicxml_bytes)
+    stored_object = get_storage_backend().write_bytes(
+        storage_key,
+        musicxml_bytes,
+        content_type="application/vnd.recordare.musicxml+xml",
+    )
+    return stored_object.storage_key, stored_object.byte_size
 
 
 def _normalize_comparison_summary(value: dict | None) -> ArrangementComparisonSummaryResponse | None:
@@ -1271,27 +1266,23 @@ def generate_arrangements(
         session.add(arrangement)
         session.flush()
 
-        midi_path = (
-            _get_storage_root()
-            / "projects"
-            / str(project.project_id)
-            / "derived"
-            / "arrangements"
-            / f"{arrangement.arrangement_id}.mid"
+        arrangement.midi_storage_key, arrangement.midi_byte_size = _store_arrangement_midi(
+            build_project_storage_key(
+                project.project_id,
+                "derived",
+                "arrangements",
+                f"{arrangement.arrangement_id}.mid",
+            ),
+            parts_json,
+            bpm,
         )
-        arrangement.midi_storage_key = str(midi_path)
-        arrangement.midi_byte_size = _write_arrangement_midi(midi_path, parts_json, bpm)
-        musicxml_path = (
-            _get_storage_root()
-            / "projects"
-            / str(project.project_id)
-            / "derived"
-            / "arrangements"
-            / f"{arrangement.arrangement_id}.musicxml"
-        )
-        arrangement.musicxml_storage_key = str(musicxml_path)
-        _write_arrangement_musicxml(
-            musicxml_path,
+        arrangement.musicxml_storage_key, _ = _store_arrangement_musicxml(
+            build_project_storage_key(
+                project.project_id,
+                "derived",
+                "arrangements",
+                f"{arrangement.arrangement_id}.musicxml",
+            ),
             arrangement.title,
             parts_json,
             bpm,
@@ -1359,14 +1350,14 @@ def update_arrangement(
     }
     arrangement.updated_at = datetime.now(timezone.utc)
     if arrangement.midi_storage_key:
-        arrangement.midi_byte_size = _write_arrangement_midi(
-            Path(arrangement.midi_storage_key),
+        arrangement.midi_storage_key, arrangement.midi_byte_size = _store_arrangement_midi(
+            arrangement.midi_storage_key,
             parts_json,
             arrangement.melody_draft.bpm or 90,
         )
     if arrangement.musicxml_storage_key:
-        _write_arrangement_musicxml(
-            Path(arrangement.musicxml_storage_key),
+        arrangement.musicxml_storage_key, _ = _store_arrangement_musicxml(
+            arrangement.musicxml_storage_key,
             arrangement.title,
             parts_json,
             arrangement.melody_draft.bpm or 90,
@@ -1384,8 +1375,7 @@ def get_arrangement_midi_path(session: Session, arrangement_id: UUID) -> Arrange
     if not arrangement.midi_storage_key:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MIDI is missing")
 
-    midi_path = Path(arrangement.midi_storage_key)
-    if not midi_path.exists():
+    if not get_storage_backend().exists(arrangement.midi_storage_key):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MIDI file not found")
 
     return arrangement
@@ -1396,8 +1386,7 @@ def get_arrangement_musicxml_path(session: Session, arrangement_id: UUID) -> Arr
     if not arrangement.musicxml_storage_key:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MusicXML is missing")
 
-    musicxml_path = Path(arrangement.musicxml_storage_key)
-    if not musicxml_path.exists():
+    if not get_storage_backend().exists(arrangement.musicxml_storage_key):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arrangement MusicXML file not found")
 
     return arrangement

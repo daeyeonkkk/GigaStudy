@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
+from io import BytesIO
 import json
 import mimetypes
 from pathlib import Path
@@ -30,6 +31,12 @@ from gigastudy_api.services.audio_features import (
     build_preview_contour,
     extract_pitch_frames,
 )
+from gigastudy_api.services.storage import (
+    StorageObjectNotFoundError,
+    StoredObject,
+    build_project_storage_key,
+    get_storage_backend,
+)
 
 
 CANONICAL_SAMPLE_RATE = 16000
@@ -41,22 +48,17 @@ CONTOUR_POINTS = 64
 @dataclass
 class AudioProbeResult:
     byte_size: int
-    canonical_path: Path
+    canonical_object: StoredObject
     channel_count: int
     checksum: str
     container_format: str | None
     duration_ms: int
-    frame_pitch_path: Path
+    frame_pitch_object: StoredObject
     frame_pitch_payload: FramePitchArtifactPayload
-    peaks_path: Path
+    peaks_object: StoredObject
     preview_data: AudioPreviewResponse
     sample_rate: int
-    source_path: Path
-
-
-def _get_storage_root() -> Path:
-    settings = get_settings()
-    return Path(settings.storage_root).resolve()
+    source_storage_key: str
 
 
 def _get_track_or_404(session: Session, track_id: UUID) -> Track:
@@ -112,8 +114,7 @@ def _validate_upload_session_window(track: Track) -> None:
         return
 
     if track.storage_key:
-        source_path = _get_storage_root() / track.storage_key
-        if source_path.exists():
+        if get_storage_backend().exists(track.storage_key):
             return
 
     window_started_at = track.updated_at or track.created_at
@@ -153,12 +154,11 @@ def get_track_frame_pitch_data(track: Track) -> FramePitchArtifactPayload | None
     if frame_pitch_artifact is None:
         return None
 
-    artifact_path = Path(frame_pitch_artifact.storage_key)
-    if artifact_path.exists():
-        try:
-            return FramePitchArtifactPayload.model_validate_json(artifact_path.read_text(encoding="utf-8"))
-        except (OSError, ValidationError, ValueError):
-            pass
+    try:
+        artifact_text = get_storage_backend().read_text(frame_pitch_artifact.storage_key, encoding="utf-8")
+        return FramePitchArtifactPayload.model_validate_json(artifact_text)
+    except (OSError, ValidationError, ValueError, StorageObjectNotFoundError):
+        pass
 
     if not isinstance(frame_pitch_artifact.meta_json, dict):
         return None
@@ -230,32 +230,25 @@ def _compute_duration_ms(
     return max(1, round((fallback_sample_count / sample_rate) * 1000))
 
 
-def _write_canonical_wav(path: Path, samples: np.ndarray, sample_rate: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _build_canonical_wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
     pcm = np.clip(samples, -1.0, 1.0)
     pcm = np.round(pcm * np.int16(32767)).astype(np.int16)
 
-    with wave.open(path.as_posix(), "wb") as wav_file:
+    output = BytesIO()
+    with wave.open(output, "wb") as wav_file:
         wav_file.setnchannels(1)
         wav_file.setsampwidth(2)
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(pcm.tobytes())
+    return output.getvalue()
 
 
-def _write_preview_json(path: Path, preview_data: AudioPreviewResponse) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(preview_data.model_dump(mode="json"), ensure_ascii=True),
-        encoding="utf-8",
-    )
+def _build_preview_json_bytes(preview_data: AudioPreviewResponse) -> bytes:
+    return json.dumps(preview_data.model_dump(mode="json"), ensure_ascii=True).encode("utf-8")
 
 
-def _write_model_json(path: Path, payload: FramePitchArtifactPayload) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        payload.model_dump_json(indent=2),
-        encoding="utf-8",
-    )
+def _build_model_json_bytes(payload: FramePitchArtifactPayload) -> bytes:
+    return payload.model_dump_json(indent=2).encode("utf-8")
 
 
 def _build_frame_pitch_payload(samples: np.ndarray, sample_rate: int) -> FramePitchArtifactPayload:
@@ -301,105 +294,133 @@ def _probe_audio_file(track: Track) -> AudioProbeResult:
     if not track.storage_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track storage key is missing")
 
-    source_path = _get_storage_root() / track.storage_key
-    if not source_path.exists():
+    storage = get_storage_backend()
+    if not storage.exists(track.storage_key):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file not found")
 
-    file_bytes = source_path.read_bytes()
-    if not file_bytes:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
-
-    try:
-        container = av.open(source_path.as_posix())
-    except Exception as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Uploaded audio could not be parsed: {error}",
-        ) from error
-
-    try:
-        audio_stream = next((stream for stream in container.streams if stream.type == "audio"), None)
-        if audio_stream is None:
+    suffix = Path(track.storage_key).suffix or ".bin"
+    with storage.materialize_to_path(track.storage_key, suffix=suffix) as source_path:
+        file_bytes = source_path.read_bytes()
+        if not file_bytes:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded file does not contain an audio stream",
+                detail="Uploaded file is empty",
             )
 
-        resampler = av.audio.resampler.AudioResampler(
-            format="flt",
-            layout=CANONICAL_CHANNEL_LAYOUT,
-            rate=CANONICAL_SAMPLE_RATE,
-        )
-        chunks: list[np.ndarray] = []
-
-        for frame in container.decode(audio=0):
-            resampled_frames = resampler.resample(frame)
-            if resampled_frames is None:
-                continue
-            if not isinstance(resampled_frames, list):
-                resampled_frames = [resampled_frames]
-
-            for item in resampled_frames:
-                chunks.append(_normalize_sample_array(item.to_ndarray()).reshape(-1))
-
-        flushed_frames = resampler.resample(None)
-        if flushed_frames is not None:
-            if not isinstance(flushed_frames, list):
-                flushed_frames = [flushed_frames]
-
-            for item in flushed_frames:
-                chunks.append(_normalize_sample_array(item.to_ndarray()).reshape(-1))
-
-        if not chunks:
+        try:
+            container = av.open(source_path.as_posix())
+        except Exception as error:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded audio does not contain decodable samples",
+                detail=f"Uploaded audio could not be parsed: {error}",
+            ) from error
+
+        try:
+            audio_stream = next((stream for stream in container.streams if stream.type == "audio"), None)
+            if audio_stream is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded file does not contain an audio stream",
+                )
+
+            resampler = av.audio.resampler.AudioResampler(
+                format="flt",
+                layout=CANONICAL_CHANNEL_LAYOUT,
+                rate=CANONICAL_SAMPLE_RATE,
+            )
+            chunks: list[np.ndarray] = []
+
+            for frame in container.decode(audio=0):
+                resampled_frames = resampler.resample(frame)
+                if resampled_frames is None:
+                    continue
+                if not isinstance(resampled_frames, list):
+                    resampled_frames = [resampled_frames]
+
+                for item in resampled_frames:
+                    chunks.append(_normalize_sample_array(item.to_ndarray()).reshape(-1))
+
+            flushed_frames = resampler.resample(None)
+            if flushed_frames is not None:
+                if not isinstance(flushed_frames, list):
+                    flushed_frames = [flushed_frames]
+
+                for item in flushed_frames:
+                    chunks.append(_normalize_sample_array(item.to_ndarray()).reshape(-1))
+
+            if not chunks:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded audio does not contain decodable samples",
+                )
+
+            mono_samples = np.concatenate(chunks)
+            duration_ms = _compute_duration_ms(container, audio_stream, mono_samples.size)
+            waveform = _build_waveform(mono_samples)
+            contour = _build_pitch_contour(mono_samples, CANONICAL_SAMPLE_RATE)
+            frame_pitch_payload = _build_frame_pitch_payload(mono_samples, CANONICAL_SAMPLE_RATE)
+            preview_data = AudioPreviewResponse(
+                waveform=waveform,
+                contour=contour,
+                duration_ms=duration_ms,
+                source="remote",
             )
 
-        mono_samples = np.concatenate(chunks)
-        duration_ms = _compute_duration_ms(container, audio_stream, mono_samples.size)
-        waveform = _build_waveform(mono_samples)
-        contour = _build_pitch_contour(mono_samples, CANONICAL_SAMPLE_RATE)
-        frame_pitch_payload = _build_frame_pitch_payload(mono_samples, CANONICAL_SAMPLE_RATE)
-        preview_data = AudioPreviewResponse(
-            waveform=waveform,
-            contour=contour,
-            duration_ms=duration_ms,
-            source="remote",
-        )
+            canonical_storage_key = build_project_storage_key(
+                track.project_id,
+                "derived",
+                f"{track.track_id}-canonical.wav",
+            )
+            peaks_storage_key = build_project_storage_key(
+                track.project_id,
+                "derived",
+                f"{track.track_id}-preview.json",
+            )
+            frame_pitch_storage_key = build_project_storage_key(
+                track.project_id,
+                "derived",
+                f"{track.track_id}-frame-pitch.json",
+            )
 
-        derived_root = _get_storage_root() / "projects" / str(track.project_id) / "derived"
-        canonical_path = derived_root / f"{track.track_id}-canonical.wav"
-        peaks_path = derived_root / f"{track.track_id}-preview.json"
-        frame_pitch_path = derived_root / f"{track.track_id}-frame-pitch.json"
+            canonical_object = storage.write_bytes(
+                canonical_storage_key,
+                _build_canonical_wav_bytes(mono_samples, CANONICAL_SAMPLE_RATE),
+                content_type="audio/wav",
+            )
+            peaks_object = storage.write_bytes(
+                peaks_storage_key,
+                _build_preview_json_bytes(preview_data),
+                content_type="application/json",
+            )
+            frame_pitch_object = storage.write_bytes(
+                frame_pitch_storage_key,
+                _build_model_json_bytes(frame_pitch_payload),
+                content_type="application/json",
+            )
 
-        _write_canonical_wav(canonical_path, mono_samples, CANONICAL_SAMPLE_RATE)
-        _write_preview_json(peaks_path, preview_data)
-        _write_model_json(frame_pitch_path, frame_pitch_payload)
+            channel_count = int(
+                getattr(audio_stream, "channels", 0)
+                or getattr(getattr(audio_stream, "layout", None), "nb_channels", 0)
+                or 1
+            )
+            sample_rate = int(audio_stream.sample_rate or CANONICAL_SAMPLE_RATE)
 
-        channel_count = int(
-            getattr(audio_stream, "channels", 0)
-            or getattr(getattr(audio_stream, "layout", None), "nb_channels", 0)
-            or 1
-        )
-        sample_rate = int(audio_stream.sample_rate or CANONICAL_SAMPLE_RATE)
-
-        return AudioProbeResult(
-            byte_size=len(file_bytes),
-            canonical_path=canonical_path,
-            channel_count=channel_count,
-            checksum=sha256(file_bytes).hexdigest(),
-            container_format=container.format.name if container.format else None,
-            duration_ms=duration_ms,
-            frame_pitch_path=frame_pitch_path,
-            frame_pitch_payload=frame_pitch_payload,
-            peaks_path=peaks_path,
-            preview_data=preview_data,
-            sample_rate=sample_rate,
-            source_path=source_path,
-        )
-    finally:
-        container.close()
+            return AudioProbeResult(
+                byte_size=len(file_bytes),
+                canonical_object=canonical_object,
+                channel_count=channel_count,
+                checksum=sha256(file_bytes).hexdigest(),
+                container_format=container.format.name if container.format else None,
+                duration_ms=duration_ms,
+                frame_pitch_object=frame_pitch_object,
+                frame_pitch_payload=frame_pitch_payload,
+                peaks_object=peaks_object,
+                preview_data=preview_data,
+                sample_rate=sample_rate,
+                source_storage_key=track.storage_key,
+            )
+        finally:
+            container.close()
 
 
 def process_uploaded_track(session: Session, track_id: UUID) -> Track:
@@ -420,7 +441,7 @@ def process_uploaded_track(session: Session, track_id: UUID) -> Track:
         _mark_track_failed(session, track, str(error))
         raise
 
-    mime_type = track.source_format or mimetypes.guess_type(probe.source_path.name)[0] or "application/octet-stream"
+    mime_type = track.source_format or mimetypes.guess_type(track.storage_key or "")[0] or "application/octet-stream"
     uploaded_artifact_type = _get_uploaded_audio_artifact_type(track)
 
     track.track_status = TrackStatus.READY
@@ -437,13 +458,13 @@ def process_uploaded_track(session: Session, track_id: UUID) -> Track:
             project_id=track.project_id,
             track=track,
             artifact_type=uploaded_artifact_type,
-            storage_key=str(probe.source_path),
+            storage_key=probe.source_storage_key,
             created_at=now,
             updated_at=now,
         )
         session.add(uploaded_artifact)
 
-    uploaded_artifact.storage_key = str(probe.source_path)
+    uploaded_artifact.storage_key = probe.source_storage_key
     uploaded_artifact.mime_type = mime_type
     uploaded_artifact.byte_size = probe.byte_size
     uploaded_artifact.updated_at = now
@@ -463,15 +484,15 @@ def process_uploaded_track(session: Session, track_id: UUID) -> Track:
             project_id=track.project_id,
             track=track,
             artifact_type=ArtifactType.CANONICAL_AUDIO,
-            storage_key=str(probe.canonical_path),
+            storage_key=probe.canonical_object.storage_key,
             created_at=now,
             updated_at=now,
         )
         session.add(canonical_artifact)
 
-    canonical_artifact.storage_key = str(probe.canonical_path)
+    canonical_artifact.storage_key = probe.canonical_object.storage_key
     canonical_artifact.mime_type = "audio/wav"
-    canonical_artifact.byte_size = probe.canonical_path.stat().st_size
+    canonical_artifact.byte_size = probe.canonical_object.byte_size
     canonical_artifact.updated_at = now
     canonical_artifact.meta_json = {
         "channel_count": 1,
@@ -486,15 +507,15 @@ def process_uploaded_track(session: Session, track_id: UUID) -> Track:
             project_id=track.project_id,
             track=track,
             artifact_type=ArtifactType.WAVEFORM_PEAKS,
-            storage_key=str(probe.peaks_path),
+            storage_key=probe.peaks_object.storage_key,
             created_at=now,
             updated_at=now,
         )
         session.add(peaks_artifact)
 
-    peaks_artifact.storage_key = str(probe.peaks_path)
+    peaks_artifact.storage_key = probe.peaks_object.storage_key
     peaks_artifact.mime_type = "application/json"
-    peaks_artifact.byte_size = probe.peaks_path.stat().st_size
+    peaks_artifact.byte_size = probe.peaks_object.byte_size
     peaks_artifact.updated_at = now
     peaks_artifact.meta_json = {
         "bins": WAVEFORM_BINS,
@@ -508,15 +529,15 @@ def process_uploaded_track(session: Session, track_id: UUID) -> Track:
             project_id=track.project_id,
             track=track,
             artifact_type=ArtifactType.FRAME_PITCH,
-            storage_key=str(probe.frame_pitch_path),
+            storage_key=probe.frame_pitch_object.storage_key,
             created_at=now,
             updated_at=now,
         )
         session.add(frame_pitch_artifact)
 
-    frame_pitch_artifact.storage_key = str(probe.frame_pitch_path)
+    frame_pitch_artifact.storage_key = probe.frame_pitch_object.storage_key
     frame_pitch_artifact.mime_type = "application/json"
-    frame_pitch_artifact.byte_size = probe.frame_pitch_path.stat().st_size
+    frame_pitch_artifact.byte_size = probe.frame_pitch_object.byte_size
     frame_pitch_artifact.updated_at = now
     frame_pitch_artifact.meta_json = {
         "artifact_version": probe.frame_pitch_payload.version,

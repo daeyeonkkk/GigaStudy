@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from pathlib import Path
 import re
 from uuid import UUID
 
@@ -13,7 +12,6 @@ from gigastudy_api.api.schemas.tracks import (
     TakeTrackResponse,
     TakeUploadInitRequest,
 )
-from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Project, Track, TrackRole, TrackStatus
 from gigastudy_api.services.analysis import (
     build_analysis_job_response,
@@ -30,11 +28,6 @@ from gigastudy_api.services.processing import (
 
 
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-
-
-def _get_storage_root() -> Path:
-    settings = get_settings()
-    return Path(settings.storage_root).resolve()
 
 
 def _sanitize_filename(filename: str | None, fallback_stem: str) -> str:

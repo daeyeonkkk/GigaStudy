@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.melody import MelodyDraftResponse, MelodyDraftUpdateRequest
@@ -13,6 +13,7 @@ from gigastudy_api.services.melody import (
     get_track_melody_draft,
     update_melody_draft,
 )
+from gigastudy_api.services.storage import build_storage_download_response
 
 
 router = APIRouter()
@@ -68,11 +69,11 @@ def update_melody_draft_endpoint(
 def download_melody_midi_endpoint(
     melody_draft_id: UUID,
     session: Session = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     draft = get_melody_midi_path(session, melody_draft_id)
 
-    return FileResponse(
-        path=draft.midi_storage_key,
+    return build_storage_download_response(
+        storage_key=draft.midi_storage_key or "",
         media_type="audio/midi",
         filename=f"{draft.melody_draft_id}.mid",
     )

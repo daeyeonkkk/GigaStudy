@@ -8,7 +8,15 @@ from gigastudy_api.config import get_settings
 
 
 def make_engine(database_url: str, echo: bool = False) -> Engine:
-    return create_engine(database_url, echo=echo, future=True)
+    engine_kwargs: dict[str, object] = {
+        "echo": echo,
+        "future": True,
+        "pool_pre_ping": True,
+    }
+    if database_url.startswith("sqlite"):
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+    return create_engine(database_url, **engine_kwargs)
 
 
 @lru_cache

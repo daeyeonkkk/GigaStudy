@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from pathlib import Path
 import re
 from uuid import UUID
 
@@ -12,7 +11,6 @@ from gigastudy_api.api.schemas.guides import (
     GuideTrackResponse,
     GuideUploadInitRequest,
 )
-from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Artifact, Project, Track, TrackRole, TrackStatus
 from gigastudy_api.services.processing import (
     get_track_canonical_artifact,
@@ -21,14 +19,10 @@ from gigastudy_api.services.processing import (
     process_uploaded_track,
     validate_upload_session_window,
 )
+from gigastudy_api.services.storage import get_storage_backend
 
 
 SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-
-
-def _get_storage_root() -> Path:
-    settings = get_settings()
-    return Path(settings.storage_root).resolve()
 
 
 def _sanitize_filename(filename: str | None, fallback_stem: str) -> str:
@@ -86,10 +80,7 @@ def store_track_upload(session: Session, track_id: UUID, payload: bytes) -> Trac
 
     try:
         validate_upload_session_window(track)
-        storage_root = _get_storage_root()
-        file_path = storage_root / track.storage_key
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_bytes(payload)
+        get_storage_backend().write_bytes(track.storage_key, payload, content_type=track.source_format)
 
         track.track_status = TrackStatus.UPLOADING
         track.failure_message = None
@@ -184,8 +175,7 @@ def get_track_source_path(session: Session, track_id: UUID) -> tuple[Track, Arti
     if source_artifact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playable audio not found")
 
-    source_path = Path(source_artifact.storage_key)
-    if not source_path.exists():
+    if not get_storage_backend().exists(source_artifact.storage_key):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
 
     return track, source_artifact
@@ -204,8 +194,7 @@ def get_track_canonical_path(session: Session, track_id: UUID) -> tuple[Track, A
     if canonical_artifact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canonical WAV not found")
 
-    canonical_path = Path(canonical_artifact.storage_key)
-    if not canonical_path.exists():
+    if not get_storage_backend().exists(canonical_artifact.storage_key):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored WAV file not found")
 
     return track, canonical_artifact

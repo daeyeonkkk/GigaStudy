@@ -12,7 +12,15 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./gigastudy.db"
     database_echo: bool = False
     default_user_nickname: str = "local-dev"
+    storage_backend: str = "local"
     storage_root: str = "./storage"
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_endpoint_url: str | None = None
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: str | None = None
+    s3_session_token: str | None = None
+    s3_addressing_style: str = "path"
     analysis_timeout_seconds: int = 15
     upload_session_expiry_minutes: int = 30
     ops_recent_limit: int = 8
@@ -46,6 +54,31 @@ class Settings(BaseSettings):
             return None
 
         return normalized.rstrip("/")
+
+    @field_validator("storage_backend", mode="before")
+    @classmethod
+    def normalize_storage_backend(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("s3_endpoint_url", mode="before")
+    @classmethod
+    def normalize_s3_endpoint_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        if not normalized:
+            return None
+
+        return normalized.rstrip("/")
+
+    @field_validator("s3_addressing_style", mode="before")
+    @classmethod
+    def normalize_s3_addressing_style(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"auto", "path", "virtual"}:
+            return "path"
+        return normalized
 
 
 @lru_cache

@@ -9,6 +9,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.models import ArtifactType, Project, User
 from gigastudy_api.services.guides import create_guide_upload_session, complete_guide_upload, store_track_upload
+from gigastudy_api.services.storage import get_storage_backend
 from audio_fixtures import build_test_wav_bytes
 
 
@@ -64,12 +65,13 @@ def test_complete_guide_upload_generates_canonical_and_preview_artifacts(session
     frame_pitch_artifact = next(
         artifact for artifact in completed.artifacts if artifact.artifact_type == ArtifactType.FRAME_PITCH
     )
+    storage = get_storage_backend()
 
     assert completed.actual_sample_rate == 32000
     assert completed.duration_ms is not None and completed.duration_ms >= 1300
-    assert Path(canonical_artifact.storage_key).exists()
-    assert Path(peaks_artifact.storage_key).exists()
-    assert Path(frame_pitch_artifact.storage_key).exists()
+    assert storage.exists(canonical_artifact.storage_key)
+    assert storage.exists(peaks_artifact.storage_key)
+    assert storage.exists(frame_pitch_artifact.storage_key)
     assert isinstance(peaks_artifact.meta_json, dict)
     assert "preview_data" in peaks_artifact.meta_json
     assert isinstance(frame_pitch_artifact.meta_json, dict)

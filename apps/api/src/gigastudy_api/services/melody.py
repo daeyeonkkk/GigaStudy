@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from io import BytesIO
 import struct
 import wave
 from uuid import UUID
@@ -11,9 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from gigastudy_api.api.schemas.melody import MelodyDraftResponse, MelodyDraftUpdateRequest
-from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Artifact, ArtifactType, MelodyDraft, Project, Track, TrackRole, TrackStatus
 from gigastudy_api.services.audio_features import PitchFrame, extract_pitch_frames
+from gigastudy_api.services.storage import (
+    build_project_storage_key,
+    get_storage_backend,
+)
 
 
 MELODY_MODEL_VERSION = "librosa-pyin-melody-v2"
@@ -53,12 +56,6 @@ class MelodyNote:
             "phrase_index": self.phrase_index,
             "velocity": self.velocity,
         }
-
-
-def _get_storage_root() -> Path:
-    settings = get_settings()
-    return Path(settings.storage_root).resolve()
-
 
 def _get_project_or_404(session: Session, project_id: UUID) -> Project:
     project = session.get(Project, project_id)
@@ -113,14 +110,15 @@ def _read_canonical_samples(track: Track) -> tuple[np.ndarray, int]:
             detail="Canonical track audio is missing. Re-run upload processing first.",
         )
 
-    canonical_path = Path(canonical_artifact.storage_key)
-    if not canonical_path.exists():
+    try:
+        canonical_bytes = get_storage_backend().read_bytes(canonical_artifact.storage_key)
+    except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Canonical track audio file is missing on disk.",
+            detail="Canonical track audio file is missing from storage.",
         )
 
-    with wave.open(canonical_path.as_posix(), "rb") as wav_file:
+    with wave.open(BytesIO(canonical_bytes), "rb") as wav_file:
         raw_frames = wav_file.readframes(wav_file.getnframes())
         sample_rate = wav_file.getframerate()
         samples = np.frombuffer(raw_frames, dtype=np.int16).astype(np.float32) / 32767.0
@@ -366,11 +364,10 @@ def _build_midi_bytes(notes: list[MelodyNote], bpm: int) -> bytes:
     return header + track_chunk
 
 
-def _write_midi_file(path: Path, notes: list[MelodyNote], bpm: int) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _store_midi_file(storage_key: str, notes: list[MelodyNote], bpm: int) -> tuple[str, int]:
     midi_bytes = _build_midi_bytes(notes, bpm)
-    path.write_bytes(midi_bytes)
-    return len(midi_bytes)
+    stored_object = get_storage_backend().write_bytes(storage_key, midi_bytes, content_type="audio/midi")
+    return stored_object.storage_key, stored_object.byte_size
 
 
 def _build_notes_from_update(payload: MelodyDraftUpdateRequest) -> list[MelodyNote]:
@@ -452,16 +449,12 @@ def extract_melody_draft(session: Session, project_id: UUID, track_id: UUID) -> 
     session.add(draft)
     session.flush()
 
-    midi_path = (
-        _get_storage_root()
-        / "projects"
-        / str(project.project_id)
-        / "derived"
-        / "melody"
-        / f"{draft.melody_draft_id}.mid"
+    midi_storage_key, midi_byte_size = _store_midi_file(
+        build_project_storage_key(project.project_id, "derived", "melody", f"{draft.melody_draft_id}.mid"),
+        quantized_notes,
+        bpm,
     )
-    midi_byte_size = _write_midi_file(midi_path, quantized_notes, bpm)
-    draft.midi_storage_key = str(midi_path)
+    draft.midi_storage_key = midi_storage_key
     draft.midi_byte_size = midi_byte_size
 
     session.commit()
@@ -489,14 +482,18 @@ def update_melody_draft(session: Session, melody_draft_id: UUID, payload: Melody
     notes = _assign_phrase_indexes(_quantize_notes(notes, bpm), bpm)
     key_estimate = payload.key_estimate or _estimate_key(notes) or draft.key_estimate
 
-    midi_path = Path(draft.midi_storage_key) if draft.midi_storage_key else Path.cwd() / f"{draft.melody_draft_id}.mid"
-    midi_byte_size = _write_midi_file(midi_path, notes, bpm)
+    midi_storage_key, midi_byte_size = _store_midi_file(
+        draft.midi_storage_key
+        or build_project_storage_key(draft.project_id, "derived", "melody", f"{draft.melody_draft_id}.mid"),
+        notes,
+        bpm,
+    )
 
     draft.key_estimate = key_estimate
     draft.note_count = len(notes)
     draft.phrase_count = max((note.phrase_index for note in notes), default=-1) + 1
     draft.notes_json = [note.to_payload() for note in notes]
-    draft.midi_storage_key = str(midi_path)
+    draft.midi_storage_key = midi_storage_key
     draft.midi_byte_size = midi_byte_size
     draft.updated_at = datetime.now(timezone.utc)
     session.commit()
@@ -509,8 +506,7 @@ def get_melody_midi_path(session: Session, melody_draft_id: UUID) -> MelodyDraft
     if not draft.midi_storage_key:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Melody draft MIDI is missing")
 
-    midi_path = Path(draft.midi_storage_key)
-    if not midi_path.exists():
+    if not get_storage_backend().exists(draft.midi_storage_key):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Melody draft MIDI file not found")
 
     return draft

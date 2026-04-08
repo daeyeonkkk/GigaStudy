@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.arrangements import (
@@ -19,6 +19,7 @@ from gigastudy_api.services.arrangements import (
     list_arrangements_response,
     update_arrangement,
 )
+from gigastudy_api.services.storage import build_storage_download_response
 
 
 router = APIRouter()
@@ -70,11 +71,11 @@ def update_arrangement_endpoint(
 def download_arrangement_midi_endpoint(
     arrangement_id: UUID,
     session: Session = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     arrangement = get_arrangement_midi_path(session, arrangement_id)
 
-    return FileResponse(
-        path=arrangement.midi_storage_key,
+    return build_storage_download_response(
+        storage_key=arrangement.midi_storage_key or "",
         media_type="audio/midi",
         filename=f"{arrangement.arrangement_id}.mid",
     )
@@ -87,11 +88,11 @@ def download_arrangement_midi_endpoint(
 def download_arrangement_musicxml_endpoint(
     arrangement_id: UUID,
     session: Session = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     arrangement = get_arrangement_musicxml_path(session, arrangement_id)
 
-    return FileResponse(
-        path=arrangement.musicxml_storage_key,
+    return build_storage_download_response(
+        storage_key=arrangement.musicxml_storage_key or "",
         media_type="application/vnd.recordare.musicxml+xml",
         filename=f"{arrangement.arrangement_id}.musicxml",
     )

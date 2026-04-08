@@ -32,6 +32,7 @@ uv run uvicorn gigastudy_api.main:app --reload --app-dir src
 
 By default the API uses local development storage under `apps/api/storage`.
 If the web client and API run on different origins, set `GIGASTUDY_API_PUBLIC_APP_URL` so share links open the frontend viewer route instead of the API origin.
+The API now also supports `GIGASTUDY_API_STORAGE_BACKEND=s3` for S3-compatible object storage, and the Python dependencies now include both `psycopg` for PostgreSQL and `boto3` for object storage.
 
 ### API Test
 
@@ -49,6 +50,15 @@ npm run test:e2e
 This currently runs the seeded browser release gate in Chromium, Firefox, and WebKit.
 Recorder transport and recorder-driven endurance checks remain Chromium-only because they rely on fake-microphone launch behavior.
 Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on Windows still lacks Web Audio playback in this environment.
+
+### Infrastructure Bootstrap
+
+```bash
+docker compose -f docker-compose.infrastructure.yml up -d
+```
+
+This starts a local PostgreSQL and MinIO pair so production-like storage settings can be exercised without changing the default developer path.
+Use `postgresql+psycopg://gigastudy:gigastudy@127.0.0.1:5432/gigastudy` for `GIGASTUDY_API_DATABASE_URL`, and pair it with `GIGASTUDY_API_STORAGE_BACKEND=s3`, `GIGASTUDY_API_S3_BUCKET`, and the MinIO endpoint credentials from `apps/api/.env.example`.
 
 ## Current Product State
 
@@ -81,6 +91,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
+- Move the new PostgreSQL + S3-compatible support from optional hardening into the default deployment profile once the deployment path is exercised outside local development.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.
 - Follow the browser environment validation protocol in `PROJECT_FOUNDATION/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks.
 

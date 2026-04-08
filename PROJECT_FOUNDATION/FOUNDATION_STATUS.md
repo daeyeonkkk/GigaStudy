@@ -66,6 +66,8 @@ Date: 2026-04-08
 - The ops overview now aggregates those DeviceProfile diagnostics into a browser matrix, warning-flag counts, and recent environment cards, which is the first foundation step from capture toward real hardware validation.
 - The ops overview can now also export an environment diagnostics report JSON, and the foundation now includes a dedicated browser-environment validation protocol for native Safari and real-hardware rounds.
 - The ops overview now also lets a reviewer save a structured PASS / WARN / FAIL validation run with browser, device, permission, playback, and follow-up notes, which turns the protocol into an actual product workflow.
+- The API now has a first-class storage backend abstraction with local and S3-compatible object storage backends, and the upload, processing, melody export, arrangement export, and download routes now run through that shared storage contract instead of hard-coded local file paths.
+- The backend runtime now also includes first-class PostgreSQL and S3-compatible client drivers (`psycopg` and `boto3`), and the repo includes a local PostgreSQL + MinIO bootstrap compose file for production-like storage rehearsals.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -74,8 +76,9 @@ Date: 2026-04-08
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `49 passed`
+- Result: `50 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
+- Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
 - Alembic upgrade: `uv run alembic upgrade head`
 - Result: passed through `20260408_0010`.
 - Web lint: `npm run lint:web`
@@ -116,7 +119,7 @@ Date: 2026-04-08
 - Phase 9 still lacks the real-vocal fixture set and human-rating comparison needed to claim a human-trustworthy intonation judge.
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
-- The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
+- The default development path still runs on SQLite and local filesystem storage. First-class PostgreSQL and S3-compatible support now exist, but the deployment path is not yet the default operating mode and still needs real environment exercise before the checklist item can be closed.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.

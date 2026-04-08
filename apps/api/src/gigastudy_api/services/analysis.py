@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
 from math import log2
-from pathlib import Path
 from time import perf_counter
 import wave
 from uuid import UUID
@@ -48,6 +48,11 @@ from gigastudy_api.services.processing import (
     get_track_frame_pitch_artifact,
     get_track_frame_pitch_data,
     get_track_preview_data,
+)
+from gigastudy_api.services.storage import (
+    StorageObjectNotFoundError,
+    build_project_storage_key,
+    get_storage_backend,
 )
 
 
@@ -160,11 +165,6 @@ def _get_track_artifact(track: Track, artifact_type: ArtifactType) -> Artifact |
     return None
 
 
-def _get_storage_root() -> Path:
-    settings = get_settings()
-    return Path(settings.storage_root).resolve()
-
-
 def get_track_note_events_artifact(track: Track) -> Artifact | None:
     return _get_track_artifact(track, ArtifactType.NOTE_EVENTS)
 
@@ -174,12 +174,11 @@ def get_track_note_events_data(track: Track) -> NoteEventArtifactPayload | None:
     if artifact is None:
         return None
 
-    artifact_path = Path(artifact.storage_key)
-    if artifact_path.exists():
-        try:
-            return NoteEventArtifactPayload.model_validate_json(artifact_path.read_text(encoding="utf-8"))
-        except (OSError, ValidationError, ValueError):
-            pass
+    try:
+        payload_text = get_storage_backend().read_text(artifact.storage_key, encoding="utf-8")
+        return NoteEventArtifactPayload.model_validate_json(payload_text)
+    except (OSError, ValidationError, ValueError, StorageObjectNotFoundError):
+        pass
 
     if not isinstance(artifact.meta_json, dict):
         return None
@@ -202,14 +201,15 @@ def _read_canonical_samples(track: Track) -> tuple[np.ndarray, int]:
             detail="Track canonical audio is missing. Re-run upload processing first.",
         )
 
-    canonical_path = Path(canonical_artifact.storage_key)
-    if not canonical_path.exists():
+    try:
+        canonical_bytes = get_storage_backend().read_bytes(canonical_artifact.storage_key)
+    except StorageObjectNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Track canonical audio file is missing on disk.",
         )
 
-    with wave.open(canonical_path.as_posix(), "rb") as wav_file:
+    with wave.open(BytesIO(canonical_bytes), "rb") as wav_file:
         raw_frames = wav_file.readframes(wav_file.getnframes())
         sample_rate = wav_file.getframerate()
         samples = np.frombuffer(raw_frames, dtype=np.int16).astype(np.float32) / 32767.0
@@ -784,12 +784,8 @@ def _build_note_event_payload(
     )
 
 
-def _write_model_json(path: Path, payload: NoteEventArtifactPayload) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        payload.model_dump_json(indent=2),
-        encoding="utf-8",
-    )
+def _build_model_json_bytes(payload: NoteEventArtifactPayload) -> bytes:
+    return payload.model_dump_json(indent=2).encode("utf-8")
 
 
 def _score_pitch_pairs(pairs: list[tuple[float, float]]) -> float:
@@ -1479,24 +1475,31 @@ def run_track_analysis(session: Session, project_id: UUID, track_id: UUID) -> Tr
 
         note_events_artifact = get_track_note_events_artifact(track)
         if computation.note_event_payload is not None:
-            derived_root = _get_storage_root() / "projects" / str(track.project_id) / "derived"
-            note_events_path = derived_root / f"{track.track_id}-note-events.json"
-            _write_model_json(note_events_path, computation.note_event_payload)
+            note_events_storage_key = build_project_storage_key(
+                track.project_id,
+                "derived",
+                f"{track.track_id}-note-events.json",
+            )
+            note_events_object = get_storage_backend().write_bytes(
+                note_events_storage_key,
+                _build_model_json_bytes(computation.note_event_payload),
+                content_type="application/json",
+            )
 
             if note_events_artifact is None:
                 note_events_artifact = Artifact(
                     project_id=track.project_id,
                     track=track,
                     artifact_type=ArtifactType.NOTE_EVENTS,
-                    storage_key=str(note_events_path),
+                    storage_key=note_events_object.storage_key,
                     created_at=finished_at,
                     updated_at=finished_at,
                 )
                 session.add(note_events_artifact)
 
-            note_events_artifact.storage_key = str(note_events_path)
+            note_events_artifact.storage_key = note_events_object.storage_key
             note_events_artifact.mime_type = "application/json"
-            note_events_artifact.byte_size = note_events_path.stat().st_size
+            note_events_artifact.byte_size = note_events_object.byte_size
             note_events_artifact.updated_at = finished_at
             note_events_artifact.meta_json = {
                 "artifact_version": computation.note_event_payload.version,

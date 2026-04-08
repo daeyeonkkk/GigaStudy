@@ -1,7 +1,6 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.guides import (
@@ -21,6 +20,7 @@ from gigastudy_api.services.guides import (
     get_track_source_path,
     store_track_upload,
 )
+from gigastudy_api.services.storage import build_storage_download_response
 
 router = APIRouter()
 
@@ -97,12 +97,10 @@ def get_guide_endpoint(
 def download_track_source_audio_endpoint(
     track_id: UUID,
     session: Session = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     track, source_artifact = get_track_source_path(session, track_id)
-    source_path = source_artifact.storage_key
-
-    return FileResponse(
-        path=source_path,
+    return build_storage_download_response(
+        storage_key=source_artifact.storage_key,
         media_type=source_artifact.mime_type or "application/octet-stream",
         filename=track.storage_key.rsplit("/", maxsplit=1)[-1] if track.storage_key else None,
     )
@@ -115,11 +113,11 @@ def download_track_source_audio_endpoint(
 def download_track_canonical_audio_endpoint(
     track_id: UUID,
     session: Session = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     track, canonical_artifact = get_track_canonical_path(session, track_id)
 
-    return FileResponse(
-        path=canonical_artifact.storage_key,
+    return build_storage_download_response(
+        storage_key=canonical_artifact.storage_key,
         media_type=canonical_artifact.mime_type or "audio/wav",
         filename=f"{track.track_id}.wav",
     )

@@ -43,6 +43,15 @@ def test_create_and_get_project(client: TestClient) -> None:
             "base_key": "G",
             "time_signature": "4/4",
             "mode": "practice",
+            "chord_timeline_json": [
+                {
+                    "start_ms": 0,
+                    "end_ms": 2000,
+                    "label": "Gmaj7",
+                    "root": "G",
+                    "quality": "maj7",
+                }
+            ],
         },
     )
 
@@ -50,11 +59,13 @@ def test_create_and_get_project(client: TestClient) -> None:
     created_project = create_response.json()
     assert created_project["title"] == "Morning Warmup"
     assert created_project["bpm"] == 104
+    assert created_project["chord_timeline_json"][0]["label"] == "Gmaj7"
 
     get_response = client.get(f"/api/projects/{created_project['project_id']}")
 
     assert get_response.status_code == 200
     assert get_response.json()["project_id"] == created_project["project_id"]
+    assert get_response.json()["chord_timeline_json"][0]["root"] == "G"
 
 
 def test_project_creation_reuses_default_user(client: TestClient, tmp_path: Path) -> None:
@@ -82,3 +93,36 @@ def test_create_project_rejects_blank_title(client: TestClient) -> None:
     response = client.post("/api/projects", json={"title": "   "})
 
     assert response.status_code == 422
+
+
+def test_patch_project_updates_chord_timeline(client: TestClient) -> None:
+    project_id = client.post("/api/projects", json={"title": "Chord Draft"}).json()["project_id"]
+
+    patch_response = client.patch(
+        f"/api/projects/{project_id}",
+        json={
+            "base_key": "A",
+            "chord_timeline_json": [
+                {
+                    "start_ms": 0,
+                    "end_ms": 1500,
+                    "label": "A",
+                    "root": "A",
+                    "quality": "major",
+                },
+                {
+                    "start_ms": 1500,
+                    "end_ms": 3000,
+                    "label": "D",
+                    "root": "D",
+                    "quality": "major",
+                },
+            ],
+        },
+    )
+
+    assert patch_response.status_code == 200
+    payload = patch_response.json()
+    assert payload["base_key"] == "A"
+    assert len(payload["chord_timeline_json"]) == 2
+    assert payload["chord_timeline_json"][1]["label"] == "D"

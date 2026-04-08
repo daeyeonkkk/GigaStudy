@@ -46,10 +46,11 @@ uv run pytest
 - Analysis and melody extraction now use `librosa.pyin`-based pitch support on the backend.
 - Upload processing now stores frame-level pitch artifacts, and analysis responses expose which scoring quality mode is in use.
 - Processed takes now also generate note-event artifacts and signed-cents note feedback on the backend.
+- Runtime note scoring now down-weights low-confidence frames, and harmony-fit can switch to a chord-aware path when the project provides a chord timeline.
 
 ## Current Hardening Focus
 
-- Execute the Phase 9 intonation quality track: note-level signed-cent feedback, note segmentation, confidence weighting, and chord-aware harmony.
+- Execute the remaining Phase 9 intonation quality track: note-level correction UI, real-vocal calibration, and claim gating.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
 - Add release-gate smoke coverage for the main studio journey.

@@ -3,9 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from gigastudy_api.api.schemas.projects import ProjectCreateRequest, ProjectResponse
+from gigastudy_api.api.schemas.projects import ProjectCreateRequest, ProjectResponse, ProjectUpdateRequest
 from gigastudy_api.db.session import get_db_session
-from gigastudy_api.services.projects import create_project, get_project_by_id
+from gigastudy_api.services.projects import create_project, get_project_by_id, update_project
 
 router = APIRouter(prefix="/projects")
 
@@ -25,6 +25,19 @@ def get_project_endpoint(
     session: Session = Depends(get_db_session),
 ) -> ProjectResponse:
     project = get_project_by_id(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    return ProjectResponse.model_validate(project)
+
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+def update_project_endpoint(
+    project_id: UUID,
+    payload: ProjectUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> ProjectResponse:
+    project = update_project(session, project_id, payload)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 

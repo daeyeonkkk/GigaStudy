@@ -21,6 +21,7 @@ from gigastudy_api.api.schemas.analysis import (
 from gigastudy_api.api.schemas.pitch_analysis import (
     COARSE_CONTOUR_QUALITY_MODE,
     FRAME_PITCH_QUALITY_MODE,
+    HARMONY_REFERENCE_MODE_CHORD_AWARE,
     HARMONY_REFERENCE_MODE_KEY_ONLY,
     NOTE_EVENT_ARTIFACT_VERSION,
     NOTE_EVENT_QUALITY_MODE,
@@ -50,7 +51,7 @@ from gigastudy_api.services.processing import (
 )
 
 
-ANALYSIS_MODEL_VERSION = "librosa-pyin-note-events-v3"
+ANALYSIS_MODEL_VERSION = "librosa-pyin-note-events-v4"
 MAX_ALIGNMENT_MS = 2000
 MIN_ALIGNMENT_OVERLAP_FRAMES = 24
 SEGMENT_COUNT = 4
@@ -87,6 +88,18 @@ NOTE_TO_PITCH_CLASS = {
     "CB": 11,
 }
 MAJOR_SCALE_INTERVALS = {0, 2, 4, 5, 7, 9, 11}
+CHORD_QUALITY_INTERVALS = {
+    "MAJOR": {0, 4, 7},
+    "MINOR": {0, 3, 7},
+    "DOM7": {0, 4, 7, 10},
+    "MAJ7": {0, 4, 7, 11},
+    "MIN7": {0, 3, 7, 10},
+    "DIM": {0, 3, 6},
+    "AUG": {0, 4, 8},
+    "SUS2": {0, 2, 7},
+    "SUS4": {0, 5, 7},
+    "POWER": {0, 7},
+}
 
 
 @dataclass
@@ -136,6 +149,7 @@ class ShiftedPitchFrame:
     pitch_midi: int | None
     voiced_prob: float | None
     rms: float | None
+    confidence_weight: float
 
 
 def _get_track_artifact(track: Track, artifact_type: ArtifactType) -> Artifact | None:
@@ -347,6 +361,34 @@ def _median(values: list[float]) -> float | None:
     return float(np.median(np.asarray(values, dtype=np.float32)))
 
 
+def _weighted_mean(values: list[float], weights: list[float]) -> float | None:
+    if not values or not weights or len(values) != len(weights):
+        return None
+    total_weight = float(sum(max(0.0, weight) for weight in weights))
+    if total_weight <= 1e-9:
+        return None
+    return float(sum(value * max(0.0, weight) for value, weight in zip(values, weights, strict=False)) / total_weight)
+
+
+def _weighted_median(values: list[float], weights: list[float]) -> float | None:
+    if not values or not weights or len(values) != len(weights):
+        return None
+    pairs = sorted(
+        [(float(value), max(0.0, float(weight))) for value, weight in zip(values, weights, strict=False)],
+        key=lambda item: item[0],
+    )
+    total_weight = sum(weight for _, weight in pairs)
+    if total_weight <= 1e-9:
+        return None
+    threshold = total_weight / 2
+    cumulative = 0.0
+    for value, weight in pairs:
+        cumulative += weight
+        if cumulative >= threshold:
+            return value
+    return pairs[-1][0]
+
+
 def _mad(values: list[float], center: float | None) -> float | None:
     if not values or center is None:
         return None
@@ -354,10 +396,56 @@ def _mad(values: list[float], center: float | None) -> float | None:
     return float(np.median(deviations))
 
 
+def _weighted_mad(values: list[float], weights: list[float], center: float | None) -> float | None:
+    if not values or center is None or not weights or len(values) != len(weights):
+        return None
+    deviations = [abs(value - center) for value in values]
+    return _weighted_median(deviations, weights)
+
+
 def _round_or_none(value: float | None, digits: int = 2) -> float | None:
     if value is None:
         return None
     return round(float(value), digits)
+
+
+def _normalize_rms_values(frames: list[ShiftedPitchFrame]) -> list[float]:
+    rms_values = [frame.rms for frame in frames if frame.rms is not None]
+    if not rms_values:
+        return [1.0 for _ in frames]
+    reference_rms = max(float(np.median(np.asarray(rms_values, dtype=np.float32))), 1e-6)
+    normalized: list[float] = []
+    for frame in frames:
+        rms = frame.rms if frame.rms is not None else 0.0
+        relative_factor = float(np.clip(rms / reference_rms, 0.0, 1.5))
+        absolute_factor = float(np.clip(rms / 0.025, 0.0, 1.0))
+        normalized.append(min(relative_factor, 1.0) * max(0.1, absolute_factor))
+    return normalized
+
+
+def _apply_frame_confidence_weights(frames: list[ShiftedPitchFrame]) -> list[ShiftedPitchFrame]:
+    if not frames:
+        return []
+
+    normalized_rms = _normalize_rms_values(frames)
+    weighted_frames: list[ShiftedPitchFrame] = []
+    for frame, rms_factor in zip(frames, normalized_rms, strict=False):
+        voiced_factor = frame.voiced_prob if frame.voiced_prob is not None else 0.55
+        weight = float(np.clip(voiced_factor * min(1.0, rms_factor), 0.0, 1.0))
+        weighted_frames.append(
+            ShiftedPitchFrame(
+                start_ms=frame.start_ms,
+                end_ms=frame.end_ms,
+                frequency_hz=frame.frequency_hz,
+                pitch_midi=frame.pitch_midi,
+                voiced_prob=frame.voiced_prob,
+                rms=frame.rms,
+                confidence_weight=weight,
+            )
+        )
+
+    high_confidence_frames = [frame for frame in weighted_frames if frame.confidence_weight >= 0.22]
+    return high_confidence_frames or weighted_frames
 
 
 def _build_note_windows(start_ms: int, end_ms: int) -> tuple[int, int, int | None, int | None, int | None, int | None]:
@@ -497,6 +585,7 @@ def _collect_shifted_take_frames(track: Track, offset_ms: int) -> list[ShiftedPi
                 pitch_midi=frame.pitch_midi,
                 voiced_prob=frame.voiced_prob,
                 rms=frame.rms,
+                confidence_weight=0.0,
             )
         )
 
@@ -554,7 +643,7 @@ def _build_note_feedback_items(
     offset_ms: int,
 ) -> list[NoteFeedbackItemResponse]:
     reference_notes = _segment_reference_notes(guide_track)
-    take_frames = _collect_shifted_take_frames(take_track, offset_ms)
+    take_frames = _apply_frame_confidence_weights(_collect_shifted_take_frames(take_track, offset_ms))
     if not reference_notes or not take_frames:
         return []
 
@@ -570,15 +659,18 @@ def _build_note_feedback_items(
         all_deltas = [_cents_delta(frame.frequency_hz, note.target_frequency_hz) for frame in note_frames]
         attack_deltas = [_cents_delta(frame.frequency_hz, note.target_frequency_hz) for frame in attack_frames]
         sustain_deltas = [_cents_delta(frame.frequency_hz, note.target_frequency_hz) for frame in sustain_frames]
+        all_weights = [frame.confidence_weight for frame in note_frames]
+        attack_weights = [frame.confidence_weight for frame in attack_frames]
+        sustain_weights = [frame.confidence_weight for frame in sustain_frames]
 
-        attack_signed_cents = _median(attack_deltas) or _median(all_deltas)
-        sustain_median_cents = _median(sustain_deltas) or _median(all_deltas)
-        sustain_mad_cents = _mad(sustain_deltas, sustain_median_cents)
+        attack_signed_cents = _weighted_median(attack_deltas, attack_weights) or _weighted_median(all_deltas, all_weights)
+        sustain_median_cents = _weighted_median(sustain_deltas, sustain_weights) or _weighted_median(all_deltas, all_weights)
+        sustain_mad_cents = _weighted_mad(sustain_deltas, sustain_weights, sustain_median_cents)
         max_sharp_cents = max((delta for delta in all_deltas if delta > 0), default=None)
         max_flat_cents = min((delta for delta in all_deltas if delta < 0), default=None)
         in_tune_ratio = (
-            sum(1 for delta in all_deltas if abs(delta) <= DEFAULT_IN_TUNE_CENTS) / len(all_deltas)
-            if all_deltas
+            sum(weight for delta, weight in zip(all_deltas, all_weights, strict=False) if abs(delta) <= DEFAULT_IN_TUNE_CENTS) / max(sum(all_weights), 1e-9)
+            if all_deltas and all_weights
             else None
         )
         first_take_frame = min(note_frames, key=lambda frame: frame.start_ms, default=None)
@@ -587,11 +679,14 @@ def _build_note_feedback_items(
             if first_take_frame is not None
             else None
         )
+        local_density_frames = _frames_in_window(take_frames, note.start_ms - NOTE_GAP_MS, note.end_ms + NOTE_GAP_MS)
         voiced_probs = [frame.voiced_prob for frame in note_frames if frame.voiced_prob is not None]
+        mean_voiced_prob = float(np.mean(voiced_probs)) if voiced_probs else 0.0
+        mean_weight = _weighted_mean(all_weights, [1.0 for _ in all_weights]) or 0.0
+        density_ratio = len(note_frames) / max(1, len(local_density_frames))
         confidence = float(
             np.clip(
-                (float(np.mean(voiced_probs)) if voiced_probs else 0.0)
-                * (len(note_frames) / max(1, len(_frames_in_window(take_frames, note.start_ms - NOTE_GAP_MS, note.end_ms + NOTE_GAP_MS)))),
+                mean_weight * ((mean_voiced_prob * 0.7) + (density_ratio * 0.3)),
                 0.0,
                 1.0,
             )
@@ -619,6 +714,8 @@ def _build_note_feedback_items(
             timing_offset_ms,
             note_score,
         )
+        if confidence < 0.45:
+            message = "Pitch estimate is low confidence here, so treat this note as a rough guide and verify by ear."
 
         note_feedback_items.append(
             NoteFeedbackItemResponse(
@@ -740,6 +837,129 @@ def _normalize_key_name(value: str | None) -> str | None:
         return cleaned[:2]
 
     return cleaned[:1]
+
+
+def _normalize_quality_name(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = value.strip().upper().replace(" ", "").replace("-", "")
+    aliases = {
+        "MAJ": "MAJOR",
+        "M": "MINOR",
+        "MIN": "MINOR",
+        "MINOR": "MINOR",
+        "MAJOR": "MAJOR",
+        "7": "DOM7",
+        "DOM7": "DOM7",
+        "MAJ7": "MAJ7",
+        "MIN7": "MIN7",
+        "M7": "MIN7",
+        "DIM": "DIM",
+        "DIMINISHED": "DIM",
+        "AUG": "AUG",
+        "AUGMENTED": "AUG",
+        "SUS2": "SUS2",
+        "SUS4": "SUS4",
+        "5": "POWER",
+        "POWER": "POWER",
+    }
+    return aliases.get(cleaned, cleaned)
+
+
+def _resolve_chord_pitch_classes(item: dict[str, object]) -> set[int] | None:
+    pitch_classes = item.get("pitch_classes")
+    if isinstance(pitch_classes, list):
+        normalized = {int(value) % 12 for value in pitch_classes if isinstance(value, int | float)}
+        if normalized:
+            return normalized
+
+    root_name = _normalize_key_name(item.get("root") if isinstance(item.get("root"), str) else None)
+    if root_name is None and isinstance(item.get("label"), str):
+        label = item["label"].strip().upper().replace(" ", "")
+        if len(label) >= 2 and label[1] in {"#", "B"}:
+            root_name = label[:2]
+        elif label:
+            root_name = label[:1]
+    if root_name is None or root_name not in NOTE_TO_PITCH_CLASS:
+        return None
+
+    quality_name = _normalize_quality_name(item.get("quality") if isinstance(item.get("quality"), str) else None)
+    if quality_name is None and isinstance(item.get("label"), str):
+        label = item["label"].strip().upper().replace(" ", "")
+        suffix = label[2:] if len(label) >= 2 and label[1] in {"#", "B"} else label[1:]
+        quality_name = _normalize_quality_name(suffix or "MAJOR")
+    intervals = CHORD_QUALITY_INTERVALS.get(quality_name or "MAJOR")
+    if intervals is None:
+        return None
+
+    root_pitch_class = NOTE_TO_PITCH_CLASS[root_name]
+    return {int((root_pitch_class + interval) % 12) for interval in intervals}
+
+
+def _get_project_chord_timeline(project: Project) -> list[dict[str, object]]:
+    if not isinstance(project.chord_timeline_json, list):
+        return []
+    items: list[dict[str, object]] = []
+    for item in project.chord_timeline_json:
+        if isinstance(item, dict):
+            items.append(item)
+    return items
+
+
+def _note_observed_pitch_class(note_item: NoteFeedbackItemResponse) -> int:
+    offset_semitones = 0
+    if note_item.sustain_median_cents is not None:
+        offset_semitones = int(round(note_item.sustain_median_cents / 100))
+    elif note_item.attack_signed_cents is not None:
+        offset_semitones = int(round(note_item.attack_signed_cents / 100))
+    return int((note_item.target_midi + offset_semitones) % 12)
+
+
+def _score_chord_aware_harmony(
+    project: Project,
+    note_feedback_items: list[NoteFeedbackItemResponse],
+) -> float | None:
+    chord_timeline = _get_project_chord_timeline(project)
+    if not chord_timeline or not note_feedback_items:
+        return None
+
+    weighted_scores: list[float] = []
+    total_weight = 0.0
+    for note_item in note_feedback_items:
+        midpoint_ms = int((note_item.start_ms + note_item.end_ms) / 2)
+        matching_entry = next(
+            (
+                item
+                for item in chord_timeline
+                if isinstance(item.get("start_ms"), int)
+                and isinstance(item.get("end_ms"), int)
+                and int(item["start_ms"]) <= midpoint_ms < int(item["end_ms"])
+            ),
+            None,
+        )
+        if matching_entry is None:
+            continue
+
+        chord_pitch_classes = _resolve_chord_pitch_classes(matching_entry)
+        if not chord_pitch_classes:
+            continue
+
+        observed_pitch_class = _note_observed_pitch_class(note_item)
+        target_pitch_class = note_item.target_midi % 12
+        if observed_pitch_class in chord_pitch_classes:
+            score = 100.0
+        elif target_pitch_class in chord_pitch_classes:
+            score = 85.0
+        else:
+            score = 35.0
+
+        weight = max(0.25, note_item.confidence) * max(1, note_item.end_ms - note_item.start_ms)
+        weighted_scores.append(score * weight)
+        total_weight += weight
+
+    if total_weight <= 0:
+        return None
+    return round(float(sum(weighted_scores) / total_weight), 2)
 
 
 def _score_harmony_fit(project: Project, take_contour: list[float | None]) -> float:
@@ -986,8 +1206,13 @@ def _compute_analysis(project: Project, guide_track: Track, take_track: Track) -
         guide_preview.duration_ms or guide_track.duration_ms or 0,
         take_preview.duration_ms or take_track.duration_ms or 0,
     )
-    harmony_reference_mode = HARMONY_REFERENCE_MODE_KEY_ONLY
-    harmony_raw = _score_harmony_fit(project, take_pitch_sequence)
+    chord_aware_harmony = _score_chord_aware_harmony(project, note_feedback_items)
+    if chord_aware_harmony is not None:
+        harmony_reference_mode = HARMONY_REFERENCE_MODE_CHORD_AWARE
+        harmony_raw = chord_aware_harmony
+    else:
+        harmony_reference_mode = HARMONY_REFERENCE_MODE_KEY_ONLY
+        harmony_raw = _score_harmony_fit(project, take_pitch_sequence)
     harmony_fit_score = _blend_harmony_score(project, harmony_raw, pitch_score, rhythm_score)
     feedback_items = (
         _build_feedback_items_from_notes(

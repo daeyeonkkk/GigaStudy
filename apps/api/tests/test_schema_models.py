@@ -45,6 +45,7 @@ def test_project_can_link_guide_takes_and_mixdown(session: Session) -> None:
         base_key="C",
         time_signature="4/4",
         mode="practice",
+        chord_timeline_json=[{"start_ms": 0, "end_ms": 1200, "label": "C", "root": "C", "quality": "major"}],
     )
     guide = Track(project=project, track_role=TrackRole.GUIDE, track_status=TrackStatus.READY)
     take_1 = Track(
@@ -92,6 +93,7 @@ def test_project_can_link_guide_takes_and_mixdown(session: Session) -> None:
 
     assert roles == ["GUIDE", "MIXDOWN", "VOCAL_TAKE", "VOCAL_TAKE"]
     assert len(project.artifacts) == 2
+    assert project.chord_timeline_json[0]["label"] == "C"
 
 
 def test_device_profile_unique_key_is_enforced(session: Session) -> None:
@@ -161,7 +163,7 @@ def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) ->
                 track=take,
                 job_type=AnalysisJobType.POST_RECORDING_SCORE,
                 status=AnalysisJobStatus.SUCCEEDED,
-                model_version="librosa-pyin-note-events-v3",
+                model_version="librosa-pyin-note-events-v4",
             ),
             Score(
                 project=project,

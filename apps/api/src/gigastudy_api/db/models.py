@@ -87,6 +87,7 @@ class Project(TimestampMixin, Base):
     base_key: Mapped[str | None] = mapped_column(String(24))
     time_signature: Mapped[str | None] = mapped_column(String(24))
     mode: Mapped[str | None] = mapped_column(String(40))
+    chord_timeline_json: Mapped[list[dict] | dict | None] = mapped_column(JSON)
 
     user: Mapped["User"] = relationship(back_populates="projects")
     tracks: Mapped[list["Track"]] = relationship(

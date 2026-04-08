@@ -224,6 +224,60 @@ def test_analysis_returns_signed_note_feedback_and_note_events_artifact(client: 
     assert note_events_payload["payload"]["note_count"] >= 1
 
 
+def test_analysis_marks_low_confidence_note_for_quiet_take(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1400, frequency_hz=440.0, amplitude=0.2, sample_rate=32000)
+    quiet_take_bytes = build_test_wav_bytes(duration_ms=1400, frequency_hz=440.0, amplitude=0.002, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Quiet Confidence", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=quiet_take_bytes, filename="quiet.wav")
+
+    response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+
+    assert response.status_code == 200
+    note = response.json()["latest_score"]["note_feedback_json"][0]
+    assert note["confidence"] < 0.45
+    assert "low confidence" in note["message"].lower()
+
+
+def test_analysis_uses_chord_aware_harmony_when_project_has_chord_timeline(client: TestClient) -> None:
+    project_id = client.post(
+        "/api/projects",
+        json={
+            "title": "Chord Aware",
+            "base_key": "C",
+            "chord_timeline_json": [
+                {
+                    "start_ms": 0,
+                    "end_ms": 2000,
+                    "label": "A",
+                    "root": "A",
+                    "quality": "major",
+                }
+            ],
+        },
+    ).json()["project_id"]
+    guide_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=440.0, sample_rate=32000)
+    in_chord_take = build_test_wav_bytes(duration_ms=1500, frequency_hz=440.0, sample_rate=32000)
+    out_of_chord_take = build_test_wav_bytes(duration_ms=1500, frequency_hz=392.0, sample_rate=32000)
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    in_take_id = upload_ready_track(client, project_id, role="take", wav_bytes=in_chord_take, filename="in.wav")
+    out_take_id = upload_ready_track(client, project_id, role="take", wav_bytes=out_of_chord_take, filename="out.wav")
+
+    in_response = client.post(f"/api/projects/{project_id}/tracks/{in_take_id}/analysis")
+    out_response = client.post(f"/api/projects/{project_id}/tracks/{out_take_id}/analysis")
+
+    assert in_response.status_code == 200
+    assert out_response.status_code == 200
+    assert in_response.json()["latest_score"]["harmony_reference_mode"] == "CHORD_AWARE"
+    assert out_response.json()["latest_score"]["harmony_reference_mode"] == "CHORD_AWARE"
+    assert in_response.json()["latest_score"]["harmony_fit_score"] > out_response.json()["latest_score"]["harmony_fit_score"]
+
+
 def test_retry_failed_analysis_job_after_reprocessing(client: TestClient) -> None:
     guide_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=440.0, sample_rate=32000)
     take_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=440.0, sample_rate=32000)

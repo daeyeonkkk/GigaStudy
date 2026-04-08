@@ -121,7 +121,7 @@ def test_ops_overview_reports_failures_and_model_versions(client: TestClient) ->
     assert payload["summary"]["failed_analysis_job_count"] >= 1
     assert payload["policies"]["analysis_timeout_seconds"] >= 0
     assert payload["policies"]["upload_session_expiry_minutes"] >= 0
-    assert "librosa-pyin-note-events-v3" in payload["model_versions"]["analysis"]
+    assert "librosa-pyin-note-events-v4" in payload["model_versions"]["analysis"]
     assert "librosa-pyin-melody-v2" in payload["model_versions"]["melody"]
     assert "rule-stack-v1" in payload["model_versions"]["arrangement_engine"]
     assert any(item["failure_message"] for item in payload["failed_tracks"])

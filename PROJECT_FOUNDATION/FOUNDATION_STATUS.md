@@ -27,15 +27,17 @@ Date: 2026-04-08
 - Upload processing now stores a dedicated `FRAME_PITCH` artifact with frame-level `f0`, `voiced_prob`, and RMS data instead of relying only on the 64-point preview contour.
 - Analysis responses now expose `pitch_quality_mode` and `harmony_reference_mode`, and a dedicated frame-pitch inspection API exists for processed tracks.
 - Analysis now generates a `NOTE_EVENTS` artifact, note-level signed-cent feedback, and a note-event-based `pitch_score` path for processed tracks.
+- Runtime scoring now applies `voiced_prob` + RMS-based confidence weighting to take frames before note scoring.
+- Projects can now store a chord timeline, and `harmony_fit_score` uses a chord-aware reference when that timeline exists while still labeling key-only fallback honestly.
 - Backend model versions now report:
-  - analysis: `librosa-pyin-note-events-v3`
+  - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
   - arrangement engine: `rule-stack-v1`
 
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `39 passed`
+- Result: `42 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 
 ## Intonation Assessment
@@ -45,17 +47,18 @@ Date: 2026-04-08
   alignment and rhythm do not rely only on the 64-point preview contour. They currently use a full-sample onset envelope from canonical audio.
 - The first two corrective slices are now in place:
   fresh processed tracks store a `FRAME_PITCH` artifact, analysis produces `NOTE_EVENTS`, and processed tracks can return signed-cents note feedback instead of only contour-distance scores.
+- The next corrective slice is now also in place:
+  runtime scoring down-weights low-confidence frames, and harmony-fit switches to a chord-aware path whenever the project provides a chord timeline.
 - The larger concern is still only partially resolved:
-  runtime confidence weighting is still basic, harmony-fit remains key-only, and the frontend does not yet present the new note-level path as a first-class study UI.
+  frontend study UX still does not present the new note-level path as a first-class correction workflow, and fallback analysis remains for older tracks that predate the new artifacts.
 - We should currently describe the system as an `MVP vocal practice scorer`, not as a `human-like intonation judge`.
 - The detailed evaluation and next-step quality track now live in `INTONATION_ANALYSIS_ASSESSMENT.md`.
 - The roadmap and actionable backlog for closing this gap now live in `ROADMAP.md` Phase 9 and `PHASE9_INTONATION_BACKLOG.md`.
 
 ## Remaining Gaps Against The Target Foundation Stack
 
-- Confidence weighting is still only a light first-pass blend and does not yet apply the full `voiced_prob` + RMS down-weighting rules described in the foundation.
-- `harmony_fit_score` is still key-only and not chord-aware.
 - Coarse fallback remains for tracks that do not yet have `FRAME_PITCH` and `NOTE_EVENTS` artifacts, so not every historical track is guaranteed to use the newer scoring source.
+- The chord-aware path currently depends on an explicit project chord timeline. Projects without that data still fall back to `KEY_ONLY`, so a stronger chord-authoring or chord-import workflow remains a product gap.
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
 - The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
@@ -63,7 +66,8 @@ Date: 2026-04-08
 
 ## Recommended Next Work
 
-1. Continue Phase 9 with `IQ-BE-03` and `IQ-BE-04`: strengthen confidence weighting in runtime scoring and move harmony-fit to a chord-aware path.
-2. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
-3. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
-4. Add at least one browser-level release-gate smoke path and note-level feedback presentation for the main studio journey.
+1. Continue Phase 9 with `IQ-FE-01` and `IQ-FE-02`: expose note-level correction feedback, signed-cents direction, and harmony reference mode clearly in the studio UI.
+2. Continue Phase 9 with `IQ-QA-01`, `IQ-QA-02`, and `IQ-QA-03`: replace sine-heavy confidence in the scoring claim with real vocal fixtures, threshold calibration, and product-language gates.
+3. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
+4. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
+5. Add at least one browser-level release-gate smoke path for the main studio journey.

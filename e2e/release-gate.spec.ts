@@ -372,7 +372,10 @@ test('release gate recording flow captures a take through browser microphone tra
 test('release gate arrangement playback shows transport progress and can be stopped cleanly', async ({
   page,
   request,
+  browserName,
 }) => {
+  test.skip(browserName === 'webkit', 'Playwright WebKit on Windows does not expose Web Audio playback yet.')
+
   const projectId = await createStudioProject(page, 'Playwright playback gate session')
   await seedGuideAndTake(page, request, projectId)
   await runChordAwareAnalysis(page)

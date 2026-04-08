@@ -71,7 +71,14 @@ function resolvePartGain(
 export async function startArrangementPlayback(
   options: ArrangementPlaybackOptions,
 ): Promise<ArrangementPlaybackController> {
-  const AudioContextCtor = window.AudioContext
+  const AudioContextCtor =
+    window.AudioContext ??
+    (
+      window as Window &
+        typeof globalThis & {
+          webkitAudioContext?: typeof AudioContext
+        }
+    ).webkitAudioContext
   if (typeof AudioContextCtor === 'undefined') {
     throw new Error('Web Audio is not available in this browser.')
   }

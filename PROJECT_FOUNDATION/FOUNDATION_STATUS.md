@@ -35,6 +35,8 @@ Date: 2026-04-08
   record repeated takes, switch take context, rerun analysis, regenerate arrangements, replay transport, and create a share link in one continuous session without page errors.
 - Browser release-gate coverage is now split honestly by engine:
   Chromium runs the full suite, while Firefox now also verifies the safer seeded paths for studio smoke, sharing, arrangement export, and arrangement playback.
+  WebKit now also verifies the seeded studio smoke, sharing, and arrangement export paths, while its playback path remains blocked in this Windows automation environment because Web Audio is unavailable there.
+- The arrangement preview engine now also checks the legacy `webkitAudioContext` constructor so Safari-family browsers can use the same playback path when that legacy bridge exists.
 
 ## Reinforcement Added In This Pass
 
@@ -63,10 +65,12 @@ Date: 2026-04-08
 - Web build: `npm run build:web`
 - Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
 - Browser release-gate smoke path: `npm run test:e2e`
-- Result: `10 passed`, `2 skipped`
-- Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, score-export artifact reachability, and arrangement playback progress plus stop/reset behavior.
+- Result: `13 passed`, `5 skipped`
+- Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
+- Arrangement playback progress plus stop/reset behavior is now verified in Chromium and Firefox.
 - Chromium additionally covers the browser recorder transport with fake-microphone permission plus DeviceProfile capture and the repeated in-session endurance workflow.
 - Firefox intentionally skips the fake-microphone recorder path and the recorder-dependent endurance path because those currently depend on Chromium launch flags rather than portable browser behavior.
+- WebKit also intentionally skips the fake-microphone recorder path and the recorder-dependent endurance path, and it currently skips arrangement playback in this Windows automation environment because Playwright WebKit does not expose Web Audio there.
 
 ## Intonation Assessment
 
@@ -93,7 +97,7 @@ Date: 2026-04-08
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
 - The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
-- Browser-level automation now covers the main studio smoke path, the read-only sharing journey, arrangement export reachability, arrangement playback behavior, and cross-browser verification for those seeded workflows in both Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, so the larger browser-side gap is now environment coverage: real hardware-specific recording variability, permission differences, and the broader browser matrix beyond Firefox.
+- Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment, so the larger browser-side gap is now environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 
 ## Recommended Next Work
 
@@ -101,4 +105,4 @@ Date: 2026-04-08
 2. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 3. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
 4. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
-5. Move browser hardening from missing flow coverage toward environment coverage: real hardware-specific recording variability, broader browser coverage beyond Firefox, and richer endurance runs.
+5. Move browser hardening from missing flow coverage toward environment coverage: real hardware-specific recording variability, native Safari/WebKit audio validation, and richer endurance runs.

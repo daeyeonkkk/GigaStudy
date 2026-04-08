@@ -1,152 +1,156 @@
-# GigaStudy 실행 체크리스트
+# GigaStudy Live Checklist
 
-기준일: 2026-04-07
+Date: 2026-04-08
+Status rule: mark `[x]` only when implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
 
-이 문서는 착수 전 확인, 구현 중 점검, 출시 직전 검수를 한 번에 확인하기 위한 실행 체크리스트다.
+## 1. Product Alignment
 
-## 1. 제품 기준 합의
+- [x] The team uses one MVP definition: web-based guided vocal recording, post-recording alignment and scoring, editable melody draft extraction, arrangement candidates, score view, playback, and export.
+- [x] The v1 non-goals are documented clearly: no real-time final scoring, no OMR, no Web MIDI-first workflow, no generative arrangement core, no high-precision free-form chord naming promise.
+- [x] The product promise is anchored on trustworthy post-recording feedback, not on real-time certainty.
+- [x] The input assumption is constrained to monophonic vocal or single-part recording for MVP.
+- [x] The first release cut line is defined and still drives implementation order.
 
-- [ ] MVP 한 줄 정의를 팀이 동일하게 이해한다.
-- [ ] v1 비목표가 문서에 명시돼 있다.
-- [ ] “실시간 확정 채점”이 아니라 “녹음 후 정밀 분석”이 핵심 가치임을 합의했다.
-- [ ] 오디오 입력 가정을 단선율 보컬 또는 개별 파트 단위로 제한했다.
-- [ ] 1차 출시 컷라인 5개 항목을 기준으로 우선순위를 정한다.
+## 2. Foundation Stack And Storage
 
-## 2. 프로젝트 기반
+- [x] Frontend foundation exists on React + TypeScript + Vite.
+- [ ] The full planned browser audio stack is complete as originally envisioned across AudioWorklet + Web Worker + OfflineAudioContext + WASM.
+- [x] Backend foundation exists on FastAPI with a tested API surface.
+- [ ] The planned analysis stack is fully adopted at runtime across Basic Pitch + `librosa.pyin` + `music21` + `note-seq`.
+- [x] Score rendering and playback are separated so notation is not coupled to the playback engine.
+- [ ] The default product storage path is production-ready PostgreSQL + S3-compatible object storage rather than SQLite + local filesystem.
+- [x] Job state, artifact metadata, model versions, and failure reasons are stored and inspectable.
 
-- [ ] 프론트엔드 스택: React + TypeScript + Vite
-- [ ] 오디오 처리 스택: AudioWorklet + Web Worker + OfflineAudioContext + WASM
-- [ ] 백엔드 스택: FastAPI API 서버 + 분석 워커
-- [ ] 분석 스택: Basic Pitch + `librosa.pyin` + `music21` + `note-seq`
-- [ ] 악보 렌더링과 재생 엔진을 분리한다.
-- [ ] 저장 구조: PostgreSQL + S3 호환 오브젝트 스토리지
-- [ ] job 상태, 모델 버전, 아티팩트 메타데이터를 남기는 구조를 잡았다.
+## 3. Recording Pipeline
 
-## 3. 녹음 파이프라인
+- [x] A user can create a project and enter the studio.
+- [x] A guide track can be uploaded and attached to the project.
+- [x] Microphone access can be requested from the browser.
+- [x] Input device selection is available in the studio.
+- [x] Requested constraints for `echoCancellation`, `autoGainControl`, and `noiseSuppression` are captured.
+- [x] Applied browser settings from `getSettings()` are saved.
+- [x] Multiple takes can be recorded, uploaded, listed, and reselected.
+- [x] Mute, solo, and volume controls exist for guide and take context.
+- [x] Count-in and metronome controls exist in the browser transport.
+- [x] Waveform preview is visible after recording and after reload.
+- [x] A mixdown preview and save path exist.
 
-- [ ] 프로젝트 생성이 된다.
-- [ ] 가이드 트랙 업로드 또는 선택이 된다.
-- [ ] 마이크 장치를 선택할 수 있다.
-- [ ] `echoCancellation`, `autoGainControl`, `noiseSuppression`, `channelCount`를 요청한다.
-- [ ] `getSettings()` 기반 실제 적용값을 저장한다.
-- [ ] take를 여러 번 녹음하고 목록에서 다시 선택할 수 있다.
-- [ ] mute / solo / volume 기본 믹서가 있다.
-- [ ] count-in과 metronome이 동작한다.
-- [ ] 녹음 직후 waveform과 임시 contour 프리뷰가 보인다.
-- [ ] mixdown 생성 경로가 있다.
+## 4. Device Profile And Alignment
 
-## 4. DeviceProfile / 정렬
+- [x] Device profiles are stored by environment characteristics, not as a loose per-user preference only.
+- [x] Sample rate, channel count, latency-related settings, and related device metadata are stored.
+- [x] Browser capability snapshots and normalized warning flags are stored with the device profile.
+- [x] Secure-context state, permission state, recorder MIME support, and Web Audio support are inspectable.
+- [x] Current browser warnings and last saved device-profile warnings are shown in the studio.
+- [x] Coarse alignment exists.
+- [x] Fine alignment exists.
+- [x] `alignment_confidence` is computed and returned.
+- [x] Low-confidence analysis states are visible to the user.
 
-- [ ] DeviceProfile이 user 단일값이 아니라 입력 / 출력 경로 기준으로 저장된다.
-- [ ] `sampleRate`, `baseLatency`, `outputLatency`, 추정 입력 지연을 저장한다.
-- [ ] `browser_user_agent`, capability snapshot, diagnostic warning flags를 저장한다.
-- [ ] secure context, microphone permission, MediaRecorder codec, Web Audio / OfflineAudioContext 지원 상태를 확인할 수 있다.
-- [ ] 저장 전 현재 capability warning과 저장된 DeviceProfile warning을 둘 다 UI에서 볼 수 있다.
-- [ ] coarse alignment가 구현됐다.
-- [ ] fine alignment가 구현됐다.
-- [ ] `alignment_confidence`를 계산한다.
-- [ ] 저신뢰도 상태를 사용자에게 표시한다.
-- [ ] 헤드폰 모드와 스피커 캘리브레이션 예외를 구분한다.
+## 5. Scoring Engine
 
-## 5. 점수 엔진
+- [x] `pitch_score`, `rhythm_score`, and `harmony_fit_score` are produced and stored.
+- [x] Structured feedback JSON is produced and stored.
+- [x] Alignment and analysis failure reasons are stored and exposed.
+- [x] Note-level signed cents feedback exists for processed tracks.
+- [x] Runtime scoring uses confidence weighting from `voiced_prob` and RMS-derived evidence.
+- [x] Harmony scoring distinguishes `CHORD_AWARE` from `KEY_ONLY` fallback.
+- [ ] Difficulty-tier cent thresholds are fully calibrated against human rating data.
 
-- [ ] `pitch_score`를 반환한다.
-- [ ] `rhythm_score`를 반환한다.
-- [ ] `harmony_fit_score`를 반환한다.
-- [ ] `feedback_json` 스키마가 정의돼 있다.
-- [ ] voiced가 아닌 구간 처리 규칙이 있다.
-- [ ] 낮은 confidence 구간 처리 규칙이 있다.
-- [ ] 난이도별 cent 허용치 기준이 있다.
-- [ ] `harmony_fit_score`가 chord-aware인지 key-only fallback인지 구분 규칙이 있다.
-- [ ] 정렬 실패 / 분석 실패 시 사용자 메시지가 있다.
+## 6. Learning UI
 
-## 6. 스튜디오 학습 UI
+- [x] The studio shows waveform and contour feedback.
+- [x] The studio shows note-level correction cues with sharp/flat direction.
+- [x] Attack, sustain, timing, and confidence are exposed separately in the UI.
+- [x] Score panel and feedback panel are separated enough for learning use.
+- [x] Wrong or weak regions are visually highlighted.
+- [x] Retake flow is short enough to support practice loops.
 
-- [ ] waveform / contour가 한 화면에서 보인다.
-- [ ] 타깃 노트 또는 화성 오버레이가 보인다.
-- [ ] 점수 패널과 피드백 패널이 분리돼 있다.
-- [ ] 오답 구간이 강조된다.
-- [ ] take 비교가 가능하다.
-- [ ] 재녹음 동선이 짧다.
+## 7. Audio-To-Melody Draft
 
-## 7. 오디오→MIDI 멜로디 변환
+- [ ] Runtime melody extraction is fully wired through Basic Pitch as planned in the target stack.
+- [x] A melody draft can be extracted from recorded audio.
+- [x] Phrase split exists.
+- [x] Quantization exists.
+- [x] Key estimation exists.
+- [x] The extracted melody draft is editable and can be exported as MIDI.
 
-- [ ] Basic Pitch 초벌 생성이 된다.
-- [ ] 과도한 쪼개짐을 줄이는 cleanup 단계가 있다.
-- [ ] quantize가 된다.
-- [ ] phrase split이 된다.
-- [ ] key 추정이 된다.
-- [ ] 사용자가 수정 가능한 멜로디 초안 포맷이 있다.
+## 8. Semi-Automatic Arrangement
 
-## 8. 반자동 편곡
+- [x] At least two arrangement candidates can be generated from the melody draft.
+- [x] Voice-range constraints are applied.
+- [x] Leap limits are applied.
+- [x] Parallel motion avoidance penalties exist.
+- [x] Difficulty presets exist.
+- [x] Beatbox templates exist and can be enabled.
+- [x] A user can compare, choose, and edit arrangement candidates.
 
-- [ ] 멜로디 MIDI 또는 MusicXML 입력을 받을 수 있다.
-- [ ] 후보안 2개 이상을 생성한다.
-- [ ] 음역 제한을 반영한다.
-- [ ] 최대 도약 제한을 반영한다.
-- [ ] 병행 5도 / 8도 회피 규칙이 있다.
-- [ ] difficulty preset을 받을 수 있다.
-- [ ] 템플릿 퍼커션 on / off가 가능하다.
-- [ ] 사용자가 후보를 선택 또는 수정할 수 있다.
+## 9. Score, Playback, And Export
 
-## 9. 악보 / 재생 / export
+- [x] MusicXML score rendering exists.
+- [x] Arrangement playback exists and is separate from the score renderer.
+- [x] Part visibility, color, and solo-style focus controls exist.
+- [x] Guide playback exists in the studio flow.
+- [x] MIDI export exists.
+- [x] MusicXML export exists.
+- [x] Guide WAV export exists.
 
-- [ ] MusicXML을 canonical format으로 저장한다.
-- [ ] OSMD 렌더링이 된다.
-- [ ] 재생 엔진이 악보 렌더링과 분리돼 있다.
-- [ ] 파트별 색상 / 숨김 / solo가 된다.
-- [ ] guide playback이 된다.
-- [ ] MIDI export가 된다.
-- [ ] MusicXML export가 된다.
-- [ ] guide WAV export가 된다.
+## 10. Operations And Reliability
 
-## 10. 운영 안정화
+- [x] Processing failures can be retried.
+- [x] Analysis failures can be retried.
+- [x] Model versions are recorded.
+- [x] Upload expiry and timeout policies exist.
+- [x] Failure reasons are visible in product and ops views.
+- [x] Ops monitoring exists for jobs, errors, and environment diagnostics.
+- [x] Ops can store structured browser and hardware validation runs.
 
-- [ ] 분석 job 상태를 저장한다.
-- [ ] 실패한 job 재시도가 가능하다.
-- [ ] 모델 버전을 기록한다.
-- [ ] 오류 로그를 확인할 수 있다.
-- [ ] timeout / 실패 정책이 정의돼 있다.
-- [ ] 업로드 보관 기간 정책이 있다.
-- [ ] 사용자에게 실패 이유를 보여준다.
+## 11. Release Gate For MVP
 
-## 11. 1차 출시 게이트
+- [x] The project supports guide-backed project creation.
+- [x] The project supports take recording and storage.
+- [x] The project supports automatic alignment and 3-axis scoring.
+- [x] The project supports melody extraction and arrangement candidate generation.
+- [x] The project supports score view, guide playback, MIDI export, and MusicXML export.
+- [x] Browser release-gate automation covers the main seeded studio path.
+- [x] Product copy is now constrained so we do not oversell the current scorer as a human-level intonation judge.
 
-- [ ] 가이드 트랙이 있는 프로젝트를 생성할 수 있다.
-- [ ] 보컬 take를 녹음하고 저장할 수 있다.
-- [ ] 자동 정렬과 3축 점수가 안정적으로 나온다.
-- [ ] 멜로디 추출 후 4~5성부 후보 2개 이상이 생성된다.
-- [ ] 악보 보기, guide playback, MIDI / MusicXML export가 닫혀 있다.
-- [ ] 출시 직전 테스트에서 P0 범위 밖 기능이 MVP를 흔들지 않는다.
-- [ ] 출시 카피가 현재 scorer를 `정밀 음정 판정기`처럼 과대 표현하지 않는다.
+## 12. Intonation Quality Gate
 
-## 12. 정밀 음정 판정 품질 게이트
+- [x] Preview contour and final scoring source are separated for fresh processed tracks.
+- [x] Frame-level pitch artifacts are stored.
+- [x] Note-event artifacts are stored.
+- [x] Analysis APIs expose signed cents note feedback and quality-mode metadata.
+- [x] The studio exposes note-level correction UI.
+- [x] Confidence weighting exists in runtime scoring.
+- [x] Chord-aware harmony scoring is reachable from the main workflow.
+- [x] A calibration report documents what the scorer can and cannot claim today.
+- [ ] Real human vocal fixtures or a trusted human-rating corpus are part of the release-quality evidence.
+- [ ] Threshold calibration has been validated against human raters strongly enough to claim a human-trustworthy intonation judge.
 
-- [ ] preview contour와 scoring source가 분리돼 있다.
-- [ ] frame-level pitch 또는 note-event artifact가 저장된다.
-- [ ] note segmentation 기준이 `attack / settle / sustain / release` 수준으로 문서화돼 있다.
-- [ ] API가 signed cents를 내려주고 sharp / flat 방향을 잃지 않는다.
-- [ ] `attack_signed_cents`, `sustain_median_cents`, `sustain_mad_cents` 같은 note-level 지표가 있다.
-- [ ] confidence weighting에 `voiced_prob`와 RMS 또는 이에 준하는 안정도 신호가 반영된다.
-- [ ] `harmony_fit_score`가 chord-aware일 때와 key-only fallback일 때를 구분해 노출한다.
-- [ ] 실제 보컬 fixture 또는 cents-shifted vocal corpus가 있다.
-- [ ] threshold calibration 기록과 사람 평가 비교 기록이 있다.
-- [ ] 이 게이트 전에는 `몇 cent 높고 낮은지 정확히 말해준다`는 카피를 쓰지 않는다.
+## 13. Browser And Hardware Variability
 
-## 13. 브라우저 환경 편차
+- [x] Browser capability differences are captured in a normalized device profile snapshot.
+- [x] Warning flags are surfaced in the studio and in ops.
+- [x] Environment diagnostics can be exported from ops.
+- [x] A native browser and hardware validation protocol exists in `BROWSER_ENVIRONMENT_VALIDATION.md`.
+- [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.
+- [x] Chromium seeded release-gate coverage exists for recording, playback, export, sharing, and endurance.
+- [x] Firefox seeded release-gate coverage exists for the safe browser paths.
+- [x] WebKit seeded release-gate coverage exists for the safe browser paths.
+- [ ] Native Safari / WebKit audio behavior has been validated on real Apple hardware and logged as release evidence.
+- [ ] Real hardware microphone variability has been validated broadly enough to close the remaining environment risk.
 
-- [ ] Chromium, Firefox, WebKit의 seeded safe path 차이를 문서로 남긴다.
-- [ ] recorder transport는 fake microphone 기반 자동화와 실제 하드웨어 확인을 구분한다.
-- [ ] Safari / WebKit 계열의 legacy audio constructor fallback 여부를 확인한다.
-- [ ] real hardware variability 이슈를 capability snapshot과 diagnostic flag로 추적할 수 있다.
-- [ ] ops overview에서 environment diagnostics report를 내려받을 수 있다.
-- [ ] native browser 검증은 `BROWSER_ENVIRONMENT_VALIDATION.md` 기준으로 기록한다.
-- [ ] native browser 검증 결과를 ops validation run log에 PASS / WARN / FAIL로 남길 수 있다.
+## 14. Explicitly Not In MVP
 
-## 14. 지금은 하지 않을 것
+- [x] Real-time final scoring is still outside the MVP commitment.
+- [x] OMR is still outside the MVP commitment.
+- [x] Web MIDI is not used as the core user flow.
+- [x] High-precision free-form chord naming is not part of the MVP promise.
+- [x] A generative arrangement model is not a core dependency.
 
-- [ ] 실시간 확정 채점을 MVP에 넣지 않는다.
-- [ ] OMR을 MVP에 넣지 않는다.
-- [ ] 자유 chord naming 고정밀화를 MVP에 넣지 않는다.
-- [ ] Web MIDI를 핵심 입력 플로우로 잡지 않는다.
-- [ ] 생성형 편곡 모델을 코어 의존성으로 잡지 않는다.
+## 15. Current Truth
+
+- [x] The checklist is now treated as a live progress board, not just as a planning appendix.
+- [x] `FOUNDATION_STATUS.md` is used as the audit narrative that explains why each checked area is considered done.
+- [x] Remaining unchecked items are deliberate gaps, not silently deferred assumptions.

@@ -31,7 +31,7 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 - `INTONATION_CALIBRATION_REPORT.md`
   Current calibration evidence, provisional threshold bands, and the claim gate for what the intonation scorer can and cannot promise today.
 - `GigaStudy_check_list.md`
-  Cross-check list for scope control, implementation readiness, and release gating.
+  Live checklist for scope control, implementation readiness, and release gating. Check marks should map only to verified implementation, not to intent.
 - `BROWSER_ENVIRONMENT_VALIDATION.md`
   Native browser and hardware validation protocol built on top of the ops diagnostics baseline.
 - `FOUNDATION_STATUS.md`

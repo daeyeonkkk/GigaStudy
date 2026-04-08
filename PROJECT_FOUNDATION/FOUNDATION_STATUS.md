@@ -12,6 +12,12 @@ Date: 2026-04-08
 - `PHASE1_BACKLOG.md`
 - `GigaStudy_check_list.md`
 
+## Checklist Discipline
+
+- `GigaStudy_check_list.md` is now maintained as a live progress board.
+- An item should be marked `[x]` only when the implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
+- This status document remains the audit narrative that explains why the checked items are considered done and which gaps are still open on purpose.
+
 ## Confirmed Implemented
 
 - The P0 release line is implemented end-to-end:

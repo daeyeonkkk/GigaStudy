@@ -59,6 +59,7 @@ npm run test:e2e
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 - A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
+- The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
 
 ## Current Hardening Focus
 
@@ -66,7 +67,7 @@ npm run test:e2e
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
-- Expand browser release-gate coverage into real recording transport and arrangement export journeys.
+- Expand browser release-gate coverage into real recording transport and arrangement playback journeys.
 
 ## Foundation Docs
 

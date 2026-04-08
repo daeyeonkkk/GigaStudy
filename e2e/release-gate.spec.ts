@@ -157,6 +157,16 @@ async function runChordAwareAnalysis(page: Page): Promise<void> {
   await expect(page.getByText(/Analysis saved\./)).toBeVisible()
 }
 
+async function extractMelodyDraft(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Extract melody draft' }).click()
+  await expect(page.getByText(/Melody draft saved with/i)).toBeVisible()
+}
+
+async function generateArrangementCandidates(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Generate arrangement candidates' }).click()
+  await expect(page.getByText(/arrangement candidates are ready for comparison\./i)).toBeVisible()
+}
+
 function getNoteFeedbackPanel(page: Page) {
   return page
     .locator('article')
@@ -171,6 +181,18 @@ function getShareLinksPanel(page: Page) {
         name: 'Create read-only share URLs tied to a frozen snapshot',
       }),
     })
+}
+
+function getArrangementEnginePanel(page: Page) {
+  return page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name: 'Generate candidate A/B/C from the latest melody draft' }) })
+}
+
+function getScoreViewPanel(page: Page) {
+  return page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name: 'Render the selected candidate as MusicXML' }) })
 }
 
 test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
@@ -225,4 +247,54 @@ test('release gate share flow opens a frozen snapshot and loses access after dea
   await sharePage.reload()
   await expect(sharePage.getByRole('heading', { name: 'Shared project unavailable' })).toBeVisible()
   await expect(sharePage.getByText('Share link is inactive')).toBeVisible()
+})
+
+test('release gate arrangement flow reaches export-ready score artifacts', async ({
+  page,
+  request,
+}) => {
+  const projectId = await createStudioProject(page, 'Playwright arrangement gate session')
+  await seedGuideAndTake(page, request, projectId)
+  await runChordAwareAnalysis(page)
+  await extractMelodyDraft(page)
+  await generateArrangementCandidates(page)
+
+  const arrangementEnginePanel = getArrangementEnginePanel(page)
+  await expect(arrangementEnginePanel.getByText(/3 candidates/i)).toBeVisible()
+  await expect(arrangementEnginePanel.getByText(/A \/ B \/ C compare/i)).toBeVisible()
+  await expect(arrangementEnginePanel.locator('article.candidate-card')).toHaveCount(3)
+  await expect(arrangementEnginePanel.getByRole('link', { name: 'Download arrangement MIDI' }).first()).toBeVisible()
+
+  const scoreViewPanel = getScoreViewPanel(page)
+  await expect(scoreViewPanel.getByText('MusicXML ready', { exact: true })).toBeVisible()
+
+  const musicXmlLink = scoreViewPanel.getByRole('link', { name: 'Export MusicXML' })
+  const arrangementMidiLink = scoreViewPanel.getByRole('link', { name: 'Export arrangement MIDI' })
+  const guideWavLink = scoreViewPanel.getByRole('link', { name: 'Export guide WAV' })
+
+  await expect(musicXmlLink).toBeVisible()
+  await expect(arrangementMidiLink).toBeVisible()
+  await expect(guideWavLink).toBeVisible()
+
+  const musicXmlHref = await musicXmlLink.getAttribute('href')
+  const arrangementMidiHref = await arrangementMidiLink.getAttribute('href')
+  const guideWavHref = await guideWavLink.getAttribute('href')
+
+  expect(musicXmlHref).toBeTruthy()
+  expect(arrangementMidiHref).toBeTruthy()
+  expect(guideWavHref).toBeTruthy()
+
+  const [musicXmlResponse, arrangementMidiResponse, guideWavResponse] = await Promise.all([
+    request.get(musicXmlHref!),
+    request.get(arrangementMidiHref!),
+    request.get(guideWavHref!),
+  ])
+
+  expect(musicXmlResponse.ok()).toBeTruthy()
+  expect(arrangementMidiResponse.ok()).toBeTruthy()
+  expect(guideWavResponse.ok()).toBeTruthy()
+
+  expect((await musicXmlResponse.text()).includes('<score-partwise')).toBeTruthy()
+  expect((await arrangementMidiResponse.body()).byteLength).toBeGreaterThan(32)
+  expect((await guideWavResponse.body()).byteLength).toBeGreaterThan(32)
 })

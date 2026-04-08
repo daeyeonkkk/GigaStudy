@@ -25,6 +25,8 @@ Date: 2026-04-08
   project creation, guide and take attachment, chord timeline save, post-recording analysis, and chord-aware note-feedback visibility.
 - A browser-level sharing gate now also exists:
   create a read-only share link, open the frozen snapshot viewer, and verify access is removed after deactivation.
+- A browser-level arrangement export gate now also exists:
+  extract a melody draft, generate A/B/C candidates, and verify MusicXML, arrangement MIDI, and guide WAV export artifacts are reachable from the score view.
 
 ## Reinforcement Added In This Pass
 
@@ -53,8 +55,8 @@ Date: 2026-04-08
 - Web build: `npm run build:web`
 - Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
 - Browser release-gate smoke path: `npm run test:e2e`
-- Result: `2 passed`
-- Scope verified by the browser run includes project creation, studio entry, guide upload, take upload, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, and share deactivation behavior.
+- Result: `3 passed`
+- Scope verified by the browser run includes project creation, studio entry, guide upload, take upload, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability.
 
 ## Intonation Assessment
 
@@ -81,7 +83,7 @@ Date: 2026-04-08
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
 - The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
-- Browser-level automation now covers the main studio smoke path and the read-only sharing journey, but it does not yet exercise real microphone permission, in-browser recording transport, or arrangement playback/export.
+- Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability, but it does not yet exercise real microphone permission, in-browser recording transport, or arrangement playback behavior.
 
 ## Recommended Next Work
 
@@ -89,4 +91,4 @@ Date: 2026-04-08
 2. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 3. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
 4. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
-5. Expand browser-level release-gate coverage from the current smoke path into recording transport and arrangement export journeys.
+5. Expand browser-level release-gate coverage from the current smoke path into recording transport and arrangement playback journeys.

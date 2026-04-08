@@ -353,7 +353,10 @@ test('release gate arrangement flow reaches export-ready score artifacts', async
 test('release gate recording flow captures a take through browser microphone transport', async ({
   page,
   request,
+  browserName,
 }) => {
+  test.skip(browserName !== 'chromium', 'Fake microphone transport is currently Chromium-only.')
+
   const projectId = await createStudioProject(page, 'Playwright recording gate session')
   await seedGuideOnly(page, request, projectId)
   await prepareBrowserRecording(page)
@@ -417,7 +420,10 @@ test('release gate arrangement playback shows transport progress and can be stop
 test('release gate long-session stability survives repeated take and analysis cycles', async ({
   page,
   request,
+  browserName,
 }) => {
+  test.skip(browserName !== 'chromium', 'Session endurance currently depends on Chromium fake-mic transport.')
+
   const pageErrors: string[] = []
   page.on('pageerror', (error) => {
     pageErrors.push(error.message)

@@ -46,6 +46,9 @@ uv run pytest
 npm run test:e2e
 ```
 
+This currently runs the seeded browser release gate in both Chromium and Firefox.
+Recorder transport and recorder-driven endurance checks remain Chromium-only because they rely on fake-microphone launch behavior.
+
 ## Current Product State
 
 - P0 MVP flow is implemented from project creation through export.
@@ -63,6 +66,7 @@ npm run test:e2e
 - The browser release gate now also covers browser recorder transport with fake microphone input: permission request, DeviceProfile save, and start/stop take upload.
 - The browser release gate now also covers arrangement playback behavior: preview start, transport progress movement, and stop/reset back to ready state.
 - The browser release gate now also covers a longer continuous session: repeated takes, take switching, repeated analysis, regeneration, playback, and share creation without page errors.
+- The browser release gate now also covers a cross-browser matrix for the seeded safe paths: Chromium and Firefox both verify the core studio smoke, sharing, arrangement export, and arrangement playback journeys.
 
 ## Current Hardening Focus
 
@@ -70,7 +74,7 @@ npm run test:e2e
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
-- Expand browser hardening into real hardware-variable recording checks, cross-browser coverage, and richer endurance runs.
+- Expand browser hardening into real hardware-variable recording checks, broader browser coverage beyond Firefox, and richer endurance runs.
 
 ## Foundation Docs
 

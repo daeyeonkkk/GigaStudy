@@ -1,3 +1,5 @@
+import { getAudioContextConstructor } from './audioContext'
+
 export type MetronomeController = {
   stop: () => Promise<void>
 }
@@ -48,11 +50,12 @@ export async function playCountInSequence({
   beats,
   accentEvery = 4,
 }: CountInOptions): Promise<void> {
-  if (beats <= 0 || typeof window.AudioContext === 'undefined') {
+  const AudioContextCtor = getAudioContextConstructor()
+  if (beats <= 0 || typeof AudioContextCtor === 'undefined') {
     return
   }
 
-  const audioContext = new AudioContext()
+  const audioContext = new AudioContextCtor()
   const beatDurationSec = 60 / bpm
   const startAt = audioContext.currentTime + 0.05
 
@@ -75,13 +78,14 @@ export function startMetronomeLoop({
   bpm,
   accentEvery = 4,
 }: CountInOptions): MetronomeController {
-  if (typeof window.AudioContext === 'undefined') {
+  const AudioContextCtor = getAudioContextConstructor()
+  if (typeof AudioContextCtor === 'undefined') {
     return {
       stop: async () => undefined,
     }
   }
 
-  const audioContext = new AudioContext()
+  const audioContext = new AudioContextCtor()
   const beatDurationMs = (60 / bpm) * 1000
   let beat = 0
   let stopped = false
@@ -109,18 +113,20 @@ export function startMetronomeLoop({
 }
 
 export function pickSupportedRecordingMimeType(): string | undefined {
+  return listSupportedRecordingMimeTypes()[0]
+}
+
+export function listSupportedRecordingMimeTypes(): string[] {
   if (typeof MediaRecorder === 'undefined') {
-    return undefined
+    return []
   }
 
-  const candidates = [
+  return [
     'audio/webm;codecs=opus',
     'audio/webm',
     'audio/ogg;codecs=opus',
     'audio/mp4',
-  ]
-
-  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate))
+  ].filter((candidate) => MediaRecorder.isTypeSupported(candidate))
 }
 
 export function uploadBlobWithProgress({

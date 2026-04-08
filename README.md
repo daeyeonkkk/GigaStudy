@@ -61,6 +61,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - The studio now exposes note-level correction UI, confidence badges, and clear `note-level` versus `fallback` analysis mode labels.
 - The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
+- DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
 - A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
 - The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
@@ -75,7 +76,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
-- Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs.
+- Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot and warning flags as the inspection baseline.
 
 ## Foundation Docs
 

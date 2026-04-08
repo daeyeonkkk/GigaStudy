@@ -19,6 +19,7 @@ Date: 2026-04-08
 - The P1 reinforcement line is also implemented:
   difficulty presets, voice-range presets, A/B/C candidate comparison, beatbox templates, project history, share links, and admin ops monitoring.
 - Device profile capture is stored with requested constraints and applied settings, and the studio snapshot includes the latest profile as the foundation docs require.
+- Device profiles now also store a browser capability snapshot plus normalized diagnostic warning flags, so permission state, recorder codec support, secure-context status, and Web Audio / OfflineAudioContext support can be audited per environment.
 - Upload processing creates canonical audio plus waveform preview artifacts and keeps retry paths for failed processing.
 - Read-only sharing is implemented as a frozen snapshot link, which matches the current safe assumption in the master plan's open decision area.
 - A browser-level release-gate smoke path now exists for the main studio journey:
@@ -51,6 +52,7 @@ Date: 2026-04-08
 - The analysis regression suite now includes vocal-like synthetic fixtures for sharp attack, flat sustain, overshoot then settle, breathy onset, centered vibrato, and portamento toward center.
 - A calibration report now records provisional threshold bands and a claim gate for what the scorer can and cannot promise today.
 - The studio now includes a lightweight chord timeline authoring and JSON import flow, so `CHORD_AWARE` harmony is reachable from the main workflow instead of only through preloaded project metadata.
+- The studio now also shows current browser audio capability warnings before save and the stored DeviceProfile warnings after save, which turns the remaining browser-hardware gap into something we can inspect instead of guess.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -69,6 +71,7 @@ Date: 2026-04-08
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
 - Arrangement playback progress plus stop/reset behavior is now verified in Chromium and Firefox.
 - Chromium additionally covers the browser recorder transport with fake-microphone permission plus DeviceProfile capture and the repeated in-session endurance workflow.
+- The DeviceProfile path now also verifies capability snapshot capture and warning-flag persistence through the API and studio snapshot.
 - Firefox intentionally skips the fake-microphone recorder path and the recorder-dependent endurance path because those currently depend on Chromium launch flags rather than portable browser behavior.
 - WebKit also intentionally skips the fake-microphone recorder path and the recorder-dependent endurance path, and it currently skips arrangement playback in this Windows automation environment because Playwright WebKit does not expose Web Audio there.
 
@@ -97,7 +100,7 @@ Date: 2026-04-08
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
 - The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
-- Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment, so the larger browser-side gap is now environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
+- Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 
 ## Recommended Next Work
 
@@ -105,4 +108,4 @@ Date: 2026-04-08
 2. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 3. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
 4. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
-5. Move browser hardening from missing flow coverage toward environment coverage: real hardware-specific recording variability, native Safari/WebKit audio validation, and richer endurance runs.
+5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs.

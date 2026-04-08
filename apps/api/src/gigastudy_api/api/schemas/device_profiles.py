@@ -9,8 +9,11 @@ class DeviceProfileUpsertRequest(BaseModel):
     os: str = Field(min_length=1, max_length=80)
     input_device_hash: str = Field(min_length=1, max_length=128)
     output_route: str = Field(min_length=1, max_length=128)
+    browser_user_agent: str | None = Field(default=None, max_length=1024)
     requested_constraints: dict | None = None
     applied_settings: dict | None = None
+    capabilities: dict | None = None
+    diagnostic_flags: list[str] | None = None
     actual_sample_rate: int | None = Field(default=None, ge=1)
     channel_count: int | None = Field(default=None, ge=1)
     input_latency_est: float | None = None
@@ -29,8 +32,11 @@ class DeviceProfileResponse(BaseModel):
     os: str
     input_device_hash: str
     output_route: str
+    browser_user_agent: str | None
     requested_constraints_json: dict | None
     applied_settings_json: dict | None
+    capabilities_json: dict | None
+    diagnostic_flags_json: list[str] | None
     actual_sample_rate: int | None
     channel_count: int | None
     input_latency_est: float | None

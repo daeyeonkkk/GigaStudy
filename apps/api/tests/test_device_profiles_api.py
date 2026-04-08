@@ -39,8 +39,14 @@ def test_device_profile_upsert_reuses_same_record(client: TestClient) -> None:
         "os": "Windows",
         "input_device_hash": "mic-123",
         "output_route": "wired-headphones",
+        "browser_user_agent": "Mozilla/5.0 Chrome/136.0",
         "requested_constraints": {"channelCount": 1},
         "applied_settings": {"sampleRate": 48000},
+        "capabilities": {
+            "media_recorder": {"supported": True, "selected_mime_type": "audio/webm"},
+            "web_audio": {"audio_context_mode": "standard"},
+        },
+        "diagnostic_flags": ["output_latency_unavailable"],
         "actual_sample_rate": 48000,
         "channel_count": 1,
     }
@@ -58,6 +64,9 @@ def test_device_profile_upsert_reuses_same_record(client: TestClient) -> None:
         == second_response.json()["device_profile_id"]
     )
     assert second_response.json()["base_latency"] == 0.012
+    assert second_response.json()["browser_user_agent"] == "Mozilla/5.0 Chrome/136.0"
+    assert second_response.json()["capabilities_json"]["media_recorder"]["supported"] is True
+    assert second_response.json()["diagnostic_flags_json"] == ["output_latency_unavailable"]
 
 
 def test_device_profiles_are_listed_latest_first(client: TestClient) -> None:
@@ -68,6 +77,7 @@ def test_device_profiles_are_listed_latest_first(client: TestClient) -> None:
             "os": "Windows",
             "input_device_hash": "mic-123",
             "output_route": "speaker",
+            "browser_user_agent": "Mozilla/5.0 Chrome/136.0",
         },
     )
     client.post(
@@ -77,6 +87,8 @@ def test_device_profiles_are_listed_latest_first(client: TestClient) -> None:
             "os": "Windows",
             "input_device_hash": "mic-456",
             "output_route": "bluetooth-headphones",
+            "capabilities": {"web_audio": {"audio_context_mode": "webkit"}},
+            "diagnostic_flags": ["legacy_webkit_audio_context_only"],
         },
     )
 
@@ -85,3 +97,6 @@ def test_device_profiles_are_listed_latest_first(client: TestClient) -> None:
     assert response.status_code == 200
     assert len(response.json()["items"]) == 1
     assert response.json()["items"][0]["input_device_hash"] == "mic-456"
+    assert response.json()["items"][0]["diagnostic_flags_json"] == [
+        "legacy_webkit_audio_context_only"
+    ]

@@ -7,6 +7,13 @@ import { WaveformPreview } from '../components/WaveformPreview'
 import { currentLaneTickets } from '../data/phase1'
 import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
 import { buildApiUrl } from '../lib/api'
+import { getAudioContextConstructor } from '../lib/audioContext'
+import {
+  collectBrowserAudioCapabilities,
+  deriveBrowserAudioWarningFlags,
+  getBrowserAudioWarningLabel,
+  type BrowserAudioCapabilitySnapshot,
+} from '../lib/browserAudioDiagnostics'
 import {
   startArrangementPlayback,
   type ArrangementPlaybackController,
@@ -45,8 +52,11 @@ type DeviceProfile = {
   os: string
   input_device_hash: string
   output_route: string
+  browser_user_agent: string | null
   requested_constraints_json: Record<string, unknown> | null
   applied_settings_json: Record<string, unknown> | null
+  capabilities_json: BrowserAudioCapabilitySnapshot | null
+  diagnostic_flags_json: string[] | null
   actual_sample_rate: number | null
   channel_count: number | null
   input_latency_est: number | null
@@ -347,6 +357,29 @@ type PermissionState =
   | { phase: 'requesting' }
   | { phase: 'granted'; message: string }
   | { phase: 'error'; message: string }
+
+function summarizeRecorderSupport(snapshot: BrowserAudioCapabilitySnapshot | null): string {
+  if (!snapshot) {
+    return 'Preview only'
+  }
+  if (!snapshot.media_recorder.supported) {
+    return 'Unavailable'
+  }
+  return snapshot.media_recorder.selected_mime_type ?? 'No audio MIME'
+}
+
+function summarizeWebAudioSupport(snapshot: BrowserAudioCapabilitySnapshot | null): string {
+  if (!snapshot) {
+    return 'Unknown'
+  }
+  if (!snapshot.web_audio.audio_context) {
+    return 'Unavailable'
+  }
+  if (snapshot.web_audio.audio_context_mode === 'webkit') {
+    return 'Legacy webkit bridge'
+  }
+  return 'Standard AudioContext'
+}
 
 type TakesState =
   | { phase: 'loading'; items: TakeTrack[] }
@@ -946,11 +979,13 @@ async function extractAudioFileMetadata(file: File): Promise<{
   actualSampleRate: number | null
   durationMs: number | null
 }> {
-  if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') {
+  const AudioContextCtor =
+    typeof window === 'undefined' ? undefined : getAudioContextConstructor(window)
+  if (typeof window === 'undefined' || typeof AudioContextCtor === 'undefined') {
     return { actualSampleRate: null, durationMs: null }
   }
 
-  const audioContext = new AudioContext()
+  const audioContext = new AudioContextCtor()
 
   try {
     const encodedAudio = await file.arrayBuffer()
@@ -1074,6 +1109,9 @@ export function StudioPage() {
     useState<ConstraintDraft>(defaultConstraintDraft)
   const [appliedSettingsPreview, setAppliedSettingsPreview] =
     useState<Record<string, unknown> | null>(null)
+  const [capabilityPreview, setCapabilityPreview] =
+    useState<BrowserAudioCapabilitySnapshot | null>(null)
+  const [capabilityWarningFlags, setCapabilityWarningFlags] = useState<string[]>([])
   const [countInBeats, setCountInBeats] = useState(4)
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null)
@@ -1250,6 +1288,16 @@ export function StudioPage() {
     }
   }
 
+  async function refreshCapabilityPreview(options?: {
+    audioContext?: AudioContext | null
+    microphonePermissionState?: 'granted' | 'prompt' | 'denied' | 'unknown' | null
+  }): Promise<BrowserAudioCapabilitySnapshot> {
+    const snapshot = await collectBrowserAudioCapabilities(options)
+    setCapabilityPreview(snapshot)
+    setCapabilityWarningFlags(deriveBrowserAudioWarningFlags(snapshot))
+    return snapshot
+  }
+
   async function stopArrangementPlayback(resetPosition = true): Promise<void> {
     const activePlayback = arrangementPlaybackRef.current
     arrangementPlaybackRef.current = null
@@ -1302,6 +1350,8 @@ export function StudioPage() {
     if (snapshot.latest_device_profile) {
       hydrateDeviceDraft(snapshot.latest_device_profile)
       setAppliedSettingsPreview(snapshot.latest_device_profile.applied_settings_json)
+      setCapabilityPreview(snapshot.latest_device_profile.capabilities_json)
+      setCapabilityWarningFlags(snapshot.latest_device_profile.diagnostic_flags_json ?? [])
     }
 
     setDeviceProfileState({
@@ -1335,6 +1385,10 @@ export function StudioPage() {
     applyStudioSnapshotRef.current(snapshot)
     return snapshot
   }
+
+  useEffect(() => {
+    void refreshCapabilityPreview().catch(() => undefined)
+  }, [])
 
   async function refreshProjectVersions(): Promise<ProjectVersionRecord[]> {
     if (!projectId) {
@@ -2802,6 +2856,7 @@ export function StudioPage() {
 
       setAppliedSettingsPreview(serializedSettings)
       await refreshAudioInputs(typeof settings.deviceId === 'string' ? settings.deviceId : undefined)
+      await refreshCapabilityPreview({ microphonePermissionState: 'granted' })
 
       permissionStream.getTracks().forEach((streamTrack) => streamTrack.stop())
 
@@ -2810,6 +2865,7 @@ export function StudioPage() {
         message: 'Microphone access granted. Device labels are now available.',
       })
     } catch (error) {
+      await refreshCapabilityPreview().catch(() => undefined)
       setPermissionState({
         phase: 'error',
         message:
@@ -2844,12 +2900,18 @@ export function StudioPage() {
       const serializedSettings = serializeTrackSettings(settings)
       setAppliedSettingsPreview(serializedSettings)
 
-      audioContext = new AudioContext()
+      const AudioContextCtor = getAudioContextConstructor()
+      audioContext = AudioContextCtor ? new AudioContextCtor() : null
       const deviceHash = await hashValue(
         typeof settings.deviceId === 'string'
           ? settings.deviceId
           : selectedInputId || 'default-input',
       )
+      const capabilitySnapshot = await refreshCapabilityPreview({
+        audioContext,
+        microphonePermissionState: 'granted',
+      })
+      const diagnosticFlags = deriveBrowserAudioWarningFlags(capabilitySnapshot)
 
       const response = await fetch(buildApiUrl('/api/device-profiles'), {
         method: 'POST',
@@ -2861,14 +2923,17 @@ export function StudioPage() {
           os: detectOsName(navigator.userAgent),
           input_device_hash: deviceHash,
           output_route: outputRoute,
+          browser_user_agent: navigator.userAgent,
           requested_constraints: requestedConstraints,
           applied_settings: serializedSettings,
+          capabilities: capabilitySnapshot,
+          diagnostic_flags: diagnosticFlags,
           actual_sample_rate:
-            pickNumber(settings.sampleRate) ?? pickNumber(audioContext.sampleRate),
+            pickNumber(settings.sampleRate) ?? pickNumber(audioContext?.sampleRate),
           channel_count: pickNumber(settings.channelCount),
           input_latency_est: getTrackLatency(settings),
-          base_latency: pickNumber(audioContext.baseLatency),
-          output_latency: getAudioContextOutputLatency(audioContext),
+          base_latency: pickNumber(audioContext?.baseLatency),
+          output_latency: audioContext ? getAudioContextOutputLatency(audioContext) : null,
           calibration_method: 'studio-device-panel',
           calibration_confidence: 0.25,
         }),
@@ -2888,9 +2953,11 @@ export function StudioPage() {
       })
       setSaveDeviceState({
         phase: 'success',
-        message: 'DeviceProfile saved with requested constraints and applied settings.',
+        message:
+          'DeviceProfile saved with requested constraints and applied settings. Capability snapshot captured too.',
       })
     } catch (error) {
+      await refreshCapabilityPreview().catch(() => undefined)
       setSaveDeviceState({
         phase: 'error',
         message: error instanceof Error ? error.message : 'DeviceProfile save failed.',
@@ -3165,6 +3232,9 @@ export function StudioPage() {
 
   const { project } = studioState
   const latestProfile = deviceProfileState.profile
+  const currentCapabilitySnapshot = latestProfile?.capabilities_json ?? capabilityPreview
+  const currentCapabilityWarnings =
+    latestProfile?.diagnostic_flags_json ?? capabilityWarningFlags
   const guide = guideState.guide
   const inputSelectionDisabled =
     permissionState.phase === 'requesting' || saveDeviceState.phase === 'submitting'
@@ -3783,6 +3853,43 @@ export function StudioPage() {
                 <span>Output route</span>
                 <strong>{latestProfile?.output_route ?? outputRoute}</strong>
               </div>
+              <div className="mini-card">
+                <span>Browser</span>
+                <strong>
+                  {latestProfile
+                    ? `${latestProfile.browser} / ${latestProfile.os}`
+                    : 'Preview only'}
+                </strong>
+                <small>
+                  {latestProfile?.browser_user_agent
+                    ? latestProfile.browser_user_agent
+                    : 'User agent will be captured on save so hardware-specific issues stay explainable.'}
+                </small>
+              </div>
+              <div className="mini-card">
+                <span>Recorder codec</span>
+                <strong>{summarizeRecorderSupport(currentCapabilitySnapshot)}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Web Audio engine</span>
+                <strong>{summarizeWebAudioSupport(currentCapabilitySnapshot)}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Mic permission</span>
+                <strong>{currentCapabilitySnapshot?.permissions.microphone ?? 'unknown'}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Output latency API</span>
+                <strong>
+                  {currentCapabilitySnapshot?.web_audio.output_latency_supported ? 'Available' : 'Unavailable'}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Offline render</span>
+                <strong>
+                  {currentCapabilitySnapshot?.web_audio.offline_audio_context ? 'Available' : 'Unavailable'}
+                </strong>
+              </div>
             </div>
 
             {deviceProfileState.phase === 'error' ? (
@@ -3795,6 +3902,58 @@ export function StudioPage() {
                 <pre className="json-card">
                   {toPrettyJson(latestProfile.applied_settings_json)}
                 </pre>
+
+                <div>
+                  <p className="json-label">Capability warnings</p>
+                  {currentCapabilityWarnings.length > 0 ? (
+                    <ul className="ticket-list">
+                      {currentCapabilityWarnings.map((flag) => (
+                        <li key={flag}>
+                          <strong>{flag}</strong>
+                          <span>{getBrowserAudioWarningLabel(flag)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="empty-card">
+                      <p>No capability warnings are active for the saved profile.</p>
+                      <p>Recorder, Web Audio, and permission surfaces look usable on this path.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="json-label">
+                    {latestProfile ? 'Saved capability snapshot' : 'Current capability snapshot'}
+                  </p>
+                  <pre className="json-card">{toPrettyJson(currentCapabilitySnapshot)}</pre>
+                </div>
+              </div>
+            ) : currentCapabilitySnapshot ? (
+              <div className="support-stack">
+                <div>
+                  <p className="json-label">Current capability warnings</p>
+                  {currentCapabilityWarnings.length > 0 ? (
+                    <ul className="ticket-list">
+                      {currentCapabilityWarnings.map((flag) => (
+                        <li key={flag}>
+                          <strong>{flag}</strong>
+                          <span>{getBrowserAudioWarningLabel(flag)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="empty-card">
+                      <p>No capability warnings are active in the current browser preview.</p>
+                      <p>Save the DeviceProfile to keep this snapshot attached to the project workflow.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="json-label">Current capability snapshot</p>
+                  <pre className="json-card">{toPrettyJson(currentCapabilitySnapshot)}</pre>
+                </div>
               </div>
             ) : null}
           </article>

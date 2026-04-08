@@ -107,8 +107,11 @@ def test_device_profile_unique_key_is_enforced(session: Session) -> None:
         os="Windows",
         input_device_hash="mic-123",
         output_route="wired-headphones",
+        browser_user_agent="Mozilla/5.0 Chrome/136.0",
         requested_constraints_json={"channelCount": 1},
         applied_settings_json={"sampleRate": 48000},
+        capabilities_json={"media_recorder": {"supported": True}},
+        diagnostic_flags_json=["output_latency_unavailable"],
         actual_sample_rate=48000,
         channel_count=1,
     )
@@ -140,6 +143,9 @@ def test_device_profile_unique_key_is_enforced(session: Session) -> None:
     session.commit()
 
     assert session.query(DeviceProfile).count() == 2
+    assert profile.browser_user_agent == "Mozilla/5.0 Chrome/136.0"
+    assert profile.capabilities_json["media_recorder"]["supported"] is True
+    assert profile.diagnostic_flags_json == ["output_latency_unavailable"]
 
 
 def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) -> None:

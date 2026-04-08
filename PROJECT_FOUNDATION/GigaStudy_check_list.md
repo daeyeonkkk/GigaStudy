@@ -39,6 +39,9 @@
 
 - [ ] DeviceProfile이 user 단일값이 아니라 입력 / 출력 경로 기준으로 저장된다.
 - [ ] `sampleRate`, `baseLatency`, `outputLatency`, 추정 입력 지연을 저장한다.
+- [ ] `browser_user_agent`, capability snapshot, diagnostic warning flags를 저장한다.
+- [ ] secure context, microphone permission, MediaRecorder codec, Web Audio / OfflineAudioContext 지원 상태를 확인할 수 있다.
+- [ ] 저장 전 현재 capability warning과 저장된 DeviceProfile warning을 둘 다 UI에서 볼 수 있다.
 - [ ] coarse alignment가 구현됐다.
 - [ ] fine alignment가 구현됐다.
 - [ ] `alignment_confidence`를 계산한다.
@@ -130,7 +133,14 @@
 - [ ] threshold calibration 기록과 사람 평가 비교 기록이 있다.
 - [ ] 이 게이트 전에는 `몇 cent 높고 낮은지 정확히 말해준다`는 카피를 쓰지 않는다.
 
-## 13. 지금은 하지 않을 것
+## 13. 브라우저 환경 편차
+
+- [ ] Chromium, Firefox, WebKit의 seeded safe path 차이를 문서로 남긴다.
+- [ ] recorder transport는 fake microphone 기반 자동화와 실제 하드웨어 확인을 구분한다.
+- [ ] Safari / WebKit 계열의 legacy audio constructor fallback 여부를 확인한다.
+- [ ] real hardware variability 이슈를 capability snapshot과 diagnostic flag로 추적할 수 있다.
+
+## 14. 지금은 하지 않을 것
 
 - [ ] 실시간 확정 채점을 MVP에 넣지 않는다.
 - [ ] OMR을 MVP에 넣지 않는다.

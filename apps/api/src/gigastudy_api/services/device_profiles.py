@@ -41,6 +41,9 @@ def upsert_device_profile(
 
     profile.requested_constraints_json = payload.requested_constraints
     profile.applied_settings_json = payload.applied_settings
+    profile.browser_user_agent = payload.browser_user_agent
+    profile.capabilities_json = payload.capabilities
+    profile.diagnostic_flags_json = payload.diagnostic_flags
     profile.actual_sample_rate = payload.actual_sample_rate
     profile.channel_count = payload.channel_count
     profile.input_latency_est = payload.input_latency_est

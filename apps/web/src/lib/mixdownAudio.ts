@@ -1,3 +1,8 @@
+import {
+  getAudioContextConstructor,
+  getOfflineAudioContextConstructor,
+} from './audioContext'
+
 export type MixdownSource = {
   gain: number
   label: string
@@ -12,7 +17,9 @@ export type RenderedMixdown = {
 }
 
 async function decodeAudioFromUrl(url: string): Promise<AudioBuffer> {
-  if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') {
+  const AudioContextCtor =
+    typeof window === 'undefined' ? undefined : getAudioContextConstructor(window)
+  if (typeof window === 'undefined' || typeof AudioContextCtor === 'undefined') {
     throw new Error('Audio decoding is not available in this browser.')
   }
 
@@ -22,7 +29,7 @@ async function decodeAudioFromUrl(url: string): Promise<AudioBuffer> {
   }
 
   const encodedAudio = await response.arrayBuffer()
-  const audioContext = new AudioContext()
+  const audioContext = new AudioContextCtor()
 
   try {
     return await audioContext.decodeAudioData(encodedAudio.slice(0))
@@ -78,10 +85,14 @@ function encodeAudioBufferToWav(audioBuffer: AudioBuffer): Blob {
 export async function renderOfflineMixdown(
   sources: MixdownSource[],
 ): Promise<RenderedMixdown> {
+  const AudioContextCtor =
+    typeof window === 'undefined' ? undefined : getAudioContextConstructor(window)
+  const OfflineAudioContextCtor =
+    typeof window === 'undefined' ? undefined : getOfflineAudioContextConstructor(window)
   if (
     typeof window === 'undefined' ||
-    typeof window.AudioContext === 'undefined' ||
-    typeof window.OfflineAudioContext === 'undefined'
+    typeof AudioContextCtor === 'undefined' ||
+    typeof OfflineAudioContextCtor === 'undefined'
   ) {
     throw new Error('Offline mixdown rendering is not available in this browser.')
   }
@@ -105,7 +116,7 @@ export async function renderOfflineMixdown(
   const sampleRate = Math.max(...decodedSources.map((source) => source.buffer.sampleRate))
   const durationSec = Math.max(...decodedSources.map((source) => source.buffer.duration), 0.25)
   const frameCount = Math.max(1, Math.ceil(durationSec * sampleRate))
-  const offlineContext = new OfflineAudioContext(channelCount, frameCount, sampleRate)
+  const offlineContext = new OfflineAudioContextCtor(channelCount, frameCount, sampleRate)
 
   for (const source of decodedSources) {
     const sourceNode = offlineContext.createBufferSource()

@@ -1,3 +1,5 @@
+import { getAudioContextConstructor } from './audioContext'
+
 export type AudioPreviewData = {
   waveform: number[]
   contour: Array<number | null>
@@ -95,7 +97,12 @@ function buildPitchContour(
 }
 
 async function decodeAudioBuffer(encoded: ArrayBuffer): Promise<AudioBuffer> {
-  const audioContext = new AudioContext()
+  const AudioContextCtor = getAudioContextConstructor()
+  if (typeof AudioContextCtor === 'undefined') {
+    throw new Error('Audio preview decoding is not available in this browser.')
+  }
+
+  const audioContext = new AudioContextCtor()
 
   try {
     return await audioContext.decodeAudioData(encoded.slice(0))

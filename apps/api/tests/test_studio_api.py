@@ -53,8 +53,11 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
             "os": "Windows",
             "input_device_hash": "mic-a",
             "output_route": "headphones",
+            "browser_user_agent": "Mozilla/5.0 Chrome/136.0",
             "requested_constraints": {"audio": {"echoCancellation": True}},
             "applied_settings": {"sampleRate": 48000},
+            "capabilities": {"media_recorder": {"supported": True}},
+            "diagnostic_flags": [],
             "actual_sample_rate": 48000,
             "channel_count": 1,
         },
@@ -67,8 +70,11 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
             "os": "Windows",
             "input_device_hash": "mic-b",
             "output_route": "headphones",
+            "browser_user_agent": "Mozilla/5.0 Safari/617.1",
             "requested_constraints": {"audio": {"noiseSuppression": True}},
             "applied_settings": {"sampleRate": 44100},
+            "capabilities": {"web_audio": {"audio_context_mode": "webkit"}},
+            "diagnostic_flags": ["legacy_webkit_audio_context_only"],
             "actual_sample_rate": 44100,
             "channel_count": 1,
         },
@@ -119,6 +125,11 @@ def test_studio_snapshot_returns_project_guide_takes_and_latest_profile(client: 
     assert payload["takes"][1]["track_status"] == "READY"
     assert payload["takes"][1]["preview_data"] is not None
     assert payload["latest_device_profile"]["input_device_hash"] == "mic-b"
+    assert payload["latest_device_profile"]["browser_user_agent"] == "Mozilla/5.0 Safari/617.1"
+    assert payload["latest_device_profile"]["capabilities_json"]["web_audio"]["audio_context_mode"] == "webkit"
+    assert payload["latest_device_profile"]["diagnostic_flags_json"] == [
+        "legacy_webkit_audio_context_only"
+    ]
     assert payload["mixdown"] is None
     assert payload["arrangement_generation_id"] is None
     assert payload["arrangements"] == []

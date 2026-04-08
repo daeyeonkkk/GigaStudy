@@ -54,6 +54,7 @@
 - [ ] voiced가 아닌 구간 처리 규칙이 있다.
 - [ ] 낮은 confidence 구간 처리 규칙이 있다.
 - [ ] 난이도별 cent 허용치 기준이 있다.
+- [ ] `harmony_fit_score`가 chord-aware인지 key-only fallback인지 구분 규칙이 있다.
 - [ ] 정렬 실패 / 분석 실패 시 사용자 메시지가 있다.
 
 ## 6. 스튜디오 학습 UI
@@ -114,8 +115,22 @@
 - [ ] 멜로디 추출 후 4~5성부 후보 2개 이상이 생성된다.
 - [ ] 악보 보기, guide playback, MIDI / MusicXML export가 닫혀 있다.
 - [ ] 출시 직전 테스트에서 P0 범위 밖 기능이 MVP를 흔들지 않는다.
+- [ ] 출시 카피가 현재 scorer를 `정밀 음정 판정기`처럼 과대 표현하지 않는다.
 
-## 12. 지금은 하지 않을 것
+## 12. 정밀 음정 판정 품질 게이트
+
+- [ ] preview contour와 scoring source가 분리돼 있다.
+- [ ] frame-level pitch 또는 note-event artifact가 저장된다.
+- [ ] note segmentation 기준이 `attack / settle / sustain / release` 수준으로 문서화돼 있다.
+- [ ] API가 signed cents를 내려주고 sharp / flat 방향을 잃지 않는다.
+- [ ] `attack_signed_cents`, `sustain_median_cents`, `sustain_mad_cents` 같은 note-level 지표가 있다.
+- [ ] confidence weighting에 `voiced_prob`와 RMS 또는 이에 준하는 안정도 신호가 반영된다.
+- [ ] `harmony_fit_score`가 chord-aware일 때와 key-only fallback일 때를 구분해 노출한다.
+- [ ] 실제 보컬 fixture 또는 cents-shifted vocal corpus가 있다.
+- [ ] threshold calibration 기록과 사람 평가 비교 기록이 있다.
+- [ ] 이 게이트 전에는 `몇 cent 높고 낮은지 정확히 말해준다`는 카피를 쓰지 않는다.
+
+## 13. 지금은 하지 않을 것
 
 - [ ] 실시간 확정 채점을 MVP에 넣지 않는다.
 - [ ] OMR을 MVP에 넣지 않는다.

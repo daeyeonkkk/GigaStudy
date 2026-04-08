@@ -277,6 +277,38 @@
 
 - 코어 MVP를 흔들지 않고 P1 기능이 독립적으로 추가된다.
 
+### Phase 9. Intonation Quality Track
+
+목표:
+
+- 현재의 coarse MVP scorer를 note-level intonation analyzer로 끌어올리고, 강한 귀를 가진 사용자도 납득할 수 있는 sharp / flat 피드백을 만든다.
+
+주요 작업:
+
+- preview contour와 scoring source 분리
+- frame-level pitch / note-event artifact 저장
+- `attack / settle / sustain / release` note segmentation
+- signed cents, stability, confidence metric 추가
+- `voiced_prob` + RMS 기반 confidence weighting
+- chord-aware harmony와 key-only fallback labeling
+- 실제 보컬 fixture와 threshold calibration
+- note-level 피드백 UI와 제품 카피 정합성 점검
+
+산출물:
+
+- `PHASE9_INTONATION_BACKLOG.md`
+- note-level analysis schema / API 계약
+- calibration fixture 세트와 품질 리포트
+- note-level 피드백 UI
+
+완료 기준:
+
+- API가 note-level signed cents와 confidence를 반환한다.
+- 피드백이 sharp / flat 방향과 attack / sustain 차이를 구분한다.
+- harmony-fit이 chord-aware인지 key-only fallback인지 명시된다.
+- 실제 보컬 fixture 기반 calibration 기록이 남는다.
+- 이 단계가 닫히기 전에는 제품 카피가 `정밀 음정 판정기`를 주장하지 않는다.
+
 ## 4. 단계 간 의존성
 
 1. Phase 1이 닫혀야 Phase 2의 입력 데이터가 안정화된다.
@@ -284,6 +316,8 @@
 3. Phase 4가 닫혀야 Phase 5 편곡 엔진의 실제 입력이 확보된다.
 4. Phase 5가 닫혀야 Phase 6에서 악보 / 재생 / export를 유의미하게 제공할 수 있다.
 5. Phase 7은 마지막 단계지만, job 메타데이터와 오류 로그 구조는 Phase 2부터 함께 심는다.
+6. Phase 9는 Phase 2 분석 결과를 바탕으로 확장되며, 1차 출시 컷라인 이후에도 독립적으로 진행할 수 있다.
+7. 다만 Phase 9가 닫히기 전에는 채점 엔진을 `human-like intonation judge`로 포장하지 않는다.
 
 ## 5. 1차 출시 기준
 
@@ -295,11 +329,16 @@
 4. 멜로디 추출 후 4~5성부 후보 2개 이상 생성
 5. 악보 보기, guide playback, MIDI / MusicXML export
 
+위 컷라인은 `MVP vocal practice scorer` 기준이다.
+note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관리한다.
+
 ## 6. 문서 연결
 
 이 로드맵은 아래 문서와 함께 본다.
 
 1. [GigaStudy_master_plan.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_master_plan.md)
 2. [PHASE1_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
-3. [GigaStudy_check_list.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_check_list.md)
-4. [WORKING_PRINCIPLES.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/WORKING_PRINCIPLES.md)
+3. [PHASE9_INTONATION_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/PHASE9_INTONATION_BACKLOG.md)
+4. [INTONATION_ANALYSIS_ASSESSMENT.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/INTONATION_ANALYSIS_ASSESSMENT.md)
+5. [GigaStudy_check_list.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_check_list.md)
+6. [WORKING_PRINCIPLES.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/WORKING_PRINCIPLES.md)

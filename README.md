@@ -47,7 +47,7 @@ uv run pytest
 
 ## Current Hardening Focus
 
-- Upgrade intonation analysis from preview-contour scoring to note-level signed-cent feedback with confidence weighting.
+- Execute the Phase 9 intonation quality track: note-level signed-cent feedback, note segmentation, confidence weighting, and chord-aware harmony.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
 - Add release-gate smoke coverage for the main studio journey.
@@ -57,6 +57,7 @@ uv run pytest
 - [Master Plan](./PROJECT_FOUNDATION/GigaStudy_master_plan.md)
 - [Roadmap](./PROJECT_FOUNDATION/ROADMAP.md)
 - [Phase 1 Backlog](./PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
+- [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/PHASE9_INTONATION_BACKLOG.md)
 - [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
 - [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
 - [Intonation Assessment](./PROJECT_FOUNDATION/INTONATION_ANALYSIS_ASSESSMENT.md)

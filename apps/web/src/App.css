@@ -794,6 +794,28 @@
   gap: 10px;
 }
 
+.ops-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ops-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(34, 62, 83, 0.12);
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--ink-strong);
+}
+
+.ops-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: var(--accent-strong);
@@ -847,6 +869,11 @@
 .text-input:focus {
   outline: 2px solid rgba(194, 90, 39, 0.25);
   border-color: rgba(194, 90, 39, 0.35);
+}
+
+.text-input--textarea {
+  min-height: 110px;
+  resize: vertical;
 }
 
 .button-primary,
@@ -1324,6 +1351,7 @@
   }
 
   .field-grid,
+  .ops-toggle-grid,
   .studio-meta {
     grid-template-columns: 1fr;
   }

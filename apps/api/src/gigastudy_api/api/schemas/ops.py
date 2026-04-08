@@ -68,6 +68,73 @@ class OpsEnvironmentDiagnosticsResponse(BaseModel):
     recent_profiles: list[OpsEnvironmentProfileResponse] = Field(default_factory=list)
 
 
+class EnvironmentValidationRunCreateRequest(BaseModel):
+    label: str = Field(min_length=1, max_length=160)
+    tester: str | None = Field(default=None, max_length=120)
+    device_name: str = Field(min_length=1, max_length=160)
+    os: str = Field(min_length=1, max_length=80)
+    browser: str = Field(min_length=1, max_length=80)
+    input_device: str | None = Field(default=None, max_length=160)
+    output_route: str | None = Field(default=None, max_length=160)
+    outcome: str = Field(pattern="^(PASS|WARN|FAIL)$")
+    secure_context: bool | None = None
+    microphone_permission_before: str | None = Field(default=None, max_length=32)
+    microphone_permission_after: str | None = Field(default=None, max_length=32)
+    recording_mime_type: str | None = Field(default=None, max_length=64)
+    audio_context_mode: str | None = Field(default=None, max_length=32)
+    offline_audio_context_mode: str | None = Field(default=None, max_length=32)
+    actual_sample_rate: int | None = Field(default=None, ge=1)
+    base_latency: float | None = None
+    output_latency: float | None = None
+    warning_flags: list[str] = Field(default_factory=list)
+    take_recording_succeeded: bool | None = None
+    analysis_succeeded: bool | None = None
+    playback_succeeded: bool | None = None
+    audible_issues: str | None = Field(default=None, max_length=2000)
+    permission_issues: str | None = Field(default=None, max_length=2000)
+    unexpected_warnings: str | None = Field(default=None, max_length=2000)
+    follow_up: str | None = Field(default=None, max_length=2000)
+    notes: str | None = Field(default=None, max_length=4000)
+    validated_at: datetime
+
+
+class EnvironmentValidationRunResponse(BaseModel):
+    validation_run_id: UUID
+    label: str
+    tester: str | None = None
+    device_name: str
+    os: str
+    browser: str
+    input_device: str | None = None
+    output_route: str | None = None
+    outcome: str
+    secure_context: bool | None = None
+    microphone_permission_before: str | None = None
+    microphone_permission_after: str | None = None
+    recording_mime_type: str | None = None
+    audio_context_mode: str | None = None
+    offline_audio_context_mode: str | None = None
+    actual_sample_rate: int | None = None
+    base_latency: float | None = None
+    output_latency: float | None = None
+    warning_flags: list[str] = Field(default_factory=list)
+    take_recording_succeeded: bool | None = None
+    analysis_succeeded: bool | None = None
+    playback_succeeded: bool | None = None
+    audible_issues: str | None = None
+    permission_issues: str | None = None
+    unexpected_warnings: str | None = None
+    follow_up: str | None = None
+    notes: str | None = None
+    validated_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
+class EnvironmentValidationRunListResponse(BaseModel):
+    items: list[EnvironmentValidationRunResponse] = Field(default_factory=list)
+
+
 class FailedTrackSummaryResponse(BaseModel):
     track_id: UUID
     project_id: UUID
@@ -99,5 +166,6 @@ class OpsOverviewResponse(BaseModel):
     policies: OpsPolicyResponse
     model_versions: OpsModelVersionsResponse
     environment_diagnostics: OpsEnvironmentDiagnosticsResponse
+    recent_environment_validation_runs: list[EnvironmentValidationRunResponse] = Field(default_factory=list)
     failed_tracks: list[FailedTrackSummaryResponse] = Field(default_factory=list)
     recent_analysis_jobs: list[AnalysisJobSummaryResponse] = Field(default_factory=list)

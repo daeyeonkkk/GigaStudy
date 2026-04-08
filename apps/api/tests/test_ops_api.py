@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -240,3 +241,60 @@ def test_ops_overview_reports_failures_and_model_versions(client: TestClient) ->
     )
     assert any(item["failure_message"] for item in payload["failed_tracks"])
     assert any(item["status"] == "FAILED" for item in payload["recent_analysis_jobs"])
+
+
+def test_environment_validation_runs_can_be_created_and_listed(client: TestClient) -> None:
+    create_response = client.post(
+        "/api/admin/environment-validations",
+        json={
+            "label": "Native Safari speaker run",
+            "tester": "QA lead",
+            "device_name": "MacBook Air 15",
+            "os": "macOS 15.4",
+            "browser": "Safari 18",
+            "input_device": "Built-in Microphone",
+            "output_route": "Built-in Speakers",
+            "outcome": "WARN",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": None,
+            "audio_context_mode": "webkit",
+            "offline_audio_context_mode": "unavailable",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.017,
+            "output_latency": 0.039,
+            "warning_flags": ["legacy_webkit_audio_context_only", "missing_offline_audio_context"],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": False,
+            "audible_issues": "Playback preview stayed disabled on this environment.",
+            "permission_issues": "The first prompt required a reload after denial recovery.",
+            "unexpected_warnings": "missing_offline_audio_context",
+            "follow_up": "Validate again on native Safari after playback fallback review.",
+            "notes": "Recording path worked, but playback is still environment-limited.",
+            "validated_at": datetime(2026, 4, 8, 23, 40, tzinfo=timezone.utc).isoformat(),
+        },
+    )
+    assert create_response.status_code == 200
+    created_payload = create_response.json()
+    assert created_payload["outcome"] == "WARN"
+    assert created_payload["browser"] == "Safari 18"
+    assert created_payload["warning_flags"] == [
+        "legacy_webkit_audio_context_only",
+        "missing_offline_audio_context",
+    ]
+
+    list_response = client.get("/api/admin/environment-validations")
+    assert list_response.status_code == 200
+    list_payload = list_response.json()
+    assert len(list_payload["items"]) == 1
+    assert list_payload["items"][0]["label"] == "Native Safari speaker run"
+    assert list_payload["items"][0]["playback_succeeded"] is False
+
+    overview_response = client.get("/api/admin/ops")
+    assert overview_response.status_code == 200
+    overview_payload = overview_response.json()
+    assert len(overview_payload["recent_environment_validation_runs"]) == 1
+    assert overview_payload["recent_environment_validation_runs"][0]["tester"] == "QA lead"
+    assert overview_payload["recent_environment_validation_runs"][0]["outcome"] == "WARN"

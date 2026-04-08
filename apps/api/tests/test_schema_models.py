@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from gigastudy_api.db.models import (
     Artifact,
     ArtifactType,
     DeviceProfile,
+    EnvironmentValidationRun,
     MelodyDraft,
     Project,
     Score,
@@ -24,6 +26,7 @@ from gigastudy_api.db.models import (
     TrackRole,
     TrackStatus,
     User,
+    ValidationOutcome,
 )
 
 
@@ -333,6 +336,46 @@ def test_project_can_store_arrangement_candidates(session: Session) -> None:
     assert project.arrangements[0].melody_draft_id == melody_draft.melody_draft_id
 
 
+def test_user_can_store_environment_validation_runs(session: Session) -> None:
+    user = User(nickname="qa-ops")
+    validation_run = EnvironmentValidationRun(
+        user=user,
+        label="Native Safari speaker run",
+        tester="QA lead",
+        device_name="MacBook Air 15",
+        os="macOS 15.4",
+        browser="Safari 18",
+        input_device="Built-in Microphone",
+        output_route="Built-in Speakers",
+        outcome=ValidationOutcome.WARN,
+        secure_context=True,
+        microphone_permission_before="prompt",
+        microphone_permission_after="granted",
+        recording_mime_type=None,
+        audio_context_mode="webkit",
+        offline_audio_context_mode="unavailable",
+        actual_sample_rate=48000,
+        base_latency=0.017,
+        output_latency=0.039,
+        warning_flags_json=["legacy_webkit_audio_context_only", "missing_offline_audio_context"],
+        take_recording_succeeded=True,
+        analysis_succeeded=True,
+        playback_succeeded=False,
+        follow_up="Retry on native Safari after playback fallback review.",
+        validated_at=datetime(2026, 4, 8, 23, 55, tzinfo=timezone.utc),
+    )
+    session.add_all([user, validation_run])
+    session.commit()
+    session.refresh(user)
+
+    assert len(user.environment_validation_runs) == 1
+    assert user.environment_validation_runs[0].outcome == ValidationOutcome.WARN
+    assert user.environment_validation_runs[0].warning_flags_json == [
+        "legacy_webkit_audio_context_only",
+        "missing_offline_audio_context",
+    ]
+
+
 def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "phase1.db"
     api_dir = Path(__file__).resolve().parents[1]
@@ -351,6 +394,7 @@ def test_alembic_upgrade_creates_phase1_tables(tmp_path: Path) -> None:
         "arrangements",
         "artifacts",
         "device_profiles",
+        "environment_validation_runs",
         "melody_drafts",
         "projects",
         "scores",

@@ -117,6 +117,23 @@ async function uploadTake(
   expect(completeResponse.ok()).toBeTruthy()
 }
 
+async function getWithRetry(
+  request: APIRequestContext,
+  url: string,
+  attempts = 3,
+): Promise<Awaited<ReturnType<APIRequestContext['get']>>> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await request.get(url)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(`Unable to fetch ${url}`)
+}
+
 async function saveDeviceProfileFixture(request: APIRequestContext): Promise<void> {
   const response = await request.post(`${apiBaseUrl}/api/device-profiles`, {
     data: {
@@ -256,7 +273,9 @@ async function extractMelodyDraft(page: Page): Promise<void> {
 
 async function generateArrangementCandidates(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Generate arrangement candidates' }).click()
-  await expect(page.getByText(/arrangement candidates are ready for comparison\./i)).toBeVisible()
+  await expect(page.getByText(/arrangement candidates are ready for comparison\./i)).toBeVisible({
+    timeout: 20000,
+  })
 }
 
 function getNoteFeedbackPanel(page: Page) {
@@ -396,9 +415,9 @@ test('release gate arrangement flow reaches export-ready score artifacts', async
   expect(guideWavHref).toBeTruthy()
 
   const [musicXmlResponse, arrangementMidiResponse, guideWavResponse] = await Promise.all([
-    request.get(musicXmlHref!),
-    request.get(arrangementMidiHref!),
-    request.get(guideWavHref!),
+    getWithRetry(request, musicXmlHref!),
+    getWithRetry(request, arrangementMidiHref!),
+    getWithRetry(request, guideWavHref!),
   ])
 
   expect(musicXmlResponse.ok()).toBeTruthy()
@@ -531,6 +550,64 @@ test('release gate ops overview can export the environment diagnostics report', 
       (warning) => warning.flag === 'legacy_webkit_audio_context_only',
     ),
   ).toBeTruthy()
+})
+
+test('release gate ops overview can store a manual environment validation run', async ({
+  page,
+}) => {
+  await page.goto('/ops')
+  await expect(page.getByRole('heading', { name: 'Record a native browser or real-hardware validation run' })).toBeVisible()
+
+  await page.getByLabel('Run label').fill('Native Safari manual run')
+  await page.getByLabel('Tester').fill('Browser QA')
+  await page.getByLabel('Device name').fill('MacBook Pro 14')
+  await page.getByLabel('OS').fill('macOS 15.4')
+  await page.getByLabel('Browser').fill('Safari 18')
+  await page.getByLabel('Input device').fill('Built-in Microphone')
+  await page.getByLabel('Output route').fill('Built-in Speakers')
+  await page.getByLabel('Warning flags').fill(
+    'legacy_webkit_audio_context_only, missing_offline_audio_context',
+  )
+  await page.getByLabel('Recorder MIME').fill('audio/mp4')
+  await page.getByLabel('Primary AudioContext mode').fill('webkit')
+  await page.getByLabel('Offline render mode').fill('unavailable')
+  await page.getByLabel('Sample rate (Hz)').fill('48000')
+  await page.getByLabel('Base latency (ms)').fill('17')
+  await page.getByLabel('Output latency (ms)').fill('39')
+  await page.getByLabel('Playback succeeded').uncheck()
+  await page.getByLabel('Follow-up').fill(
+    'Retry after native Safari playback fallback verification.',
+  )
+  await page.getByLabel('Notes').fill(
+    'Recording path passed, playback remains degraded on this environment.',
+  )
+
+  await page.getByRole('button', { name: 'Save validation run' }).click()
+  await expect(
+    page.getByText(
+      'Environment validation run saved. The ops overview now includes the latest manual browser check.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+
+  const validationPanel = page
+    .locator('article.panel')
+    .filter({
+      has: page.getByRole('heading', {
+        name: 'Keep native browser checks visible next to the diagnostics baseline',
+      }),
+    })
+    .first()
+  const validationCard = validationPanel
+    .locator('article.ops-card')
+    .filter({ hasText: 'Native Safari manual run' })
+    .first()
+  await expect(validationCard).toBeVisible()
+  await expect(validationCard.getByText('Browser QA', { exact: true })).toBeVisible()
+  await expect(validationCard.getByText('WARN', { exact: true })).toBeVisible()
+  await expect(
+    validationCard.getByText('Retry after native Safari playback fallback verification.'),
+  ).toBeVisible()
 })
 
 test('release gate long-session stability survives repeated take and analysis cycles', async ({

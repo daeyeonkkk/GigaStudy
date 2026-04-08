@@ -64,6 +64,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
 - The admin ops view now aggregates those environment diagnostics into a browser matrix, warning-flag counts, and recent captured profiles for support and release triage.
 - The ops view can now also download an environment diagnostics report JSON, which is the baseline artifact for native Safari and real-hardware validation rounds.
+- The ops view now also stores structured manual validation runs, so PASS / WARN / FAIL browser checks live beside the diagnostics baseline.
 - A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
 - The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
@@ -72,6 +73,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - The browser release gate now also covers a longer continuous session: repeated takes, take switching, repeated analysis, regeneration, playback, and share creation without page errors.
 - The browser release gate now also covers a cross-browser matrix for the seeded safe paths: Chromium, Firefox, and WebKit verify the core studio smoke, sharing, and arrangement export journeys, while arrangement playback is currently verified in Chromium and Firefox.
 - The browser release gate now also covers environment diagnostics report export in Chromium, Firefox, and WebKit.
+- The browser release gate now also covers manual environment validation run capture in Chromium, Firefox, and WebKit.
 
 ## Current Hardening Focus
 

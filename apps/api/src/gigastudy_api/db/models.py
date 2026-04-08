@@ -53,6 +53,12 @@ class ShareAccessScope(str, enum.Enum):
     READ_ONLY = "READ_ONLY"
 
 
+class ValidationOutcome(str, enum.Enum):
+    PASS = "PASS"
+    WARN = "WARN"
+    FAIL = "FAIL"
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -75,6 +81,10 @@ class User(TimestampMixin, Base):
 
     projects: Mapped[list["Project"]] = relationship(back_populates="user")
     device_profiles: Mapped[list["DeviceProfile"]] = relationship(back_populates="user")
+    environment_validation_runs: Mapped[list["EnvironmentValidationRun"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class Project(TimestampMixin, Base):
@@ -222,6 +232,45 @@ class DeviceProfile(TimestampMixin, Base):
     calibration_confidence: Mapped[float | None] = mapped_column(Float)
 
     user: Mapped["User"] = relationship(back_populates="device_profiles")
+
+
+class EnvironmentValidationRun(TimestampMixin, Base):
+    __tablename__ = "environment_validation_runs"
+
+    validation_run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.user_id"), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    tester: Mapped[str | None] = mapped_column(String(120))
+    device_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    os: Mapped[str] = mapped_column(String(80), nullable=False)
+    browser: Mapped[str] = mapped_column(String(80), nullable=False)
+    input_device: Mapped[str | None] = mapped_column(String(160))
+    output_route: Mapped[str | None] = mapped_column(String(160))
+    outcome: Mapped[ValidationOutcome] = mapped_column(
+        Enum(ValidationOutcome, name="validation_outcome", native_enum=False),
+        nullable=False,
+    )
+    secure_context: Mapped[bool | None] = mapped_column(Boolean)
+    microphone_permission_before: Mapped[str | None] = mapped_column(String(32))
+    microphone_permission_after: Mapped[str | None] = mapped_column(String(32))
+    recording_mime_type: Mapped[str | None] = mapped_column(String(64))
+    audio_context_mode: Mapped[str | None] = mapped_column(String(32))
+    offline_audio_context_mode: Mapped[str | None] = mapped_column(String(32))
+    actual_sample_rate: Mapped[int | None] = mapped_column(Integer)
+    base_latency: Mapped[float | None] = mapped_column(Float)
+    output_latency: Mapped[float | None] = mapped_column(Float)
+    warning_flags_json: Mapped[list[str] | None] = mapped_column(JSON)
+    take_recording_succeeded: Mapped[bool | None] = mapped_column(Boolean)
+    analysis_succeeded: Mapped[bool | None] = mapped_column(Boolean)
+    playback_succeeded: Mapped[bool | None] = mapped_column(Boolean)
+    audible_issues: Mapped[str | None] = mapped_column(String(2000))
+    permission_issues: Mapped[str | None] = mapped_column(String(2000))
+    unexpected_warnings: Mapped[str | None] = mapped_column(String(2000))
+    follow_up: Mapped[str | None] = mapped_column(String(2000))
+    notes: Mapped[str | None] = mapped_column(String(4000))
+    validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    user: Mapped["User"] = relationship(back_populates="environment_validation_runs")
 
 
 class AnalysisJob(Base):

@@ -68,6 +68,39 @@ type OpsEnvironmentDiagnostics = {
   recent_profiles: OpsEnvironmentProfile[]
 }
 
+type EnvironmentValidationRun = {
+  validation_run_id: string
+  label: string
+  tester: string | null
+  device_name: string
+  os: string
+  browser: string
+  input_device: string | null
+  output_route: string | null
+  outcome: 'PASS' | 'WARN' | 'FAIL'
+  secure_context: boolean | null
+  microphone_permission_before: string | null
+  microphone_permission_after: string | null
+  recording_mime_type: string | null
+  audio_context_mode: string | null
+  offline_audio_context_mode: string | null
+  actual_sample_rate: number | null
+  base_latency: number | null
+  output_latency: number | null
+  warning_flags: string[]
+  take_recording_succeeded: boolean | null
+  analysis_succeeded: boolean | null
+  playback_succeeded: boolean | null
+  audible_issues: string | null
+  permission_issues: string | null
+  unexpected_warnings: string | null
+  follow_up: string | null
+  notes: string | null
+  validated_at: string
+  created_at: string
+  updated_at: string
+}
+
 type FailedTrackSummary = {
   track_id: string
   project_id: string
@@ -99,6 +132,7 @@ type OpsOverview = {
   policies: OpsPolicies
   model_versions: OpsModelVersions
   environment_diagnostics: OpsEnvironmentDiagnostics
+  recent_environment_validation_runs: EnvironmentValidationRun[]
   failed_tracks: FailedTrackSummary[]
   recent_analysis_jobs: AnalysisJobSummary[]
 }
@@ -119,6 +153,73 @@ type EnvironmentDiagnosticsExport = {
   generated_from: 'ops_overview'
   environment_diagnostics: OpsEnvironmentDiagnostics
 }
+
+type ValidationFormState = {
+  label: string
+  tester: string
+  deviceName: string
+  os: string
+  browser: string
+  inputDevice: string
+  outputRoute: string
+  outcome: 'PASS' | 'WARN' | 'FAIL'
+  secureContext: boolean
+  microphonePermissionBefore: string
+  microphonePermissionAfter: string
+  recordingMimeType: string
+  audioContextMode: string
+  offlineAudioContextMode: string
+  actualSampleRate: string
+  baseLatencyMs: string
+  outputLatencyMs: string
+  warningFlagsText: string
+  takeRecordingSucceeded: boolean
+  analysisSucceeded: boolean
+  playbackSucceeded: boolean
+  audibleIssues: string
+  permissionIssues: string
+  unexpectedWarnings: string
+  followUp: string
+  notes: string
+  validatedAt: string
+}
+
+function getCurrentDateTimeLocal(): string {
+  const now = new Date()
+  const offsetMinutes = now.getTimezoneOffset()
+  const localDate = new Date(now.getTime() - offsetMinutes * 60_000)
+  return localDate.toISOString().slice(0, 16)
+}
+
+const initialValidationFormState = (): ValidationFormState => ({
+  label: '',
+  tester: '',
+  deviceName: '',
+  os: '',
+  browser: '',
+  inputDevice: '',
+  outputRoute: '',
+  outcome: 'WARN',
+  secureContext: true,
+  microphonePermissionBefore: 'prompt',
+  microphonePermissionAfter: 'granted',
+  recordingMimeType: '',
+  audioContextMode: '',
+  offlineAudioContextMode: '',
+  actualSampleRate: '',
+  baseLatencyMs: '',
+  outputLatencyMs: '',
+  warningFlagsText: '',
+  takeRecordingSucceeded: true,
+  analysisSucceeded: true,
+  playbackSucceeded: true,
+  audibleIssues: '',
+  permissionIssues: '',
+  unexpectedWarnings: '',
+  followUp: '',
+  notes: '',
+  validatedAt: getCurrentDateTimeLocal(),
+})
 
 function formatDate(value: string | null): string {
   if (!value) {
@@ -150,6 +251,13 @@ function downloadJsonReport(filename: string, payload: unknown): void {
   URL.revokeObjectURL(url)
 }
 
+function parseWarningFlags(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const payload = (await response.json()) as { detail?: unknown }
@@ -166,6 +274,9 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 export function OpsPage() {
   const [pageState, setPageState] = useState<PageState>({ phase: 'loading' })
   const [actionState, setActionState] = useState<ActionState>({ phase: 'idle' })
+  const [validationFormState, setValidationFormState] = useState<ValidationFormState>(
+    initialValidationFormState,
+  )
 
   async function loadOverview(signal?: AbortSignal): Promise<void> {
     try {
@@ -264,6 +375,75 @@ export function OpsPage() {
     })
   }
 
+  async function handleCreateValidationRun(event: React.FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault()
+    setActionState({
+      phase: 'submitting',
+      message: 'Saving the environment validation run and refreshing the overview...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl('/api/admin/environment-validations'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          label: validationFormState.label,
+          tester: validationFormState.tester || null,
+          device_name: validationFormState.deviceName,
+          os: validationFormState.os,
+          browser: validationFormState.browser,
+          input_device: validationFormState.inputDevice || null,
+          output_route: validationFormState.outputRoute || null,
+          outcome: validationFormState.outcome,
+          secure_context: validationFormState.secureContext,
+          microphone_permission_before: validationFormState.microphonePermissionBefore || null,
+          microphone_permission_after: validationFormState.microphonePermissionAfter || null,
+          recording_mime_type: validationFormState.recordingMimeType || null,
+          audio_context_mode: validationFormState.audioContextMode || null,
+          offline_audio_context_mode: validationFormState.offlineAudioContextMode || null,
+          actual_sample_rate: validationFormState.actualSampleRate
+            ? Number(validationFormState.actualSampleRate)
+            : null,
+          base_latency: validationFormState.baseLatencyMs
+            ? Number(validationFormState.baseLatencyMs) / 1000
+            : null,
+          output_latency: validationFormState.outputLatencyMs
+            ? Number(validationFormState.outputLatencyMs) / 1000
+            : null,
+          warning_flags: parseWarningFlags(validationFormState.warningFlagsText),
+          take_recording_succeeded: validationFormState.takeRecordingSucceeded,
+          analysis_succeeded: validationFormState.analysisSucceeded,
+          playback_succeeded: validationFormState.playbackSucceeded,
+          audible_issues: validationFormState.audibleIssues || null,
+          permission_issues: validationFormState.permissionIssues || null,
+          unexpected_warnings: validationFormState.unexpectedWarnings || null,
+          follow_up: validationFormState.followUp || null,
+          notes: validationFormState.notes || null,
+          validated_at: new Date(validationFormState.validatedAt).toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to save the validation run.'))
+      }
+
+      await loadOverview()
+      setValidationFormState(initialValidationFormState())
+      setActionState({
+        phase: 'success',
+        message:
+          'Environment validation run saved. The ops overview now includes the latest manual browser check.',
+      })
+    } catch (error) {
+      setActionState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to save the validation run.',
+      })
+    }
+  }
+
   if (pageState.phase === 'loading') {
     return (
       <div className="page-shell">
@@ -295,6 +475,7 @@ export function OpsPage() {
 
   const { payload } = pageState
   const environmentDiagnostics = payload.environment_diagnostics
+  const validationRuns = payload.recent_environment_validation_runs
 
   return (
     <div className="page-shell">
@@ -495,6 +676,557 @@ export function OpsPage() {
             )}
           </article>
         </div>
+      </section>
+
+      <section className="section section--split">
+        <article className="panel studio-block">
+          <p className="eyebrow">Validation Log</p>
+          <h2>Record a native browser or real-hardware validation run</h2>
+          <p className="panel__summary">
+            Use the PROJECT_FOUNDATION environment protocol, then leave the result here so ops,
+            release notes, and browser support claims all point at the same evidence.
+          </p>
+
+          <form className="project-form" onSubmit={(event) => void handleCreateValidationRun(event)}>
+            <div className="field-grid">
+              <label className="field">
+                <span>Run label</span>
+                <input
+                  className="text-input"
+                  name="validationLabel"
+                  value={validationFormState.label}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      label: event.target.value,
+                    }))
+                  }
+                  placeholder="Native Safari built-in speaker run"
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>Tester</span>
+                <input
+                  className="text-input"
+                  name="tester"
+                  value={validationFormState.tester}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      tester: event.target.value,
+                    }))
+                  }
+                  placeholder="QA lead"
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Device name</span>
+                <input
+                  className="text-input"
+                  name="deviceName"
+                  value={validationFormState.deviceName}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      deviceName: event.target.value,
+                    }))
+                  }
+                  placeholder="MacBook Air 15"
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>Validated at</span>
+                <input
+                  className="text-input"
+                  type="datetime-local"
+                  name="validatedAt"
+                  value={validationFormState.validatedAt}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      validatedAt: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>OS</span>
+                <input
+                  className="text-input"
+                  name="validationOs"
+                  value={validationFormState.os}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      os: event.target.value,
+                    }))
+                  }
+                  placeholder="macOS 15.4"
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>Browser</span>
+                <input
+                  className="text-input"
+                  name="validationBrowser"
+                  value={validationFormState.browser}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      browser: event.target.value,
+                    }))
+                  }
+                  placeholder="Safari 18"
+                  required
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Input device</span>
+                <input
+                  className="text-input"
+                  name="inputDevice"
+                  value={validationFormState.inputDevice}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      inputDevice: event.target.value,
+                    }))
+                  }
+                  placeholder="Built-in Microphone"
+                />
+              </label>
+
+              <label className="field">
+                <span>Output route</span>
+                <input
+                  className="text-input"
+                  name="outputRoute"
+                  value={validationFormState.outputRoute}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      outputRoute: event.target.value,
+                    }))
+                  }
+                  placeholder="Built-in Speakers"
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Outcome</span>
+                <select
+                  className="text-input"
+                  name="outcome"
+                  value={validationFormState.outcome}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      outcome: event.target.value as ValidationFormState['outcome'],
+                    }))
+                  }
+                >
+                  <option value="PASS">PASS</option>
+                  <option value="WARN">WARN</option>
+                  <option value="FAIL">FAIL</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Warning flags</span>
+                <input
+                  className="text-input"
+                  name="warningFlags"
+                  value={validationFormState.warningFlagsText}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      warningFlagsText: event.target.value,
+                    }))
+                  }
+                  placeholder="legacy_webkit_audio_context_only, missing_offline_audio_context"
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Mic permission before</span>
+                <input
+                  className="text-input"
+                  name="permissionBefore"
+                  value={validationFormState.microphonePermissionBefore}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      microphonePermissionBefore: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span>Mic permission after</span>
+                <input
+                  className="text-input"
+                  name="permissionAfter"
+                  value={validationFormState.microphonePermissionAfter}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      microphonePermissionAfter: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Recorder MIME</span>
+                <input
+                  className="text-input"
+                  name="recordingMimeType"
+                  value={validationFormState.recordingMimeType}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      recordingMimeType: event.target.value,
+                    }))
+                  }
+                  placeholder="audio/webm"
+                />
+              </label>
+
+              <label className="field">
+                <span>Primary AudioContext mode</span>
+                <input
+                  className="text-input"
+                  name="audioContextMode"
+                  value={validationFormState.audioContextMode}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      audioContextMode: event.target.value,
+                    }))
+                  }
+                  placeholder="standard or webkit"
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Offline render mode</span>
+                <input
+                  className="text-input"
+                  name="offlineAudioContextMode"
+                  value={validationFormState.offlineAudioContextMode}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      offlineAudioContextMode: event.target.value,
+                    }))
+                  }
+                  placeholder="standard, webkit, unavailable"
+                />
+              </label>
+
+              <label className="field">
+                <span>Sample rate (Hz)</span>
+                <input
+                  className="text-input"
+                  name="actualSampleRate"
+                  inputMode="numeric"
+                  value={validationFormState.actualSampleRate}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      actualSampleRate: event.target.value,
+                    }))
+                  }
+                  placeholder="48000"
+                />
+              </label>
+            </div>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Base latency (ms)</span>
+                <input
+                  className="text-input"
+                  name="baseLatency"
+                  inputMode="decimal"
+                  value={validationFormState.baseLatencyMs}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      baseLatencyMs: event.target.value,
+                    }))
+                  }
+                  placeholder="17"
+                />
+              </label>
+
+              <label className="field">
+                <span>Output latency (ms)</span>
+                <input
+                  className="text-input"
+                  name="outputLatency"
+                  inputMode="decimal"
+                  value={validationFormState.outputLatencyMs}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      outputLatencyMs: event.target.value,
+                    }))
+                  }
+                  placeholder="39"
+                />
+              </label>
+            </div>
+
+            <div className="ops-toggle-grid">
+              <label className="ops-toggle">
+                <input
+                  type="checkbox"
+                  checked={validationFormState.secureContext}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      secureContext: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Secure context</span>
+              </label>
+              <label className="ops-toggle">
+                <input
+                  type="checkbox"
+                  checked={validationFormState.takeRecordingSucceeded}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      takeRecordingSucceeded: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Take recording succeeded</span>
+              </label>
+              <label className="ops-toggle">
+                <input
+                  type="checkbox"
+                  checked={validationFormState.analysisSucceeded}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      analysisSucceeded: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Analysis succeeded</span>
+              </label>
+              <label className="ops-toggle">
+                <input
+                  type="checkbox"
+                  checked={validationFormState.playbackSucceeded}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      playbackSucceeded: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Playback succeeded</span>
+              </label>
+            </div>
+
+            <label className="field">
+              <span>Audible issues</span>
+              <textarea
+                className="text-input text-input--textarea"
+                name="audibleIssues"
+                value={validationFormState.audibleIssues}
+                onChange={(event) =>
+                  setValidationFormState((current) => ({
+                    ...current,
+                    audibleIssues: event.target.value,
+                  }))
+                }
+                placeholder="Playback preview stayed disabled on this environment."
+              />
+            </label>
+
+            <label className="field">
+              <span>Permission issues</span>
+              <textarea
+                className="text-input text-input--textarea"
+                name="permissionIssues"
+                value={validationFormState.permissionIssues}
+                onChange={(event) =>
+                  setValidationFormState((current) => ({
+                    ...current,
+                    permissionIssues: event.target.value,
+                  }))
+                }
+                placeholder="The first prompt required a reload after denial recovery."
+              />
+            </label>
+
+            <div className="field-grid">
+              <label className="field">
+                <span>Unexpected warnings</span>
+                <textarea
+                  className="text-input text-input--textarea"
+                  name="unexpectedWarnings"
+                  value={validationFormState.unexpectedWarnings}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      unexpectedWarnings: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span>Follow-up</span>
+                <textarea
+                  className="text-input text-input--textarea"
+                  name="followUp"
+                  value={validationFormState.followUp}
+                  onChange={(event) =>
+                    setValidationFormState((current) => ({
+                      ...current,
+                      followUp: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <label className="field">
+              <span>Notes</span>
+              <textarea
+                className="text-input text-input--textarea"
+                name="validationNotes"
+                value={validationFormState.notes}
+                onChange={(event) =>
+                  setValidationFormState((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+                placeholder="Recording worked, but playback stayed environment-limited."
+              />
+            </label>
+
+            <button
+              className="button-primary"
+              type="submit"
+              disabled={actionState.phase === 'submitting'}
+            >
+              {actionState.phase === 'submitting' ? 'Saving validation run...' : 'Save validation run'}
+            </button>
+          </form>
+        </article>
+
+        <article className="panel studio-block">
+          <p className="eyebrow">Recent Validation Runs</p>
+          <h2>Keep native browser checks visible next to the diagnostics baseline</h2>
+
+          <div className="ops-list">
+            {validationRuns.length === 0 ? (
+              <div className="empty-card empty-card--warn">
+                <p>No manual validation runs have been logged yet.</p>
+                <p>Use the form to capture a native Safari or real-hardware run after testing.</p>
+              </div>
+            ) : (
+              validationRuns.map((run) => (
+                <article className="ops-card" key={run.validation_run_id}>
+                  <div className="ops-card__header">
+                    <div>
+                      <strong>{run.label}</strong>
+                      <span>
+                        {run.browser} / {run.os} | {run.device_name} | validated{' '}
+                        {formatDate(run.validated_at)}
+                      </span>
+                    </div>
+
+                    <div
+                      className={`status-pill ${
+                        run.outcome === 'FAIL'
+                          ? 'status-pill--error'
+                          : run.outcome === 'WARN'
+                            ? 'status-pill--loading'
+                            : 'status-pill--ready'
+                      }`}
+                    >
+                      {run.outcome}
+                    </div>
+                  </div>
+
+                  <div className="mini-grid">
+                    <div className="mini-card">
+                      <span>Tester</span>
+                      <strong>{run.tester ?? 'Unspecified'}</strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>Input / output</span>
+                      <strong>
+                        {run.input_device ?? 'Unknown'} / {run.output_route ?? 'Unknown'}
+                      </strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>Recorder / audio</span>
+                      <strong>
+                        {run.recording_mime_type ?? 'Unavailable'} / {run.audio_context_mode ?? 'Unavailable'}
+                      </strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>Flow checks</span>
+                      <strong>
+                        Rec {run.take_recording_succeeded ? 'yes' : 'no'} / Ana{' '}
+                        {run.analysis_succeeded ? 'yes' : 'no'} / Play{' '}
+                        {run.playback_succeeded ? 'yes' : 'no'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {run.warning_flags.length > 0 ? (
+                    <div className="ops-chip-list">
+                      {run.warning_flags.map((flag) => (
+                        <span className="status-pill status-pill--loading" key={flag}>
+                          {getBrowserAudioWarningLabel(flag)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {run.follow_up ? <p className="status-card__hint">Follow-up: {run.follow_up}</p> : null}
+                  {run.notes ? <p className="status-card__hint">{run.notes}</p> : null}
+                </article>
+              ))
+            )}
+          </div>
+        </article>
       </section>
 
       <section className="section section--split">

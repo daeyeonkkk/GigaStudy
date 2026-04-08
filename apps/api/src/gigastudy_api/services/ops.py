@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from gigastudy_api.api.schemas.ops import (
     AnalysisJobSummaryResponse,
+    EnvironmentValidationRunCreateRequest,
+    EnvironmentValidationRunResponse,
     FailedTrackSummaryResponse,
     OpsEnvironmentBrowserResponse,
     OpsEnvironmentDiagnosticsResponse,
@@ -21,15 +23,18 @@ from gigastudy_api.db.models import (
     AnalysisJob,
     AnalysisJobStatus,
     DeviceProfile,
+    EnvironmentValidationRun,
     MelodyDraft,
     Project,
     Track,
     TrackRole,
     TrackStatus,
+    ValidationOutcome,
 )
 from gigastudy_api.services.analysis import ANALYSIS_MODEL_VERSION
 from gigastudy_api.services.arrangements import ARRANGEMENT_ENGINE_VERSION
 from gigastudy_api.services.melody import MELODY_MODEL_VERSION
+from gigastudy_api.services.projects import get_or_create_default_user
 
 
 def _count_records(session: Session, statement) -> int:
@@ -147,6 +152,101 @@ def _build_environment_diagnostics(
     )
 
 
+def list_environment_validation_runs(
+    session: Session,
+    *,
+    limit: int,
+) -> list[EnvironmentValidationRun]:
+    user = get_or_create_default_user(session)
+    recent_limit = max(1, limit)
+    return list(
+        session.scalars(
+            select(EnvironmentValidationRun)
+            .where(EnvironmentValidationRun.user_id == user.user_id)
+            .order_by(EnvironmentValidationRun.validated_at.desc(), EnvironmentValidationRun.created_at.desc())
+            .limit(recent_limit)
+        ).all()
+    )
+
+
+def create_environment_validation_run(
+    session: Session,
+    payload: EnvironmentValidationRunCreateRequest,
+) -> EnvironmentValidationRun:
+    user = get_or_create_default_user(session)
+    validation_run = EnvironmentValidationRun(
+        user=user,
+        label=payload.label,
+        tester=payload.tester,
+        device_name=payload.device_name,
+        os=payload.os,
+        browser=payload.browser,
+        input_device=payload.input_device,
+        output_route=payload.output_route,
+        outcome=ValidationOutcome(payload.outcome),
+        secure_context=payload.secure_context,
+        microphone_permission_before=payload.microphone_permission_before,
+        microphone_permission_after=payload.microphone_permission_after,
+        recording_mime_type=payload.recording_mime_type,
+        audio_context_mode=payload.audio_context_mode,
+        offline_audio_context_mode=payload.offline_audio_context_mode,
+        actual_sample_rate=payload.actual_sample_rate,
+        base_latency=payload.base_latency,
+        output_latency=payload.output_latency,
+        warning_flags_json=payload.warning_flags,
+        take_recording_succeeded=payload.take_recording_succeeded,
+        analysis_succeeded=payload.analysis_succeeded,
+        playback_succeeded=payload.playback_succeeded,
+        audible_issues=payload.audible_issues,
+        permission_issues=payload.permission_issues,
+        unexpected_warnings=payload.unexpected_warnings,
+        follow_up=payload.follow_up,
+        notes=payload.notes,
+        validated_at=payload.validated_at,
+    )
+    session.add(validation_run)
+    session.commit()
+    session.refresh(validation_run)
+    return validation_run
+
+
+def build_environment_validation_run_response(
+    validation_run: EnvironmentValidationRun,
+) -> EnvironmentValidationRunResponse:
+    return EnvironmentValidationRunResponse(
+        validation_run_id=validation_run.validation_run_id,
+        label=validation_run.label,
+        tester=validation_run.tester,
+        device_name=validation_run.device_name,
+        os=validation_run.os,
+        browser=validation_run.browser,
+        input_device=validation_run.input_device,
+        output_route=validation_run.output_route,
+        outcome=validation_run.outcome.value,
+        secure_context=validation_run.secure_context,
+        microphone_permission_before=validation_run.microphone_permission_before,
+        microphone_permission_after=validation_run.microphone_permission_after,
+        recording_mime_type=validation_run.recording_mime_type,
+        audio_context_mode=validation_run.audio_context_mode,
+        offline_audio_context_mode=validation_run.offline_audio_context_mode,
+        actual_sample_rate=validation_run.actual_sample_rate,
+        base_latency=validation_run.base_latency,
+        output_latency=validation_run.output_latency,
+        warning_flags=list(validation_run.warning_flags_json or []),
+        take_recording_succeeded=validation_run.take_recording_succeeded,
+        analysis_succeeded=validation_run.analysis_succeeded,
+        playback_succeeded=validation_run.playback_succeeded,
+        audible_issues=validation_run.audible_issues,
+        permission_issues=validation_run.permission_issues,
+        unexpected_warnings=validation_run.unexpected_warnings,
+        follow_up=validation_run.follow_up,
+        notes=validation_run.notes,
+        validated_at=validation_run.validated_at,
+        created_at=validation_run.created_at,
+        updated_at=validation_run.updated_at,
+    )
+
+
 def get_ops_overview(session: Session) -> OpsOverviewResponse:
     settings = get_settings()
     recent_limit = max(1, settings.ops_recent_limit)
@@ -195,6 +295,7 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
             .limit(recent_limit)
         ).all()
     )
+    recent_validation_runs = list_environment_validation_runs(session, limit=recent_limit)
 
     analysis_versions = sorted(
         {
@@ -233,6 +334,10 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
             session,
             recent_limit=recent_limit,
         ),
+        recent_environment_validation_runs=[
+            build_environment_validation_run_response(validation_run)
+            for validation_run in recent_validation_runs
+        ],
         failed_tracks=[
             FailedTrackSummaryResponse(
                 track_id=track.track_id,

@@ -19,6 +19,7 @@ Date: 2026-04-08
 - The P1 reinforcement line is also implemented:
   difficulty presets, voice-range presets, A/B/C candidate comparison, beatbox templates, project history, share links, and admin ops monitoring.
 - Admin ops monitoring now also includes browser-audio environment diagnostics from saved DeviceProfiles, so capability warnings can be reviewed by browser and OS instead of staying buried in studio-only state.
+- Admin ops monitoring now also includes manual environment validation runs, so native Safari and real-hardware checks can be stored next to the diagnostics baseline instead of living only in ad hoc notes.
 - Device profile capture is stored with requested constraints and applied settings, and the studio snapshot includes the latest profile as the foundation docs require.
 - Device profiles now also store a browser capability snapshot plus normalized diagnostic warning flags, so permission state, recorder codec support, secure-context status, and Web Audio / OfflineAudioContext support can be audited per environment.
 - Upload processing creates canonical audio plus waveform preview artifacts and keeps retry paths for failed processing.
@@ -58,6 +59,7 @@ Date: 2026-04-08
 - The studio now also shows current browser audio capability warnings before save and the stored DeviceProfile warnings after save, which turns the remaining browser-hardware gap into something we can inspect instead of guess.
 - The ops overview now aggregates those DeviceProfile diagnostics into a browser matrix, warning-flag counts, and recent environment cards, which is the first foundation step from capture toward real hardware validation.
 - The ops overview can now also export an environment diagnostics report JSON, and the foundation now includes a dedicated browser-environment validation protocol for native Safari and real-hardware rounds.
+- The ops overview now also lets a reviewer save a structured PASS / WARN / FAIL validation run with browser, device, permission, playback, and follow-up notes, which turns the protocol into an actual product workflow.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -66,16 +68,19 @@ Date: 2026-04-08
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `47 passed`
+- Result: `49 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
+- Alembic upgrade: `uv run alembic upgrade head`
+- Result: passed through `20260408_0010`.
 - Web lint: `npm run lint:web`
 - Web build: `npm run build:web`
 - Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
 - Browser release-gate smoke path: `npm run test:e2e`
-- Result: `16 passed`, `5 skipped`
+- Result: `19 passed`, `5 skipped`
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
 - Arrangement playback progress plus stop/reset behavior is now verified in Chromium and Firefox.
 - Ops overview export is now verified in Chromium, Firefox, and WebKit.
+- Ops overview manual validation-run capture is now also verified in Chromium, Firefox, and WebKit.
 - Chromium additionally covers the browser recorder transport with fake-microphone permission plus DeviceProfile capture and the repeated in-session endurance workflow.
 - The DeviceProfile path now also verifies capability snapshot capture and warning-flag persistence through the API and studio snapshot.
 - Firefox intentionally skips the fake-microphone recorder path and the recorder-dependent endurance path because those currently depend on Chromium launch flags rather than portable browser behavior.

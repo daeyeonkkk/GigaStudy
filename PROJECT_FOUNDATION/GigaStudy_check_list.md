@@ -141,6 +141,7 @@
 - [ ] real hardware variability 이슈를 capability snapshot과 diagnostic flag로 추적할 수 있다.
 - [ ] ops overview에서 environment diagnostics report를 내려받을 수 있다.
 - [ ] native browser 검증은 `BROWSER_ENVIRONMENT_VALIDATION.md` 기준으로 기록한다.
+- [ ] native browser 검증 결과를 ops validation run log에 PASS / WARN / FAIL로 남길 수 있다.
 
 ## 14. 지금은 하지 않을 것
 

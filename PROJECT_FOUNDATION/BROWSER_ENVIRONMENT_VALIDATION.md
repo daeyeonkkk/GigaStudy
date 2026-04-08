@@ -116,14 +116,16 @@ Before a manual validation round:
 2. Refresh overview
 3. Download the environment diagnostics report
 4. Use that report as the baseline for the round
+5. Prepare a new validation run entry in the ops validation log form
 
 After a manual validation round:
 
 1. Save DeviceProfiles from the tested environments
 2. Refresh `/ops`
-3. Download a fresh environment diagnostics report
-4. Attach the report to release notes or the validation log
-5. Compare new warning flags against the previous baseline
+3. Save a structured validation run in the ops validation log
+4. Download a fresh environment diagnostics report
+5. Attach the report to release notes or the validation log
+6. Compare new warning flags against the previous baseline
 
 ## Release Gate Expectations
 

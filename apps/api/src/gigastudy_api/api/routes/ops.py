@@ -1,9 +1,19 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from gigastudy_api.api.schemas.ops import OpsOverviewResponse
+from gigastudy_api.api.schemas.ops import (
+    EnvironmentValidationRunCreateRequest,
+    EnvironmentValidationRunListResponse,
+    EnvironmentValidationRunResponse,
+    OpsOverviewResponse,
+)
 from gigastudy_api.db.session import get_db_session
-from gigastudy_api.services.ops import get_ops_overview
+from gigastudy_api.services.ops import (
+    build_environment_validation_run_response,
+    create_environment_validation_run,
+    get_ops_overview,
+    list_environment_validation_runs,
+)
 
 
 router = APIRouter(prefix="/admin")
@@ -14,3 +24,22 @@ def get_ops_overview_endpoint(
     session: Session = Depends(get_db_session),
 ) -> OpsOverviewResponse:
     return get_ops_overview(session)
+
+
+@router.get("/environment-validations", response_model=EnvironmentValidationRunListResponse)
+def list_environment_validation_runs_endpoint(
+    session: Session = Depends(get_db_session),
+) -> EnvironmentValidationRunListResponse:
+    items = list_environment_validation_runs(session, limit=20)
+    return EnvironmentValidationRunListResponse(
+        items=[build_environment_validation_run_response(item) for item in items]
+    )
+
+
+@router.post("/environment-validations", response_model=EnvironmentValidationRunResponse)
+def create_environment_validation_run_endpoint(
+    payload: EnvironmentValidationRunCreateRequest,
+    session: Session = Depends(get_db_session),
+) -> EnvironmentValidationRunResponse:
+    item = create_environment_validation_run(session, payload)
+    return build_environment_validation_run_response(item)

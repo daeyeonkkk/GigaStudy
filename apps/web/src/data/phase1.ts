@@ -11,7 +11,7 @@ export const priorityCards = [
     title: 'Native browser validation',
     items: [
       'Use Chromium, Firefox, and WebKit automation as the seeded baseline, not the final proof.',
-      'Add native Safari and real-hardware checks on top of the new diagnostics report.',
+      'Add native Safari and real-hardware checks on top of the new diagnostics report and manual validation log.',
       'Keep unsupported paths explicit in release notes and ops summaries.',
     ],
   },
@@ -36,6 +36,7 @@ export const priorityCards = [
 export const currentLaneTickets = [
   'Environment validation',
   'Ops diagnostics export',
+  'Validation run logging',
   'Native Safari checklist',
   'Hardware variability tracking',
   'Human-rating calibration next',

@@ -12,7 +12,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 3. `PHASE1_BACKLOG.md`
 4. `GigaStudy_check_list.md`
 5. `FOUNDATION_STATUS.md`
-6. `WORKING_PRINCIPLES.md`
+6. `INTONATION_ANALYSIS_ASSESSMENT.md`
+7. `WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -26,6 +27,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Cross-check list for scope control, implementation readiness, and release gating.
 - `FOUNDATION_STATUS.md`
   Current implementation audit against the foundation docs, including verified coverage and remaining gaps.
+- `INTONATION_ANALYSIS_ASSESSMENT.md`
+  Evaluation of the current scoring engine, what critique is accepted, and the approved quality track for a more human-trustworthy intonation analyzer.
 - `WORKING_PRINCIPLES.md`
   Project working rules, storage conventions, and execution discipline.
 

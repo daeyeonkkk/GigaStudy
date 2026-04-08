@@ -1,6 +1,6 @@
 # Foundation Status
 
-Date: 2026-04-07
+Date: 2026-04-08
 
 ## Sources Checked
 
@@ -31,11 +31,22 @@ Date: 2026-04-07
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `36 passed`
+- Result: `37 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
+
+## Intonation Assessment
+
+- The recent intonation critique is mostly valid and is now accepted as foundation guidance.
+- One nuance matters:
+  alignment and rhythm do not rely only on the 64-point preview contour. They currently use a full-sample onset envelope from canonical audio.
+- The larger concern is still correct:
+  pitch scoring, harmony-fit scoring, and feedback generation remain too dependent on preview-contour-level data and coarse segment windows.
+- We should currently describe the system as an `MVP vocal practice scorer`, not as a `human-like intonation judge`.
+- The detailed evaluation and next-step quality track now live in `INTONATION_ANALYSIS_ASSESSMENT.md`.
 
 ## Remaining Gaps Against The Target Foundation Stack
 
+- The current scoring path still lacks note-level signed-cent analysis, note segmentation, confidence weighting, and chord-aware harmony evaluation.
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
 - The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
@@ -43,6 +54,7 @@ Date: 2026-04-07
 
 ## Recommended Next Work
 
-1. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
-2. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
-3. Add at least one release-gate smoke path that exercises the main studio journey from project creation to share link generation.
+1. Upgrade intonation analysis from preview-contour scoring to note-level analysis with signed cents, note segmentation, confidence weighting, and chord-aware harmony.
+2. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
+3. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
+4. Add at least one browser-level release-gate smoke path for the main studio journey.

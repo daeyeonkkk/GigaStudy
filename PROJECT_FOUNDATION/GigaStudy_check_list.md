@@ -125,6 +125,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Confidence weighting exists in runtime scoring.
 - [x] Chord-aware harmony scoring is reachable from the main workflow.
 - [x] A calibration report documents what the scorer can and cannot claim today.
+- [x] A repeatable synthetic-vocal calibration runner exists and can be rerun from a manifest.
 - [ ] Real human vocal fixtures or a trusted human-rating corpus are part of the release-quality evidence.
 - [ ] Threshold calibration has been validated against human raters strongly enough to claim a human-trustworthy intonation judge.
 

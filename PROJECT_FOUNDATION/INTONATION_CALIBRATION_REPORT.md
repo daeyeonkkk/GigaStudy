@@ -22,7 +22,13 @@ The analysis regression suite now includes:
 
 Reference implementation:
 
+- `apps/api/src/gigastudy_api/services/audio_fixture_library.py`
+- `apps/api/src/gigastudy_api/services/calibration.py`
+- `apps/api/calibration/synthetic_vocal_baseline.json`
+- `apps/api/calibration/human_rating_corpus.template.json`
+- `apps/api/scripts/run_intonation_calibration.py`
 - `apps/api/tests/audio_fixtures.py`
+- `apps/api/tests/test_calibration_runner.py`
 - `apps/api/tests/test_analysis_api.py`
 
 Important limit:
@@ -30,6 +36,23 @@ Important limit:
 - these are `vocal-like synthetic fixtures`, not yet a human-recorded vocal corpus
 
 So this report is a meaningful Phase 9 checkpoint, but it is not the final calibration gate for a human-trustworthy intonation judge.
+
+## Repeatable Synthetic Runner
+
+The repo now has a repeatable synthetic calibration path:
+
+- manifest-driven corpus definition in `apps/api/calibration/synthetic_vocal_baseline.json`
+- a runner service that evaluates each case through the real upload and analysis API flow
+- a CLI entry point: `uv run python scripts/run_intonation_calibration.py`
+- regression coverage in `apps/api/tests/test_calibration_runner.py`
+
+Current synthetic baseline result:
+
+- `4/4` baseline cases pass on the current note-event scorer
+- the runner checks `NOTE_EVENT_V1` mode and case-level note feedback expectations
+
+This is now strong enough to claim that synthetic-vocal calibration is reproducible.
+It is still not strong enough to claim human-level intonation trustworthiness.
 
 ## Provisional Interpretation Bands
 

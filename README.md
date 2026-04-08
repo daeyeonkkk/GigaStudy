@@ -72,6 +72,16 @@ uv run python scripts/production_stack_smoke.py
 Run this with the PostgreSQL + S3-compatible environment variables from `apps/api/.env.production.example`.
 It verifies project creation, guide/take upload, post-recording analysis, Basic Pitch melody extraction, arrangement generation, and export artifact reads against the product storage path.
 
+### Intonation Calibration Runner
+
+```bash
+cd apps/api
+uv run python scripts/run_intonation_calibration.py
+```
+
+This runs the repeatable synthetic-vocal baseline in `apps/api/calibration/synthetic_vocal_baseline.json` through the real upload and analysis API flow.
+It is a regression path for the current note-event scorer, not a substitute for the still-open real-human calibration gate.
+
 ## Current Product State
 
 - P0 MVP flow is implemented from project creation through export.
@@ -83,6 +93,7 @@ It verifies project creation, guide/take upload, post-recording analysis, Basic 
 - Runtime note scoring now down-weights low-confidence frames, and harmony-fit can switch to a chord-aware path when the project provides a chord timeline.
 - The studio now exposes note-level correction UI, confidence badges, and clear `note-level` versus `fallback` analysis mode labels.
 - The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
+- The backend now also includes a manifest-driven calibration runner for the repeatable synthetic vocal baseline, so scorer changes can be checked against the same Phase 9 evidence set on demand.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 - DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
 - The admin ops view now aggregates those environment diagnostics into a browser matrix, warning-flag counts, and recent captured profiles for support and release triage.
@@ -102,6 +113,7 @@ It verifies project creation, guide/take upload, post-recording analysis, Basic 
 ## Current Hardening Focus
 
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
+- Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.

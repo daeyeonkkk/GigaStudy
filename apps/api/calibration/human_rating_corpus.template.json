@@ -1,0 +1,35 @@
+{
+  "corpus_id": "human-rating-corpus-template",
+  "description": "Template manifest for future human-recorded vocal calibration rounds. Replace wav_path values and thresholds with real evidence before using it as a release gate.",
+  "evidence_kind": "human_rating_template",
+  "cases": [
+    {
+      "case_id": "replace-with-real-vocal-case",
+      "description": "Example case for a human-recorded guide/take pair plus expected note-level judgment.",
+      "project_title": "Human rating template case",
+      "base_key": "C",
+      "bpm": 90,
+      "guide_source": {
+        "source_kind": "wav_path",
+        "wav_path": "replace/with/guide.wav",
+        "filename": "guide.wav"
+      },
+      "take_source": {
+        "source_kind": "wav_path",
+        "wav_path": "replace/with/take.wav",
+        "filename": "take.wav"
+      },
+      "expectation": {
+        "note_index": 0,
+        "attack_direction": "sharp",
+        "sustain_direction": "centered",
+        "min_confidence": 0.8,
+        "max_abs_sustain_cents": 10,
+        "min_abs_attack_cents": 12,
+        "message_contains": "settled",
+        "expected_pitch_quality_mode": "NOTE_EVENT_V1",
+        "expected_harmony_reference_mode": "CHORD_AWARE"
+      }
+    }
+  ]
+}

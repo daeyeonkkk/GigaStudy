@@ -73,6 +73,7 @@ Date: 2026-04-08
 - The Basic Pitch integration is now operational in this Python 3.12 environment through a repo-local Node helper, while the previous `librosa.pyin` melody path remains as an explicit fallback when that helper is unavailable.
 - Melody MIDI export now runs through `note-seq`, and arrangement MIDI export now also uses `note-seq` instead of the local hand-rolled MIDI serializer.
 - Arrangement MusicXML export now runs through `music21`, so the runtime export path now uses a standard music notation library instead of only the local custom MusicXML builder.
+- The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -81,11 +82,18 @@ Date: 2026-04-08
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `51 passed`
+- Result: `53 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
+- Scope now also includes a calibration-runner regression path that executes the synthetic vocal baseline manifest through isolated upload and analysis flows.
 - Alembic upgrade: `uv run alembic upgrade head`
 - Result: passed through `20260408_0010`.
+- Intonation calibration runner:
+  `uv run python scripts/run_intonation_calibration.py`
+- Result:
+  passed with `4/4` cases on `apps/api/calibration/synthetic_vocal_baseline.json`.
+- Verified flow:
+  manifest load, isolated project creation, guide upload, take upload, post-recording analysis, note-feedback expectation checks, and Markdown summary generation all succeeded through the real API path.
 - Production-stack smoke:
   `uv run python scripts/production_stack_smoke.py`
 - Result:
@@ -117,6 +125,8 @@ Date: 2026-04-08
   runtime scoring down-weights low-confidence frames, and harmony-fit switches to a chord-aware path whenever the project provides a chord timeline.
 - The QA checkpoint is stronger than before:
   the scorer is now regression-tested against vocal-like synthetic cases instead of sine-only coverage, and the current threshold interpretation is written down in `INTONATION_CALIBRATION_REPORT.md`.
+- The synthetic-vocal checkpoint is also more repeatable than before:
+  the repo now carries a first-class calibration manifest plus runner, so the same baseline can be rerun after scorer changes instead of being inferred only from hand-written test assertions.
 - The larger concern is still only partially resolved:
   the studio now exposes note-level correction feedback, but fallback analysis still exists for older tracks and the quality claim is still not calibrated against real human vocal fixtures.
 - We should currently describe the system as an `MVP vocal practice scorer`, not as a `human-like intonation judge`.
@@ -128,6 +138,7 @@ Date: 2026-04-08
 - Coarse fallback remains for tracks that do not yet have `FRAME_PITCH` and `NOTE_EVENTS` artifacts, so not every historical track is guaranteed to use the newer scoring source.
 - Projects without saved chord markers still fall back to `KEY_ONLY`, and the current chord authoring flow is intentionally lightweight rather than a full chart editor or import pipeline.
 - Phase 9 still lacks the real-vocal fixture set and human-rating comparison needed to claim a human-trustworthy intonation judge.
+- The new calibration runner closes the repeatability gap for synthetic evidence, but it does not close the evidence gap for real singer data or human-rating alignment.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.

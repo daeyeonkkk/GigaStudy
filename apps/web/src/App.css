@@ -788,6 +788,12 @@
   font-size: 0.9rem;
 }
 
+.ops-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: var(--accent-strong);

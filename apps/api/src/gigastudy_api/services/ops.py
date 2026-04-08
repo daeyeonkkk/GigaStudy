@@ -1,16 +1,32 @@
+from collections import Counter
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from gigastudy_api.api.schemas.ops import (
     AnalysisJobSummaryResponse,
     FailedTrackSummaryResponse,
+    OpsEnvironmentBrowserResponse,
+    OpsEnvironmentDiagnosticsResponse,
+    OpsEnvironmentProfileResponse,
+    OpsEnvironmentSummaryResponse,
+    OpsEnvironmentWarningResponse,
     OpsModelVersionsResponse,
     OpsOverviewResponse,
     OpsPolicyResponse,
     OpsSummaryResponse,
 )
 from gigastudy_api.config import get_settings
-from gigastudy_api.db.models import AnalysisJob, AnalysisJobStatus, MelodyDraft, Project, Track, TrackRole, TrackStatus
+from gigastudy_api.db.models import (
+    AnalysisJob,
+    AnalysisJobStatus,
+    DeviceProfile,
+    MelodyDraft,
+    Project,
+    Track,
+    TrackRole,
+    TrackStatus,
+)
 from gigastudy_api.services.analysis import ANALYSIS_MODEL_VERSION
 from gigastudy_api.services.arrangements import ARRANGEMENT_ENGINE_VERSION
 from gigastudy_api.services.melody import MELODY_MODEL_VERSION
@@ -19,6 +35,116 @@ from gigastudy_api.services.melody import MELODY_MODEL_VERSION
 def _count_records(session: Session, statement) -> int:
     result = session.scalar(statement)
     return int(result or 0)
+
+
+def _read_capability_path(capabilities: dict | None, *path: str) -> str | None:
+    if not isinstance(capabilities, dict):
+        return None
+
+    current: object = capabilities
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+
+    return current if isinstance(current, str) else None
+
+
+def _build_environment_diagnostics(
+    session: Session,
+    *,
+    recent_limit: int,
+) -> OpsEnvironmentDiagnosticsResponse:
+    device_profiles = list(
+        session.scalars(
+            select(DeviceProfile).order_by(DeviceProfile.updated_at.desc())
+        ).all()
+    )
+
+    warning_counter: Counter[str] = Counter()
+    browser_matrix: dict[tuple[str, str], OpsEnvironmentBrowserResponse] = {}
+    recent_profiles: list[OpsEnvironmentProfileResponse] = []
+    profiles_with_warnings = 0
+
+    for profile in device_profiles:
+        warning_flags = list(profile.diagnostic_flags_json or [])
+        if warning_flags:
+            profiles_with_warnings += 1
+            warning_counter.update(warning_flags)
+
+        matrix_key = (profile.browser, profile.os)
+        existing_bucket = browser_matrix.get(matrix_key)
+        if existing_bucket is None:
+            browser_matrix[matrix_key] = OpsEnvironmentBrowserResponse(
+                browser=profile.browser,
+                os=profile.os,
+                profile_count=1,
+                warning_profile_count=1 if warning_flags else 0,
+                latest_seen_at=profile.updated_at,
+            )
+        else:
+            existing_bucket.profile_count += 1
+            if warning_flags:
+                existing_bucket.warning_profile_count += 1
+            if profile.updated_at > existing_bucket.latest_seen_at:
+                existing_bucket.latest_seen_at = profile.updated_at
+
+        if len(recent_profiles) < recent_limit:
+            recent_profiles.append(
+                OpsEnvironmentProfileResponse(
+                    device_profile_id=profile.device_profile_id,
+                    browser=profile.browser,
+                    os=profile.os,
+                    browser_user_agent=profile.browser_user_agent,
+                    output_route=profile.output_route,
+                    actual_sample_rate=profile.actual_sample_rate,
+                    base_latency=profile.base_latency,
+                    output_latency=profile.output_latency,
+                    microphone_permission=_read_capability_path(
+                        profile.capabilities_json,
+                        "permissions",
+                        "microphone",
+                    ),
+                    recording_mime_type=_read_capability_path(
+                        profile.capabilities_json,
+                        "media_recorder",
+                        "selected_mime_type",
+                    ),
+                    audio_context_mode=_read_capability_path(
+                        profile.capabilities_json,
+                        "web_audio",
+                        "audio_context_mode",
+                    ),
+                    offline_audio_context_mode=_read_capability_path(
+                        profile.capabilities_json,
+                        "web_audio",
+                        "offline_audio_context_mode",
+                    ),
+                    warning_flags=warning_flags,
+                    updated_at=profile.updated_at,
+                )
+            )
+
+    sorted_browser_matrix = sorted(
+        browser_matrix.values(),
+        key=lambda item: (-item.warning_profile_count, -item.profile_count, item.browser, item.os),
+    )
+    sorted_warning_flags = [
+        OpsEnvironmentWarningResponse(flag=flag, profile_count=count)
+        for flag, count in warning_counter.most_common()
+    ]
+
+    return OpsEnvironmentDiagnosticsResponse(
+        summary=OpsEnvironmentSummaryResponse(
+            total_device_profiles=len(device_profiles),
+            profiles_with_warnings=profiles_with_warnings,
+            browser_family_count=len({profile.browser for profile in device_profiles}),
+            warning_flag_count=len(sorted_warning_flags),
+        ),
+        browser_matrix=sorted_browser_matrix,
+        warning_flags=sorted_warning_flags,
+        recent_profiles=recent_profiles,
+    )
 
 
 def get_ops_overview(session: Session) -> OpsOverviewResponse:
@@ -102,6 +228,10 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
             analysis=analysis_versions,
             melody=melody_versions,
             arrangement_engine=[ARRANGEMENT_ENGINE_VERSION],
+        ),
+        environment_diagnostics=_build_environment_diagnostics(
+            session,
+            recent_limit=recent_limit,
         ),
         failed_tracks=[
             FailedTrackSummaryResponse(

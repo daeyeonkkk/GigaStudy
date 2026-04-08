@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { buildApiUrl } from '../lib/api'
+import { getBrowserAudioWarningLabel } from '../lib/browserAudioDiagnostics'
 
 type OpsSummary = {
   project_count: number
@@ -21,6 +22,50 @@ type OpsModelVersions = {
   analysis: string[]
   melody: string[]
   arrangement_engine: string[]
+}
+
+type OpsEnvironmentSummary = {
+  total_device_profiles: number
+  profiles_with_warnings: number
+  browser_family_count: number
+  warning_flag_count: number
+}
+
+type OpsEnvironmentBrowser = {
+  browser: string
+  os: string
+  profile_count: number
+  warning_profile_count: number
+  latest_seen_at: string
+}
+
+type OpsEnvironmentWarning = {
+  flag: string
+  profile_count: number
+}
+
+type OpsEnvironmentProfile = {
+  device_profile_id: string
+  browser: string
+  os: string
+  browser_user_agent: string | null
+  output_route: string
+  actual_sample_rate: number | null
+  base_latency: number | null
+  output_latency: number | null
+  microphone_permission: string | null
+  recording_mime_type: string | null
+  audio_context_mode: string | null
+  offline_audio_context_mode: string | null
+  warning_flags: string[]
+  updated_at: string
+}
+
+type OpsEnvironmentDiagnostics = {
+  summary: OpsEnvironmentSummary
+  browser_matrix: OpsEnvironmentBrowser[]
+  warning_flags: OpsEnvironmentWarning[]
+  recent_profiles: OpsEnvironmentProfile[]
 }
 
 type FailedTrackSummary = {
@@ -53,6 +98,7 @@ type OpsOverview = {
   summary: OpsSummary
   policies: OpsPolicies
   model_versions: OpsModelVersions
+  environment_diagnostics: OpsEnvironmentDiagnostics
   failed_tracks: FailedTrackSummary[]
   recent_analysis_jobs: AnalysisJobSummary[]
 }
@@ -74,6 +120,14 @@ function formatDate(value: string | null): string {
   }
 
   return new Date(value).toLocaleString()
+}
+
+function formatLatency(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return 'Unavailable'
+  }
+
+  return `${Math.round(value * 1000)} ms`
 }
 
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -204,6 +258,7 @@ export function OpsPage() {
   }
 
   const { payload } = pageState
+  const environmentDiagnostics = payload.environment_diagnostics
 
   return (
     <div className="page-shell">
@@ -318,6 +373,82 @@ export function OpsPage() {
                 <li key={version}>{version}</li>
               ))}
             </ul>
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Environment Diagnostics</p>
+          <h2>Track browser audio variability before it becomes a support mystery</h2>
+        </div>
+
+        <div className="card-grid">
+          <article className="info-card">
+            <h3>DeviceProfile coverage</h3>
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Profiles captured</span>
+                <strong>{environmentDiagnostics.summary.total_device_profiles}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Profiles with warnings</span>
+                <strong>{environmentDiagnostics.summary.profiles_with_warnings}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Browser families</span>
+                <strong>{environmentDiagnostics.summary.browser_family_count}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Warning types</span>
+                <strong>{environmentDiagnostics.summary.warning_flag_count}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article className="info-card">
+            <h3>Warning distribution</h3>
+            {environmentDiagnostics.warning_flags.length === 0 ? (
+              <div className="empty-card">
+                <p>No warning flags have been captured yet.</p>
+                <p>Save DeviceProfiles from different browsers to build this baseline.</p>
+              </div>
+            ) : (
+              <ul className="ticket-list">
+                {environmentDiagnostics.warning_flags.map((warning) => (
+                  <li key={warning.flag}>
+                    <strong>{getBrowserAudioWarningLabel(warning.flag)}</strong>
+                    <span>{warning.profile_count} profiles</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+
+          <article className="info-card">
+            <h3>Browser matrix</h3>
+            {environmentDiagnostics.browser_matrix.length === 0 ? (
+              <div className="empty-card">
+                <p>No browser environments have been captured yet.</p>
+                <p>The matrix fills in as soon as DeviceProfiles are saved from the studio.</p>
+              </div>
+            ) : (
+              <ul className="ticket-list">
+                {environmentDiagnostics.browser_matrix.map((browserEntry) => (
+                  <li key={`${browserEntry.browser}-${browserEntry.os}`}>
+                    <strong>
+                      {browserEntry.browser} / {browserEntry.os}
+                    </strong>
+                    <span>
+                      {browserEntry.profile_count} profiles, {browserEntry.warning_profile_count}{' '}
+                      with warnings
+                      <br />
+                      Last seen {formatDate(browserEntry.latest_seen_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         </div>
       </section>
@@ -448,6 +579,97 @@ export function OpsPage() {
             )}
           </div>
         </article>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Recent Profiles</p>
+          <h2>Inspect the latest captured audio environments</h2>
+        </div>
+
+        <div className="ops-list">
+          {environmentDiagnostics.recent_profiles.length === 0 ? (
+            <div className="empty-card empty-card--warn">
+              <p>No recent DeviceProfiles are available yet.</p>
+              <p>Open the studio, save a DeviceProfile, and come back here to compare environments.</p>
+            </div>
+          ) : (
+            environmentDiagnostics.recent_profiles.map((profile) => (
+              <article className="ops-card" key={profile.device_profile_id}>
+                <div className="ops-card__header">
+                  <div>
+                    <strong>
+                      {profile.browser} / {profile.os}
+                    </strong>
+                    <span>
+                      {profile.output_route} | saved {formatDate(profile.updated_at)}
+                    </span>
+                  </div>
+
+                  <div
+                    className={`status-pill ${
+                      profile.warning_flags.length > 0 ? 'status-pill--loading' : 'status-pill--ready'
+                    }`}
+                  >
+                    {profile.warning_flags.length > 0
+                      ? `${profile.warning_flags.length} warnings`
+                      : 'No warnings'}
+                  </div>
+                </div>
+
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Mic permission</span>
+                    <strong>{profile.microphone_permission ?? 'Unknown'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Recorder MIME</span>
+                    <strong>{profile.recording_mime_type ?? 'Unavailable'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>AudioContext</span>
+                    <strong>{profile.audio_context_mode ?? 'Unavailable'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Offline render</span>
+                    <strong>{profile.offline_audio_context_mode ?? 'Unavailable'}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Sample rate</span>
+                    <strong>
+                      {profile.actual_sample_rate ? `${profile.actual_sample_rate} Hz` : 'Unavailable'}
+                    </strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Latency</span>
+                    <strong>
+                      Base {formatLatency(profile.base_latency)} / Out{' '}
+                      {formatLatency(profile.output_latency)}
+                    </strong>
+                  </div>
+                </div>
+
+                {profile.browser_user_agent ? (
+                  <p className="status-card__hint">{profile.browser_user_agent}</p>
+                ) : null}
+
+                {profile.warning_flags.length > 0 ? (
+                  <div className="ops-chip-list">
+                    {profile.warning_flags.map((flag) => (
+                      <span className="status-pill status-pill--loading" key={flag}>
+                        {getBrowserAudioWarningLabel(flag)}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="status-card__hint">
+                    This environment currently reports no stored browser-audio warnings.
+                  </p>
+                )}
+              </article>
+            ))
+          )}
+        </div>
       </section>
     </div>
   )

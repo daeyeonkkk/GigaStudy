@@ -73,6 +73,78 @@ def upload_ready_track(client: TestClient, project_id: str, *, role: str, wav_by
     return track_id
 
 
+def save_device_profile(
+    client: TestClient,
+    *,
+    browser: str,
+    os: str,
+    input_device_hash: str,
+    output_route: str,
+    diagnostic_flags: list[str],
+    microphone_permission: str,
+    recording_mime_type: str | None,
+    audio_context_mode: str,
+    offline_audio_context_mode: str,
+) -> None:
+    response = client.post(
+        "/api/device-profiles",
+        json={
+            "browser": browser,
+            "os": os,
+            "input_device_hash": input_device_hash,
+            "output_route": output_route,
+            "browser_user_agent": f"{browser}/{os} test agent",
+            "requested_constraints": {
+                "echoCancellation": False,
+                "autoGainControl": False,
+                "noiseSuppression": False,
+                "channelCount": 1,
+            },
+            "applied_settings": {
+                "sampleRate": 48000,
+                "channelCount": 1,
+            },
+            "capabilities": {
+                "secure_context": True,
+                "media_devices": {
+                    "get_user_media": True,
+                    "enumerate_devices": True,
+                    "get_supported_constraints": True,
+                    "supported_constraints": ["channelCount", "echoCancellation"],
+                },
+                "permissions": {
+                    "api_supported": True,
+                    "microphone": microphone_permission,
+                },
+                "web_audio": {
+                    "audio_context": True,
+                    "audio_context_mode": audio_context_mode,
+                    "offline_audio_context": True,
+                    "offline_audio_context_mode": offline_audio_context_mode,
+                    "output_latency_supported": True,
+                },
+                "media_recorder": {
+                    "supported": True,
+                    "supported_mime_types": ["audio/webm"],
+                    "selected_mime_type": recording_mime_type,
+                },
+                "audio_playback": {
+                    "wav": "probably",
+                    "webm": "probably",
+                    "mp4": "maybe",
+                    "ogg": "unsupported",
+                },
+            },
+            "diagnostic_flags": diagnostic_flags,
+            "actual_sample_rate": 48000,
+            "channel_count": 1,
+            "base_latency": 0.012,
+            "output_latency": 0.024,
+        },
+    )
+    assert response.status_code == 200
+
+
 def test_ops_overview_reports_failures_and_model_versions(client: TestClient) -> None:
     project_id = client.post(
         "/api/projects",
@@ -112,6 +184,31 @@ def test_ops_overview_reports_failures_and_model_versions(client: TestClient) ->
     failed_analysis = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
     assert failed_analysis.status_code == 400
 
+    save_device_profile(
+        client,
+        browser="Chrome",
+        os="Windows",
+        input_device_hash="usb-mic",
+        output_route="headphones",
+        diagnostic_flags=[],
+        microphone_permission="granted",
+        recording_mime_type="audio/webm",
+        audio_context_mode="standard",
+        offline_audio_context_mode="standard",
+    )
+    save_device_profile(
+        client,
+        browser="Safari",
+        os="macOS",
+        input_device_hash="built-in",
+        output_route="speakers",
+        diagnostic_flags=["legacy_webkit_audio_context_only", "missing_offline_audio_context"],
+        microphone_permission="prompt",
+        recording_mime_type=None,
+        audio_context_mode="webkit",
+        offline_audio_context_mode="unavailable",
+    )
+
     ops_response = client.get("/api/admin/ops")
     assert ops_response.status_code == 200
     payload = ops_response.json()
@@ -124,5 +221,22 @@ def test_ops_overview_reports_failures_and_model_versions(client: TestClient) ->
     assert "librosa-pyin-note-events-v4" in payload["model_versions"]["analysis"]
     assert "librosa-pyin-melody-v2" in payload["model_versions"]["melody"]
     assert "rule-stack-v1" in payload["model_versions"]["arrangement_engine"]
+    assert payload["environment_diagnostics"]["summary"]["total_device_profiles"] == 2
+    assert payload["environment_diagnostics"]["summary"]["profiles_with_warnings"] == 1
+    assert payload["environment_diagnostics"]["summary"]["warning_flag_count"] >= 2
+    assert any(
+        item["browser"] == "Safari" and item["warning_profile_count"] == 1
+        for item in payload["environment_diagnostics"]["browser_matrix"]
+    )
+    assert any(
+        item["flag"] == "missing_offline_audio_context"
+        for item in payload["environment_diagnostics"]["warning_flags"]
+    )
+    assert any(
+        item["browser"] == "Safari"
+        and item["microphone_permission"] == "prompt"
+        and item["audio_context_mode"] == "webkit"
+        for item in payload["environment_diagnostics"]["recent_profiles"]
+    )
     assert any(item["failure_message"] for item in payload["failed_tracks"])
     assert any(item["status"] == "FAILED" for item in payload["recent_analysis_jobs"])

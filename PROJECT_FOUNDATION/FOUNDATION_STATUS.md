@@ -21,6 +21,8 @@ Date: 2026-04-08
 - Device profile capture is stored with requested constraints and applied settings, and the studio snapshot includes the latest profile as the foundation docs require.
 - Upload processing creates canonical audio plus waveform preview artifacts and keeps retry paths for failed processing.
 - Read-only sharing is implemented as a frozen snapshot link, which matches the current safe assumption in the master plan's open decision area.
+- A browser-level release-gate smoke path now exists for the main studio journey:
+  project creation, guide and take attachment, chord timeline save, post-recording analysis, and chord-aware note-feedback visibility.
 
 ## Reinforcement Added In This Pass
 
@@ -48,6 +50,9 @@ Date: 2026-04-08
 - Web lint: `npm run lint:web`
 - Web build: `npm run build:web`
 - Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
+- Browser release-gate smoke path: `npm run test:e2e`
+- Result: `1 passed`
+- Scope verified by the browser run includes project creation, studio entry, guide upload, take upload, chord timeline save, post-recording analysis, and note-level chord-aware feedback visibility.
 
 ## Intonation Assessment
 
@@ -74,7 +79,7 @@ Date: 2026-04-08
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
 - The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
-- There is no browser-level end-to-end automation yet. Current verification is strong on API and data flow coverage, but not on full UI playback/recording automation.
+- Browser-level automation now covers one main studio smoke path, but it does not yet exercise real microphone permission, in-browser recording transport, arrangement playback/export, or sharing flows.
 
 ## Recommended Next Work
 
@@ -82,4 +87,4 @@ Date: 2026-04-08
 2. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 3. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
 4. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
-5. Add at least one browser-level release-gate smoke path for the main studio journey.
+5. Expand browser-level release-gate coverage from the current smoke path into recording transport, arrangement export, and sharing journeys.

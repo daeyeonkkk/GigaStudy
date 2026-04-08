@@ -39,6 +39,12 @@ cd apps/api
 uv run pytest
 ```
 
+### Browser Release-Gate Smoke Test
+
+```bash
+npm run test:e2e
+```
+
 ## Current Product State
 
 - P0 MVP flow is implemented from project creation through export.
@@ -50,6 +56,7 @@ uv run pytest
 - The studio now exposes note-level correction UI, confidence badges, and clear `note-level` versus `fallback` analysis mode labels.
 - The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
+- A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 
 ## Current Hardening Focus
 
@@ -57,7 +64,7 @@ uv run pytest
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
-- Add release-gate smoke coverage for the main studio journey.
+- Expand browser release-gate coverage into real recording transport, arrangement export, and sharing journeys.
 
 ## Foundation Docs
 

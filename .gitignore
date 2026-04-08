@@ -23,3 +23,7 @@ Thumbs.db
 *.db
 *.sqlite3
 apps/api/storage/
+playwright-report/
+test-results/
+apps/api/.e2e/
+apps/api/.e2e-storage/

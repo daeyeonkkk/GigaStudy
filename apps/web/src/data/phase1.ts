@@ -1,24 +1,24 @@
 export const priorityCards = [
   {
-    title: 'Note-level correction UI',
+    title: 'Chord timeline authoring',
     items: [
-      'Move beyond phrase-only summaries and surface the problem note directly in the studio.',
-      'Show attack, sustain, timing, and confidence as separate correction cues.',
-      'Keep the view readable enough that a singer can act on it without opening raw JSON.',
+      'Make chord-aware harmony reachable from the main studio instead of relying on preloaded project metadata.',
+      'Support both lightweight row editing and JSON paste for prepared markers.',
+      'Keep the first pass small enough to avoid turning the studio into a full chart editor.',
     ],
   },
   {
-    title: 'Scoring mode transparency',
+    title: 'Harmony mode reachability',
     items: [
-      'Make `note-level` versus `fallback` scoring visible in the analysis panel.',
-      'Show `chord-aware` versus `key-only` harmony mode without hiding current limits.',
-      'Prevent fallback results from looking more precise than they really are.',
+      'Let users save markers, rerun analysis, and actually see `CHORD_AWARE` without leaving the workflow.',
+      'Keep `KEY_ONLY` fallback visible whenever no saved chord timeline exists.',
+      'Make the transition from fallback to chord-aware analysis understandable in the UI.',
     ],
   },
   {
     title: 'Calibration gate',
     items: [
-      'Back the new UI with real vocal fixtures instead of sine-only confidence.',
+      'Build on the new synthetic-vocal checkpoint with real singer recordings or a cents-shifted corpus.',
       'Tune thresholds so note score explanations match what good ears would say.',
       'Keep release claims aligned with the analysis mode that is actually implemented.',
     ],
@@ -26,8 +26,8 @@ export const priorityCards = [
   {
     title: 'Phase 9 closeout',
     items: [
-      'Finish the frontend leg of the intonation quality track without disturbing the core studio flow.',
-      'Leave room for chord authoring and deeper calibration tooling in the next slice.',
+      'Finish the reachability leg of the intonation quality track without disturbing the core studio flow.',
+      'Leave room for deeper chord import and calibration tooling in the next slice.',
       'Keep the MVP scorer honest while we move toward a more trustworthy judge.',
     ],
   },
@@ -35,8 +35,8 @@ export const priorityCards = [
 
 export const currentLaneTickets = [
   'Phase 9',
-  'Note-level correction UI',
-  'Pitch mode transparency',
+  'Chord timeline authoring',
+  'Chord-aware reachability',
   'Harmony fallback cues',
-  'Calibration gate next',
+  'Human-rating calibration next',
 ] as const

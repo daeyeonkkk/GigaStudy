@@ -25,7 +25,7 @@ import {
   uploadBlobWithProgress,
   type MetronomeController,
 } from '../lib/studioAudio'
-import type { Project } from '../types/project'
+import type { Project, ProjectChordTimelineItem } from '../types/project'
 
 type StudioState =
   | { phase: 'loading' }
@@ -392,6 +392,15 @@ type ArrangementTransportState =
   | { phase: 'playing'; message: string }
   | { phase: 'error'; message: string }
 
+type ChordTimelineDraftItem = {
+  start_ms: string
+  end_ms: string
+  label: string
+  root: string
+  quality: string
+  pitch_classes: string
+}
+
 type VersionsState =
   | { phase: 'loading'; items: ProjectVersionRecord[] }
   | { phase: 'ready'; items: ProjectVersionRecord[] }
@@ -494,6 +503,126 @@ const beatboxTemplateOptions = [
     description: 'Off-beat accents for a livelier comparison candidate.',
   },
 ] as const
+
+function createChordTimelineDraftItem(
+  item?: ProjectChordTimelineItem,
+  fallbackRoot = 'C',
+): ChordTimelineDraftItem {
+  return {
+    start_ms: item ? String(item.start_ms) : '0',
+    end_ms: item ? String(item.end_ms) : '2000',
+    label: item?.label ?? (item?.root ? `${item.root}${item.quality ? ` ${item.quality}` : ''}` : fallbackRoot),
+    root: item?.root ?? fallbackRoot,
+    quality: item?.quality ?? 'major',
+    pitch_classes: item?.pitch_classes?.join(', ') ?? '',
+  }
+}
+
+function serializeChordTimelineItems(items: ProjectChordTimelineItem[] | null | undefined): string {
+  return JSON.stringify(items ?? [], null, 2)
+}
+
+function parsePitchClassesDraft(value: string): number[] | null {
+  const normalized = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  if (normalized.length === 0) {
+    return null
+  }
+
+  const pitchClasses = normalized.map((item) => {
+    const parsed = Number(item)
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 11) {
+      throw new Error('Pitch classes must be integers between 0 and 11.')
+    }
+    return parsed
+  })
+
+  return pitchClasses
+}
+
+function buildChordTimelinePayload(draft: ChordTimelineDraftItem[]): ProjectChordTimelineItem[] {
+  const items: ProjectChordTimelineItem[] = []
+
+  for (const [index, item] of draft.entries()) {
+    const startText = item.start_ms.trim()
+    const endText = item.end_ms.trim()
+    const label = item.label.trim()
+    const root = item.root.trim()
+    const quality = item.quality.trim()
+    const pitchClassesText = item.pitch_classes.trim()
+
+    const isEmpty =
+      startText === '' &&
+      endText === '' &&
+      label === '' &&
+      root === '' &&
+      quality === '' &&
+      pitchClassesText === ''
+
+    if (isEmpty) {
+      continue
+    }
+
+    const startMs = Number(startText)
+    const endMs = Number(endText)
+
+    if (!Number.isInteger(startMs) || startMs < 0) {
+      throw new Error(`Chord ${index + 1}: start ms must be a whole number >= 0.`)
+    }
+    if (!Number.isInteger(endMs) || endMs <= startMs) {
+      throw new Error(`Chord ${index + 1}: end ms must be greater than start ms.`)
+    }
+
+    items.push({
+      start_ms: startMs,
+      end_ms: endMs,
+      label: label || null,
+      root: root || null,
+      quality: quality || null,
+      pitch_classes: parsePitchClassesDraft(pitchClassesText),
+    })
+  }
+
+  return items
+}
+
+function chordTimelineImportItemToDraft(
+  item: unknown,
+  index: number,
+  fallbackRoot = 'C',
+): ChordTimelineDraftItem {
+  if (!item || typeof item !== 'object') {
+    throw new Error(`Chord ${index + 1}: each imported item must be an object.`)
+  }
+
+  const record = item as Record<string, unknown>
+  const startMs = Number(record.start_ms)
+  const endMs = Number(record.end_ms)
+  if (!Number.isInteger(startMs) || startMs < 0) {
+    throw new Error(`Chord ${index + 1}: start_ms must be an integer >= 0.`)
+  }
+  if (!Number.isInteger(endMs) || endMs <= startMs) {
+    throw new Error(`Chord ${index + 1}: end_ms must be greater than start_ms.`)
+  }
+
+  const pitchClasses = Array.isArray(record.pitch_classes)
+    ? record.pitch_classes
+        .map((value) => (typeof value === 'number' ? value : Number.NaN))
+        .filter((value) => Number.isInteger(value) && value >= 0 && value <= 11)
+    : null
+
+  return {
+    start_ms: String(startMs),
+    end_ms: String(endMs),
+    label: typeof record.label === 'string' ? record.label : '',
+    root: typeof record.root === 'string' ? record.root : fallbackRoot,
+    quality: typeof record.quality === 'string' ? record.quality : 'major',
+    pitch_classes: pitchClasses && pitchClasses.length > 0 ? pitchClasses.join(', ') : '',
+  }
+}
 
 function getOptionMeta<T extends { value: string; label: string; description: string }>(
   options: readonly T[],
@@ -956,7 +1085,10 @@ export function StudioPage() {
   const [audioPreviews, setAudioPreviews] = useState<Record<string, AudioPreviewData>>({})
   const [waveformState, setWaveformState] = useState<ActionState>({ phase: 'idle' })
   const [analysisState, setAnalysisState] = useState<ActionState>({ phase: 'idle' })
+  const [projectHarmonyState, setProjectHarmonyState] = useState<ActionState>({ phase: 'idle' })
   const [selectedNoteFeedbackIndex, setSelectedNoteFeedbackIndex] = useState(0)
+  const [chordTimelineDraft, setChordTimelineDraft] = useState<ChordTimelineDraftItem[]>([])
+  const [chordTimelineJsonDraft, setChordTimelineJsonDraft] = useState('[]')
   const [melodyState, setMelodyState] = useState<ActionState>({ phase: 'idle' })
   const [melodySaveState, setMelodySaveState] = useState<ActionState>({ phase: 'idle' })
   const [melodyNotesDraft, setMelodyNotesDraft] = useState<MelodyNote[]>([])
@@ -1038,8 +1170,18 @@ export function StudioPage() {
       channelCount:
         typeof requestedAudio.channelCount === 'number'
           ? requestedAudio.channelCount
-          : defaultConstraintDraft.channelCount,
+        : defaultConstraintDraft.channelCount,
     })
+  }
+
+  function hydrateChordTimelineDraft(project: Project): void {
+    const nextDraft = (project.chord_timeline_json ?? []).map((item) =>
+      createChordTimelineDraftItem(item, project.base_key ?? 'C'),
+    )
+
+    setChordTimelineDraft(nextDraft)
+    setChordTimelineJsonDraft(serializeChordTimelineItems(project.chord_timeline_json))
+    setProjectHarmonyState({ phase: 'idle' })
   }
 
   async function refreshAudioInputs(preferredDeviceId?: string): Promise<void> {
@@ -1139,6 +1281,7 @@ export function StudioPage() {
 
   applyStudioSnapshotRef.current = (snapshot: StudioSnapshotResponse) => {
     setStudioState({ phase: 'ready', project: snapshot.project })
+    hydrateChordTimelineDraft(snapshot.project)
     setGuideState({ phase: 'ready', guide: snapshot.guide })
     setTakesState({ phase: 'ready', items: snapshot.takes })
     setMixdownSummary(snapshot.mixdown)
@@ -2842,6 +2985,155 @@ export function StudioPage() {
     }
   }
 
+  function updateChordTimelineDraftItem(
+    index: number,
+    field: keyof ChordTimelineDraftItem,
+    value: string,
+  ): void {
+    setChordTimelineDraft((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)),
+    )
+  }
+
+  function handleAddChordMarker(): void {
+    setChordTimelineDraft((current) => {
+      const lastEndMs = current.length > 0 ? Number(current[current.length - 1]!.end_ms) || 0 : 0
+      const fallbackRoot =
+        studioState.phase === 'ready' ? studioState.project.base_key ?? 'C' : 'C'
+
+      return [
+        ...current,
+        {
+          ...createChordTimelineDraftItem(undefined, fallbackRoot),
+          start_ms: String(lastEndMs),
+          end_ms: String(lastEndMs + 2000),
+        },
+      ]
+    })
+  }
+
+  function handleRemoveChordMarker(index: number): void {
+    setChordTimelineDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  function handleSeedChordTimelineFromProjectKey(): void {
+    if (studioState.phase !== 'ready') {
+      return
+    }
+
+    const keyRoot = studioState.project.base_key?.trim() || 'C'
+    const spanMs = Math.max(
+      1000,
+      Math.round(
+        (60000 / (studioState.project.bpm ?? 90)) *
+          getAccentEvery(studioState.project.time_signature),
+      ),
+    )
+
+    setChordTimelineDraft([
+      {
+        start_ms: '0',
+        end_ms: String(spanMs),
+        label: `${keyRoot} major`,
+        root: keyRoot,
+        quality: 'major',
+        pitch_classes: '',
+      },
+    ])
+    setProjectHarmonyState({
+      phase: 'success',
+      message: 'Seeded one marker from the current project key. Expand or replace it before saving.',
+    })
+  }
+
+  function handleLoadChordRowsIntoJson(): void {
+    try {
+      const payload = buildChordTimelinePayload(chordTimelineDraft)
+      setChordTimelineJsonDraft(serializeChordTimelineItems(payload))
+      setProjectHarmonyState({
+        phase: 'success',
+        message: 'Loaded the current chord rows into the JSON box.',
+      })
+    } catch (error) {
+      setProjectHarmonyState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to serialize the chord rows.',
+      })
+    }
+  }
+
+  function handleApplyChordImport(): void {
+    try {
+      const parsed = JSON.parse(chordTimelineJsonDraft) as unknown
+      if (!Array.isArray(parsed)) {
+        throw new Error('Chord timeline import must be a JSON array.')
+      }
+
+      const fallbackRoot =
+        studioState.phase === 'ready' ? studioState.project.base_key ?? 'C' : 'C'
+      const nextDraft = parsed.map((item, index) =>
+        chordTimelineImportItemToDraft(item, index, fallbackRoot),
+      )
+      setChordTimelineDraft(nextDraft)
+      setChordTimelineJsonDraft(serializeChordTimelineItems(buildChordTimelinePayload(nextDraft)))
+      setProjectHarmonyState({
+        phase: 'success',
+        message: `Imported ${nextDraft.length} chord marker${nextDraft.length === 1 ? '' : 's'} into the editor.`,
+      })
+    } catch (error) {
+      setProjectHarmonyState({
+        phase: 'error',
+        message:
+          error instanceof Error ? error.message : 'Unable to import the chord timeline JSON.',
+      })
+    }
+  }
+
+  async function handleSaveProjectHarmonyReference(): Promise<void> {
+    if (!projectId || studioState.phase !== 'ready') {
+      setProjectHarmonyState({
+        phase: 'error',
+        message: 'Project metadata is not ready yet.',
+      })
+      return
+    }
+
+    setProjectHarmonyState({
+      phase: 'submitting',
+      message: 'Saving chord markers so chord-aware harmony can use them.',
+    })
+
+    try {
+      const chordTimelinePayload = buildChordTimelinePayload(chordTimelineDraft)
+      const response = await fetch(buildApiUrl(`/api/projects/${projectId}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chord_timeline_json: chordTimelinePayload,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to save the chord timeline.'))
+      }
+
+      const updatedProject = (await response.json()) as Project
+      setStudioState({ phase: 'ready', project: updatedProject })
+      hydrateChordTimelineDraft(updatedProject)
+      setProjectHarmonyState({
+        phase: 'success',
+        message: `Saved ${chordTimelinePayload.length} chord marker${chordTimelinePayload.length === 1 ? '' : 's'}. Run analysis again to switch harmony-fit onto the chord-aware path.`,
+      })
+    } catch (error) {
+      setProjectHarmonyState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Unable to save the chord timeline.',
+      })
+    }
+  }
+
   if (studioState.phase === 'loading') {
     return (
       <div className="page-shell">
@@ -2889,6 +3181,7 @@ export function StudioPage() {
   const selectedNoteFeedback =
     selectedTakeNoteFeedback[selectedNoteFeedbackIndex] ?? selectedTakeNoteFeedback[0] ?? null
   const chordMarkerCount = project.chord_timeline_json?.length ?? 0
+  const chordDraftRowCount = chordTimelineDraft.length
   const noteFeedbackTimelineDurationMs =
     selectedTakeNoteFeedback.length > 0
       ? Math.max(
@@ -2988,6 +3281,257 @@ export function StudioPage() {
                 <li key={ticket}>{ticket}</li>
               ))}
             </ul>
+          </article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section__header">
+          <p className="eyebrow">Phase 9 Reachability</p>
+          <h2>Attach a chord timeline so harmony-fit can leave key-only fallback</h2>
+        </div>
+
+        <div className="card-grid studio-work-grid">
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Harmony Reference Authoring</p>
+                <h2>Build chord markers inside the studio</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  chordMarkerCount > 0 ? 'status-pill--ready' : 'status-pill--loading'
+                }`}
+              >
+                {chordMarkerCount > 0 ? `${chordMarkerCount} saved markers` : 'Key-only fallback'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              PROJECT_FOUNDATION still treats chord-aware harmony as optional, but it should be
+              reachable from the main workflow. Save at least one chord marker here, then rerun
+              analysis to move harmony-fit off the key-only fallback path.
+            </p>
+
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Saved markers</span>
+                <strong>{chordMarkerCount}</strong>
+                <small>
+                  {chordMarkerCount > 0
+                    ? 'The project is ready to run chord-aware harmony when analysis is rerun.'
+                    : 'No chord timeline is attached yet, so harmony-fit still falls back to key-only.'}
+                </small>
+              </div>
+              <div className="mini-card">
+                <span>Draft rows</span>
+                <strong>{chordDraftRowCount}</strong>
+                <small>
+                  Keep this lightweight: enough markers to make harmony-fit honest, not a full notation tool.
+                </small>
+              </div>
+              <div className="mini-card">
+                <span>Project key</span>
+                <strong>{project.base_key ?? 'Unset'}</strong>
+                <small>Used as the seed fallback when you create the first marker from project metadata.</small>
+              </div>
+              <div className="mini-card">
+                <span>Time grid hint</span>
+                <strong>{project.time_signature ?? '4/4'} · {transportBpm} BPM</strong>
+                <small>Use this to estimate marker span when you are not importing a prepared timeline.</small>
+              </div>
+            </div>
+
+            <div className="button-row">
+              <button className="button-primary" type="button" onClick={handleAddChordMarker}>
+                Add chord marker
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={handleSeedChordTimelineFromProjectKey}
+              >
+                Seed from current key
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={handleLoadChordRowsIntoJson}
+              >
+                Load rows into JSON
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={handleApplyChordImport}
+              >
+                Apply JSON import
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={projectHarmonyState.phase === 'submitting'}
+                onClick={() => void handleSaveProjectHarmonyReference()}
+              >
+                {projectHarmonyState.phase === 'submitting'
+                  ? 'Saving harmony reference...'
+                  : 'Save chord timeline'}
+              </button>
+            </div>
+
+            {projectHarmonyState.phase === 'success' || projectHarmonyState.phase === 'error' ? (
+              <p
+                className={
+                  projectHarmonyState.phase === 'error' ? 'form-error' : 'status-card__hint'
+                }
+              >
+                {projectHarmonyState.message}
+              </p>
+            ) : (
+              <p className="status-card__hint">
+                Keep `start_ms` and `end_ms` in milliseconds. Root and quality are enough for most
+                markers, and pitch classes are optional when you already know the chord tones.
+              </p>
+            )}
+
+            {chordTimelineDraft.length > 0 ? (
+              <div className="chord-list">
+                {chordTimelineDraft.map((item, index) => (
+                  <article className="chord-row" key={`chord-marker-${index}`}>
+                    <div className="field">
+                      <span>Start ms</span>
+                      <input
+                        className="text-input"
+                        inputMode="numeric"
+                        value={item.start_ms}
+                        onChange={(event) =>
+                          updateChordTimelineDraftItem(index, 'start_ms', event.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <span>End ms</span>
+                      <input
+                        className="text-input"
+                        inputMode="numeric"
+                        value={item.end_ms}
+                        onChange={(event) =>
+                          updateChordTimelineDraftItem(index, 'end_ms', event.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <span>Label</span>
+                      <input
+                        className="text-input"
+                        value={item.label}
+                        onChange={(event) =>
+                          updateChordTimelineDraftItem(index, 'label', event.target.value)
+                        }
+                        placeholder="A major"
+                      />
+                    </div>
+                    <div className="field">
+                      <span>Root</span>
+                      <input
+                        className="text-input"
+                        value={item.root}
+                        onChange={(event) =>
+                          updateChordTimelineDraftItem(index, 'root', event.target.value)
+                        }
+                        placeholder="A"
+                      />
+                    </div>
+                    <div className="field">
+                      <span>Quality</span>
+                      <input
+                        className="text-input"
+                        value={item.quality}
+                        onChange={(event) =>
+                          updateChordTimelineDraftItem(index, 'quality', event.target.value)
+                        }
+                        placeholder="major, minor, dom7"
+                      />
+                    </div>
+                    <div className="field">
+                      <span>Pitch classes</span>
+                      <input
+                        className="text-input"
+                        value={item.pitch_classes}
+                        onChange={(event) =>
+                          updateChordTimelineDraftItem(index, 'pitch_classes', event.target.value)
+                        }
+                        placeholder="0, 4, 7"
+                      />
+                    </div>
+                    <button
+                      className="button-secondary button-secondary--small"
+                      type="button"
+                      onClick={() => handleRemoveChordMarker(index)}
+                    >
+                      Remove
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-card">
+                <p>No chord markers in the editor yet.</p>
+                <p>Add one manually, seed from the project key, or paste a JSON timeline to get started.</p>
+              </div>
+            )}
+          </article>
+
+          <article className="panel studio-block">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">JSON Import / Export</p>
+                <h2>Paste prepared chord markers or inspect the saved shape</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  chordMarkerCount > 0 ? 'status-pill--ready' : 'status-pill--loading'
+                }`}
+              >
+                {chordMarkerCount > 0 ? 'Chord-aware path reachable' : 'Fallback only'}
+              </span>
+            </div>
+
+            <p className="panel__summary">
+              This stays intentionally lightweight. If you already have chord markers from another
+              tool, paste them here, apply them into the row editor, then save the project.
+            </p>
+
+            <label className="field">
+              <span>Chord timeline JSON</span>
+              <textarea
+                className="text-input json-card--editor"
+                value={chordTimelineJsonDraft}
+                onChange={(event) => setChordTimelineJsonDraft(event.target.value)}
+                spellCheck={false}
+              />
+            </label>
+
+            <div className="empty-card empty-card--warn">
+              <p>Expected shape</p>
+              <p>
+                Use an array of objects with `start_ms`, `end_ms`, `label`, `root`, `quality`,
+                and optional `pitch_classes`.
+              </p>
+            </div>
+
+            <div className="mini-card mini-card--stack">
+              <span>Example</span>
+              <pre className="json-card">{`[
+  {
+    "start_ms": 0,
+    "end_ms": 2000,
+    "label": "A",
+    "root": "A",
+    "quality": "major"
+  }
+]`}</pre>
+            </div>
           </article>
         </div>
       </section>

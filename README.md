@@ -49,11 +49,12 @@ uv run pytest
 - Runtime note scoring now down-weights low-confidence frames, and harmony-fit can switch to a chord-aware path when the project provides a chord timeline.
 - The studio now exposes note-level correction UI, confidence badges, and clear `note-level` versus `fallback` analysis mode labels.
 - The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
+- The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 
 ## Current Hardening Focus
 
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
-- Add a studio-friendly chord-authoring path so chord-aware harmony is reachable without leaving the main workflow.
+- Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
 - Add release-gate smoke coverage for the main studio journey.

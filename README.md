@@ -67,6 +67,7 @@ Use `postgresql+psycopg://gigastudy:gigastudy@127.0.0.1:5432/gigastudy` for `GIG
 - Analysis and melody extraction now use `librosa.pyin`-based pitch support on the backend.
 - Upload processing now stores frame-level pitch artifacts, and analysis responses expose which scoring quality mode is in use.
 - Processed takes now also generate note-event artifacts and signed-cents note feedback on the backend.
+- Melody MIDI export now runs through `note-seq`, and arrangement MIDI plus MusicXML export now run through `note-seq` and `music21`.
 - Runtime note scoring now down-weights low-confidence frames, and harmony-fit can switch to a chord-aware path when the project provides a chord timeline.
 - The studio now exposes note-level correction UI, confidence badges, and clear `note-level` versus `fallback` analysis mode labels.
 - The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
@@ -89,7 +90,7 @@ Use `postgresql+psycopg://gigastudy:gigastudy@127.0.0.1:5432/gigastudy` for `GIG
 
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
-- Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
+- Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch` on top of the now-adopted `librosa.pyin`, `music21`, and `note-seq` runtime path.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
 - Move the new PostgreSQL + S3-compatible support from optional hardening into the default deployment profile once the deployment path is exercised outside local development.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.

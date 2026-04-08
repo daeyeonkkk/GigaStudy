@@ -14,6 +14,8 @@ dependencies = [
   "psycopg[binary]>=3.2,<4.0",
   "sqlalchemy>=2.0,<3.0",
   "uvicorn[standard]>=0.34,<1.0",
+  "note-seq>=0.0.5",
+  "music21>=9.9.1",
 ]
 
 [dependency-groups]

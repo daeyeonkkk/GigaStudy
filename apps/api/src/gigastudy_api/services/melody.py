@@ -1,11 +1,14 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from io import BytesIO
-import struct
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 import wave
 from uuid import UUID
 
 import numpy as np
+from note_seq import midi_io
+from note_seq.protobuf import music_pb2
 from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -324,44 +327,35 @@ def _estimate_key(notes: list[MelodyNote]) -> str | None:
     return best_name
 
 
-def _encode_variable_length(value: int) -> bytes:
-    buffer = [value & 0x7F]
-    value >>= 7
-    while value:
-        buffer.insert(0, (value & 0x7F) | 0x80)
-        value >>= 7
-
-    return bytes(buffer)
+def _build_note_sequence(notes: list[MelodyNote], bpm: int) -> music_pb2.NoteSequence:
+    sequence = music_pb2.NoteSequence()
+    sequence.ticks_per_quarter = PPQN
+    sequence.tempos.add(qpm=float(max(1, bpm)), time=0.0)
+    sequence.time_signatures.add(numerator=4, denominator=4, time=0.0)
+    for note in notes:
+        sequence.notes.add(
+            pitch=int(note.pitch_midi),
+            start_time=float(note.start_ms / 1000),
+            end_time=float(note.end_ms / 1000),
+            velocity=int(note.velocity),
+            instrument=0,
+            program=0,
+        )
+    sequence.total_time = max((float(note.end_ms / 1000) for note in notes), default=0.0)
+    return sequence
 
 
 def _build_midi_bytes(notes: list[MelodyNote], bpm: int) -> bytes:
-    microseconds_per_quarter = max(1, round(60_000_000 / max(1, bpm)))
-    beat_ms = 60000 / max(1, bpm)
-    events: list[tuple[int, int, bytes]] = [
-        (0, 0, bytes([0xFF, 0x51, 0x03]) + microseconds_per_quarter.to_bytes(3, "big"))
-    ]
-
-    for note in notes:
-        start_tick = int(round((note.start_ms / beat_ms) * PPQN))
-        end_tick = max(start_tick + 1, int(round((note.end_ms / beat_ms) * PPQN)))
-        events.append((start_tick, 1, bytes([0x90, note.pitch_midi, note.velocity])))
-        events.append((end_tick, 0, bytes([0x80, note.pitch_midi, 0x00])))
-
-    events.sort(key=lambda item: (item[0], item[1]))
-    track_data = bytearray()
-    previous_tick = 0
-    for tick, _, payload in events:
-        delta = max(0, tick - previous_tick)
-        track_data.extend(_encode_variable_length(delta))
-        track_data.extend(payload)
-        previous_tick = tick
-
-    track_data.extend(_encode_variable_length(0))
-    track_data.extend(b"\xFF\x2F\x00")
-
-    header = b"MThd" + struct.pack(">IHHH", 6, 0, 1, PPQN)
-    track_chunk = b"MTrk" + struct.pack(">I", len(track_data)) + bytes(track_data)
-    return header + track_chunk
+    sequence = _build_note_sequence(notes, bpm)
+    temp_path: Path | None = None
+    try:
+        with NamedTemporaryFile(delete=False, suffix=".mid") as temp_file:
+            temp_path = Path(temp_file.name)
+        midi_io.note_sequence_to_midi_file(sequence, temp_path.as_posix())
+        return temp_path.read_bytes()
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
 
 
 def _store_midi_file(storage_key: str, notes: list[MelodyNote], bpm: int) -> tuple[str, int]:

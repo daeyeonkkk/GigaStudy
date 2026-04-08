@@ -1,7 +1,9 @@
 from collections.abc import Iterator
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from fastapi.testclient import TestClient
+from note_seq import midi_io
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -83,6 +85,16 @@ def test_extract_melody_draft_returns_notes_and_midi(client: TestClient) -> None
     midi_response = client.get(payload["midi_artifact_url"])
     assert midi_response.status_code == 200
     assert midi_response.content[:4] == b"MThd"
+    with NamedTemporaryFile(delete=False, suffix=".mid") as temp_file:
+        midi_path = Path(temp_file.name)
+    try:
+        midi_path.write_bytes(midi_response.content)
+        sequence = midi_io.midi_file_to_note_sequence(midi_path.as_posix())
+        assert len(sequence.notes) >= 1
+        assert sequence.notes[0].pitch == 69
+    finally:
+        if midi_path.exists():
+            midi_path.unlink()
 
     snapshot_response = client.get(f"/api/projects/{project_id}/studio")
     assert snapshot_response.status_code == 200

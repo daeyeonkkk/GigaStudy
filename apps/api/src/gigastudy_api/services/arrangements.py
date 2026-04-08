@@ -2,10 +2,23 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape
 from math import log2
+from pathlib import Path
 import struct
+from tempfile import NamedTemporaryFile
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Request, status
+from music21 import chord as m21chord
+from music21 import clef as m21clef
+from music21 import key as m21key
+from music21 import metadata as m21metadata
+from music21 import meter as m21meter
+from music21 import note as m21note
+from music21 import stream as m21stream
+from music21 import tempo as m21tempo
+from music21.musicxml.m21ToXml import GeneralObjectExporter
+from note_seq import midi_io
+from note_seq.protobuf import music_pb2
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -968,101 +981,118 @@ def _build_musicxml_bytes(
     time_signature: str | None,
     key_signature: str | None,
 ) -> bytes:
-    part_list_lines = ["  <part-list>"]
-    part_body_lines: list[str] = []
+    score = m21stream.Score(id=_sanitize_xml_id(title) or "GigaStudyScore")
+    score.metadata = m21metadata.Metadata(title=title)
+    numerator, denominator = _parse_time_signature(time_signature)
+    beat_ms = 60000 / max(1, bpm)
+    measure_quarter_length = numerator * (4 / max(1, denominator))
+    key_signature_obj = m21key.KeySignature(_parse_key_fifths(key_signature))
+
+    def quantized_quarter_length(duration_ms: int) -> float:
+        sixteenth_ms = beat_ms / 4
+        units = max(1, round(duration_ms / max(sixteenth_ms, 1)))
+        return units * 0.25
 
     for index, part in enumerate(parts_json, start=1):
-        part_id = f"P{index}-{_sanitize_xml_id(str(part.get('part_name', index)))}"
         part_name = str(part.get("part_name", f"Part {index}"))
-        part_list_lines.extend(
-            [
-                f'    <score-part id="{part_id}">',
-                f"      <part-name>{escape(part_name)}</part-name>",
-                "    </score-part>",
-            ]
-        )
-        part_body_lines.append(
-            _build_part_musicxml(
-                part_id=part_id,
-                part_name=part_name,
-                role=str(part.get("role", "HARMONY")),
-                notes=list(part.get("notes", [])),
-                bpm=bpm,
-                time_signature=time_signature,
-                key_signature=key_signature,
-                color=_part_color(index - 1),
-            )
-        )
-
-    part_list_lines.append("  </part-list>")
-    xml_text = "\n".join(
-        [
-            '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
-            '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">',
-            '<score-partwise version="4.0">',
-            f"  <work><work-title>{escape(title)}</work-title></work>",
-            f"  <movement-title>{escape(title)}</movement-title>",
-            *part_list_lines,
-            *part_body_lines,
-            "</score-partwise>",
-        ]
-    )
-    return xml_text.encode("utf-8")
-
-
-def _encode_variable_length(value: int) -> bytes:
-    buffer = [value & 0x7F]
-    value >>= 7
-    while value:
-        buffer.insert(0, (value & 0x7F) | 0x80)
-        value >>= 7
-
-    return bytes(buffer)
-
-
-def _build_midi_bytes(parts_json: list[dict], bpm: int) -> bytes:
-    microseconds_per_quarter = max(1, round(60_000_000 / max(1, bpm)))
-    beat_ms = 60000 / max(1, bpm)
-    events: list[tuple[int, int, bytes]] = [
-        (0, 0, bytes([0xFF, 0x51, 0x03]) + microseconds_per_quarter.to_bytes(3, "big"))
-    ]
-    melodic_channel = 0
-
-    for part in parts_json:
-        notes = part.get("notes", [])
-        if str(part.get("role", "")).upper() == "PERCUSSION":
-            midi_channel = 9
+        role = str(part.get("role", "HARMONY")).upper()
+        part_stream = m21stream.Part(id=f"P{index}-{_sanitize_xml_id(part_name)}")
+        part_stream.partName = part_name
+        part_stream.insert(0, m21tempo.MetronomeMark(number=float(max(1, bpm))))
+        part_stream.insert(0, key_signature_obj)
+        part_stream.insert(0, m21meter.TimeSignature(f"{numerator}/{denominator}"))
+        if role == "BASS":
+            part_stream.insert(0, m21clef.BassClef())
+        elif role == "PERCUSSION":
+            part_stream.insert(0, m21clef.PercussionClef())
         else:
-            if melodic_channel == 9:
-                melodic_channel += 1
-            midi_channel = melodic_channel % 16
-            melodic_channel += 1
-        for item in notes:
-            pitch_midi = int(item["pitch_midi"])
-            start_tick = int(round((int(item["start_ms"]) / beat_ms) * PPQN))
-            end_tick = max(start_tick + 1, int(round((int(item["end_ms"]) / beat_ms) * PPQN)))
-            velocity = int(item.get("velocity", 84))
-            events.append((start_tick, 1, bytes([0x90 | midi_channel, pitch_midi, velocity])))
-            events.append((end_tick, 0, bytes([0x80 | midi_channel, pitch_midi, 0x00])))
+            part_stream.insert(0, m21clef.TrebleClef())
 
-    events.sort(key=lambda item: (item[0], item[1]))
-    track_data = bytearray()
-    previous_tick = 0
-    for tick, _, payload in events:
-        track_data.extend(_encode_variable_length(max(0, tick - previous_tick)))
-        track_data.extend(payload)
-        previous_tick = tick
+        notes_by_start: dict[int, list[dict]] = {}
+        for note_payload in list(part.get("notes", [])):
+            notes_by_start.setdefault(int(note_payload["start_ms"]), []).append(note_payload)
 
-    track_data.extend(_encode_variable_length(0))
-    track_data.extend(b"\xFF\x2F\x00")
+        cursor_ms = 0
+        for start_ms in sorted(notes_by_start):
+            group = notes_by_start[start_ms]
+            if start_ms > cursor_ms:
+                rest = m21note.Rest(quarterLength=quantized_quarter_length(start_ms - cursor_ms))
+                part_stream.append(rest)
+                cursor_ms = start_ms
 
-    header = b"MThd" + struct.pack(">IHHH", 6, 0, 1, PPQN)
-    track_chunk = b"MTrk" + struct.pack(">I", len(track_data)) + bytes(track_data)
-    return header + track_chunk
+            end_ms = max(int(item["end_ms"]) for item in group)
+            quarter_length = quantized_quarter_length(end_ms - start_ms)
+            color = _part_color(index - 1)
+            if len(group) == 1:
+                item = group[0]
+                rendered = m21note.Note(int(item["pitch_midi"]), quarterLength=quarter_length)
+                rendered.volume.velocity = int(item.get("velocity", 84))
+                rendered.style.color = color
+            else:
+                rendered = m21chord.Chord(
+                    [int(item["pitch_midi"]) for item in group],
+                    quarterLength=quarter_length,
+                )
+                rendered.volume.velocity = max(int(item.get("velocity", 84)) for item in group)
+                rendered.style.color = color
+                for chord_note in rendered.notes:
+                    chord_note.style.color = color
+            part_stream.append(rendered)
+            cursor_ms = max(cursor_ms, end_ms)
+
+        if not notes_by_start:
+            part_stream.append(m21note.Rest(quarterLength=max(1.0, measure_quarter_length)))
+
+        score.append(part_stream)
+
+    score.makeNotation(inPlace=True)
+    return GeneralObjectExporter(score).parse()
 
 
-def _store_arrangement_midi(storage_key: str, parts_json: list[dict], bpm: int) -> tuple[str, int]:
-    midi_bytes = _build_midi_bytes(parts_json, bpm)
+def _build_midi_bytes(parts_json: list[dict], bpm: int, time_signature: str | None = None) -> bytes:
+    sequence = music_pb2.NoteSequence()
+    sequence.ticks_per_quarter = PPQN
+    sequence.tempos.add(qpm=float(max(1, bpm)), time=0.0)
+    numerator, denominator = _parse_time_signature(time_signature)
+    sequence.time_signatures.add(numerator=numerator, denominator=denominator, time=0.0)
+
+    for instrument_index, part in enumerate(parts_json):
+        role = str(part.get("role", "")).upper()
+        is_drum = role == "PERCUSSION"
+        program = 0 if is_drum else min(instrument_index * 8, 120)
+        for item in list(part.get("notes", [])):
+            sequence.notes.add(
+                pitch=int(item["pitch_midi"]),
+                start_time=float(int(item["start_ms"]) / 1000),
+                end_time=float(int(item["end_ms"]) / 1000),
+                velocity=int(item.get("velocity", 84)),
+                instrument=instrument_index,
+                program=program,
+                is_drum=is_drum,
+            )
+
+    sequence.total_time = max(
+        (float(int(item["end_ms"]) / 1000) for part in parts_json for item in list(part.get("notes", []))),
+        default=0.0,
+    )
+    temp_path: Path | None = None
+    try:
+        with NamedTemporaryFile(delete=False, suffix=".mid") as temp_file:
+            temp_path = Path(temp_file.name)
+        midi_io.note_sequence_to_midi_file(sequence, temp_path.as_posix())
+        return temp_path.read_bytes()
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+
+
+def _store_arrangement_midi(
+    storage_key: str,
+    parts_json: list[dict],
+    bpm: int,
+    time_signature: str | None = None,
+) -> tuple[str, int]:
+    midi_bytes = _build_midi_bytes(parts_json, bpm, time_signature=time_signature)
     stored_object = get_storage_backend().write_bytes(storage_key, midi_bytes, content_type="audio/midi")
     return stored_object.storage_key, stored_object.byte_size
 
@@ -1275,6 +1305,7 @@ def generate_arrangements(
             ),
             parts_json,
             bpm,
+            project.time_signature,
         )
         arrangement.musicxml_storage_key, _ = _store_arrangement_musicxml(
             build_project_storage_key(
@@ -1354,6 +1385,7 @@ def update_arrangement(
             arrangement.midi_storage_key,
             parts_json,
             arrangement.melody_draft.bpm or 90,
+            arrangement.project.time_signature,
         )
     if arrangement.musicxml_storage_key:
         arrangement.musicxml_storage_key, _ = _store_arrangement_musicxml(

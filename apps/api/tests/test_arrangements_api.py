@@ -1,7 +1,10 @@
 from collections.abc import Iterator
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from fastapi.testclient import TestClient
+from music21 import converter
+from note_seq import midi_io
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -109,6 +112,20 @@ def test_generate_arrangements_creates_candidate_batch_and_snapshot(client: Test
     assert musicxml_response.status_code == 200
     assert b"<score-partwise" in musicxml_response.content
     assert b"<part-list>" in musicxml_response.content
+
+    with NamedTemporaryFile(delete=False, suffix=".mid") as temp_file:
+        midi_path = Path(temp_file.name)
+    try:
+        midi_path.write_bytes(midi_response.content)
+        sequence = midi_io.midi_file_to_note_sequence(midi_path.as_posix())
+        assert len(sequence.notes) >= 4
+    finally:
+        if midi_path.exists():
+            midi_path.unlink()
+
+    parsed_score = converter.parseData(musicxml_response.content.decode("utf-8"), format="musicxml")
+    assert len(parsed_score.parts) >= 4
+    assert parsed_score.parts[0].partName is not None
 
     list_response = client.get(f"/api/projects/{project_id}/arrangements")
     assert list_response.status_code == 200

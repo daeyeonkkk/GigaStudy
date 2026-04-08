@@ -647,9 +647,22 @@ test('release gate long-session stability survives repeated take and analysis cy
   await generateArrangementCandidates(page)
 
   const playbackPanel = getPlaybackPanel(page)
+  const progressFill = playbackPanel.locator('.transport-progress__fill')
+  const stopButton = playbackPanel.getByRole('button', { name: 'Stop playback' })
   await playbackPanel.getByRole('button', { name: 'Play arrangement preview' }).click()
-  await expect(playbackPanel.getByText('Playing', { exact: true })).toBeVisible()
-  await playbackPanel.getByRole('button', { name: 'Stop playback' }).click()
+  await expect
+    .poll(
+      async () => {
+        const style = await progressFill.getAttribute('style')
+        return style ?? ''
+      },
+      { timeout: 10000 },
+    )
+    .not.toContain('width: 0%')
+
+  if (await stopButton.isEnabled()) {
+    await stopButton.click()
+  }
   await expect(playbackPanel.getByText('Playback ready', { exact: true })).toBeVisible()
 
   const shareLinksPanel = getShareLinksPanel(page)

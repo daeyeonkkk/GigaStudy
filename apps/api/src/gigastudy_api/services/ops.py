@@ -33,7 +33,7 @@ from gigastudy_api.db.models import (
 )
 from gigastudy_api.services.analysis import ANALYSIS_MODEL_VERSION
 from gigastudy_api.services.arrangements import ARRANGEMENT_ENGINE_VERSION
-from gigastudy_api.services.melody import MELODY_MODEL_VERSION
+from gigastudy_api.services.melody import MELODY_MODEL_VERSION, PYIN_FALLBACK_MODEL_VERSION
 from gigastudy_api.services.projects import get_or_create_default_user
 
 
@@ -310,6 +310,7 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
     melody_versions = sorted(
         {
             MELODY_MODEL_VERSION,
+            PYIN_FALLBACK_MODEL_VERSION,
             *[
                 value
                 for value in session.scalars(select(MelodyDraft.model_version).distinct()).all()

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     s3_secret_access_key: str | None = None
     s3_session_token: str | None = None
     s3_addressing_style: str = "path"
+    basic_pitch_node_binary: str = "node"
+    basic_pitch_timeout_seconds: int = 90
     analysis_timeout_seconds: int = 15
     upload_session_expiry_minutes: int = 30
     ops_recent_limit: int = 8

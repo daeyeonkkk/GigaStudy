@@ -68,6 +68,8 @@ Date: 2026-04-08
 - The ops overview now also lets a reviewer save a structured PASS / WARN / FAIL validation run with browser, device, permission, playback, and follow-up notes, which turns the protocol into an actual product workflow.
 - The API now has a first-class storage backend abstraction with local and S3-compatible object storage backends, and the upload, processing, melody export, arrangement export, and download routes now run through that shared storage contract instead of hard-coded local file paths.
 - The backend runtime now also includes first-class PostgreSQL and S3-compatible client drivers (`psycopg` and `boto3`), and the repo includes a local PostgreSQL + MinIO bootstrap compose file for production-like storage rehearsals.
+- Melody draft extraction now runs through the official `@spotify/basic-pitch` helper by default, then continues through the existing quantize, phrase split, key estimation, and editable draft path in the API.
+- The Basic Pitch integration is now operational in this Python 3.12 environment through a repo-local Node helper, while the previous `librosa.pyin` melody path remains as an explicit fallback when that helper is unavailable.
 - Melody MIDI export now runs through `note-seq`, and arrangement MIDI export now also uses `note-seq` instead of the local hand-rolled MIDI serializer.
 - Arrangement MusicXML export now runs through `music21`, so the runtime export path now uses a standard music notation library instead of only the local custom MusicXML builder.
 - Backend model versions now report:
@@ -78,7 +80,7 @@ Date: 2026-04-08
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `50 passed`
+- Result: `51 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
 - Alembic upgrade: `uv run alembic upgrade head`
@@ -119,7 +121,6 @@ Date: 2026-04-08
 - Coarse fallback remains for tracks that do not yet have `FRAME_PITCH` and `NOTE_EVENTS` artifacts, so not every historical track is guaranteed to use the newer scoring source.
 - Projects without saved chord markers still fall back to `KEY_ONLY`, and the current chord authoring flow is intentionally lightweight rather than a full chart editor or import pipeline.
 - Phase 9 still lacks the real-vocal fixture set and human-rating comparison needed to claim a human-trustworthy intonation judge.
-- `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, and `music21` plus `note-seq` are now in the runtime export path, but the final planned audio-to-MIDI stack is still not fully adopted until Basic Pitch is evaluated in-product.
 - The default development path still runs on SQLite and local filesystem storage. First-class PostgreSQL and S3-compatible support now exist, but the deployment path is not yet the default operating mode and still needs real environment exercise before the checklist item can be closed.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
@@ -129,7 +130,6 @@ Date: 2026-04-08
 
 1. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
 2. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
-3. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
-4. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
-5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
-6. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
+3. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
+4. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
+5. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.

@@ -13,6 +13,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.main import app
+from gigastudy_api.services.basic_pitch_runner import BasicPitchRunnerError
 
 
 @pytest.fixture
@@ -77,7 +78,7 @@ def test_extract_melody_draft_returns_notes_and_midi(client: TestClient) -> None
     assert response.status_code == 200
     payload = response.json()
     assert payload["track_id"] == take_id
-    assert payload["model_version"] == "librosa-pyin-melody-v2"
+    assert payload["model_version"] == "basic-pitch-ts-v1.0.1"
     assert payload["note_count"] >= 1
     assert payload["notes_json"][0]["pitch_midi"] == 69
     assert payload["midi_artifact_url"] is not None
@@ -151,3 +152,34 @@ def test_update_melody_draft_rewrites_notes_and_midi(client: TestClient) -> None
     assert fetched.status_code == 200
     assert fetched.json()["melody_draft_id"] == melody_draft_id
     assert fetched.json()["notes_json"][0]["pitch_name"] == "D4"
+
+
+def test_extract_melody_draft_falls_back_when_basic_pitch_is_unavailable(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_basic_pitch_runner_error(*_args: object, **_kwargs: object) -> tuple[str, list[object]]:
+        raise BasicPitchRunnerError("basic pitch helper unavailable")
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.melody.extract_basic_pitch_notes",
+        raise_basic_pitch_runner_error,
+    )
+
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Fallback Melody", "bpm": 90, "base_key": "A"},
+    ).json()["project_id"]
+    take_id = upload_ready_take(
+        client,
+        project_id,
+        build_test_wav_bytes(duration_ms=1400, frequency_hz=440.0, sample_rate=32000),
+    )
+
+    response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/melody")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["model_version"] == "librosa-pyin-melody-v2-fallback"
+    assert payload["note_count"] >= 1
+    assert payload["notes_json"][0]["pitch_midi"] == 69

@@ -16,7 +16,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Frontend foundation exists on React + TypeScript + Vite.
 - [ ] The full planned browser audio stack is complete as originally envisioned across AudioWorklet + Web Worker + OfflineAudioContext + WASM.
 - [x] Backend foundation exists on FastAPI with a tested API surface.
-- [ ] The planned analysis stack is fully adopted at runtime across Basic Pitch + `librosa.pyin` + `music21` + `note-seq`.
+- [x] The planned analysis stack is fully adopted at runtime across Basic Pitch + `librosa.pyin` + `music21` + `note-seq`.
 - [x] Score rendering and playback are separated so notation is not coupled to the playback engine.
 - [ ] The default product storage path is production-ready PostgreSQL + S3-compatible object storage rather than SQLite + local filesystem.
 - [x] Job state, artifact metadata, model versions, and failure reasons are stored and inspectable.
@@ -68,7 +68,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 
 ## 7. Audio-To-Melody Draft
 
-- [ ] Runtime melody extraction is fully wired through Basic Pitch as planned in the target stack.
+- [x] Runtime melody extraction is fully wired through Basic Pitch as planned in the target stack.
 - [x] A melody draft can be extracted from recorded audio.
 - [x] Phrase split exists.
 - [x] Quantization exists.

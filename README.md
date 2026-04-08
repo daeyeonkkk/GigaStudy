@@ -31,6 +31,7 @@ uv run uvicorn gigastudy_api.main:app --reload --app-dir src
 ```
 
 By default the API uses local development storage under `apps/api/storage`.
+Melody extraction now calls a repo-local `@spotify/basic-pitch` helper, so keep the root `node_modules` installed with `npm install` even when you are focusing on API-only work.
 If the web client and API run on different origins, set `GIGASTUDY_API_PUBLIC_APP_URL` so share links open the frontend viewer route instead of the API origin.
 The API now also supports `GIGASTUDY_API_STORAGE_BACKEND=s3` for S3-compatible object storage, and the Python dependencies now include both `psycopg` for PostgreSQL and `boto3` for object storage.
 
@@ -64,7 +65,7 @@ Use `postgresql+psycopg://gigastudy:gigastudy@127.0.0.1:5432/gigastudy` for `GIG
 
 - P0 MVP flow is implemented from project creation through export.
 - P1 reinforcement features are implemented, including presets, candidate comparison polish, project history, share links, and ops monitoring.
-- Analysis and melody extraction now use `librosa.pyin`-based pitch support on the backend.
+- Analysis now uses `librosa.pyin`-based pitch support on the backend, and melody extraction now uses the official `@spotify/basic-pitch` helper with the previous `librosa.pyin` path retained as an explicit fallback.
 - Upload processing now stores frame-level pitch artifacts, and analysis responses expose which scoring quality mode is in use.
 - Processed takes now also generate note-event artifacts and signed-cents note feedback on the backend.
 - Melody MIDI export now runs through `note-seq`, and arrangement MIDI plus MusicXML export now run through `note-seq` and `music21`.
@@ -90,7 +91,6 @@ Use `postgresql+psycopg://gigastudy:gigastudy@127.0.0.1:5432/gigastudy` for `GIG
 
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
-- Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch` on top of the now-adopted `librosa.pyin`, `music21`, and `note-seq` runtime path.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
 - Move the new PostgreSQL + S3-compatible support from optional hardening into the default deployment profile once the deployment path is exercised outside local development.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.

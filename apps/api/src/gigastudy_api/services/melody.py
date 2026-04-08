@@ -16,13 +16,21 @@ from sqlalchemy.orm import Session, joinedload
 from gigastudy_api.api.schemas.melody import MelodyDraftResponse, MelodyDraftUpdateRequest
 from gigastudy_api.db.models import Artifact, ArtifactType, MelodyDraft, Project, Track, TrackRole, TrackStatus
 from gigastudy_api.services.audio_features import PitchFrame, extract_pitch_frames
+from gigastudy_api.services.basic_pitch_runner import (
+    BASIC_PITCH_MODEL_VERSION,
+    BasicPitchNote,
+    BasicPitchRunnerError,
+    extract_basic_pitch_notes,
+)
 from gigastudy_api.services.storage import (
     build_project_storage_key,
     get_storage_backend,
 )
 
 
-MELODY_MODEL_VERSION = "librosa-pyin-melody-v2"
+MELODY_MODEL_VERSION = BASIC_PITCH_MODEL_VERSION
+PYIN_MELODY_MODEL_VERSION = "librosa-pyin-melody-v2"
+PYIN_FALLBACK_MODEL_VERSION = "librosa-pyin-melody-v2-fallback"
 MIN_NOTE_MS = 80
 REST_SPLIT_BEATS = 1.0
 GRID_DIVISION = "1/16"
@@ -154,6 +162,30 @@ def _smooth_pitch_frames(frames: list[PitchFrame]) -> list[PitchFrame]:
     return smoothed
 
 
+def _velocity_from_amplitude(amplitude: float) -> int:
+    normalized = max(0.0, min(1.0, amplitude))
+    return int(round(48 + normalized * 48))
+
+
+def _notes_from_basic_pitch(notes: list[BasicPitchNote]) -> list[MelodyNote]:
+    extracted: list[MelodyNote] = []
+    for note in notes:
+        if note.end_ms - note.start_ms < MIN_NOTE_MS:
+            continue
+
+        extracted.append(
+            MelodyNote(
+                pitch_midi=note.pitch_midi,
+                start_ms=note.start_ms,
+                end_ms=note.end_ms,
+                phrase_index=0,
+                velocity=_velocity_from_amplitude(note.amplitude),
+            )
+        )
+
+    return sorted(extracted, key=lambda item: (item.start_ms, item.pitch_midi))
+
+
 def _merge_frame_notes(frames: list[PitchFrame]) -> list[MelodyNote]:
     notes: list[MelodyNote] = []
     current_pitch: int | None = None
@@ -206,6 +238,20 @@ def _merge_frame_notes(frames: list[PitchFrame]) -> list[MelodyNote]:
         )
 
     return notes
+
+
+def _extract_candidate_notes(samples: np.ndarray, sample_rate: int) -> tuple[list[MelodyNote], str]:
+    try:
+        basic_pitch_model_version, basic_pitch_notes = extract_basic_pitch_notes(samples, sample_rate)
+    except BasicPitchRunnerError:
+        basic_pitch_notes = []
+        basic_pitch_model_version = ""
+
+    extracted_from_basic_pitch = _notes_from_basic_pitch(basic_pitch_notes)
+    if extracted_from_basic_pitch:
+        return extracted_from_basic_pitch, basic_pitch_model_version
+
+    return _merge_frame_notes(_extract_pitch_frames(samples, sample_rate)), PYIN_FALLBACK_MODEL_VERSION
 
 
 def _quantize_notes(notes: list[MelodyNote], bpm: int) -> list[MelodyNote]:
@@ -421,16 +467,16 @@ def extract_melody_draft(session: Session, project_id: UUID, track_id: UUID) -> 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track must be READY before melody extraction")
 
     samples, sample_rate = _read_canonical_samples(track)
-    frame_notes = _merge_frame_notes(_extract_pitch_frames(samples, sample_rate))
+    extracted_notes, model_version = _extract_candidate_notes(samples, sample_rate)
     bpm = project.bpm or 90
-    quantized_notes = _assign_phrase_indexes(_quantize_notes(frame_notes, bpm), bpm)
+    quantized_notes = _assign_phrase_indexes(_quantize_notes(extracted_notes, bpm), bpm)
     key_estimate = _estimate_key(quantized_notes) or project.base_key
 
     now = datetime.now(timezone.utc)
     draft = MelodyDraft(
         project_id=project.project_id,
         track_id=track.track_id,
-        model_version=MELODY_MODEL_VERSION,
+        model_version=model_version or PYIN_MELODY_MODEL_VERSION,
         key_estimate=key_estimate,
         bpm=bpm,
         grid_division=GRID_DIVISION,

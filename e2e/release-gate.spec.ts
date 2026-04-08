@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
 const apiBaseUrl = 'http://127.0.0.1:8000'
@@ -114,6 +115,65 @@ async function uploadTake(
     },
   })
   expect(completeResponse.ok()).toBeTruthy()
+}
+
+async function saveDeviceProfileFixture(request: APIRequestContext): Promise<void> {
+  const response = await request.post(`${apiBaseUrl}/api/device-profiles`, {
+    data: {
+      browser: 'Safari',
+      os: 'macOS',
+      input_device_hash: 'fixture-mic',
+      output_route: 'bluetooth-output',
+      browser_user_agent: 'Playwright Safari fixture',
+      requested_constraints: {
+        echoCancellation: false,
+        autoGainControl: false,
+        noiseSuppression: false,
+        channelCount: 1,
+      },
+      applied_settings: {
+        sampleRate: 48000,
+        channelCount: 1,
+      },
+      capabilities: {
+        secure_context: true,
+        media_devices: {
+          get_user_media: true,
+          enumerate_devices: true,
+          get_supported_constraints: true,
+          supported_constraints: ['channelCount', 'echoCancellation'],
+        },
+        permissions: {
+          api_supported: true,
+          microphone: 'prompt',
+        },
+        web_audio: {
+          audio_context: true,
+          audio_context_mode: 'webkit',
+          offline_audio_context: false,
+          offline_audio_context_mode: 'unavailable',
+          output_latency_supported: false,
+        },
+        media_recorder: {
+          supported: true,
+          supported_mime_types: ['audio/mp4'],
+          selected_mime_type: null,
+        },
+        audio_playback: {
+          wav: 'probably',
+          webm: 'unsupported',
+          mp4: 'maybe',
+          ogg: 'unsupported',
+        },
+      },
+      diagnostic_flags: ['legacy_webkit_audio_context_only', 'missing_offline_audio_context'],
+      actual_sample_rate: 48000,
+      channel_count: 1,
+      base_latency: 0.018,
+      output_latency: 0.041,
+    },
+  })
+  expect(response.ok()).toBeTruthy()
 }
 
 async function createStudioProject(page: Page, title: string): Promise<string> {
@@ -418,6 +478,59 @@ test('release gate arrangement playback shows transport progress and can be stop
   await expect(
     playbackPanel.getByText('Arrangement playback is ready.', { exact: true }),
   ).toBeVisible()
+})
+
+test('release gate ops overview can export the environment diagnostics report', async ({
+  page,
+  request,
+}) => {
+  await saveDeviceProfileFixture(request)
+
+  await page.goto('/ops')
+  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Track browser audio variability before it becomes a support mystery' })).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download environment report' }).click()
+  await expect(
+    page.getByText(
+      'Environment diagnostics report downloaded. Use it as the baseline for native hardware validation.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^gigastudy-environment-diagnostics-\d{4}-\d{2}-\d{2}\.json$/)
+
+  const downloadPath = await download.path()
+  expect(downloadPath).toBeTruthy()
+  const reportText = await readFile(downloadPath!, 'utf8')
+  const report = JSON.parse(reportText) as {
+    exported_at: string
+    environment_diagnostics: {
+      recent_profiles: Array<{
+        browser: string
+        warning_flags: string[]
+      }>
+      warning_flags: Array<{
+        flag: string
+      }>
+    }
+  }
+
+  expect(report.exported_at).toBeTruthy()
+  expect(
+    report.environment_diagnostics.recent_profiles.some(
+      (profile) =>
+        profile.browser === 'Safari' &&
+        profile.warning_flags.includes('missing_offline_audio_context'),
+    ),
+  ).toBeTruthy()
+  expect(
+    report.environment_diagnostics.warning_flags.some(
+      (warning) => warning.flag === 'legacy_webkit_audio_context_only',
+    ),
+  ).toBeTruthy()
 })
 
 test('release gate long-session stability survives repeated take and analysis cycles', async ({

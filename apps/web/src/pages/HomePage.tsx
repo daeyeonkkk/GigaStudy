@@ -122,19 +122,19 @@ export function HomePage() {
     <div className="page-shell">
       <section className="hero">
         <div className="hero__copy">
-          <p className="eyebrow">GigaStudy Phase 8</p>
-          <h1>Finish Phase 8 with snapshot history and read-only sharing.</h1>
+          <p className="eyebrow">GigaStudy Environment Track</p>
+          <h1>Turn seeded browser coverage into real environment validation.</h1>
           <p className="hero__summary">
-            This workspace follows the PROJECT_FOUNDATION post-launch lane:
-            keep the core studio flow intact while adding review-safe history and share surfaces
-            around the studio.
+            This workspace now follows the PROJECT_FOUNDATION environment-validation lane:
+            keep the core studio flow stable while making browser and hardware variability visible,
+            exportable, and ready for native Safari and real-device checks.
           </p>
 
           <div className="chip-row" aria-label="current scope">
             <span className="chip">React 19 + Vite</span>
             <span className="chip">FastAPI</span>
-            <span className="chip">Version history</span>
-            <span className="chip">Read-only shares</span>
+            <span className="chip">Ops diagnostics</span>
+            <span className="chip">Hardware validation</span>
           </div>
 
           <div className="button-row">
@@ -199,8 +199,9 @@ export function HomePage() {
           <p className="eyebrow">FE-01</p>
           <h2>Create a project and enter the studio</h2>
           <p className="panel__summary">
-            This screen keeps the first foundation checkpoint small: capture the core
-            musical metadata, then move straight into the studio workspace.
+            The entry flow stays intentionally small: capture core musical metadata,
+            then move straight into the studio where DeviceProfiles, recordings, and
+            environment diagnostics can be exercised.
           </p>
 
           <form className="project-form" onSubmit={handleSubmit}>
@@ -307,7 +308,7 @@ export function HomePage() {
 
         <article className="panel">
           <p className="eyebrow">Current Lane</p>
-          <h2>Phase 8 tickets in motion</h2>
+          <h2>Environment-validation tickets in motion</h2>
           <ul className="ticket-list">
             {currentLaneTickets.map((ticket) => (
               <li key={ticket}>

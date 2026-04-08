@@ -1,18 +1,18 @@
 export const priorityCards = [
   {
-    title: 'Chord timeline authoring',
+    title: 'Environment diagnostics',
     items: [
-      'Make chord-aware harmony reachable from the main studio instead of relying on preloaded project metadata.',
-      'Support both lightweight row editing and JSON paste for prepared markers.',
-      'Keep the first pass small enough to avoid turning the studio into a full chart editor.',
+      'Turn saved DeviceProfiles into an ops-visible browser and hardware diagnostics baseline.',
+      'Keep warning flags, permissions, codec support, and audio-context mode visible by environment.',
+      'Make real hardware validation easier instead of leaving support to guesswork.',
     ],
   },
   {
-    title: 'Harmony mode reachability',
+    title: 'Native browser validation',
     items: [
-      'Let users save markers, rerun analysis, and actually see `CHORD_AWARE` without leaving the workflow.',
-      'Keep `KEY_ONLY` fallback visible whenever no saved chord timeline exists.',
-      'Make the transition from fallback to chord-aware analysis understandable in the UI.',
+      'Use Chromium, Firefox, and WebKit automation as the seeded baseline, not the final proof.',
+      'Add native Safari and real-hardware checks on top of the new diagnostics report.',
+      'Keep unsupported paths explicit in release notes and ops summaries.',
     ],
   },
   {
@@ -24,19 +24,19 @@ export const priorityCards = [
     ],
   },
   {
-    title: 'Phase 9 closeout',
+    title: 'Next closeout',
     items: [
-      'Finish the reachability leg of the intonation quality track without disturbing the core studio flow.',
-      'Leave room for deeper chord import and calibration tooling in the next slice.',
-      'Keep the MVP scorer honest while we move toward a more trustworthy judge.',
+      'Finish the environment-validation leg without disturbing the seeded release gate.',
+      'Leave room for deeper native Safari and long-session hardware runs in the next slice.',
+      'Keep the MVP scorer and browser-support claims honest while coverage deepens.',
     ],
   },
 ] as const
 
 export const currentLaneTickets = [
-  'Phase 9',
-  'Chord timeline authoring',
-  'Chord-aware reachability',
-  'Harmony fallback cues',
+  'Environment validation',
+  'Ops diagnostics export',
+  'Native Safari checklist',
+  'Hardware variability tracking',
   'Human-rating calibration next',
 ] as const

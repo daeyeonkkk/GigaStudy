@@ -63,6 +63,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 - DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
 - The admin ops view now aggregates those environment diagnostics into a browser matrix, warning-flag counts, and recent captured profiles for support and release triage.
+- The ops view can now also download an environment diagnostics report JSON, which is the baseline artifact for native Safari and real-hardware validation rounds.
 - A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
 - The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
@@ -70,6 +71,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - The browser release gate now also covers arrangement playback behavior: preview start, transport progress movement, and stop/reset back to ready state.
 - The browser release gate now also covers a longer continuous session: repeated takes, take switching, repeated analysis, regeneration, playback, and share creation without page errors.
 - The browser release gate now also covers a cross-browser matrix for the seeded safe paths: Chromium, Firefox, and WebKit verify the core studio smoke, sharing, and arrangement export journeys, while arrangement playback is currently verified in Chromium and Firefox.
+- The browser release gate now also covers environment diagnostics report export in Chromium, Firefox, and WebKit.
 
 ## Current Hardening Focus
 
@@ -78,6 +80,7 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.
+- Follow the browser environment validation protocol in `PROJECT_FOUNDATION/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks.
 
 ## Foundation Docs
 
@@ -89,3 +92,4 @@ Arrangement playback is verified in Chromium and Firefox; Playwright WebKit on W
 - [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
 - [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
 - [Intonation Assessment](./PROJECT_FOUNDATION/INTONATION_ANALYSIS_ASSESSMENT.md)
+- [Browser Environment Validation](./PROJECT_FOUNDATION/BROWSER_ENVIRONMENT_VALIDATION.md)

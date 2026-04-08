@@ -309,6 +309,35 @@
 - 실제 보컬 fixture 기반 calibration 기록이 남는다.
 - 이 단계가 닫히기 전에는 제품 카피가 `정밀 음정 판정기`를 주장하지 않는다.
 
+### Phase 10. Browser Environment Validation
+
+목표:
+
+- seeded 브라우저 release gate 위에 native Safari / WebKit와 real hardware recording 검증을 얹어서, 실제 환경 편차를 릴리즈 판단에 반영한다.
+
+주요 작업:
+
+- ops overview의 environment diagnostics report를 기준 산출물로 사용
+- `BROWSER_ENVIRONMENT_VALIDATION.md` 기준 matrix 실행
+- native Safari / WebKit recording, permission, playback 검증
+- output route 차이:
+  built-in speaker, wired headphones, Bluetooth output
+- warning flag 변화와 실제 사용자 체감 이슈를 함께 기록
+- release note와 unsupported path 문구 갱신
+
+산출물:
+
+- environment diagnostics report JSON
+- native browser validation run log
+- browser / hardware compatibility notes
+
+완료 기준:
+
+- 최소 1회 이상의 native Safari 또는 WebKit 검증 결과가 남는다.
+- 최소 1회 이상의 real hardware recorder 검증 결과가 남는다.
+- warning flag와 실제 체감 이슈가 함께 기록된다.
+- 릴리즈 노트가 검증된 범위와 미검증 범위를 정직하게 구분한다.
+
 ## 4. 단계 간 의존성
 
 1. Phase 1이 닫혀야 Phase 2의 입력 데이터가 안정화된다.

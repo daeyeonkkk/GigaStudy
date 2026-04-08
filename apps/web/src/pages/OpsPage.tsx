@@ -114,6 +114,12 @@ type ActionState =
   | { phase: 'success'; message: string }
   | { phase: 'error'; message: string }
 
+type EnvironmentDiagnosticsExport = {
+  exported_at: string
+  generated_from: 'ops_overview'
+  environment_diagnostics: OpsEnvironmentDiagnostics
+}
+
 function formatDate(value: string | null): string {
   if (!value) {
     return 'Not finished'
@@ -128,6 +134,20 @@ function formatLatency(value: number | null): string {
   }
 
   return `${Math.round(value * 1000)} ms`
+}
+
+function downloadJsonReport(filename: string, payload: unknown): void {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.append(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -228,6 +248,22 @@ export function OpsPage() {
     }
   }
 
+  function handleDownloadEnvironmentReport(payload: OpsEnvironmentDiagnostics): void {
+    const report: EnvironmentDiagnosticsExport = {
+      exported_at: new Date().toISOString(),
+      generated_from: 'ops_overview',
+      environment_diagnostics: payload,
+    }
+
+    const dateToken = new Date().toISOString().slice(0, 10)
+    downloadJsonReport(`gigastudy-environment-diagnostics-${dateToken}.json`, report)
+    setActionState({
+      phase: 'success',
+      message:
+        'Environment diagnostics report downloaded. Use it as the baseline for native hardware validation.',
+    })
+  }
+
   if (pageState.phase === 'loading') {
     return (
       <div className="page-shell">
@@ -280,6 +316,14 @@ export function OpsPage() {
               onClick={() => void loadOverview()}
             >
               Refresh overview
+            </button>
+
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={() => handleDownloadEnvironmentReport(environmentDiagnostics)}
+            >
+              Download environment report
             </button>
 
             <Link className="back-link" to="/">

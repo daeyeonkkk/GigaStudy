@@ -14,8 +14,9 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 5. `PHASE1_BACKLOG.md`
 6. `PHASE9_INTONATION_BACKLOG.md`
 7. `GigaStudy_check_list.md`
-8. `FOUNDATION_STATUS.md`
-9. `WORKING_PRINCIPLES.md`
+8. `BROWSER_ENVIRONMENT_VALIDATION.md`
+9. `FOUNDATION_STATUS.md`
+10. `WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -31,6 +32,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Current calibration evidence, provisional threshold bands, and the claim gate for what the intonation scorer can and cannot promise today.
 - `GigaStudy_check_list.md`
   Cross-check list for scope control, implementation readiness, and release gating.
+- `BROWSER_ENVIRONMENT_VALIDATION.md`
+  Native browser and hardware validation protocol built on top of the ops diagnostics baseline.
 - `FOUNDATION_STATUS.md`
   Current implementation audit against the foundation docs, including verified coverage, browser-environment diagnostics, and remaining gaps.
 - `INTONATION_ANALYSIS_ASSESSMENT.md`

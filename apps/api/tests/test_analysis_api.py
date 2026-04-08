@@ -102,6 +102,8 @@ def test_run_track_analysis_persists_scores_and_snapshot_summary(client: TestCli
     assert payload["latest_score"]["pitch_score"] >= 90
     assert payload["latest_score"]["rhythm_score"] >= 90
     assert payload["latest_score"]["total_score"] >= 88
+    assert payload["latest_score"]["pitch_quality_mode"] == "FRAME_PITCH_V1"
+    assert payload["latest_score"]["harmony_reference_mode"] == "KEY_ONLY"
     assert len(payload["latest_score"]["feedback_json"]) == 4
 
     snapshot_response = client.get(f"/api/projects/{project_id}/studio")
@@ -148,6 +150,29 @@ def test_analysis_distinguishes_matching_and_mismatched_takes(client: TestClient
 
     assert matching_score["pitch_score"] > mismatched_score["pitch_score"]
     assert matching_score["total_score"] > mismatched_score["total_score"]
+
+
+def test_get_track_frame_pitch_returns_stored_artifact(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1250, frequency_hz=440.0, sample_rate=32000)
+    take_bytes = build_test_wav_bytes(duration_ms=1250, frequency_hz=493.88, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Frame Pitch Session", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = upload_ready_track(client, project_id, role="take", wav_bytes=take_bytes, filename="take.wav")
+
+    frame_pitch_response = client.get(f"/api/projects/{project_id}/tracks/{take_id}/frame-pitch")
+
+    assert frame_pitch_response.status_code == 200
+    payload = frame_pitch_response.json()
+    assert payload["track_id"] == take_id
+    assert payload["artifact_type"] == "FRAME_PITCH"
+    assert payload["payload"]["quality_mode"] == "FRAME_PITCH_V1"
+    assert payload["payload"]["frame_count"] > 0
+    assert payload["payload"]["voiced_frame_count"] > 0
+    assert any(frame["frequency_hz"] is not None for frame in payload["payload"]["frames"])
 
 
 def test_retry_failed_analysis_job_after_reprocessing(client: TestClient) -> None:

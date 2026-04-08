@@ -191,6 +191,8 @@ def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) ->
     assert take.alignment_confidence == pytest.approx(0.91)
     assert len(take.analysis_jobs) == 1
     assert len(take.scores) == 1
+    assert take.scores[0].pitch_quality_mode == "COARSE_CONTOUR_V1"
+    assert take.scores[0].harmony_reference_mode == "KEY_ONLY"
 
 
 def test_track_can_store_editable_melody_draft(session: Session) -> None:

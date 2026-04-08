@@ -44,6 +44,7 @@ uv run pytest
 - P0 MVP flow is implemented from project creation through export.
 - P1 reinforcement features are implemented, including presets, candidate comparison polish, project history, share links, and ops monitoring.
 - Analysis and melody extraction now use `librosa.pyin`-based pitch support on the backend.
+- Upload processing now stores frame-level pitch artifacts, and analysis responses expose which scoring quality mode is in use.
 
 ## Current Hardening Focus
 

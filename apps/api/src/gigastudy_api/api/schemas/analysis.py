@@ -38,6 +38,8 @@ class TrackScoreResponse(BaseModel):
     rhythm_score: float = Field(ge=0, le=100)
     harmony_fit_score: float = Field(ge=0, le=100)
     total_score: float = Field(ge=0, le=100)
+    pitch_quality_mode: str
+    harmony_reference_mode: str
     feedback_json: list[AnalysisFeedbackItemResponse]
     created_at: datetime
     updated_at: datetime

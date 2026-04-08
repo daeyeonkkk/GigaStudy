@@ -27,6 +27,10 @@ class ArtifactType(str, enum.Enum):
     CANONICAL_AUDIO = "CANONICAL_AUDIO"
     WAVEFORM_PEAKS = "WAVEFORM_PEAKS"
     MIXDOWN_AUDIO = "MIXDOWN_AUDIO"
+    FRAME_PITCH = "FRAME_PITCH"
+    NOTE_EVENTS = "NOTE_EVENTS"
+    CHORD_TIMELINE = "CHORD_TIMELINE"
+    ALIGNMENT_DEBUG = "ALIGNMENT_DEBUG"
 
 
 class AnalysisJobType(str, enum.Enum):
@@ -254,6 +258,8 @@ class Score(TimestampMixin, Base):
     rhythm_score: Mapped[float] = mapped_column(Float, nullable=False)
     harmony_fit_score: Mapped[float] = mapped_column(Float, nullable=False)
     total_score: Mapped[float] = mapped_column(Float, nullable=False)
+    pitch_quality_mode: Mapped[str] = mapped_column(String(64), nullable=False, default="COARSE_CONTOUR_V1")
+    harmony_reference_mode: Mapped[str] = mapped_column(String(64), nullable=False, default="KEY_ONLY")
     feedback_json: Mapped[list[dict] | dict] = mapped_column(JSON, nullable=False)
 
     project: Mapped["Project"] = relationship(back_populates="scores")

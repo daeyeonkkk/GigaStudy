@@ -17,6 +17,12 @@ from gigastudy_api.api.schemas.analysis import (
     TrackAnalysisResponse,
     TrackScoreResponse,
 )
+from gigastudy_api.api.schemas.pitch_analysis import (
+    COARSE_CONTOUR_QUALITY_MODE,
+    FRAME_PITCH_QUALITY_MODE,
+    HARMONY_REFERENCE_MODE_KEY_ONLY,
+    TrackFramePitchResponse,
+)
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import (
     AnalysisJob,
@@ -31,7 +37,11 @@ from gigastudy_api.db.models import (
     TrackStatus,
 )
 from gigastudy_api.services.audio_features import ONSET_HOP_LENGTH, build_onset_envelope
-from gigastudy_api.services.processing import get_track_preview_data
+from gigastudy_api.services.processing import (
+    get_track_frame_pitch_artifact,
+    get_track_frame_pitch_data,
+    get_track_preview_data,
+)
 
 
 ANALYSIS_MODEL_VERSION = "librosa-pyin-alignment-v2"
@@ -80,6 +90,8 @@ class AnalysisComputation:
     rhythm_score: float
     harmony_fit_score: float
     total_score: float
+    pitch_quality_mode: str
+    harmony_reference_mode: str
     feedback_items: list[dict[str, object]]
 
 
@@ -198,15 +210,15 @@ def _align_numeric_arrays(
     )
 
 
-def _align_pitch_contours(
-    guide_contour: list[float | None],
-    take_contour: list[float | None],
+def _align_pitch_sequences(
+    guide_sequence: list[float | None],
+    take_sequence: list[float | None],
     offset_ms: int,
     guide_duration_ms: int,
     take_duration_ms: int,
 ) -> list[tuple[float, float]]:
-    guide_values = np.array([value if value is not None else np.nan for value in guide_contour], dtype=np.float32)
-    take_values = np.array([value if value is not None else np.nan for value in take_contour], dtype=np.float32)
+    guide_values = np.array([value if value is not None else np.nan for value in guide_sequence], dtype=np.float32)
+    take_values = np.array([value if value is not None else np.nan for value in take_sequence], dtype=np.float32)
     aligned_guide, aligned_take = _align_numeric_arrays(
         guide_values,
         take_values,
@@ -226,6 +238,14 @@ def _align_pitch_contours(
         pairs.append((float(guide_value), float(take_value)))
 
     return pairs
+
+
+def _frame_pitch_sequence(track: Track) -> list[float | None] | None:
+    payload = get_track_frame_pitch_data(track)
+    if payload is None:
+        return None
+
+    return [frame.frequency_hz for frame in payload.frames]
 
 
 def _score_pitch_pairs(pairs: list[tuple[float, float]]) -> float:
@@ -416,9 +436,18 @@ def _compute_analysis(project: Project, guide_track: Track, take_track: Track) -
         frame_ms,
     )
 
-    pitch_pairs = _align_pitch_contours(
-        guide_preview.contour,
-        take_preview.contour,
+    guide_pitch_sequence = _frame_pitch_sequence(guide_track)
+    take_pitch_sequence = _frame_pitch_sequence(take_track)
+    if guide_pitch_sequence is not None and take_pitch_sequence is not None:
+        pitch_quality_mode = FRAME_PITCH_QUALITY_MODE
+    else:
+        guide_pitch_sequence = guide_preview.contour
+        take_pitch_sequence = take_preview.contour
+        pitch_quality_mode = COARSE_CONTOUR_QUALITY_MODE
+
+    pitch_pairs = _align_pitch_sequences(
+        guide_pitch_sequence,
+        take_pitch_sequence,
         alignment_offset_ms,
         guide_preview.duration_ms or guide_track.duration_ms or 0,
         take_preview.duration_ms or take_track.duration_ms or 0,
@@ -431,13 +460,14 @@ def _compute_analysis(project: Project, guide_track: Track, take_track: Track) -
         guide_preview.duration_ms or guide_track.duration_ms or 0,
         take_preview.duration_ms or take_track.duration_ms or 0,
     )
-    harmony_raw = _score_harmony_fit(project, take_preview.contour)
+    harmony_reference_mode = HARMONY_REFERENCE_MODE_KEY_ONLY
+    harmony_raw = _score_harmony_fit(project, take_pitch_sequence)
     harmony_fit_score = _blend_harmony_score(project, harmony_raw, pitch_score, rhythm_score)
     feedback_items = _build_feedback_items(
         pitch_pairs,
         guide_envelope,
         take_envelope,
-        take_preview.contour,
+        take_pitch_sequence,
         project,
         alignment_offset_ms,
         guide_preview.duration_ms or guide_track.duration_ms or 0,
@@ -452,6 +482,8 @@ def _compute_analysis(project: Project, guide_track: Track, take_track: Track) -
         rhythm_score=rhythm_score,
         harmony_fit_score=harmony_fit_score,
         total_score=_calculate_total_score(pitch_score, rhythm_score, harmony_fit_score),
+        pitch_quality_mode=pitch_quality_mode,
+        harmony_reference_mode=harmony_reference_mode,
         feedback_items=feedback_items,
     )
 
@@ -560,9 +592,31 @@ def build_track_score_response(score: Score) -> TrackScoreResponse:
         rhythm_score=round(score.rhythm_score, 2),
         harmony_fit_score=round(score.harmony_fit_score, 2),
         total_score=round(score.total_score, 2),
+        pitch_quality_mode=score.pitch_quality_mode,
+        harmony_reference_mode=score.harmony_reference_mode,
         feedback_json=feedback_items,
         created_at=score.created_at,
         updated_at=score.updated_at,
+    )
+
+
+def build_track_frame_pitch_response(track: Track) -> TrackFramePitchResponse:
+    artifact = get_track_frame_pitch_artifact(track)
+    payload = get_track_frame_pitch_data(track)
+    if artifact is None or payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Track frame-pitch artifact has not been created yet.",
+        )
+
+    return TrackFramePitchResponse(
+        artifact_id=artifact.artifact_id,
+        track_id=track.track_id,
+        project_id=track.project_id,
+        artifact_type=artifact.artifact_type.value,
+        payload=payload,
+        created_at=artifact.created_at,
+        updated_at=artifact.updated_at,
     )
 
 
@@ -637,6 +691,8 @@ def run_track_analysis(session: Session, project_id: UUID, track_id: UUID) -> Tr
             rhythm_score=computation.rhythm_score,
             harmony_fit_score=computation.harmony_fit_score,
             total_score=computation.total_score,
+            pitch_quality_mode=computation.pitch_quality_mode,
+            harmony_reference_mode=computation.harmony_reference_mode,
             feedback_json=computation.feedback_items,
             created_at=finished_at,
             updated_at=finished_at,
@@ -684,6 +740,15 @@ def get_track_analysis(session: Session, project_id: UUID, track_id: UUID) -> Tr
 
     guide_track = _get_latest_guide_track(session, project_id)
     return build_track_analysis_response(track, guide_track.track_id)
+
+
+def get_track_frame_pitch(session: Session, project_id: UUID, track_id: UUID) -> TrackFramePitchResponse:
+    _get_project_or_404(session, project_id)
+    track = _get_track_or_404(session, track_id)
+    if track.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track does not match project")
+
+    return build_track_frame_pitch_response(track)
 
 
 def retry_analysis_job(session: Session, job_id: UUID) -> TrackAnalysisResponse:

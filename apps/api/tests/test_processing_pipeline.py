@@ -53,6 +53,7 @@ def test_complete_guide_upload_generates_canonical_and_preview_artifacts(session
     assert ArtifactType.SOURCE_AUDIO in artifact_types
     assert ArtifactType.CANONICAL_AUDIO in artifact_types
     assert ArtifactType.WAVEFORM_PEAKS in artifact_types
+    assert ArtifactType.FRAME_PITCH in artifact_types
 
     canonical_artifact = next(
         artifact for artifact in completed.artifacts if artifact.artifact_type == ArtifactType.CANONICAL_AUDIO
@@ -60,10 +61,17 @@ def test_complete_guide_upload_generates_canonical_and_preview_artifacts(session
     peaks_artifact = next(
         artifact for artifact in completed.artifacts if artifact.artifact_type == ArtifactType.WAVEFORM_PEAKS
     )
+    frame_pitch_artifact = next(
+        artifact for artifact in completed.artifacts if artifact.artifact_type == ArtifactType.FRAME_PITCH
+    )
 
     assert completed.actual_sample_rate == 32000
     assert completed.duration_ms is not None and completed.duration_ms >= 1300
     assert Path(canonical_artifact.storage_key).exists()
     assert Path(peaks_artifact.storage_key).exists()
+    assert Path(frame_pitch_artifact.storage_key).exists()
     assert isinstance(peaks_artifact.meta_json, dict)
     assert "preview_data" in peaks_artifact.meta_json
+    assert isinstance(frame_pitch_artifact.meta_json, dict)
+    assert frame_pitch_artifact.meta_json["quality_mode"] == "FRAME_PITCH_V1"
+    assert frame_pitch_artifact.meta_json["frame_count"] > 0

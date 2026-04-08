@@ -24,6 +24,8 @@ Date: 2026-04-08
 
 - Post-recording analysis now uses `librosa.pyin` contour support plus onset-envelope alignment.
 - Melody draft extraction now uses `librosa.pyin` pitch frames instead of the earlier heuristic frame estimator.
+- Upload processing now stores a dedicated `FRAME_PITCH` artifact with frame-level `f0`, `voiced_prob`, and RMS data instead of relying only on the 64-point preview contour.
+- Analysis responses now expose `pitch_quality_mode` and `harmony_reference_mode`, and a dedicated frame-pitch inspection API exists for processed tracks.
 - Backend model versions now report:
   - analysis: `librosa-pyin-alignment-v2`
   - melody: `librosa-pyin-melody-v2`
@@ -32,7 +34,7 @@ Date: 2026-04-08
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `37 passed`
+- Result: `38 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 
 ## Intonation Assessment
@@ -40,15 +42,18 @@ Date: 2026-04-08
 - The recent intonation critique is mostly valid and is now accepted as foundation guidance.
 - One nuance matters:
   alignment and rhythm do not rely only on the 64-point preview contour. They currently use a full-sample onset envelope from canonical audio.
-- The larger concern is still correct:
-  pitch scoring, harmony-fit scoring, and feedback generation remain too dependent on preview-contour-level data and coarse segment windows.
+- The first corrective slice is now in place:
+  fresh processed tracks store a `FRAME_PITCH` artifact, and pitch / harmony analysis can use that artifact instead of the preview contour path.
+- The larger concern is still only partially resolved:
+  feedback remains coarse, signed cents are not exposed yet, and note segmentation plus confidence-weighted scoring are still pending.
 - We should currently describe the system as an `MVP vocal practice scorer`, not as a `human-like intonation judge`.
 - The detailed evaluation and next-step quality track now live in `INTONATION_ANALYSIS_ASSESSMENT.md`.
 - The roadmap and actionable backlog for closing this gap now live in `ROADMAP.md` Phase 9 and `PHASE9_INTONATION_BACKLOG.md`.
 
 ## Remaining Gaps Against The Target Foundation Stack
 
-- The current scoring path still lacks note-level signed-cent analysis, note segmentation, confidence weighting, and chord-aware harmony evaluation.
+- The current scoring path still lacks note-level signed-cent analysis, note segmentation, confidence weighting in runtime scoring, and chord-aware harmony evaluation.
+- Coarse fallback remains for tracks that do not yet have a `FRAME_PITCH` artifact, so not every historical track is guaranteed to use the newer scoring source.
 - `Basic Pitch` is still not wired into the runtime extraction path. Melody extraction is currently improved with `librosa.pyin`, but the final planned audio-to-MIDI stack is not fully adopted yet.
 - `music21` and `note-seq` are not yet part of the runtime export or transform pipeline. Arrangement and melody export are still handled by local project utilities.
 - The default development path still runs on SQLite and local filesystem storage. `database_url` is configurable, but a first-class PostgreSQL plus S3-compatible production adapter is still a follow-up hardening step.
@@ -56,7 +61,7 @@ Date: 2026-04-08
 
 ## Recommended Next Work
 
-1. Execute Phase 9 to upgrade intonation analysis from preview-contour scoring to note-level analysis with signed cents, note segmentation, confidence weighting, and chord-aware harmony.
+1. Continue Phase 9 with `IQ-WK-02` and `IQ-BE-01`: note segmentation plus signed-cent scoring on top of the new frame-pitch artifact.
 2. Wire the remaining planned music stack pieces where they materially improve output quality: `Basic Pitch`, then `music21` or `note-seq` where export and transformation become simpler or safer.
 3. Add production-grade storage and deployment hardening: PostgreSQL migration guidance, S3-compatible storage adapter, and environment docs.
 4. Add at least one browser-level release-gate smoke path for the main studio journey.

@@ -19,10 +19,35 @@ class PitchFrame:
     end_ms: int
     frequency_hz: float | None
     pitch_midi: int | None
+    voiced: bool
+    voiced_prob: float | None
+    rms: float | None
 
 
 def _normalize_samples(samples: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(samples, dtype=np.float32).reshape(-1))
+
+
+def _fit_feature_length(
+    values: np.ndarray | list[float] | list[bool] | None,
+    target_length: int,
+    *,
+    fill_value: float | bool,
+    dtype: np.dtype,
+) -> np.ndarray:
+    if values is None:
+        return np.full(target_length, fill_value, dtype=dtype)
+
+    array = np.asarray(values, dtype=dtype).reshape(-1)
+    if array.size == target_length:
+        return array
+    if array.size > target_length:
+        return array[:target_length]
+    if array.size == 0:
+        return np.full(target_length, fill_value, dtype=dtype)
+
+    pad_width = target_length - array.size
+    return np.pad(array, (0, pad_width), mode="constant", constant_values=fill_value)
 
 
 def extract_pitch_frames(
@@ -46,13 +71,37 @@ def extract_pitch_frames(
             mode="constant",
         )
 
-    f0, _, _ = librosa.pyin(
+    f0, voiced_flag, voiced_prob = librosa.pyin(
         normalized_samples,
         sr=sample_rate,
         fmin=min_frequency_hz,
         fmax=max_frequency_hz,
         frame_length=frame_length,
         hop_length=hop_length,
+    )
+    rms = librosa.feature.rms(
+        y=normalized_samples,
+        frame_length=frame_length,
+        hop_length=hop_length,
+    ).reshape(-1)
+    frame_count = len(f0)
+    voiced_flag_array = _fit_feature_length(
+        voiced_flag,
+        frame_count,
+        fill_value=False,
+        dtype=np.bool_,
+    )
+    voiced_prob_array = _fit_feature_length(
+        voiced_prob,
+        frame_count,
+        fill_value=np.nan,
+        dtype=np.float32,
+    )
+    rms_array = _fit_feature_length(
+        rms,
+        frame_count,
+        fill_value=0.0,
+        dtype=np.float32,
     )
 
     frame_times_ms = librosa.frames_to_time(
@@ -78,12 +127,18 @@ def extract_pitch_frames(
             frequency_hz = round(float(raw_frequency), 3)
             pitch_midi = int(round(float(librosa.hz_to_midi(raw_frequency))))
 
+        voiced_prob_value = float(voiced_prob_array[index])
+        rms_value = float(rms_array[index])
+
         frames.append(
             PitchFrame(
                 start_ms=start_ms,
                 end_ms=max(start_ms + 1, end_ms),
                 frequency_hz=frequency_hz,
                 pitch_midi=pitch_midi,
+                voiced=bool(voiced_flag_array[index]),
+                voiced_prob=(round(voiced_prob_value, 4) if not np.isnan(voiced_prob_value) else None),
+                rms=round(rms_value, 6),
             )
         )
 

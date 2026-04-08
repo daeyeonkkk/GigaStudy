@@ -10,14 +10,26 @@ from uuid import UUID
 import av
 import numpy as np
 from fastapi import HTTPException, Request, status
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from gigastudy_api.api.schemas.audio_preview import AudioPreviewResponse
+from gigastudy_api.api.schemas.pitch_analysis import (
+    FRAME_PITCH_ARTIFACT_VERSION,
+    FRAME_PITCH_QUALITY_MODE,
+    FramePitchArtifactPayload,
+    PitchFrameArtifactFrame,
+)
 from gigastudy_api.api.schemas.processing import TrackProcessingRetryResponse
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.models import Artifact, ArtifactType, Track, TrackRole, TrackStatus
-from gigastudy_api.services.audio_features import build_preview_contour
+from gigastudy_api.services.audio_features import (
+    PYIN_FRAME_LENGTH,
+    PYIN_HOP_LENGTH,
+    build_preview_contour,
+    extract_pitch_frames,
+)
 
 
 CANONICAL_SAMPLE_RATE = 16000
@@ -34,6 +46,8 @@ class AudioProbeResult:
     checksum: str
     container_format: str | None
     duration_ms: int
+    frame_pitch_path: Path
+    frame_pitch_payload: FramePitchArtifactPayload
     peaks_path: Path
     preview_data: AudioPreviewResponse
     sample_rate: int
@@ -79,6 +93,10 @@ def get_track_playback_artifact(track: Track) -> Artifact | None:
 
 def get_track_canonical_artifact(track: Track) -> Artifact | None:
     return _get_track_artifact(track, ArtifactType.CANONICAL_AUDIO)
+
+
+def get_track_frame_pitch_artifact(track: Track) -> Artifact | None:
+    return _get_track_artifact(track, ArtifactType.FRAME_PITCH)
 
 
 def _mark_track_failed(session: Session, track: Track, message: str) -> None:
@@ -128,6 +146,31 @@ def get_track_preview_data(track: Track) -> AudioPreviewResponse | None:
         return None
 
     return AudioPreviewResponse.model_validate(preview_data)
+
+
+def get_track_frame_pitch_data(track: Track) -> FramePitchArtifactPayload | None:
+    frame_pitch_artifact = get_track_frame_pitch_artifact(track)
+    if frame_pitch_artifact is None:
+        return None
+
+    artifact_path = Path(frame_pitch_artifact.storage_key)
+    if artifact_path.exists():
+        try:
+            return FramePitchArtifactPayload.model_validate_json(artifact_path.read_text(encoding="utf-8"))
+        except (OSError, ValidationError, ValueError):
+            pass
+
+    if not isinstance(frame_pitch_artifact.meta_json, dict):
+        return None
+
+    frame_pitch_data = frame_pitch_artifact.meta_json.get("frame_pitch_data")
+    if not isinstance(frame_pitch_data, dict):
+        return None
+
+    try:
+        return FramePitchArtifactPayload.model_validate(frame_pitch_data)
+    except ValidationError:
+        return None
 
 
 def _normalize_sample_array(samples: np.ndarray) -> np.ndarray:
@@ -207,6 +250,53 @@ def _write_preview_json(path: Path, preview_data: AudioPreviewResponse) -> None:
     )
 
 
+def _write_model_json(path: Path, payload: FramePitchArtifactPayload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        payload.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+
+def _build_frame_pitch_payload(samples: np.ndarray, sample_rate: int) -> FramePitchArtifactPayload:
+    frames = extract_pitch_frames(
+        samples,
+        sample_rate,
+        frame_length=PYIN_FRAME_LENGTH,
+        hop_length=PYIN_HOP_LENGTH,
+    )
+    voiced_probs = [frame.voiced_prob for frame in frames if frame.voiced_prob is not None and frame.voiced]
+    rms_values = [frame.rms for frame in frames if frame.rms is not None]
+
+    return FramePitchArtifactPayload(
+        version=FRAME_PITCH_ARTIFACT_VERSION,
+        quality_mode=FRAME_PITCH_QUALITY_MODE,
+        sample_rate=sample_rate,
+        frame_length=PYIN_FRAME_LENGTH,
+        hop_length=PYIN_HOP_LENGTH,
+        frame_count=len(frames),
+        voiced_frame_count=sum(1 for frame in frames if frame.voiced and frame.frequency_hz is not None),
+        mean_voiced_prob=(
+            round(float(np.mean(voiced_probs)), 4)
+            if voiced_probs
+            else None
+        ),
+        mean_rms=round(float(np.mean(rms_values)), 6) if rms_values else None,
+        frames=[
+            PitchFrameArtifactFrame(
+                start_ms=frame.start_ms,
+                end_ms=frame.end_ms,
+                frequency_hz=frame.frequency_hz,
+                pitch_midi=frame.pitch_midi,
+                voiced=frame.voiced,
+                voiced_prob=frame.voiced_prob,
+                rms=frame.rms,
+            )
+            for frame in frames
+        ],
+    )
+
+
 def _probe_audio_file(track: Track) -> AudioProbeResult:
     if not track.storage_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Track storage key is missing")
@@ -270,6 +360,7 @@ def _probe_audio_file(track: Track) -> AudioProbeResult:
         duration_ms = _compute_duration_ms(container, audio_stream, mono_samples.size)
         waveform = _build_waveform(mono_samples)
         contour = _build_pitch_contour(mono_samples, CANONICAL_SAMPLE_RATE)
+        frame_pitch_payload = _build_frame_pitch_payload(mono_samples, CANONICAL_SAMPLE_RATE)
         preview_data = AudioPreviewResponse(
             waveform=waveform,
             contour=contour,
@@ -280,9 +371,11 @@ def _probe_audio_file(track: Track) -> AudioProbeResult:
         derived_root = _get_storage_root() / "projects" / str(track.project_id) / "derived"
         canonical_path = derived_root / f"{track.track_id}-canonical.wav"
         peaks_path = derived_root / f"{track.track_id}-preview.json"
+        frame_pitch_path = derived_root / f"{track.track_id}-frame-pitch.json"
 
         _write_canonical_wav(canonical_path, mono_samples, CANONICAL_SAMPLE_RATE)
         _write_preview_json(peaks_path, preview_data)
+        _write_model_json(frame_pitch_path, frame_pitch_payload)
 
         channel_count = int(
             getattr(audio_stream, "channels", 0)
@@ -298,6 +391,8 @@ def _probe_audio_file(track: Track) -> AudioProbeResult:
             checksum=sha256(file_bytes).hexdigest(),
             container_format=container.format.name if container.format else None,
             duration_ms=duration_ms,
+            frame_pitch_path=frame_pitch_path,
+            frame_pitch_payload=frame_pitch_payload,
             peaks_path=peaks_path,
             preview_data=preview_data,
             sample_rate=sample_rate,
@@ -405,6 +500,34 @@ def process_uploaded_track(session: Session, track_id: UUID) -> Track:
         "bins": WAVEFORM_BINS,
         "points": CONTOUR_POINTS,
         "preview_data": probe.preview_data.model_dump(mode="json"),
+    }
+
+    frame_pitch_artifact = _get_track_artifact(track, ArtifactType.FRAME_PITCH)
+    if frame_pitch_artifact is None:
+        frame_pitch_artifact = Artifact(
+            project_id=track.project_id,
+            track=track,
+            artifact_type=ArtifactType.FRAME_PITCH,
+            storage_key=str(probe.frame_pitch_path),
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(frame_pitch_artifact)
+
+    frame_pitch_artifact.storage_key = str(probe.frame_pitch_path)
+    frame_pitch_artifact.mime_type = "application/json"
+    frame_pitch_artifact.byte_size = probe.frame_pitch_path.stat().st_size
+    frame_pitch_artifact.updated_at = now
+    frame_pitch_artifact.meta_json = {
+        "artifact_version": probe.frame_pitch_payload.version,
+        "quality_mode": probe.frame_pitch_payload.quality_mode,
+        "sample_rate": probe.frame_pitch_payload.sample_rate,
+        "frame_length": probe.frame_pitch_payload.frame_length,
+        "hop_length": probe.frame_pitch_payload.hop_length,
+        "frame_count": probe.frame_pitch_payload.frame_count,
+        "voiced_frame_count": probe.frame_pitch_payload.voiced_frame_count,
+        "mean_voiced_prob": probe.frame_pitch_payload.mean_voiced_prob,
+        "mean_rms": probe.frame_pitch_payload.mean_rms,
     }
 
     session.commit()

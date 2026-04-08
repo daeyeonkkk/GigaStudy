@@ -161,7 +161,7 @@ def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) ->
                 track=take,
                 job_type=AnalysisJobType.POST_RECORDING_SCORE,
                 status=AnalysisJobStatus.SUCCEEDED,
-                model_version="librosa-pyin-alignment-v2",
+                model_version="librosa-pyin-note-events-v3",
             ),
             Score(
                 project=project,
@@ -170,6 +170,8 @@ def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) ->
                 rhythm_score=87.5,
                 harmony_fit_score=84.0,
                 total_score=88.6,
+                pitch_quality_mode="NOTE_EVENT_V1",
+                harmony_reference_mode="KEY_ONLY",
                 feedback_json=[
                     {
                         "segment_index": 0,
@@ -191,7 +193,7 @@ def test_track_can_store_alignment_scores_and_analysis_jobs(session: Session) ->
     assert take.alignment_confidence == pytest.approx(0.91)
     assert len(take.analysis_jobs) == 1
     assert len(take.scores) == 1
-    assert take.scores[0].pitch_quality_mode == "COARSE_CONTOUR_V1"
+    assert take.scores[0].pitch_quality_mode == "NOTE_EVENT_V1"
     assert take.scores[0].harmony_reference_mode == "KEY_ONLY"
 
 

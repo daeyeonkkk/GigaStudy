@@ -184,7 +184,7 @@ def build_take_response(track: Track, request: Request) -> TakeTrackResponse:
         recording_finished_at=track.recording_finished_at,
         source_artifact_url=download_url,
         preview_data=preview_data,
-        latest_score=build_track_score_response(latest_score) if latest_score else None,
+        latest_score=build_track_score_response(latest_score, track) if latest_score else None,
         latest_analysis_job=(
             build_analysis_job_response(latest_analysis_job) if latest_analysis_job else None
         ),

@@ -102,9 +102,10 @@ def test_run_track_analysis_persists_scores_and_snapshot_summary(client: TestCli
     assert payload["latest_score"]["pitch_score"] >= 90
     assert payload["latest_score"]["rhythm_score"] >= 90
     assert payload["latest_score"]["total_score"] >= 88
-    assert payload["latest_score"]["pitch_quality_mode"] == "FRAME_PITCH_V1"
+    assert payload["latest_score"]["pitch_quality_mode"] == "NOTE_EVENT_V1"
     assert payload["latest_score"]["harmony_reference_mode"] == "KEY_ONLY"
     assert len(payload["latest_score"]["feedback_json"]) == 4
+    assert len(payload["latest_score"]["note_feedback_json"]) >= 1
 
     snapshot_response = client.get(f"/api/projects/{project_id}/studio")
     assert snapshot_response.status_code == 200
@@ -173,6 +174,54 @@ def test_get_track_frame_pitch_returns_stored_artifact(client: TestClient) -> No
     assert payload["payload"]["frame_count"] > 0
     assert payload["payload"]["voiced_frame_count"] > 0
     assert any(frame["frequency_hz"] is not None for frame in payload["payload"]["frames"])
+
+
+def test_analysis_returns_signed_note_feedback_and_note_events_artifact(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=440.0, sample_rate=32000)
+    sharp_take_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=466.16, sample_rate=32000)
+    flat_take_bytes = build_test_wav_bytes(duration_ms=1500, frequency_hz=415.3, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Signed Note Feedback", "base_key": "C"},
+    ).json()["project_id"]
+
+    upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    sharp_take_id = upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=sharp_take_bytes,
+        filename="sharp.wav",
+    )
+    flat_take_id = upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=flat_take_bytes,
+        filename="flat.wav",
+    )
+
+    sharp_response = client.post(f"/api/projects/{project_id}/tracks/{sharp_take_id}/analysis")
+    flat_response = client.post(f"/api/projects/{project_id}/tracks/{flat_take_id}/analysis")
+
+    assert sharp_response.status_code == 200
+    assert flat_response.status_code == 200
+
+    sharp_note = sharp_response.json()["latest_score"]["note_feedback_json"][0]
+    flat_note = flat_response.json()["latest_score"]["note_feedback_json"][0]
+
+    assert sharp_note["attack_signed_cents"] > 0
+    assert sharp_note["max_sharp_cents"] > 0
+    assert flat_note["attack_signed_cents"] < 0
+    assert flat_note["max_flat_cents"] < 0
+    assert sharp_response.json()["latest_score"]["pitch_quality_mode"] == "NOTE_EVENT_V1"
+
+    note_events_response = client.get(f"/api/projects/{project_id}/tracks/{sharp_take_id}/note-events")
+    assert note_events_response.status_code == 200
+    note_events_payload = note_events_response.json()
+    assert note_events_payload["artifact_type"] == "NOTE_EVENTS"
+    assert note_events_payload["payload"]["quality_mode"] == "NOTE_EVENT_V1"
+    assert note_events_payload["payload"]["note_count"] >= 1
 
 
 def test_retry_failed_analysis_job_after_reprocessing(client: TestClient) -> None:

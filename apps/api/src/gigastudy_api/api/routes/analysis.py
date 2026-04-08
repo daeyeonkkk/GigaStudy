@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.analysis import TrackAnalysisResponse
-from gigastudy_api.api.schemas.pitch_analysis import TrackFramePitchResponse
+from gigastudy_api.api.schemas.pitch_analysis import TrackFramePitchResponse, TrackNoteEventsResponse
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.analysis import (
     get_track_frame_pitch,
+    get_track_note_events,
     get_track_analysis,
     retry_analysis_job,
     run_track_analysis,
@@ -52,6 +53,18 @@ def get_track_frame_pitch_endpoint(
     session: Session = Depends(get_db_session),
 ) -> TrackFramePitchResponse:
     return get_track_frame_pitch(session, project_id, track_id)
+
+
+@router.get(
+    "/projects/{project_id}/tracks/{track_id}/note-events",
+    response_model=TrackNoteEventsResponse,
+)
+def get_track_note_events_endpoint(
+    project_id: UUID,
+    track_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> TrackNoteEventsResponse:
+    return get_track_note_events(session, project_id, track_id)
 
 
 @router.post(

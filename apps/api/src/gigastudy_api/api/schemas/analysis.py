@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from gigastudy_api.api.schemas.pitch_analysis import NoteFeedbackItemResponse
+
 
 class AnalysisFeedbackItemResponse(BaseModel):
     segment_index: int = Field(ge=0)
@@ -41,6 +43,7 @@ class TrackScoreResponse(BaseModel):
     pitch_quality_mode: str
     harmony_reference_mode: str
     feedback_json: list[AnalysisFeedbackItemResponse]
+    note_feedback_json: list[NoteFeedbackItemResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

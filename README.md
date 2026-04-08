@@ -61,6 +61,7 @@ npm run test:e2e
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
 - The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
 - The browser release gate now also covers browser recorder transport with fake microphone input: permission request, DeviceProfile save, and start/stop take upload.
+- The browser release gate now also covers arrangement playback behavior: preview start, transport progress movement, and stop/reset back to ready state.
 
 ## Current Hardening Focus
 
@@ -68,7 +69,7 @@ npm run test:e2e
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Complete the remaining planned music stack adoption where it adds real quality: `Basic Pitch`, `music21`, and `note-seq`.
 - Harden production infrastructure: PostgreSQL guidance and S3-compatible storage support.
-- Expand browser release-gate coverage into arrangement playback behavior and hardware-variable recording journeys.
+- Expand browser hardening into real hardware-variable recording checks, cross-browser coverage, and longer-session stability.
 
 ## Foundation Docs
 

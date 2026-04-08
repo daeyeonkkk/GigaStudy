@@ -211,6 +211,12 @@ function getRecorderPanel(page: Page) {
     .filter({ has: page.getByRole('heading', { name: 'Capture repeated takes and upload them with status' }) })
 }
 
+function getPlaybackPanel(page: Page) {
+  return page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name: 'Preview parts with guide mode and synchronized transport' }) })
+}
+
 test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
   page,
   request,
@@ -343,4 +349,52 @@ test('release gate recording flow captures a take through browser microphone tra
   await expect(page.getByText(/Take 1 uploaded and ready\./)).toBeVisible({ timeout: 20000 })
   await expect(page.getByRole('heading', { name: 'Take 1' })).toBeVisible()
   await expect(recorderPanel.getByText('Latest ready take', { exact: true })).toBeVisible()
+})
+
+test('release gate arrangement playback shows transport progress and can be stopped cleanly', async ({
+  page,
+  request,
+}) => {
+  const projectId = await createStudioProject(page, 'Playwright playback gate session')
+  await seedGuideAndTake(page, request, projectId)
+  await runChordAwareAnalysis(page)
+  await extractMelodyDraft(page)
+  await generateArrangementCandidates(page)
+
+  const playbackPanel = getPlaybackPanel(page)
+  const progressFill = playbackPanel.locator('.transport-progress__fill')
+  const stopButton = playbackPanel.getByRole('button', { name: 'Stop playback' })
+  const guideModeCheckbox = playbackPanel.getByLabel('Guide mode')
+
+  await expect(playbackPanel.getByText('Playback ready', { exact: true })).toBeVisible()
+  await expect(stopButton).toBeDisabled()
+
+  await guideModeCheckbox.check()
+  await expect(guideModeCheckbox).toBeChecked()
+
+  await playbackPanel.getByRole('button', { name: 'Play arrangement preview' }).click()
+  await expect(playbackPanel.getByText('Playing', { exact: true })).toBeVisible()
+  await expect(
+    playbackPanel.getByText(
+      'Playback is running through the separate arrangement preview engine.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+  await expect(stopButton).toBeEnabled()
+
+  await expect
+    .poll(
+      async () => {
+        const style = await progressFill.getAttribute('style')
+        return style ?? ''
+      },
+      { timeout: 5000 },
+    )
+    .not.toContain('width: 0%')
+
+  await stopButton.click()
+  await expect(playbackPanel.getByText('Playback ready', { exact: true })).toBeVisible()
+  await expect(
+    playbackPanel.getByText('Arrangement playback is ready.', { exact: true }),
+  ).toBeVisible()
 })

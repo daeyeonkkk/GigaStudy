@@ -148,6 +148,16 @@ async function seedGuideAndTake(
   await expect(page.getByRole('heading', { name: 'Take 1' })).toBeVisible()
 }
 
+async function seedGuideOnly(
+  page: Page,
+  request: APIRequestContext,
+  projectId: string,
+): Promise<void> {
+  const guideBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
+  await uploadGuide(request, projectId, guideBuffer)
+  await page.reload()
+}
+
 async function runChordAwareAnalysis(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Seed from current key' }).click()
   await page.getByRole('button', { name: 'Save chord timeline' }).click()
@@ -193,6 +203,12 @@ function getScoreViewPanel(page: Page) {
   return page
     .locator('article')
     .filter({ has: page.getByRole('heading', { name: 'Render the selected candidate as MusicXML' }) })
+}
+
+function getRecorderPanel(page: Page) {
+  return page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name: 'Capture repeated takes and upload them with status' }) })
 }
 
 test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
@@ -297,4 +313,34 @@ test('release gate arrangement flow reaches export-ready score artifacts', async
   expect((await musicXmlResponse.text()).includes('<score-partwise')).toBeTruthy()
   expect((await arrangementMidiResponse.body()).byteLength).toBeGreaterThan(32)
   expect((await guideWavResponse.body()).byteLength).toBeGreaterThan(32)
+})
+
+test('release gate recording flow captures a take through browser microphone transport', async ({
+  page,
+  request,
+}) => {
+  const projectId = await createStudioProject(page, 'Playwright recording gate session')
+  await seedGuideOnly(page, request, projectId)
+
+  await page.getByRole('button', { name: 'Request microphone access' }).click()
+  await expect(page.getByText(/Microphone access granted\./)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Save DeviceProfile' }).click()
+  await expect(page.getByText(/DeviceProfile saved with requested constraints and applied settings\./)).toBeVisible()
+
+  await page.getByLabel('Count-in length').selectOption('0')
+  await page.getByLabel('Metronome during recording').uncheck()
+
+  const recorderPanel = getRecorderPanel(page)
+  await expect(recorderPanel.getByText('Take count', { exact: true })).toBeVisible()
+  await expect(recorderPanel.getByText('No takes yet.', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Start take' }).click()
+  await expect(page.getByText('Recording in progress. Stop when the take is done.', { exact: true })).toBeVisible()
+  await page.waitForTimeout(1400)
+  await page.getByRole('button', { name: 'Stop take' }).click()
+
+  await expect(page.getByText(/Take 1 uploaded and ready\./)).toBeVisible({ timeout: 20000 })
+  await expect(page.getByRole('heading', { name: 'Take 1' })).toBeVisible()
+  await expect(recorderPanel.getByText('Latest ready take', { exact: true })).toBeVisible()
 })

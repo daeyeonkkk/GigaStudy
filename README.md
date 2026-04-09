@@ -102,6 +102,16 @@ uv run python scripts/fit_human_rating_thresholds.py --manifest calibration/huma
 
 This runs the generated human-rated corpus through the calibration flow and emits candidate `strict`, `basic`, and `beginner` cent bands as a report.
 
+### Environment Validation Intake Import
+
+```bash
+cd apps/api
+uv run python scripts/import_environment_validation_runs.py --csv environment_validation/environment_validation_runs.template.csv
+```
+
+This converts spreadsheet-style native browser or real-hardware validation evidence into the API request shape used by ops.
+Add `--api-base-url http://127.0.0.1:8000` to submit the rows directly into the running API.
+
 ### Human Rating Evidence Bundle
 
 ```bash
@@ -136,6 +146,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The ops view now also stores structured manual validation runs, so PASS / WARN / FAIL browser checks live beside the diagnostics baseline.
 - The ops view can now also download an environment validation packet, so diagnostics, manual validation runs, matrix coverage, compatibility notes, and release guardrails can be handed to release review as one JSON artifact.
 - The ops view can now also download a browser compatibility release-note draft, so unsupported paths and environment caveats can be reviewed as Markdown before publishing support claims.
+- The repo now also includes a spreadsheet-friendly environment-validation intake template and importer, so native browser or real-hardware evidence collected outside the product UI can still be normalized before it reaches ops.
 - A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
 - The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
@@ -170,6 +181,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.
 - Follow the browser environment validation protocol in `PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks, and use the exported environment validation packet as the default release-review artifact.
 - Use the exported browser compatibility release-note draft as the default publishing aid once the packet has been reviewed.
+- Prefer the environment-validation CSV template plus importer when QA or external testers collect hardware evidence outside the ops UI.
 
 ## Foundation Docs
 

@@ -331,6 +331,7 @@
 
 - ops overview의 environment diagnostics report를 기준 산출물로 사용
 - ops overview의 manual validation run log를 실제 검증 기록 저장소로 사용
+- spreadsheet-friendly intake template과 importer로 외부 수집 evidence를 ops에 들여오기
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` 기준 matrix 실행
 - native Safari / WebKit recording, permission, playback 검증
 - output route 차이:

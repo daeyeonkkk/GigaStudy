@@ -116,7 +116,10 @@ Before a manual validation round:
 2. Refresh overview
 3. Download the environment diagnostics report
 4. Use that report as the baseline for the round
-5. Prepare a new validation run entry in the ops validation log form
+5. If testers are collecting evidence outside the product UI, start from `apps/api/environment_validation/environment_validation_runs.template.csv`
+6. Convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
+7. Review the preview JSON or submit the rows into the API
+8. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
 
 After a manual validation round:
 

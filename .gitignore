@@ -31,4 +31,5 @@ apps/api/.e2e-storage/
 apps/api/calibration/*.generated.json
 apps/api/calibration/output/*
 !apps/api/calibration/output/README.md
+apps/api/environment_validation/*.generated.json
 output/playwright/

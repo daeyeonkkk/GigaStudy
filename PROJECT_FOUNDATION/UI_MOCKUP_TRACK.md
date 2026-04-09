@@ -87,10 +87,12 @@ Preferred end state:
 
 ## 7. Current Seeded Assets
 
-The repo now carries initial seeded exports for:
+The repo now carries seeded exports for:
 
 - `Home`
 - `Studio`
 - `Arrangement`
+- `Shared Review`
+- `Ops`
 
 They live under `UI_MOCKUPS/` and should be treated as the first visible visual baseline for continuing the refactor.

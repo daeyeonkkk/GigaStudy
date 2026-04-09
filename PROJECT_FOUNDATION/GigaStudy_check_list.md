@@ -163,7 +163,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
 - [x] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
 - [x] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
-- [ ] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
+- [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
 - [ ] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
 
 ## 17. Mockup Track
@@ -172,5 +172,5 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Repo-visible mockup exports exist for the first visual-priority screens in `UI_MOCKUPS/`.
 - [ ] A shared Figma file or equivalent editable design source exists for the canonical product mockups.
 - [x] `Home`, `Studio`, and `Arrangement` each have a frozen mockup version that implementation can target directly.
-- [ ] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
+- [x] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
 - [x] Each visually refactored screen references the mockup version it implements, rather than only the low-fidelity wireframe.

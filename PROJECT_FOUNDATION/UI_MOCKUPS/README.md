@@ -15,8 +15,10 @@ Purpose:
 - `home-v1.svg`
 - `studio-v1.svg`
 - `arrangement-v1.svg`
+- `shared-review-v1.svg`
+- `ops-v1.svg`
 
-These are the seeded visual baseline exports for the first-priority screens.
+These are the seeded visual baseline exports for the canonical product screens.
 
 They do not replace a shared editable Figma source.
 They make the design target visible inside the repo until that editable source is fully established.

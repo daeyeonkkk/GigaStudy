@@ -1888,6 +1888,188 @@
   gap: 10px;
 }
 
+.shared-review-page {
+  gap: 0;
+}
+
+.shared-review-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.shared-review-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  padding: 26px 28px;
+  border-radius: 30px;
+  background:
+    linear-gradient(135deg, rgba(28, 45, 57, 0.97), rgba(40, 61, 75, 0.92)),
+    radial-gradient(circle at top right, rgba(181, 100, 58, 0.18), transparent 50%);
+  color: #fff8f1;
+  box-shadow: 0 28px 60px rgba(16, 24, 29, 0.16);
+}
+
+.shared-review-header__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shared-review-header__copy .eyebrow,
+.shared-review-header__copy .panel__summary {
+  color: rgba(248, 241, 231, 0.78);
+}
+
+.shared-review-header__copy h1 {
+  color: #fff8f1;
+}
+
+.shared-review-header__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.shared-review-header__meta .mini-card {
+  min-height: 96px;
+  background: rgba(255, 248, 241, 0.08);
+  border-color: rgba(255, 248, 241, 0.1);
+}
+
+.shared-review-header__meta .mini-card span,
+.shared-review-header__meta .mini-card strong {
+  color: #fff8f1;
+}
+
+.shared-review-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: rgba(241, 229, 216, 0.88);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+}
+
+.shared-review-strip__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shared-review-strip__item span {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.shared-review-strip__item strong {
+  color: var(--ink-strong);
+  font-size: 1.05rem;
+}
+
+.shared-review-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(280px, 320px);
+  gap: 20px;
+  align-items: start;
+}
+
+.shared-review-rail,
+.shared-review-canvas {
+  min-width: 0;
+}
+
+.shared-review-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.shared-review-pill {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 62, 83, 0.12);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--ink-strong);
+  font-weight: 700;
+}
+
+.shared-review-pill--active {
+  background: var(--copper);
+  border-color: rgba(181, 100, 58, 0.22);
+  color: #fff8f1;
+}
+
+.shared-review-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shared-review-audio--subtle {
+  padding-top: 4px;
+}
+
+.shared-review-label {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.shared-review-canvas__meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shared-review-export-row {
+  padding-top: 6px;
+}
+
+.shared-review-score-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shared-review-highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+}
+
+.shared-review-highlight p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.shared-review-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shared-review-message-list ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink-strong);
+}
+
 .audio-preview {
   display: flex;
   flex-direction: column;
@@ -2080,6 +2262,18 @@
     grid-template-columns: 1fr;
   }
 
+  .shared-review-header,
+  .shared-review-grid,
+  .shared-review-strip,
+  .shared-review-canvas__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .shared-review-header__meta,
+  .shared-review-score-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .arrangement-topbar__meta,
   .arrangement-topbar__actions {
     align-items: flex-start;
@@ -2147,9 +2341,20 @@
     padding: 18px;
   }
 
+  .shared-review-header {
+    padding: 20px;
+  }
+
+  .shared-review-header__meta,
+  .shared-review-score-grid {
+    grid-template-columns: 1fr;
+  }
+
   .arrangement-tabs,
   .arrangement-action-row,
-  .arrangement-topbar__actions {
+  .arrangement-topbar__actions,
+  .shared-review-pill-row,
+  .shared-review-export-row {
     display: grid;
     grid-template-columns: 1fr;
   }

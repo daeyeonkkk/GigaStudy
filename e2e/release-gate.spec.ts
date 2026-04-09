@@ -373,10 +373,14 @@ test('release gate share flow opens a frozen snapshot and loses access after dea
   await expect(sharePage).toHaveURL(/\/shared\//)
   await expect(sharePage.getByRole('heading', { name: 'Playwright share gate session' })).toBeVisible()
   await expect(sharePage.getByText('Read-Only Share', { exact: true })).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: 'Selected source take' })).toBeVisible()
   await expect(sharePage.getByRole('heading', { name: 'Frozen review snapshot' })).toBeVisible()
   await expect(sharePage.getByRole('heading', { name: 'Recorded take results' })).toBeVisible()
   await expect(sharePage.getByText('Coach review', { exact: true })).toBeVisible()
   await expect(sharePage.getByText('Take 1', { exact: false })).toBeVisible()
+  await expect(
+    sharePage.getByText('This is a frozen review artifact. Editing, rescoring, and share creation stay in the studio.'),
+  ).toBeVisible()
   await expect(sharePage.getByRole('button', { name: 'Run post-recording analysis' })).toHaveCount(0)
   await expect(sharePage.getByRole('button', { name: 'Create read-only share link' })).toHaveCount(0)
 

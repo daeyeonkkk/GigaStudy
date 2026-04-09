@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960" fill="none">
+  <rect width="1440" height="960" fill="#E9DED0"/>
+  <rect x="36" y="28" width="1368" height="904" rx="34" fill="#16232C"/>
+  <rect x="68" y="60" width="1304" height="840" rx="30" fill="#F7F0E8"/>
+  <rect x="96" y="88" width="1248" height="96" rx="24" fill="#1D2D39"/>
+  <text x="126" y="126" fill="#D9CDBE" font-size="17" font-family="Arial, sans-serif">Read-Only Share</text>
+  <text x="126" y="164" fill="#FFF8F1" font-size="34" font-family="Georgia, serif">Morning Warmup</text>
+  <text x="1052" y="126" fill="#D9CDBE" font-size="16" font-family="Arial, sans-serif">Coach review</text>
+  <text x="1018" y="160" fill="#FFF8F1" font-size="16" font-family="Arial, sans-serif">Captured Apr 9, 2026  |  Read-only</text>
+  <rect x="96" y="212" width="1248" height="86" rx="22" fill="#F1E5D8"/>
+  <text x="126" y="264" fill="#1E2D38" font-size="20" font-family="Arial, sans-serif">Guide: Yes</text>
+  <text x="342" y="264" fill="#1E2D38" font-size="20" font-family="Arial, sans-serif">Takes: 3</text>
+  <text x="538" y="264" fill="#1E2D38" font-size="20" font-family="Arial, sans-serif">Ready takes: 2</text>
+  <text x="798" y="264" fill="#1E2D38" font-size="20" font-family="Arial, sans-serif">Arrangements: 2</text>
+  <text x="1094" y="264" fill="#1E2D38" font-size="20" font-family="Arial, sans-serif">Mixdown: Yes</text>
+  <rect x="96" y="326" width="300" height="526" rx="26" fill="#FBF5EE"/>
+  <text x="126" y="370" fill="#B5643A" font-size="16" font-family="Arial, sans-serif">Left Rail</text>
+  <text x="126" y="408" fill="#1E2D38" font-size="30" font-family="Georgia, serif">Selected source take</text>
+  <rect x="126" y="438" width="240" height="46" rx="23" fill="#B5643A"/>
+  <rect x="126" y="496" width="240" height="42" rx="21" fill="#EFE2D4"/>
+  <rect x="126" y="550" width="240" height="126" rx="20" fill="#FFFFFF"/>
+  <text x="156" y="468" fill="#FFF8F1" font-size="16" font-family="Arial, sans-serif">Take 2   selected</text>
+  <text x="156" y="523" fill="#1E2D38" font-size="16" font-family="Arial, sans-serif">Take 1   ready</text>
+  <text x="148" y="588" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Alignment confidence: 88%</text>
+  <text x="148" y="620" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Melody draft: ready</text>
+  <text x="148" y="652" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Guide audio and take audio</text>
+  <rect x="126" y="700" width="240" height="126" rx="20" fill="#1F3240"/>
+  <path d="M148 770C173 742 200 744 223 767C246 790 274 793 297 768C320 744 344 744 366 765" stroke="#B5643A" stroke-width="6" stroke-linecap="round"/>
+  <path d="M148 792C176 806 202 799 227 784C251 770 277 768 302 781C327 794 349 794 366 784" stroke="#7DA9B8" stroke-width="4" stroke-linecap="round"/>
+  <rect x="424" y="326" width="596" height="526" rx="26" fill="#FCF7F2"/>
+  <text x="454" y="370" fill="#B5643A" font-size="16" font-family="Arial, sans-serif">Center Canvas</text>
+  <text x="454" y="408" fill="#1E2D38" font-size="30" font-family="Georgia, serif">Frozen review snapshot</text>
+  <rect x="454" y="436" width="160" height="42" rx="21" fill="#B5643A"/>
+  <rect x="626" y="436" width="160" height="42" rx="21" fill="#29404E"/>
+  <text x="508" y="463" fill="#FFF8F1" font-size="16" font-family="Arial, sans-serif">Candidate A</text>
+  <text x="681" y="463" fill="#D9CDBE" font-size="16" font-family="Arial, sans-serif">Candidate B</text>
+  <rect x="454" y="500" width="536" height="280" rx="20" fill="#FFFFFF" stroke="#E0D3C4"/>
+  <line x1="484" y1="566" x2="960" y2="566" stroke="#1E2D38" stroke-width="2"/>
+  <line x1="484" y1="584" x2="960" y2="584" stroke="#1E2D38" stroke-width="2"/>
+  <line x1="484" y1="602" x2="960" y2="602" stroke="#1E2D38" stroke-width="2"/>
+  <line x1="484" y1="620" x2="960" y2="620" stroke="#1E2D38" stroke-width="2"/>
+  <line x1="484" y1="638" x2="960" y2="638" stroke="#1E2D38" stroke-width="2"/>
+  <rect x="560" y="534" width="8" height="200" fill="#B5643A"/>
+  <circle cx="640" cy="592" r="12" fill="#1E2D38"/>
+  <circle cx="698" cy="574" r="12" fill="#1E2D38"/>
+  <circle cx="756" cy="610" r="12" fill="#1E2D38"/>
+  <circle cx="816" cy="592" r="12" fill="#1E2D38"/>
+  <text x="454" y="822" fill="#1E2D38" font-size="18" font-family="Arial, sans-serif">Open guide audio  |  Export arrangement MIDI  |  Export MusicXML</text>
+  <rect x="1048" y="326" width="296" height="526" rx="26" fill="#FBF5EE"/>
+  <text x="1078" y="370" fill="#B5643A" font-size="16" font-family="Arial, sans-serif">Right Rail</text>
+  <text x="1078" y="408" fill="#1E2D38" font-size="30" font-family="Georgia, serif">Recorded take results</text>
+  <rect x="1078" y="438" width="236" height="120" rx="20" fill="#F1E5D8"/>
+  <text x="1100" y="476" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Pitch: 84</text>
+  <text x="1100" y="508" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Rhythm: 90</text>
+  <text x="1100" y="540" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Harmony: 78</text>
+  <rect x="1078" y="580" width="236" height="116" rx="20" fill="#FFFFFF"/>
+  <text x="1100" y="618" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Weak note: A4</text>
+  <text x="1100" y="650" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Attack: +24c sharp</text>
+  <text x="1100" y="682" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Confidence: 93%</text>
+  <rect x="1078" y="716" width="236" height="110" rx="20" fill="#FFFFFF"/>
+  <text x="1100" y="754" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">Started sharp, then settled.</text>
+  <text x="1100" y="786" fill="#1E2D38" font-size="17" font-family="Arial, sans-serif">No edit controls on this page.</text>
+</svg>

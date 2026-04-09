@@ -88,26 +88,26 @@ For new collection rounds, prefer the structured intake path: `apps/api/calibrat
 
 ```bash
 cd apps/api
-uv run python scripts/build_human_rating_corpus.py
+uv run python scripts/build_human_rating_corpus.py --round-root <round>
 ```
 
-This converts the seeded metadata JSON plus per-rater CSV sheet into the final calibration manifest shape that `run_intonation_calibration.py` can consume.
+This converts the round metadata JSON plus per-rater CSV sheet into the generated calibration manifest shape that `run_intonation_calibration.py` can consume.
 
 ### Human Rating Corpus Inventory
 
 ```bash
 cd apps/api
-uv run python scripts/inspect_human_rating_corpus.py --metadata calibration/human_rating_cases.template.json
+uv run python scripts/inspect_human_rating_corpus.py --round-root <round>
 ```
 
 This inspects guide/take source paths, WAV metadata, and rating coverage before calibration runs.
-Use `--manifest calibration/human_rating_corpus.generated.json` after building a corpus, and add `--require-real-audio --fail-on-missing` once the collection round switches to actual singer WAV files.
+Use `--source-kind manifest` after building a corpus, and add `--require-real-audio --fail-on-missing` once the collection round switches to actual singer WAV files.
 
 ### Human Rating Threshold Fitting
 
 ```bash
 cd apps/api
-uv run python scripts/fit_human_rating_thresholds.py --manifest calibration/human_rating_corpus.generated.json
+uv run python scripts/fit_human_rating_thresholds.py --round-root <round>
 ```
 
 This runs the generated human-rated corpus through the calibration flow and emits candidate `strict`, `basic`, and `beginner` cent bands as a report.
@@ -116,17 +116,17 @@ This runs the generated human-rated corpus through the calibration flow and emit
 
 ```bash
 cd apps/api
-uv run python scripts/evaluate_human_rating_claim_gate.py --manifest calibration/human_rating_seeded_fixture.json
+uv run python scripts/evaluate_human_rating_claim_gate.py --round-root <round>
 ```
 
-This evaluates whether the current corpus is strong enough to even begin threshold-closure review.
-The seeded fixture manifest is only a workflow smoke input; real checklist closure still requires a trusted real-vocal corpus.
+This evaluates whether the current round is strong enough to even begin threshold-closure review.
+For workflow-only smoke, you can still point `--manifest` at the seeded fixture manifest, but real checklist closure still requires a trusted real-vocal corpus.
 
 ### Environment Validation Intake Import
 
 ```bash
 cd apps/api
-uv run python scripts/import_environment_validation_runs.py --csv environment_validation/environment_validation_runs.template.csv
+uv run python scripts/import_environment_validation_runs.py --round-root <round>
 ```
 
 This converts spreadsheet-style native browser or real-hardware validation evidence into the API request shape used by ops.
@@ -146,6 +146,8 @@ This creates one named folder for the still-open real-world evidence tracks:
 
 When `C:\my_project\DreamCatcher` exists, the scaffold defaults there so the evidence round stays outside the repo and outside `PROJECT_FOUNDATION`.
 
+Once a round exists, prefer passing `--round-root <round>` to the human-rating and environment-validation CLIs so metadata, generated corpora, reports, claim gates, evidence bundles, and preview JSON all stay inside that same round folder.
+
 ### Browser Environment Claim Gate
 
 After validation runs are loaded into ops, use the ops UI or call `/api/admin/environment-validation-claim-gate`.
@@ -155,10 +157,10 @@ It evaluates whether current native-browser and real-hardware evidence is strong
 
 ```bash
 cd apps/api
-uv run python scripts/build_human_rating_evidence_bundle.py --manifest calibration/human_rating_corpus.generated.json
+uv run python scripts/build_human_rating_evidence_bundle.py --round-root <round>
 ```
 
-This packages the calibration summary, threshold-fit report, and release-claim guardrails into `apps/api/calibration/output/`.
+This packages the calibration summary, threshold-fit report, and release-claim guardrails into the selected round folder.
 Those outputs are review artifacts, not canonical foundation docs.
 
 ## Current Product State

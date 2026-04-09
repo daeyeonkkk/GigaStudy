@@ -126,6 +126,7 @@ uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
 6. If testers are collecting evidence outside the product UI, start from the generated `environment-validation/environment_validation_runs.csv` file inside that round scaffold
 7. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
 8. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
+   Prefer `uv run python scripts/import_environment_validation_runs.py --round-root <round>` so the round CSV and generated preview JSON stay together.
 9. Review the preview rows before importing them into the ops log
 10. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
 

@@ -5,6 +5,7 @@ import pytest
 from gigastudy_api.services.evidence_rounds import (
     create_evidence_round_scaffold,
     default_evidence_rounds_root,
+    resolve_evidence_round_paths,
     validate_round_id,
 )
 
@@ -59,6 +60,24 @@ def test_create_evidence_round_scaffold_copies_templates_and_writes_readme(tmp_p
     readme = scaffold.readme.read_text(encoding="utf-8")
     assert "Human Rating" in readme
     assert "Browser And Hardware Validation" in readme
+    assert "--round-root <round>" in readme
+
+
+def test_resolve_evidence_round_paths_exposes_generated_output_locations(tmp_path: Path) -> None:
+    round_root = tmp_path / "round-001"
+
+    paths = resolve_evidence_round_paths(round_root)
+
+    assert paths.root == round_root.resolve()
+    assert paths.human_rating_generated_corpus_path == round_root.resolve() / "human-rating" / "human_rating_corpus.generated.json"
+    assert paths.human_rating_calibration_json_path == round_root.resolve() / "human-rating" / "reports" / "calibration-summary.json"
+    assert paths.human_rating_threshold_markdown_path == round_root.resolve() / "human-rating" / "reports" / "threshold-report.md"
+    assert paths.human_rating_claim_gate_markdown_path == round_root.resolve() / "human-rating" / "reports" / "claim-gate.md"
+    assert paths.human_rating_evidence_output_dir == round_root.resolve() / "human-rating" / "evidence-bundle"
+    assert (
+        paths.environment_validation_generated_requests_path
+        == round_root.resolve() / "environment-validation" / "environment_validation_runs.generated.json"
+    )
 
 
 def test_validate_round_id_rejects_path_separators() -> None:

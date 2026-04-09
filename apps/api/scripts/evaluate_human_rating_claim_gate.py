@@ -10,6 +10,7 @@ from gigastudy_api.services.calibration_claim_gate import (
     evaluate_calibration_claim_gate,
     render_calibration_claim_gate_markdown,
 )
+from gigastudy_api.services.evidence_rounds import resolve_evidence_round_paths
 from gigastudy_api.services.threshold_fitting import build_threshold_calibration_report
 
 
@@ -18,9 +19,15 @@ def build_parser() -> argparse.ArgumentParser:
         description="Evaluate whether a human-rated corpus is strong enough to begin threshold-closure review."
     )
     parser.add_argument(
+        "--round-root",
+        type=Path,
+        default=None,
+        help="Optional evidence-round root. When set, defaults the manifest and output paths to that round.",
+    )
+    parser.add_argument(
         "--manifest",
         type=Path,
-        required=True,
+        default=None,
         help="Path to the generated human rating corpus manifest.",
     )
     parser.add_argument(
@@ -54,7 +61,13 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    manifest_path = args.manifest.resolve()
+    round_paths = resolve_evidence_round_paths(args.round_root) if args.round_root is not None else None
+    manifest_path = (args.manifest or (round_paths.human_rating_generated_corpus_path if round_paths else None))
+
+    if manifest_path is None:
+        raise SystemExit("Either --manifest or --round-root must be provided.")
+
+    manifest_path = manifest_path.resolve()
     corpus = load_calibration_corpus(manifest_path)
     summary = run_calibration_corpus(corpus, manifest_path=manifest_path)
     report = build_threshold_calibration_report(summary)
@@ -78,12 +91,15 @@ def main() -> None:
         indent=2,
     )
 
-    if args.output_json is not None:
-        args.output_json.parent.mkdir(parents=True, exist_ok=True)
-        args.output_json.write_text(rendered_json, encoding="utf-8")
-    if args.output_md is not None:
-        args.output_md.parent.mkdir(parents=True, exist_ok=True)
-        args.output_md.write_text(rendered_markdown, encoding="utf-8")
+    output_json_path = args.output_json or (round_paths.human_rating_claim_gate_json_path if round_paths else None)
+    output_md_path = args.output_md or (round_paths.human_rating_claim_gate_markdown_path if round_paths else None)
+
+    if output_json_path is not None:
+        output_json_path.parent.mkdir(parents=True, exist_ok=True)
+        output_json_path.write_text(rendered_json, encoding="utf-8")
+    if output_md_path is not None:
+        output_md_path.parent.mkdir(parents=True, exist_ok=True)
+        output_md_path.write_text(rendered_markdown, encoding="utf-8")
 
     print(rendered_markdown)
 

@@ -19,8 +19,18 @@ class EvidenceRoundPaths:
     human_rating_cases_path: Path
     human_rating_sheet_path: Path
     human_rating_reference_corpus_path: Path
+    human_rating_generated_corpus_path: Path
+    human_rating_reports_dir: Path
+    human_rating_calibration_json_path: Path
+    human_rating_calibration_markdown_path: Path
+    human_rating_threshold_json_path: Path
+    human_rating_threshold_markdown_path: Path
+    human_rating_claim_gate_json_path: Path
+    human_rating_claim_gate_markdown_path: Path
+    human_rating_evidence_output_dir: Path
     environment_validation_dir: Path
     environment_validation_sheet_path: Path
+    environment_validation_generated_requests_path: Path
 
 
 def resolve_project_root(service_path: Path | None = None) -> Path:
@@ -55,6 +65,40 @@ def validate_round_id(round_id: str) -> str:
     return normalized
 
 
+def resolve_evidence_round_paths(round_root: Path) -> EvidenceRoundPaths:
+    resolved_root = round_root.resolve()
+    human_rating_dir = resolved_root / "human-rating"
+    human_rating_audio_guides_dir = human_rating_dir / "audio" / "guides"
+    human_rating_audio_takes_dir = human_rating_dir / "audio" / "takes"
+    environment_validation_dir = resolved_root / "environment-validation"
+    human_rating_reports_dir = human_rating_dir / "reports"
+    human_rating_evidence_output_dir = human_rating_dir / "evidence-bundle"
+
+    return EvidenceRoundPaths(
+        root=resolved_root,
+        readme=resolved_root / "README.md",
+        human_rating_dir=human_rating_dir,
+        human_rating_audio_guides_dir=human_rating_audio_guides_dir,
+        human_rating_audio_takes_dir=human_rating_audio_takes_dir,
+        human_rating_cases_path=human_rating_dir / "human_rating_cases.json",
+        human_rating_sheet_path=human_rating_dir / "human_rating_sheet.csv",
+        human_rating_reference_corpus_path=human_rating_dir / "human_rating_corpus.reference.json",
+        human_rating_generated_corpus_path=human_rating_dir / "human_rating_corpus.generated.json",
+        human_rating_reports_dir=human_rating_reports_dir,
+        human_rating_calibration_json_path=human_rating_reports_dir / "calibration-summary.json",
+        human_rating_calibration_markdown_path=human_rating_reports_dir / "calibration-summary.md",
+        human_rating_threshold_json_path=human_rating_reports_dir / "threshold-report.json",
+        human_rating_threshold_markdown_path=human_rating_reports_dir / "threshold-report.md",
+        human_rating_claim_gate_json_path=human_rating_reports_dir / "claim-gate.json",
+        human_rating_claim_gate_markdown_path=human_rating_reports_dir / "claim-gate.md",
+        human_rating_evidence_output_dir=human_rating_evidence_output_dir,
+        environment_validation_dir=environment_validation_dir,
+        environment_validation_sheet_path=environment_validation_dir / "environment_validation_runs.csv",
+        environment_validation_generated_requests_path=environment_validation_dir
+        / "environment_validation_runs.generated.json",
+    )
+
+
 def render_evidence_round_readme(
     *,
     round_id: str,
@@ -87,12 +131,12 @@ def render_evidence_round_readme(
             "",
             "```bash",
             f"cd {repo_root / 'apps' / 'api'}",
-            "uv run python scripts/inspect_human_rating_corpus.py --metadata calibration/human_rating_cases.template.json",
-            "uv run python scripts/build_human_rating_corpus.py --metadata <round>/human-rating/human_rating_cases.json --ratings <round>/human-rating/human_rating_sheet.csv --output <round>/human-rating/human_rating_corpus.generated.json",
-            "uv run python scripts/run_intonation_calibration.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
-            "uv run python scripts/fit_human_rating_thresholds.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
-            "uv run python scripts/evaluate_human_rating_claim_gate.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
-            "uv run python scripts/build_human_rating_evidence_bundle.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
+            "uv run python scripts/inspect_human_rating_corpus.py --round-root <round>",
+            "uv run python scripts/build_human_rating_corpus.py --round-root <round>",
+            "uv run python scripts/run_intonation_calibration.py --round-root <round>",
+            "uv run python scripts/fit_human_rating_thresholds.py --round-root <round>",
+            "uv run python scripts/evaluate_human_rating_claim_gate.py --round-root <round>",
+            "uv run python scripts/build_human_rating_evidence_bundle.py --round-root <round>",
             "```",
             "",
             "Foundation workflow reference:",
@@ -108,7 +152,7 @@ def render_evidence_round_readme(
             "",
             "```bash",
             f"cd {repo_root / 'apps' / 'api'}",
-            "uv run python scripts/import_environment_validation_runs.py --csv <round>/environment-validation/environment_validation_runs.csv",
+            "uv run python scripts/import_environment_validation_runs.py --round-root <round>",
             "```",
             "",
             "Foundation workflow reference:",
@@ -142,46 +186,37 @@ def create_evidence_round_scaffold(
 
     round_root.mkdir(parents=True, exist_ok=True)
 
-    human_rating_dir = round_root / "human-rating"
-    human_rating_audio_guides_dir = human_rating_dir / "audio" / "guides"
-    human_rating_audio_takes_dir = human_rating_dir / "audio" / "takes"
-    environment_validation_dir = round_root / "environment-validation"
+    scaffold_paths = resolve_evidence_round_paths(round_root)
 
     for directory in (
-        human_rating_dir,
-        human_rating_audio_guides_dir,
-        human_rating_audio_takes_dir,
-        environment_validation_dir,
+        scaffold_paths.human_rating_dir,
+        scaffold_paths.human_rating_audio_guides_dir,
+        scaffold_paths.human_rating_audio_takes_dir,
+        scaffold_paths.environment_validation_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
-    human_rating_cases_path = human_rating_dir / "human_rating_cases.json"
-    human_rating_sheet_path = human_rating_dir / "human_rating_sheet.csv"
-    human_rating_reference_corpus_path = human_rating_dir / "human_rating_corpus.reference.json"
-    environment_validation_sheet_path = environment_validation_dir / "environment_validation_runs.csv"
-    readme_path = round_root / "README.md"
-
     shutil.copy2(
         resolved_api_root / "calibration" / "human_rating_cases.template.json",
-        human_rating_cases_path,
+        scaffold_paths.human_rating_cases_path,
     )
     shutil.copy2(
         resolved_api_root / "calibration" / "human_rating_sheet.template.csv",
-        human_rating_sheet_path,
+        scaffold_paths.human_rating_sheet_path,
     )
     shutil.copy2(
         resolved_api_root / "calibration" / "human_rating_corpus.template.json",
-        human_rating_reference_corpus_path,
+        scaffold_paths.human_rating_reference_corpus_path,
     )
     shutil.copy2(
         resolved_api_root / "environment_validation" / "environment_validation_runs.template.csv",
-        environment_validation_sheet_path,
+        scaffold_paths.environment_validation_sheet_path,
     )
 
     uses_dreamcatcher_root = (
         resolved_project_root.parent / "DreamCatcher"
     ).exists() and resolved_output_root.is_relative_to((resolved_project_root.parent / "DreamCatcher").resolve())
-    readme_path.write_text(
+    scaffold_paths.readme.write_text(
         render_evidence_round_readme(
             round_id=normalized_round_id,
             repo_root=resolved_project_root,
@@ -190,15 +225,4 @@ def create_evidence_round_scaffold(
         encoding="utf-8",
     )
 
-    return EvidenceRoundPaths(
-        root=round_root,
-        readme=readme_path,
-        human_rating_dir=human_rating_dir,
-        human_rating_audio_guides_dir=human_rating_audio_guides_dir,
-        human_rating_audio_takes_dir=human_rating_audio_takes_dir,
-        human_rating_cases_path=human_rating_cases_path,
-        human_rating_sheet_path=human_rating_sheet_path,
-        human_rating_reference_corpus_path=human_rating_reference_corpus_path,
-        environment_validation_dir=environment_validation_dir,
-        environment_validation_sheet_path=environment_validation_sheet_path,
-    )
+    return scaffold_paths

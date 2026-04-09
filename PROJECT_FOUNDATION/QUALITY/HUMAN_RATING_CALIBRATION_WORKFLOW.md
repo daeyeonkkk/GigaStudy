@@ -122,7 +122,7 @@ If these bands change after real-rater analysis, the runner and report should be
 4. Inspect the metadata file or generated corpus before calibration:
 
 ```bash
-uv run python scripts/inspect_human_rating_corpus.py --metadata <round>/human-rating/human_rating_cases.json
+uv run python scripts/inspect_human_rating_corpus.py --round-root <round>
 ```
 
 Use `--require-real-audio --fail-on-missing` once the collection round has switched from fixtures to actual wav files.
@@ -132,40 +132,40 @@ For workflow smoke only, `apps/api/calibration/human_rating_seeded_fixture.json`
 6. Build the consensus corpus:
 
 ```bash
-uv run python scripts/build_human_rating_corpus.py --metadata <round>/human-rating/human_rating_cases.json --ratings <round>/human-rating/human_rating_sheet.csv --output <round>/human-rating/human_rating_corpus.generated.json
+uv run python scripts/build_human_rating_corpus.py --round-root <round>
 ```
 
 7. Inspect the generated corpus inventory:
 
 ```bash
-uv run python scripts/inspect_human_rating_corpus.py --manifest <round>/human-rating/human_rating_corpus.generated.json
+uv run python scripts/inspect_human_rating_corpus.py --round-root <round> --source-kind manifest
 ```
 
 8. Run the calibration CLI:
 
 ```bash
-uv run python scripts/run_intonation_calibration.py --manifest <round>/human-rating/human_rating_corpus.generated.json
+uv run python scripts/run_intonation_calibration.py --round-root <round>
 ```
 
 9. Fit candidate difficulty thresholds:
 
 ```bash
-uv run python scripts/fit_human_rating_thresholds.py --manifest <round>/human-rating/human_rating_corpus.generated.json
+uv run python scripts/fit_human_rating_thresholds.py --round-root <round>
 ```
 
 10. Evaluate whether the current corpus is even strong enough to begin a closure discussion:
 
 ```bash
-uv run python scripts/evaluate_human_rating_claim_gate.py --manifest <round>/human-rating/human_rating_corpus.generated.json
+uv run python scripts/evaluate_human_rating_claim_gate.py --round-root <round>
 ```
 
 11. Build the release-review evidence bundle:
 
 ```bash
-uv run python scripts/build_human_rating_evidence_bundle.py --manifest <round>/human-rating/human_rating_corpus.generated.json
+uv run python scripts/build_human_rating_evidence_bundle.py --round-root <round>
 ```
 
-This writes the calibration summary, threshold-fit report, and combined evidence bundle into `apps/api/calibration/output/`.
+This writes the calibration summary, threshold-fit report, claim gate, and combined evidence bundle back into the same round folder under `human-rating/reports/` and `human-rating/evidence-bundle/`.
 
 12. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
 13. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.

@@ -14,6 +14,7 @@ from gigastudy_api.services.calibration_evidence import (
     build_human_rating_evidence_bundle,
     render_human_rating_evidence_markdown,
 )
+from gigastudy_api.services.evidence_rounds import resolve_evidence_round_paths
 from gigastudy_api.services.threshold_fitting import (
     build_threshold_calibration_report,
     render_threshold_calibration_markdown,
@@ -25,15 +26,21 @@ def build_parser() -> argparse.ArgumentParser:
         description="Build a human-rating evidence bundle from calibration and threshold-fit outputs."
     )
     parser.add_argument(
+        "--round-root",
+        type=Path,
+        default=None,
+        help="Optional evidence-round root. When set, defaults the manifest and output directory to that round.",
+    )
+    parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path("calibration/human_rating_corpus.generated.json"),
+        default=None,
         help="Path to a generated human-rating corpus manifest.",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("calibration/output"),
+        default=None,
         help="Directory for the generated bundle artifacts.",
     )
     return parser
@@ -42,8 +49,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    manifest_path = args.manifest.resolve()
-    output_dir = args.output_dir.resolve()
+    round_paths = resolve_evidence_round_paths(args.round_root) if args.round_root is not None else None
+    default_manifest_path = round_paths.human_rating_generated_corpus_path if round_paths else Path(
+        "calibration/human_rating_corpus.generated.json"
+    )
+    default_output_dir = round_paths.human_rating_evidence_output_dir if round_paths else Path("calibration/output")
+    manifest_path = (args.manifest or default_manifest_path).resolve()
+    output_dir = (args.output_dir or default_output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     corpus = load_calibration_corpus(manifest_path)

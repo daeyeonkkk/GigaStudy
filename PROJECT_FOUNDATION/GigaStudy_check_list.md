@@ -160,7 +160,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 
 - [x] One canonical visual direction is locked in `UI_DESIGN_DIRECTION.md`.
 - [x] A reference-led wireframe pack exists in `UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
-- [ ] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
+- [x] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
 - [ ] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
 - [ ] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
 - [ ] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.

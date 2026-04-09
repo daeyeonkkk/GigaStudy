@@ -113,8 +113,8 @@ It is a regression path for the current note-event scorer, not a substitute for 
 
 ## Current Hardening Focus
 
-- Lock the visual refactor to `PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
-- Refactor the product screens in order: Home, then Studio, then Arrangement, while keeping Shared Review and Ops aligned to the same system without letting ops aesthetics dominate the product.
+- Keep the visual refactor locked to `PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
+- The Home entry screen now follows that wireframe pack; continue next with Studio, then Arrangement, while keeping Shared Review and Ops aligned to the same system without letting ops aesthetics dominate the product.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.

@@ -78,6 +78,7 @@ Date: 2026-04-09
 - The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
 - The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
 - The foundation now also has a reference-led wireframe pack for Home, Studio, Arrangement, Shared Review, and Ops, so the next UI refactor has one canonical screen set instead of relying on scattered implementation screenshots.
+- The Home page now follows that wireframe pack closely enough to act like a product-facing studio entry screen instead of an environment-validation dashboard, while still preserving the real project-creation flow and API status check.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -107,6 +108,11 @@ Date: 2026-04-09
 - Web lint: `npm run lint:web`
 - Web build: `npm run build:web`
 - Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
+- Visual browser review:
+  `npx playwright screenshot --device="Desktop Chrome" --wait-for-timeout=1600 --full-page http://127.0.0.1:4173 output/playwright/home-wireframe.png`
+  plus the matching `iPhone 13` capture.
+- Result:
+  the refactored Home page was visually reviewed in desktop and mobile layouts against `UI_WIREFRAMES_V1.md`, and the first screen now matches the intended poster-like product entry much more closely than the previous utility dashboard.
 - Browser release-gate smoke path: `npm run test:e2e`
 - Result: `19 passed`, `5 skipped`
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
@@ -147,12 +153,12 @@ Date: 2026-04-09
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
-- The product now has one chosen visual direction, but the current home page and parts of the studio still reflect the earlier environment-validation emphasis rather than the new `Quiet Studio Console` direction. The design decision is locked; the implementation refactor is still ahead.
-- The product now also has a canonical wireframe pack, but the actual `Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops` implementations have not yet been brought into close visual alignment with those layouts.
+- The product now has one chosen visual direction, and the Home page has been brought into that system first. The larger implementation gap is now concentrated in `Studio`, `Arrangement`, `Shared Review`, and `Ops`.
+- The product now also has a canonical wireframe pack, but the actual `Studio`, `Arrangement`, `Shared Review`, and `Ops` implementations have not yet been brought into close visual alignment with those layouts.
 
 ## Recommended Next Work
 
-1. Execute the UI refactor against `UI_WIREFRAMES_V1.md` in screen order: `Home` first, then `Studio`, then `Arrangement`, while keeping `Shared Review` and `Ops` visually subordinate to the product workflow.
+1. Continue the UI refactor against `UI_WIREFRAMES_V1.md` in screen order: `Studio` next, then `Arrangement`, while keeping `Shared Review` and `Ops` visually subordinate to the product workflow.
 2. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
 3. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 4. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.

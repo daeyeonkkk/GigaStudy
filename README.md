@@ -211,6 +211,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The Home screen now also carries one curated non-identifying ambient photo copied from the user-owned external library into a repo-owned asset path, so the entry surface can gain real atmosphere without coupling the app to the raw photo archive.
 - Arrangement work now also has its own dedicated `/projects/:projectId/arrangement` route, so score comparison and export can happen in a score-first workspace instead of only inside the studio page.
 - Shared review now also reads like a frozen review desk instead of a generic details page, making the read-only boundary much clearer for recipients.
+- The web app now also route-splits the heavy non-home workspaces, so the home entry does not ship the full studio, arrangement, sharing, and ops surfaces up front.
 
 ## Current Hardening Focus
 

@@ -114,6 +114,7 @@ Date: 2026-04-09
 - The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
 - The foundation now also has an equivalent editable design source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the product no longer depends on frozen SVG exports alone when updating canonical screen mockups.
 - The Home page now also uses one curated non-identifying ambient photo from the user-owned external library as a supporting visual layer, and the selected source `C:\my_project\DCIM\102_PANA\IMG_9729.JPG` has been copied into the repo-owned path `apps/web/public/photography/home-ambient-quiet-hall.jpg` without modifying `C:\my_project\DCIM`.
+- The web app now also route-splits the heavy non-home workspaces (`Studio`, `Arrangement`, `Shared Review`, and `Ops`), and the score stack is chunked so the home entry does not load the full notation workspace upfront.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -187,7 +188,9 @@ Date: 2026-04-09
   project creation, guide upload, take upload, post-recording analysis, Basic Pitch melody draft extraction, arrangement generation, studio snapshot read, and MusicXML/MIDI/guide-WAV artifact download all succeeded on PostgreSQL + S3-compatible storage.
 - Web lint: `npm run lint:web`
 - Web build: `npm run build:web`
-- Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
+- Result: passed, with the remaining chunk-size warning isolated to the lazy-loaded `osmd-vendor` notation chunk during `vite build`.
+- Web route-split hardening:
+  non-home routes now load through `React.lazy` + `Suspense`, and Vite manually splits `opensheetmusicdisplay`, `vexflow`, and router vendor chunks.
 - The Studio integrated-console refactor now also keeps the browser release gate green after the shell and workbench split, so the visual restructuring did not break the seeded product paths.
 - Mockup export render check:
   `npx playwright screenshot --device="Desktop Chrome" "file:///.../UI_MOCKUPS/home-v1.svg"`

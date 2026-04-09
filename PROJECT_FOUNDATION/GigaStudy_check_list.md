@@ -94,6 +94,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] MIDI export exists.
 - [x] MusicXML export exists.
 - [x] Guide WAV export exists.
+- [x] Heavy notation and arrangement workspace code is route-split so the home entry does not pay the full score-workspace cost upfront.
 
 ## 10. Operations And Reliability
 

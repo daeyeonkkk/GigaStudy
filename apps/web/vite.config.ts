@@ -12,4 +12,22 @@ export default defineConfig({
     host: true,
     port: 4173,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('opensheetmusicdisplay')) {
+            return 'osmd-vendor'
+          }
+          if (id.includes('vexflow')) {
+            return 'vexflow-vendor'
+          }
+          if (id.includes('react-router-dom')) {
+            return 'router-vendor'
+          }
+          return undefined
+        },
+      },
+    },
+  },
 })

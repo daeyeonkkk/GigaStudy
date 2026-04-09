@@ -112,13 +112,14 @@ It is a regression path for the current note-event scorer, not a substitute for 
 - The foundation now also includes a reference-led wireframe pack for the canonical Home, Studio, Arrangement, Shared Review, and Ops screens, so the next UI refactor can follow one agreed layout system.
 - The foundation now also includes a mockup track plus repo-visible mockup exports, so visual implementation can target explicit design files instead of only textual wireframes.
 - Seeded mockup exports now exist for `Home`, `Studio`, and `Arrangement` under `PROJECT_FOUNDATION/UI_MOCKUPS/`.
-- The Home and Studio screens now both follow that wireframe pack closely enough to read like one product system instead of a utility dashboard plus a stacked tool page.
+- The Home, Studio, and Arrangement screens now follow that visual system closely enough to read like one product workspace family instead of a utility dashboard plus stacked tool panels.
+- Arrangement work now also has its own dedicated `/projects/:projectId/arrangement` route, so score comparison and export can happen in a score-first workspace instead of only inside the studio page.
 
 ## Current Hardening Focus
 
 - Keep the visual refactor locked to `PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
 - Use `PROJECT_FOUNDATION/UI_MOCKUP_TRACK.md` plus the exported assets under `PROJECT_FOUNDATION/UI_MOCKUPS/` as the next visual implementation baseline, not prose interpretation alone.
-- The Home entry screen and Studio console now follow that visual system; continue next with Arrangement, then Shared Review, while keeping Ops aligned to the same system without letting ops aesthetics dominate the product.
+- The Home entry screen, Studio console, and Arrangement workspace now follow that visual system; continue next with Shared Review, then Ops, while keeping ops aligned to the same system without letting ops aesthetics dominate the product.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.

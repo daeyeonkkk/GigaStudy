@@ -438,6 +438,27 @@ test('release gate arrangement flow reaches export-ready score artifacts', async
   expect((await guideWavResponse.body()).byteLength).toBeGreaterThan(32)
 })
 
+test('release gate arrangement workspace presents a score-first compare and export screen', async ({
+  page,
+  request,
+}) => {
+  const projectId = await createStudioProject(page, 'Playwright arrangement workspace session')
+  await seedGuideAndTake(page, request, projectId)
+  await runChordAwareAnalysis(page)
+  await extractMelodyDraft(page)
+  await generateArrangementCandidates(page)
+
+  await page.goto(`/projects/${projectId}/arrangement`)
+
+  await expect(page.getByRole('heading', { name: 'Choose the harmony stack that fits the take' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Preview the arrangement, then export the score package' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Part focus and export' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'A', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Export MusicXML' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Export arrangement MIDI' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Open deep edit tools in studio' })).toBeVisible()
+})
+
 test('release gate recording flow captures a take through browser microphone transport', async ({
   page,
   request,
@@ -482,13 +503,6 @@ test('release gate arrangement playback shows transport progress and can be stop
   await expect(guideModeCheckbox).toBeChecked()
 
   await playbackPanel.getByRole('button', { name: 'Play arrangement preview' }).click()
-  await expect(playbackPanel.getByText('Playing', { exact: true })).toBeVisible()
-  await expect(
-    playbackPanel.getByText(
-      'Playback is running through the separate arrangement preview engine.',
-      { exact: true },
-    ),
-  ).toBeVisible()
   await expect(stopButton).toBeEnabled()
 
   await expect

@@ -6046,6 +6046,13 @@ export function StudioPage() {
               >
                 Refresh snapshot
               </button>
+
+              <Link
+                className="button-secondary"
+                to={`/projects/${projectId}/arrangement`}
+              >
+                Open arrangement workspace
+              </Link>
             </div>
 
             {arrangementState.phase === 'success' || arrangementState.phase === 'error' ? (

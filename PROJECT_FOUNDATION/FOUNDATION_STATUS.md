@@ -29,6 +29,18 @@ Date: 2026-04-09
 - Supporting material now lives under `BACKLOGS/`, `DESIGN/`, `QUALITY/`, and `OPERATIONS/` instead of accumulating at the root.
 - New foundation files should be placed in the correct category, linked from `PROJECT_FOUNDATION/README.md`, and kept out of the root unless they are canonical source-of-truth documents.
 
+## Readiness Snapshot
+
+- Current stage:
+  GigaStudy is now past the planning-only stage and into a working MVP-plus state.
+  The core studio loop, melody and arrangement flow, score/export path, share flow, and ops review tooling are implemented.
+- What the product can do right now:
+  create a project, upload a guide, record takes in the browser, run post-recording analysis, inspect note-level feedback, extract an editable melody draft, generate arrangement candidates, view a score, export MusicXML/MIDI/guide WAV, create read-only share links, and review environment diagnostics in ops.
+- What still blocks a stronger product claim:
+  real-human vocal evidence for threshold tuning, native Safari / real Apple hardware validation, and broader real microphone variability evidence.
+- Honest readiness statement:
+  the product is usable now as an internal or pilot-stage vocal practice MVP, but it is not yet ready to claim a human-trustworthy intonation judge or universally validated browser-and-hardware support.
+
 ## Confirmed Implemented
 
 - The P0 release line is implemented end-to-end:

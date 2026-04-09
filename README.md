@@ -93,6 +93,16 @@ uv run python scripts/build_human_rating_corpus.py
 
 This converts the seeded metadata JSON plus per-rater CSV sheet into the final calibration manifest shape that `run_intonation_calibration.py` can consume.
 
+### Human Rating Corpus Inventory
+
+```bash
+cd apps/api
+uv run python scripts/inspect_human_rating_corpus.py --metadata calibration/human_rating_cases.template.json
+```
+
+This inspects guide/take source paths, WAV metadata, and rating coverage before calibration runs.
+Use `--manifest calibration/human_rating_corpus.generated.json` after building a corpus, and add `--require-real-audio --fail-on-missing` once the collection round switches to actual singer WAV files.
+
 ### Human Rating Threshold Fitting
 
 ```bash
@@ -136,6 +146,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The backend now also includes a manifest-driven calibration runner for the repeatable synthetic vocal baseline, so scorer changes can be checked against the same Phase 9 evidence set on demand.
 - The calibration runner now also supports note-level human-rating comparison summaries and optional agreement thresholds, so future real-rater evidence can be attached without inventing a second evaluation path.
 - The repo now also includes a human-rating intake builder plus metadata and sheet templates, so raw rater labels can be turned into a calibration corpus without hand-authoring the final manifest JSON.
+- The repo now also includes a real-vocal corpus inventory tool, so collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before calibration and threshold fitting.
 - The repo now also includes a threshold-fit report path for candidate difficulty bands, so future human-rated corpora can yield repeatable `strict / basic / beginner` recommendations instead of ad hoc threshold notes.
 - The repo now also includes a human-rating evidence-bundle path, so future release reviews can attach calibration summary, threshold-fit output, and claim guardrails without assembling them by hand.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
@@ -173,6 +184,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Use `PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.
 - Prefer the new human-rating intake builder workflow over editing the final corpus JSON by hand.
+- Prefer the human-rating corpus inventory CLI before calibration runs so missing WAV files or thin rating coverage fail early instead of during release-review prep.
 - Use the threshold-fit report as the default way to propose difficulty-tier cent bands once a real human-rated corpus exists.
 - Use the evidence-bundle CLI as the default way to package human-rating release evidence once a corpus round has been run.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.

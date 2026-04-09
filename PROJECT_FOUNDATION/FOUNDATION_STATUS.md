@@ -93,6 +93,7 @@ Date: 2026-04-09
 - The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
 - The calibration runner now also supports note-level human-rating comparison summaries plus optional agreement thresholds, so the repo can attach real-rater evidence without inventing a separate evaluation path later.
 - The repo now also has a human-rating intake builder with metadata and sheet templates, so future real-vocal rounds can turn raw per-rater labels into a calibration corpus without hand-editing final manifests.
+- The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
 - Calibration manifest loading is now also UTF-8 BOM-safe, so Windows-edited human-rating corpus files do not break the runner or evidence-bundle flow.
@@ -114,7 +115,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `74 passed`
+- Result: `76 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes environment-validation intake parsing and request-shape generation from CSV evidence sheets.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
@@ -139,6 +140,14 @@ Date: 2026-04-09
   `uv run python scripts/build_human_rating_corpus.py`
 - Result:
   passed against the seeded metadata and sheet templates, emitting a final-shape calibration corpus JSON with consensus labels and rater counts.
+- Real-vocal corpus inventory regression:
+  `uv run pytest apps/api/tests/test_real_vocal_corpus.py`
+- Result:
+  passed with coverage for missing-audio detection, fixture-vs-real-audio classification, WAV metadata inspection, and human-rating coverage aggregation.
+- Real-vocal corpus inventory CLI:
+  `uv run python scripts/inspect_human_rating_corpus.py --metadata calibration/human_rating_cases.template.json`
+- Result:
+  passed against the seeded metadata template, rendering an inventory report that distinguishes fixture-backed cases from real-audio-ready corpus entries.
 - Threshold-fit regression:
   `uv run pytest apps/api/tests/test_threshold_fitting.py`
 - Result:
@@ -234,6 +243,7 @@ Date: 2026-04-09
 - The new calibration runner closes the repeatability gap for synthetic evidence, but it does not close the evidence gap for real singer data or human-rating alignment.
 - The new human-rating workflow closes the tooling gap for future human-rater comparison, but it still does not populate the corpus or prove release-quality human agreement by itself.
 - The new intake builder removes the remaining manual-manifest bottleneck, but the evidence gap is still real singer data, real raters, and reviewed threshold tuning.
+- The new corpus inventory tool removes another pre-calibration bottleneck, but it still does not populate a trusted real-vocal corpus or justify closing the human-trust checklist items by itself.
 - The new threshold-fit report removes the last ad hoc step in proposing difficulty bands, but it still does not count as validated human-threshold evidence until a real corpus is run through it.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.

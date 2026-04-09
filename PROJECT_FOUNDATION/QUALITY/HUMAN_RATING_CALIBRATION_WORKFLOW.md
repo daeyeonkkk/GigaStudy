@@ -24,6 +24,8 @@ The repo now supports:
   `apps/api/calibration/human_rating_sheet.template.csv`
 - a manifest template for human-rated corpora:
   `apps/api/calibration/human_rating_corpus.template.json`
+- a corpus inventory CLI:
+  `apps/api/scripts/inspect_human_rating_corpus.py`
 - a corpus builder CLI:
   `apps/api/scripts/build_human_rating_corpus.py`
 - a threshold-fit CLI:
@@ -97,27 +99,41 @@ If these bands change after real-rater analysis, the runner and report should be
 ## 4. Recommended Collection Flow
 
 1. Record or curate a real singer guide and take pair.
-2. Confirm the note indexing that the scorer returns for that case.
-3. Ask multiple raters to label attack direction, sustain direction, and acceptability in the rating sheet CSV.
-4. Build the consensus corpus:
+2. Inspect the metadata file or generated corpus before calibration:
+
+```bash
+uv run python scripts/inspect_human_rating_corpus.py --metadata calibration/human_rating_cases.template.json
+```
+
+Use `--require-real-audio --fail-on-missing` once the collection round has switched from fixtures to actual wav files.
+
+3. Confirm the note indexing that the scorer returns for that case.
+4. Ask multiple raters to label attack direction, sustain direction, and acceptability in the rating sheet CSV.
+5. Build the consensus corpus:
 
 ```bash
 uv run python scripts/build_human_rating_corpus.py --output calibration/human_rating_corpus.generated.json
 ```
 
-5. Run the calibration CLI:
+6. Inspect the generated corpus inventory:
+
+```bash
+uv run python scripts/inspect_human_rating_corpus.py --manifest calibration/human_rating_corpus.generated.json
+```
+
+7. Run the calibration CLI:
 
 ```bash
 uv run python scripts/run_intonation_calibration.py --manifest calibration/human_rating_corpus.generated.json
 ```
 
-6. Fit candidate difficulty thresholds:
+8. Fit candidate difficulty thresholds:
 
 ```bash
 uv run python scripts/fit_human_rating_thresholds.py --manifest calibration/human_rating_corpus.generated.json
 ```
 
-7. Build the release-review evidence bundle:
+9. Build the release-review evidence bundle:
 
 ```bash
 uv run python scripts/build_human_rating_evidence_bundle.py --manifest calibration/human_rating_corpus.generated.json
@@ -125,14 +141,15 @@ uv run python scripts/build_human_rating_evidence_bundle.py --manifest calibrati
 
 This writes the calibration summary, threshold-fit report, and combined evidence bundle into `apps/api/calibration/output/`.
 
-8. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
-9. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
+10. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
+11. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
 
 ## 5. What Closes The Checklist
 
 This workflow alone closes only the support-path gap:
 
 - the repo can now compare scorer output against human note labels
+- the repo can now inspect whether real-vocal source files and rating coverage are actually ready before calibration
 - the repo can now package calibration summary, threshold recommendations, and claim guardrails into one release-review bundle
 
 This workflow does **not** close:

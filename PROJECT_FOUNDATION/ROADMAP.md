@@ -301,6 +301,7 @@
 - `voiced_prob` + RMS 기반 confidence weighting
 - chord-aware harmony와 key-only fallback labeling
 - human-rating intake sheet와 consensus builder
+- real-vocal corpus inventory / validation report for audio-path and rating coverage sanity checks
 - human-rating corpus manifest와 agreement report workflow
 - threshold-fit report generator for difficulty tiers
 - 실제 보컬 fixture와 threshold calibration

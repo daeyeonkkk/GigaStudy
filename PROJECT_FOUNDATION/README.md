@@ -75,7 +75,7 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 - `QUALITY/INTONATION_CALIBRATION_REPORT.md`
   Current calibration evidence, provisional threshold bands, and claim gate.
 - `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-  Workflow for future real-vocal and human-rating evidence, including intake templates, consensus building, threshold-fit reporting, and evidence-bundle packaging.
+  Workflow for future real-vocal and human-rating evidence, including intake templates, corpus inventory, consensus building, threshold-fit reporting, and evidence-bundle packaging.
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
   Native browser and hardware validation protocol built on top of the ops diagnostics baseline, including intake/import, environment validation packet, and release-note draft workflows.
 - `OPERATIONS/WORKING_PRINCIPLES.md`

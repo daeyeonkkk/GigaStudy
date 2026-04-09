@@ -411,3 +411,45 @@ def test_environment_validation_packet_reports_matrix_and_guardrails(client: Tes
     )
     assert packet_payload["environment_diagnostics"]["summary"]["total_device_profiles"] == 2
     assert len(packet_payload["recent_validation_runs"]) == 2
+
+
+def test_environment_validation_release_notes_render_markdown(client: TestClient) -> None:
+    response = client.post(
+        "/api/admin/environment-validations",
+        json={
+            "label": "Native Safari speaker run",
+            "tester": "QA lead",
+            "device_name": "MacBook Air 15",
+            "os": "macOS 15.4",
+            "browser": "Safari 18",
+            "input_device": "Built-in Microphone",
+            "output_route": "Built-in Speakers",
+            "outcome": "WARN",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": None,
+            "audio_context_mode": "webkit",
+            "offline_audio_context_mode": "unavailable",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.017,
+            "output_latency": 0.039,
+            "warning_flags": ["legacy_webkit_audio_context_only", "missing_offline_audio_context"],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": False,
+            "validated_at": datetime(2026, 4, 9, 10, 0, tzinfo=timezone.utc).isoformat(),
+        },
+    )
+    assert response.status_code == 200
+
+    notes_response = client.get("/api/admin/environment-validation-release-notes")
+    assert notes_response.status_code == 200
+    assert notes_response.headers["content-type"].startswith("text/plain")
+
+    markdown = notes_response.text
+    assert "# Browser Environment Release Notes Draft" in markdown
+    assert "## Covered Matrix Cells" in markdown
+    assert "## Compatibility Notes" in markdown
+    assert "## Claim Guardrails" in markdown
+    assert "Native Safari speaker run" in markdown

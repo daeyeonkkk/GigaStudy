@@ -318,6 +318,78 @@ def build_environment_validation_packet(session: Session) -> EnvironmentValidati
     )
 
 
+def render_environment_validation_release_notes(packet: EnvironmentValidationPacketResponse) -> str:
+    lines = [
+        "# Browser Environment Release Notes Draft",
+        "",
+        f"- Generated at: {packet.generated_at.isoformat()}",
+        f"- Total validation runs: {packet.summary.total_validation_runs}",
+        f"- PASS / WARN / FAIL: {packet.summary.pass_run_count} / {packet.summary.warn_run_count} / {packet.summary.fail_run_count}",
+        f"- Native Safari runs: {packet.summary.native_safari_run_count}",
+        f"- Real-hardware recording successes: {packet.summary.real_hardware_recording_success_count}",
+        "",
+        "## Covered Matrix Cells",
+        "",
+    ]
+
+    for cell in packet.required_matrix:
+        lines.append(
+            f"- [{'x' if cell.covered else ' '}] {cell.label} ({cell.run_count} run{'s' if cell.run_count != 1 else ''})"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Compatibility Notes",
+            "",
+        ]
+    )
+    for note in packet.compatibility_notes:
+        lines.append(f"- {note}")
+
+    lines.extend(
+        [
+            "",
+            "## Claim Guardrails",
+            "",
+        ]
+    )
+    for guardrail in packet.claim_guardrails:
+        lines.append(f"- {guardrail}")
+
+    unsupported_cells = [cell.label for cell in packet.required_matrix if not cell.covered]
+    lines.extend(
+        [
+            "",
+            "## Unsupported Or Not Yet Validated Paths",
+            "",
+        ]
+    )
+    if unsupported_cells:
+        for label in unsupported_cells:
+            lines.append(f"- {label}")
+    else:
+        lines.append("- No uncovered matrix cells remain in the current required validation matrix.")
+
+    lines.extend(
+        [
+            "",
+            "## Recent Manual Validation Runs",
+            "",
+        ]
+    )
+    if packet.recent_validation_runs:
+        for run in packet.recent_validation_runs:
+            lines.append(
+                f"- {run.label}: {run.browser} on {run.os} / {run.device_name} / {run.outcome}"
+            )
+    else:
+        lines.append("- No manual validation runs are stored yet.")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def get_ops_overview(session: Session) -> OpsOverviewResponse:
     settings = get_settings()
     recent_limit = max(1, settings.ops_recent_limit)

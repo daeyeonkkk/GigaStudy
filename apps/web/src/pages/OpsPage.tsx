@@ -274,6 +274,20 @@ function downloadJsonReport(filename: string, payload: unknown): void {
   URL.revokeObjectURL(url)
 }
 
+function downloadTextReport(filename: string, payload: string, contentType = 'text/plain'): void {
+  const blob = new Blob([payload], {
+    type: `${contentType};charset=utf-8`,
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.append(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function parseWarningFlags(value: string): string[] {
   return value
     .split(',')
@@ -427,6 +441,43 @@ export function OpsPage() {
     }
   }
 
+  async function handleDownloadValidationReleaseNotes(): Promise<void> {
+    setActionState({
+      phase: 'submitting',
+      message: 'Building the browser compatibility release-note draft from saved validation evidence...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl('/api/admin/environment-validation-release-notes'))
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(response, 'Unable to build the environment validation release notes.'),
+        )
+      }
+
+      const payload = await response.text()
+      const dateToken = new Date().toISOString().slice(0, 10)
+      downloadTextReport(
+        `gigastudy-browser-compatibility-notes-${dateToken}.md`,
+        payload,
+        'text/markdown',
+      )
+      setActionState({
+        phase: 'success',
+        message:
+          'Browser compatibility release-note draft downloaded. Review unsupported paths before publishing support claims.',
+      })
+    } catch (error) {
+      setActionState({
+        phase: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to build the environment validation release notes.',
+      })
+    }
+  }
+
   async function handleCreateValidationRun(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     setActionState({
@@ -565,6 +616,14 @@ export function OpsPage() {
               onClick={() => void handleDownloadValidationPacket()}
             >
               Download validation packet
+            </button>
+
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={() => void handleDownloadValidationReleaseNotes()}
+            >
+              Download compatibility notes
             </button>
 
             <Link className="back-link" to="/">

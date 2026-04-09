@@ -139,6 +139,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Warning flags are surfaced in the studio and in ops.
 - [x] Environment diagnostics can be exported from ops.
 - [x] A release-review environment validation packet can be exported from ops with matrix coverage, guardrails, and compatibility notes.
+- [x] A browser compatibility release-note draft can be exported from ops from the current validation evidence.
 - [x] A native browser and hardware validation protocol exists in `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`.
 - [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.
 - [x] Chromium seeded release-gate coverage exists for recording, playback, export, sharing, and endurance.

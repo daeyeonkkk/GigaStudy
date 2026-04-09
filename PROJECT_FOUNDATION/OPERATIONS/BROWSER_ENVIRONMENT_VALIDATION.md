@@ -136,6 +136,14 @@ The environment validation packet is the preferred release-review artifact becau
 - claim guardrails
 - compatibility notes inferred from the stored evidence
 
+The browser compatibility release-note draft is the preferred publishing artifact because it translates that packet into:
+
+- covered matrix cells
+- compatibility notes
+- claim guardrails
+- unsupported or not-yet-validated paths
+- recent manual validation run summaries
+
 ## Release Gate Expectations
 
 Before claiming improved browser support in release notes:
@@ -144,6 +152,7 @@ Before claiming improved browser support in release notes:
 - at least one real-hardware recording run must be recorded
 - warning flags added by the new environment must be explained
 - the exported environment validation packet must be reviewed for uncovered matrix cells and guardrails
+- the exported browser compatibility release-note draft must be reviewed before updating support claims
 - any unsupported path must be described honestly in product and ops notes
 
 ## Current Honest Product Claim

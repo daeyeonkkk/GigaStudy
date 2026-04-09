@@ -666,6 +666,38 @@ test('release gate ops overview can export the environment validation packet', a
   ).toBeTruthy()
 })
 
+test('release gate ops overview can export browser compatibility release notes', async ({
+  page,
+  request,
+}) => {
+  await saveDeviceProfileFixture(request)
+  await saveValidationRunFixture(request)
+
+  await page.goto('/ops')
+  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download compatibility notes' }).click()
+  await expect(
+    page.getByText(
+      'Browser compatibility release-note draft downloaded. Review unsupported paths before publishing support claims.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^gigastudy-browser-compatibility-notes-\d{4}-\d{2}-\d{2}\.md$/)
+
+  const downloadPath = await download.path()
+  expect(downloadPath).toBeTruthy()
+  const markdown = await readFile(downloadPath!, 'utf8')
+
+  expect(markdown).toContain('# Browser Environment Release Notes Draft')
+  expect(markdown).toContain('## Compatibility Notes')
+  expect(markdown).toContain('## Unsupported Or Not Yet Validated Paths')
+  expect(markdown).toContain('Native Safari fixture run')
+})
+
 test('release gate ops overview can store a manual environment validation run', async ({
   page,
 }) => {

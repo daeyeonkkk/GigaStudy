@@ -75,4 +75,4 @@ If product copy, demo copy, or roadmap copy claims that the system can say:
 - whether the attack was sharp but the sustain settled
 - whether vibrato stayed centered
 
-then the note-level quality track above must be completed first, and the evidence in `INTONATION_CALIBRATION_REPORT.md` must support that claim level.
+then the note-level quality track above must be completed first, and the evidence in `QUALITY/INTONATION_CALIBRATION_REPORT.md` must support that claim level.

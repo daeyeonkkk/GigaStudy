@@ -6,15 +6,15 @@ Date: 2026-04-09
 
 - `GigaStudy_master_plan.md`
 - `ROADMAP.md`
-- `INTONATION_ANALYSIS_ASSESSMENT.md`
-- `INTONATION_CALIBRATION_REPORT.md`
-- `HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-- `UI_DESIGN_DIRECTION.md`
-- `UI_WIREFRAMES_V1.md`
-- `UI_MOCKUP_TRACK.md`
-- `UI_EDITABLE_SOURCE/README.md`
-- `PHASE9_INTONATION_BACKLOG.md`
-- `PHASE1_BACKLOG.md`
+- `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
+- `QUALITY/INTONATION_CALIBRATION_REPORT.md`
+- `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+- `DESIGN/UI_DESIGN_DIRECTION.md`
+- `DESIGN/UI_WIREFRAMES_V1.md`
+- `DESIGN/UI_MOCKUP_TRACK.md`
+- `DESIGN/UI_EDITABLE_SOURCE/README.md`
+- `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
+- `BACKLOGS/PHASE1_BACKLOG.md`
 - `GigaStudy_check_list.md`
 
 ## Checklist Discipline
@@ -22,6 +22,12 @@ Date: 2026-04-09
 - `GigaStudy_check_list.md` is now maintained as a live progress board.
 - An item should be marked `[x]` only when the implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
 - This status document remains the audit narrative that explains why the checked items are considered done and which gaps are still open on purpose.
+
+## Foundation Hygiene
+
+- `PROJECT_FOUNDATION` root is now restricted to canonical core docs only: plan, roadmap, checklist, audit, and the root index.
+- Supporting material now lives under `BACKLOGS/`, `DESIGN/`, `QUALITY/`, and `OPERATIONS/` instead of accumulating at the root.
+- New foundation files should be placed in the correct category, linked from `PROJECT_FOUNDATION/README.md`, and kept out of the root unless they are canonical source-of-truth documents.
 
 ## Confirmed Implemented
 
@@ -90,8 +96,8 @@ Date: 2026-04-09
 - The Arrangement screen now exists as a dedicated `/projects/:projectId/arrangement` workspace and follows the `arrangement-v1` mockup closely enough to read as one score-first comparison and export surface instead of another subsection buried in the studio page.
 - The Shared Review screen now follows the `shared-review-v1` mockup closely enough to read like a frozen review desk instead of a generic read-only detail page: selected take on the left, frozen score canvas in the center, and score summary plus note highlight on the right.
 - The Ops screen now follows the `ops-v1` mockup closely enough to read like a dense release desk instead of a generic stack of admin cards: KPI strip on top, validation and recovery work areas in the middle, and diagnostics plus recent environment capture at the bottom.
-- The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
-- The foundation now also has an equivalent editable design source under `PROJECT_FOUNDATION/UI_EDITABLE_SOURCE/`, so the product no longer depends on frozen SVG exports alone when updating canonical screen mockups.
+- The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
+- The foundation now also has an equivalent editable design source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the product no longer depends on frozen SVG exports alone when updating canonical screen mockups.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -151,7 +157,7 @@ Date: 2026-04-09
   `npx playwright screenshot --device="Desktop Chrome" --wait-for-timeout=1600 --full-page http://127.0.0.1:4173 output/playwright/home-wireframe.png`
   plus the matching `iPhone 13` capture.
 - Result:
-  the refactored Home page was visually reviewed in desktop and mobile layouts against `UI_WIREFRAMES_V1.md`, and the first screen now matches the intended poster-like product entry much more closely than the previous utility dashboard.
+  the refactored Home page was visually reviewed in desktop and mobile layouts against `DESIGN/UI_WIREFRAMES_V1.md`, and the first screen now matches the intended poster-like product entry much more closely than the previous utility dashboard.
 - Visual browser review:
   `npx playwright screenshot --device="Desktop Chrome" --full-page http://127.0.0.1:5173/ops output/playwright/ops-loaded.png`
 - Result:
@@ -183,14 +189,14 @@ Date: 2026-04-09
 - The next corrective slice is now also in place:
   runtime scoring down-weights low-confidence frames, and harmony-fit switches to a chord-aware path whenever the project provides a chord timeline.
 - The QA checkpoint is stronger than before:
-  the scorer is now regression-tested against vocal-like synthetic cases instead of sine-only coverage, and the current threshold interpretation is written down in `INTONATION_CALIBRATION_REPORT.md`.
+  the scorer is now regression-tested against vocal-like synthetic cases instead of sine-only coverage, and the current threshold interpretation is written down in `QUALITY/INTONATION_CALIBRATION_REPORT.md`.
 - The synthetic-vocal checkpoint is also more repeatable than before:
   the repo now carries a first-class calibration manifest plus runner, so the same baseline can be rerun after scorer changes instead of being inferred only from hand-written test assertions.
 - The larger concern is still only partially resolved:
   the studio now exposes note-level correction feedback, but fallback analysis still exists for older tracks and the quality claim is still not calibrated against real human vocal fixtures.
 - We should currently describe the system as an `MVP vocal practice scorer`, not as a `human-like intonation judge`.
-- The detailed evaluation and next-step quality track now live in `INTONATION_ANALYSIS_ASSESSMENT.md`.
-- The roadmap and actionable backlog for closing this gap now live in `ROADMAP.md` Phase 9 and `PHASE9_INTONATION_BACKLOG.md`.
+- The detailed evaluation and next-step quality track now live in `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`.
+- The roadmap and actionable backlog for closing this gap now live in `ROADMAP.md` Phase 9 and `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`.
 
 ## Remaining Gaps Against The Target Foundation Stack
 
@@ -216,4 +222,4 @@ Date: 2026-04-09
 3. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, collect labels through the sheet/template builder workflow, then compare scorer output against human ratings.
 4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
-6. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
+6. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.

@@ -21,7 +21,7 @@
 ### 2.1 제품 / UX 축
 
 - 한국어 중심 용어 체계 정리
-- canonical UI direction을 `UI_DESIGN_DIRECTION.md`의 `Quiet Studio Console`로 고정
+- canonical UI direction을 `DESIGN/UI_DESIGN_DIRECTION.md`의 `Quiet Studio Console`로 고정
 - 오디오 설정, 정렬 상태, 저신뢰도 상태를 설명 가능한 UI로 노출
 - 재녹음과 후보 비교 흐름을 최소 클릭으로 유지
 
@@ -49,7 +49,7 @@
 
 ### 2.5 시각 산출물 축
 
-- canonical mockup source of truth를 `UI_MOCKUP_TRACK.md`로 고정
+- canonical mockup source of truth를 `DESIGN/UI_MOCKUP_TRACK.md`로 고정
 - Figma 또는 동등한 디자인 파일을 선호하되, repo 안에는 항상 export된 mockup asset을 함께 둔다
 - `Home`, `Studio`, `Arrangement`를 먼저 high-fidelity mockup으로 고정한 뒤 구현에 연결
 - 구현 화면은 임의 해석보다 frozen mockup 버전을 우선 기준으로 삼는다
@@ -109,7 +109,7 @@
 
 세부 티켓 기준:
 
-- `PHASE1_BACKLOG.md`를 단일 실행 백로그로 사용한다.
+- `BACKLOGS/PHASE1_BACKLOG.md`를 단일 실행 백로그로 사용한다.
 
 ### Phase 2. 사후 정렬과 점수 엔진
 
@@ -308,7 +308,7 @@
 
 산출물:
 
-- `PHASE9_INTONATION_BACKLOG.md`
+- `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
 - note-level analysis schema / API 계약
 - calibration fixture 세트와 품질 리포트
 - note-level 피드백 UI
@@ -331,7 +331,7 @@
 
 - ops overview의 environment diagnostics report를 기준 산출물로 사용
 - ops overview의 manual validation run log를 실제 검증 기록 저장소로 사용
-- `BROWSER_ENVIRONMENT_VALIDATION.md` 기준 matrix 실행
+- `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` 기준 matrix 실행
 - native Safari / WebKit recording, permission, playback 검증
 - output route 차이:
   built-in speaker, wired headphones, Bluetooth output
@@ -380,8 +380,8 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 이 로드맵은 아래 문서와 함께 본다.
 
 1. [GigaStudy_master_plan.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_master_plan.md)
-2. [PHASE1_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
-3. [PHASE9_INTONATION_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/PHASE9_INTONATION_BACKLOG.md)
-4. [INTONATION_ANALYSIS_ASSESSMENT.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/INTONATION_ANALYSIS_ASSESSMENT.md)
+2. [PHASE1_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/BACKLOGS/PHASE1_BACKLOG.md)
+3. [PHASE9_INTONATION_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/BACKLOGS/PHASE9_INTONATION_BACKLOG.md)
+4. [INTONATION_ANALYSIS_ASSESSMENT.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md)
 5. [GigaStudy_check_list.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_check_list.md)
-6. [WORKING_PRINCIPLES.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/WORKING_PRINCIPLES.md)
+6. [WORKING_PRINCIPLES.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/OPERATIONS/WORKING_PRINCIPLES.md)

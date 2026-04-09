@@ -81,7 +81,7 @@ uv run python scripts/run_intonation_calibration.py
 
 This runs the repeatable synthetic-vocal baseline in `apps/api/calibration/synthetic_vocal_baseline.json` through the real upload and analysis API flow.
 It is a regression path for the current note-event scorer, not a substitute for the still-open real-human calibration gate.
-When you are ready to compare against human raters, use `apps/api/calibration/human_rating_corpus.template.json` plus `PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the starting workflow.
+When you are ready to compare against human raters, use `apps/api/calibration/human_rating_corpus.template.json` plus `PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the starting workflow.
 For new collection rounds, prefer the structured intake path: `apps/api/calibration/human_rating_cases.template.json`, `apps/api/calibration/human_rating_sheet.template.csv`, and `uv run python scripts/build_human_rating_corpus.py`.
 
 ### Human Rating Corpus Builder
@@ -134,38 +134,38 @@ This runs the generated human-rated corpus through the calibration flow and emit
 - The PostgreSQL + S3-compatible product storage path is now exercised by a repeatable smoke script instead of staying an optional note.
 - The foundation now also includes a reference-led wireframe pack for the canonical Home, Studio, Arrangement, Shared Review, and Ops screens, so the next UI refactor can follow one agreed layout system.
 - The foundation now also includes a mockup track plus repo-visible mockup exports, so visual implementation can target explicit design files instead of only textual wireframes.
-- Seeded mockup exports now exist for all five canonical screens under `PROJECT_FOUNDATION/UI_MOCKUPS/`.
-- A repo-local equivalent editable design source now also exists under `PROJECT_FOUNDATION/UI_EDITABLE_SOURCE/`, so the canonical mockups are editable in-repo even before a shared Figma file is connected.
+- Seeded mockup exports now exist for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`.
+- A repo-local equivalent editable design source now also exists under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the canonical mockups are editable in-repo even before a shared Figma file is connected.
 - The Home, Studio, Arrangement, Shared Review, and Ops screens now follow that visual system closely enough to read like one product workspace family instead of a utility dashboard plus stacked tool panels.
 - Arrangement work now also has its own dedicated `/projects/:projectId/arrangement` route, so score comparison and export can happen in a score-first workspace instead of only inside the studio page.
 - Shared review now also reads like a frozen review desk instead of a generic details page, making the read-only boundary much clearer for recipients.
 
 ## Current Hardening Focus
 
-- Keep the visual refactor locked to `PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
-- Use `PROJECT_FOUNDATION/UI_MOCKUP_TRACK.md` plus the editable source under `PROJECT_FOUNDATION/UI_EDITABLE_SOURCE/` and the exports under `PROJECT_FOUNDATION/UI_MOCKUPS/` as the visual implementation baseline, not prose interpretation alone.
+- Keep the visual refactor locked to `PROJECT_FOUNDATION/DESIGN/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/DESIGN/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
+- Use `PROJECT_FOUNDATION/DESIGN/UI_MOCKUP_TRACK.md` plus the editable source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/` and the exports under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/` as the visual implementation baseline, not prose interpretation alone.
 - The first-wave product screens now all follow that visual system; next is to upgrade the repo-local editable source into a shared Figma workflow and keep future ops-only work from bleeding utility styling back into rehearsal screens.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
-- Use `PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.
+- Use `PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.
 - Prefer the new human-rating intake builder workflow over editing the final corpus JSON by hand.
 - Use the threshold-fit report as the default way to propose difficulty-tier cent bands once a real human-rated corpus exists.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.
-- Follow the browser environment validation protocol in `PROJECT_FOUNDATION/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks.
+- Follow the browser environment validation protocol in `PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks.
 
 ## Foundation Docs
 
 - [Master Plan](./PROJECT_FOUNDATION/GigaStudy_master_plan.md)
 - [Roadmap](./PROJECT_FOUNDATION/ROADMAP.md)
-- [UI Design Direction](./PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md)
-- [UI Wireframes v1](./PROJECT_FOUNDATION/UI_WIREFRAMES_V1.md)
-- [Phase 1 Backlog](./PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
-- [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/PHASE9_INTONATION_BACKLOG.md)
-- [Intonation Calibration Report](./PROJECT_FOUNDATION/INTONATION_CALIBRATION_REPORT.md)
-- [Human Rating Calibration Workflow](./PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md)
+- [UI Design Direction](./PROJECT_FOUNDATION/DESIGN/UI_DESIGN_DIRECTION.md)
+- [UI Wireframes v1](./PROJECT_FOUNDATION/DESIGN/UI_WIREFRAMES_V1.md)
+- [Phase 1 Backlog](./PROJECT_FOUNDATION/BACKLOGS/PHASE1_BACKLOG.md)
+- [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/BACKLOGS/PHASE9_INTONATION_BACKLOG.md)
+- [Intonation Calibration Report](./PROJECT_FOUNDATION/QUALITY/INTONATION_CALIBRATION_REPORT.md)
+- [Human Rating Calibration Workflow](./PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md)
 - [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
 - [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
-- [Intonation Assessment](./PROJECT_FOUNDATION/INTONATION_ANALYSIS_ASSESSMENT.md)
-- [Browser Environment Validation](./PROJECT_FOUNDATION/BROWSER_ENVIRONMENT_VALIDATION.md)
+- [Intonation Assessment](./PROJECT_FOUNDATION/QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md)
+- [Browser Environment Validation](./PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md)

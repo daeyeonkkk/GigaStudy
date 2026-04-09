@@ -27,7 +27,7 @@ Reference implementation:
 - `apps/api/calibration/synthetic_vocal_baseline.json`
 - `apps/api/calibration/human_rating_corpus.template.json`
 - `apps/api/scripts/run_intonation_calibration.py`
-- `HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+- `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
 - `apps/api/tests/audio_fixtures.py`
 - `apps/api/tests/test_calibration_runner.py`
 - `apps/api/tests/test_analysis_api.py`
@@ -64,7 +64,7 @@ The repo now also has a first-class workflow for future human-rating comparison:
 - per-case and per-run human-agreement summaries
 - a threshold-fit report path for candidate difficulty bands
 - optional `minimum_human_agreement_ratio` gating
-- a dedicated workflow note in `HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+- a dedicated workflow note in `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
 
 This is an operational bridge, not the evidence itself.
 It means the repo can now ingest and compare human consensus labels cleanly once real singer data is available.

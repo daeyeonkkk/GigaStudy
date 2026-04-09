@@ -137,7 +137,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Browser capability differences are captured in a normalized device profile snapshot.
 - [x] Warning flags are surfaced in the studio and in ops.
 - [x] Environment diagnostics can be exported from ops.
-- [x] A native browser and hardware validation protocol exists in `BROWSER_ENVIRONMENT_VALIDATION.md`.
+- [x] A native browser and hardware validation protocol exists in `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`.
 - [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.
 - [x] Chromium seeded release-gate coverage exists for recording, playback, export, sharing, and endurance.
 - [x] Firefox seeded release-gate coverage exists for the safe browser paths.
@@ -161,8 +161,8 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 
 ## 16. Visual Refactor Track
 
-- [x] One canonical visual direction is locked in `UI_DESIGN_DIRECTION.md`.
-- [x] A reference-led wireframe pack exists in `UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
+- [x] One canonical visual direction is locked in `DESIGN/UI_DESIGN_DIRECTION.md`.
+- [x] A reference-led wireframe pack exists in `DESIGN/UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
 - [x] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
 - [x] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
 - [x] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
@@ -171,9 +171,16 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 
 ## 17. Mockup Track
 
-- [x] A canonical mockup workflow is documented in `UI_MOCKUP_TRACK.md`.
-- [x] Repo-visible mockup exports exist for the first visual-priority screens in `UI_MOCKUPS/`.
+- [x] A canonical mockup workflow is documented in `DESIGN/UI_MOCKUP_TRACK.md`.
+- [x] Repo-visible mockup exports exist for the first visual-priority screens in `DESIGN/UI_MOCKUPS/`.
 - [x] A shared Figma file or equivalent editable design source exists for the canonical product mockups.
 - [x] `Home`, `Studio`, and `Arrangement` each have a frozen mockup version that implementation can target directly.
 - [x] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
 - [x] Each visually refactored screen references the mockup version it implements, rather than only the low-fidelity wireframe.
+
+## 18. Foundation Hygiene
+
+- [x] `PROJECT_FOUNDATION` root now contains only canonical core documents.
+- [x] Supporting docs and assets are grouped under `BACKLOGS/`, `DESIGN/`, `QUALITY/`, and `OPERATIONS/`.
+- [x] The root index defines document placement rules and expected read order.
+- [x] Working rules now explicitly forbid dropping scratch files, screenshots, or generated evidence into the foundation root.

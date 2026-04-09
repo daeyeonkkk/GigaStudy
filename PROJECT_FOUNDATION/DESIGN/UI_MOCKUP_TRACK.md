@@ -5,7 +5,7 @@ Status: Active foundation track.
 
 ## 0. Why This Exists
 
-`UI_WIREFRAMES_V1.md` is still the canonical low-fidelity layout pack, but it is not enough by itself for high-confidence visual implementation.
+`DESIGN/UI_WIREFRAMES_V1.md` is still the canonical low-fidelity layout pack, but it is not enough by itself for high-confidence visual implementation.
 
 From this point forward, GigaStudy treats explicit mockup files as the preferred visual source of truth for the key product screens.
 
@@ -13,11 +13,11 @@ From this point forward, GigaStudy treats explicit mockup files as the preferred
 
 1. Editable design source
    Preferred: shared Figma file with named frames and frozen version references.
-   Current equivalent: repo-local HTML and CSS artboards under `UI_EDITABLE_SOURCE/`.
+   Current equivalent: repo-local HTML and CSS artboards under `DESIGN/UI_EDITABLE_SOURCE/`.
 2. Repo-visible mockup exports
-   Required: exported PNG, SVG, or equivalent files under `PROJECT_FOUNDATION/UI_MOCKUPS/`.
+   Required: exported PNG, SVG, or equivalent files under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`.
 3. Low-fidelity wireframe pack
-   `UI_WIREFRAMES_V1.md` remains the layout and hierarchy fallback when the higher-fidelity source is still missing.
+   `DESIGN/UI_WIREFRAMES_V1.md` remains the layout and hierarchy fallback when the higher-fidelity source is still missing.
 
 Rule:
 
@@ -74,7 +74,7 @@ That is a bridge step, not the final state.
 
 Current bridge state:
 
-- repo-local editable source under `UI_EDITABLE_SOURCE/`
+- repo-local editable source under `DESIGN/UI_EDITABLE_SOURCE/`
 - exported SVG assets in the repo
 - code implementation tied to a named mockup version
 
@@ -108,8 +108,8 @@ They live under `UI_MOCKUPS/` and should be treated as the first visible visual 
 
 The repo now also carries an equivalent editable source at:
 
-- `UI_EDITABLE_SOURCE/quiet-studio-console-v1.html`
-- `UI_EDITABLE_SOURCE/quiet-studio-console-v1.css`
+- `DESIGN/UI_EDITABLE_SOURCE/quiet-studio-console-v1.html`
+- `DESIGN/UI_EDITABLE_SOURCE/quiet-studio-console-v1.css`
 
 This source is now sufficient to close the "shared Figma file or equivalent editable design source exists" checklist item.
 It does not remove the preference for a future shared Figma file.

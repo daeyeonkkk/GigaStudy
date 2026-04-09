@@ -1,7 +1,7 @@
 # GigaStudy UI Wireframes v1
 
 Date: 2026-04-09
-Status: Reference-led low-fidelity wireframe pack aligned to `UI_DESIGN_DIRECTION.md`.
+Status: Reference-led low-fidelity wireframe pack aligned to `DESIGN/UI_DESIGN_DIRECTION.md`.
 
 ## 0. Purpose
 
@@ -289,4 +289,4 @@ Desktop wireframe:
 
 ## 9. Foundation Rule
 
-If the eventual implemented screen intentionally diverges from these wireframes, update this document and `UI_DESIGN_DIRECTION.md` in the same change.
+If the eventual implemented screen intentionally diverges from these wireframes, update this document and `DESIGN/UI_DESIGN_DIRECTION.md` in the same change.

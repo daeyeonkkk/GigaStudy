@@ -9,6 +9,7 @@ Date: 2026-04-09
 - `INTONATION_ANALYSIS_ASSESSMENT.md`
 - `INTONATION_CALIBRATION_REPORT.md`
 - `UI_DESIGN_DIRECTION.md`
+- `UI_WIREFRAMES_V1.md`
 - `PHASE9_INTONATION_BACKLOG.md`
 - `PHASE1_BACKLOG.md`
 - `GigaStudy_check_list.md`
@@ -76,6 +77,7 @@ Date: 2026-04-09
 - Arrangement MusicXML export now runs through `music21`, so the runtime export path now uses a standard music notation library instead of only the local custom MusicXML builder.
 - The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
 - The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
+- The foundation now also has a reference-led wireframe pack for Home, Studio, Arrangement, Shared Review, and Ops, so the next UI refactor has one canonical screen set instead of relying on scattered implementation screenshots.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -146,10 +148,12 @@ Date: 2026-04-09
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
 - The product now has one chosen visual direction, but the current home page and parts of the studio still reflect the earlier environment-validation emphasis rather than the new `Quiet Studio Console` direction. The design decision is locked; the implementation refactor is still ahead.
+- The product now also has a canonical wireframe pack, but the actual `Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops` implementations have not yet been brought into close visual alignment with those layouts.
 
 ## Recommended Next Work
 
-1. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
-2. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
-3. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
-4. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
+1. Execute the UI refactor against `UI_WIREFRAMES_V1.md` in screen order: `Home` first, then `Studio`, then `Arrangement`, while keeping `Shared Review` and `Ops` visually subordinate to the product workflow.
+2. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
+3. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
+4. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
+5. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.

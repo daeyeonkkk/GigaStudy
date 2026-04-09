@@ -1,6 +1,6 @@
 # GigaStudy Live Checklist
 
-Date: 2026-04-08
+Date: 2026-04-09
 Status rule: mark `[x]` only when implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
 
 ## 1. Product Alignment
@@ -155,3 +155,13 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The checklist is now treated as a live progress board, not just as a planning appendix.
 - [x] `FOUNDATION_STATUS.md` is used as the audit narrative that explains why each checked area is considered done.
 - [x] Remaining unchecked items are deliberate gaps, not silently deferred assumptions.
+
+## 16. Visual Refactor Track
+
+- [x] One canonical visual direction is locked in `UI_DESIGN_DIRECTION.md`.
+- [x] A reference-led wireframe pack exists in `UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
+- [ ] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
+- [ ] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
+- [ ] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
+- [ ] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
+- [ ] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.

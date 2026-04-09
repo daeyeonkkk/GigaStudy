@@ -10,14 +10,15 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 1. `GigaStudy_master_plan.md`
 2. `ROADMAP.md`
 3. `UI_DESIGN_DIRECTION.md`
-4. `INTONATION_ANALYSIS_ASSESSMENT.md`
-5. `INTONATION_CALIBRATION_REPORT.md`
-6. `PHASE1_BACKLOG.md`
-7. `PHASE9_INTONATION_BACKLOG.md`
-8. `GigaStudy_check_list.md`
-9. `BROWSER_ENVIRONMENT_VALIDATION.md`
-10. `FOUNDATION_STATUS.md`
-11. `WORKING_PRINCIPLES.md`
+4. `UI_WIREFRAMES_V1.md`
+5. `INTONATION_ANALYSIS_ASSESSMENT.md`
+6. `INTONATION_CALIBRATION_REPORT.md`
+7. `PHASE1_BACKLOG.md`
+8. `PHASE9_INTONATION_BACKLOG.md`
+9. `GigaStudy_check_list.md`
+10. `BROWSER_ENVIRONMENT_VALIDATION.md`
+11. `FOUNDATION_STATUS.md`
+12. `WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -27,6 +28,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Phase-by-phase execution order and completion criteria.
 - `UI_DESIGN_DIRECTION.md`
   Canonical visual direction for the product, including the chosen art direction, reference read, screen priorities, and hard UI rules for future visual refactors.
+- `UI_WIREFRAMES_V1.md`
+  Reference-led low-fidelity wireframe pack for the canonical home, studio, arrangement, shared, and ops screens.
 - `PHASE1_BACKLOG.md`
   Build backlog for the first recording pipeline and studio foundation slice.
 - `PHASE9_INTONATION_BACKLOG.md`

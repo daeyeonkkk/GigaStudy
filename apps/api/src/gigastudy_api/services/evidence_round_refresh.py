@@ -21,6 +21,10 @@ from gigastudy_api.services.environment_validation_import import (
     load_environment_validation_sheet,
     render_environment_validation_requests_json,
 )
+from gigastudy_api.services.environment_validation_round_preview import (
+    build_round_environment_validation_preview,
+    render_round_environment_validation_claim_gate_markdown,
+)
 from gigastudy_api.services.evidence_round_audit import inspect_evidence_round, render_evidence_round_audit_markdown
 from gigastudy_api.services.evidence_rounds import resolve_evidence_round_paths
 from gigastudy_api.services.human_rating_builder import (
@@ -39,6 +43,8 @@ class EvidenceRoundRefreshResult(BaseModel):
     round_root: str
     generated_corpus_written: bool
     environment_preview_written: bool
+    environment_packet_written: bool
+    environment_claim_gate_written: bool
     human_reports_written: bool
     human_reports_skip_reason: str | None = None
     audit_json_written: bool
@@ -51,6 +57,8 @@ def refresh_evidence_round(round_root: Path) -> EvidenceRoundRefreshResult:
 
     generated_corpus_written = False
     environment_preview_written = False
+    environment_packet_written = False
+    environment_claim_gate_written = False
     human_reports_written = False
     human_reports_skip_reason: str | None = None
 
@@ -73,7 +81,22 @@ def refresh_evidence_round(round_root: Path) -> EvidenceRoundRefreshResult:
             render_environment_validation_requests_json(requests),
             encoding="utf-8",
         )
+        preview = build_round_environment_validation_preview(paths.root)
+        paths.environment_validation_packet_json_path.write_text(
+            json.dumps(preview.packet.model_dump(mode="json"), indent=2),
+            encoding="utf-8",
+        )
+        paths.environment_validation_claim_gate_json_path.write_text(
+            json.dumps(preview.claim_gate.model_dump(mode="json"), indent=2),
+            encoding="utf-8",
+        )
+        paths.environment_validation_claim_gate_markdown_path.write_text(
+            render_round_environment_validation_claim_gate_markdown(preview.claim_gate),
+            encoding="utf-8",
+        )
         environment_preview_written = True
+        environment_packet_written = True
+        environment_claim_gate_written = True
 
     initial_audit = inspect_evidence_round(paths.root)
     generated_inventory = initial_audit.human_rating.generated_corpus_inventory
@@ -172,6 +195,8 @@ def refresh_evidence_round(round_root: Path) -> EvidenceRoundRefreshResult:
         round_root=str(paths.root),
         generated_corpus_written=generated_corpus_written,
         environment_preview_written=environment_preview_written,
+        environment_packet_written=environment_packet_written,
+        environment_claim_gate_written=environment_claim_gate_written,
         human_reports_written=human_reports_written,
         human_reports_skip_reason=human_reports_skip_reason,
         audit_json_written=True,

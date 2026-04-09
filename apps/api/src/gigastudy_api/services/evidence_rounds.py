@@ -33,6 +33,9 @@ class EvidenceRoundPaths:
     environment_validation_dir: Path
     environment_validation_sheet_path: Path
     environment_validation_generated_requests_path: Path
+    environment_validation_packet_json_path: Path
+    environment_validation_claim_gate_json_path: Path
+    environment_validation_claim_gate_markdown_path: Path
 
 
 def resolve_project_root(service_path: Path | None = None) -> Path:
@@ -100,6 +103,12 @@ def resolve_evidence_round_paths(round_root: Path) -> EvidenceRoundPaths:
         environment_validation_sheet_path=environment_validation_dir / "environment_validation_runs.csv",
         environment_validation_generated_requests_path=environment_validation_dir
         / "environment_validation_runs.generated.json",
+        environment_validation_packet_json_path=environment_validation_dir
+        / "environment_validation_packet.preview.json",
+        environment_validation_claim_gate_json_path=environment_validation_dir
+        / "environment_validation_claim_gate.preview.json",
+        environment_validation_claim_gate_markdown_path=environment_validation_dir
+        / "environment_validation_claim_gate.preview.md",
     )
 
 
@@ -153,6 +162,7 @@ def render_evidence_round_readme(
             "- Fill `environment-validation/environment_validation_runs.csv` with native browser and hardware validation results.",
             "- Prefer importing those rows through the ops UI preview/import panel when the app is running.",
             "- Use the CLI importer when the round is easier to normalize offline first.",
+            "- Before ops import, use the round refresh path to regenerate a round-local packet and claim-gate preview from the CSV.",
             "",
             "Recommended command:",
             "",

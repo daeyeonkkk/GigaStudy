@@ -101,6 +101,7 @@ Date: 2026-04-09
 - The human-rating and environment-validation CLIs can now also target one named evidence round directly through `--round-root`, so corpus build, calibration, threshold fit, claim gate, evidence bundle generation, and validation-sheet import no longer need repeated manual file-path wiring.
 - The repo now also has an evidence-round audit path, so one command can summarize which human-rating and browser-validation artifacts are present, which generated outputs still need to be run, and what the next collection step is for that round.
 - The repo now also has an evidence-round refresh path, so one command can rebuild the generated human corpus, human-rating support reports, environment-validation preview JSON, and round audit back into the same round before review.
+- The evidence-round refresh path now also regenerates a round-local environment validation packet preview plus browser/hardware claim-gate preview from the external CSV, so reviewers can inspect matrix coverage and checklist blockers before anything is imported into ops.
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
@@ -126,7 +127,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `87 passed`
+- Result: `94 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes environment-validation intake parsing and request-shape generation from CSV evidence sheets.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
@@ -259,11 +260,19 @@ Date: 2026-04-09
 - Evidence-round refresh regression:
   `uv run pytest apps/api/tests/test_evidence_round_refresh.py`
 - Result:
-  passed with one placeholder-audio round that correctly skips calibration reports and one fixture-backed round that rebuilds generated corpus, human-rating reports, environment preview JSON, and round audit in place.
+  passed with one placeholder-audio round that correctly skips calibration reports and one fixture-backed round that rebuilds generated corpus, human-rating reports, environment preview JSON, round-local environment packet / claim-gate previews, and round audit in place.
 - Evidence-round audit regression:
   `uv run pytest apps/api/tests/test_evidence_round_audit.py`
 - Result:
-  passed with coverage for placeholder rounds that still point at missing real WAV files and for support-complete rounds that already have a generated corpus, report artifacts, and environment-validation preview JSON.
+  passed with coverage for placeholder rounds that still point at missing real WAV files and for support-complete rounds that already have a generated corpus, report artifacts, environment-validation preview artifacts, and round-local claim-gate readiness state.
+- Round-local environment preview regression:
+  `uv run pytest apps/api/tests/test_environment_validation_round_preview.py`
+- Result:
+  passed with coverage for a not-ready two-row round and a review-ready three-row round, confirming packet summary and claim-gate preview are both derivable directly from the round CSV before ops import.
+- Evidence-round refresh CLI smoke:
+  `uv run python scripts/refresh_evidence_round.py --round-root <round>`
+- Result:
+  passed against a temporary scaffold, writing `environment_validation_packet.preview.json` and `environment_validation_claim_gate.preview.{json,md}` into the round before cleanup.
 - Chromium additionally covers the browser recorder transport with fake-microphone permission plus DeviceProfile capture and the repeated in-session endurance workflow.
 - Chromium recorder coverage now also verifies that the `AudioWorklet` live meter activates during browser take capture and that the resulting waveform preview reports the `Worker + WASM` path.
 - The DeviceProfile path now also verifies capability snapshot capture and warning-flag persistence through the API and studio snapshot.
@@ -306,6 +315,7 @@ Date: 2026-04-09
 - The new `--round-root` CLI defaults remove another workflow-friction bottleneck for evidence collection, but they still do not create real singer data or native-hardware logs by themselves.
 - The new evidence-round audit removes another coordination bottleneck during collection, but it still does not replace real singer audio, human raters, or native Safari / real-hardware logs.
 - The new evidence-round refresh removes another manual rebuild bottleneck during collection, but it still only regenerates support artifacts from whatever evidence is already in the round.
+- The new round-local environment packet and claim-gate preview remove another pre-import review bottleneck, but they still only summarize the current CSV and do not replace native Safari or broad real-hardware evidence.
 - The new curated home-photo layer improves atmosphere on the entry screen, but it is intentionally limited to one non-identifying ambient image and should not become a shortcut around the broader mockup discipline.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.

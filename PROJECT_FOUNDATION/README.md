@@ -77,7 +77,7 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 - `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
   Workflow for future real-vocal and human-rating evidence, including intake templates, corpus inventory, consensus building, threshold-fit reporting, claim-gate evaluation, and evidence-bundle packaging.
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-  Native browser and hardware validation protocol built on top of the ops diagnostics baseline, including intake/import, ops-side CSV preview, environment validation packet, claim-gate, and release-note draft workflows.
+  Native browser and hardware validation protocol built on top of the ops diagnostics baseline, including round-local packet and claim-gate preview, intake/import, ops-side CSV preview, environment validation packet, claim-gate, and release-note draft workflows.
   Both workflows now start from the shared external evidence-round scaffold so real-world artifacts stay out of `PROJECT_FOUNDATION`.
 - `OPERATIONS/WORKING_PRINCIPLES.md`
   Project working rules, storage conventions, and foundation hygiene discipline.

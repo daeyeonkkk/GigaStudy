@@ -1,6 +1,6 @@
 # Browser Environment Validation
 
-Date: 2026-04-08
+Date: 2026-04-09
 
 ## Purpose
 
@@ -125,6 +125,7 @@ uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
 5. Use that report as the baseline for the round
 6. If testers are collecting evidence outside the product UI, start from the generated `environment-validation/environment_validation_runs.csv` file inside that round scaffold
 7. Run `uv run python scripts/refresh_evidence_round.py --round-root <round>` when you want the round preview JSON and support artifacts regenerated in place before review
+   This now also writes `environment_validation_packet.preview.json` and `environment_validation_claim_gate.preview.{json,md}` inside the round before anything is imported into ops.
 8. Run `uv run python scripts/inspect_evidence_round.py --round-root <round>` when you want one summary of what the round is still missing before review
 9. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
 10. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
@@ -169,6 +170,12 @@ The browser environment claim gate is the preferred checklist-review artifact be
 - whether enough successful real-hardware recording runs exist
 - whether FAIL runs still block claim review
 - whether the checklist should remain open even if release notes can already be drafted
+
+Before ops import, the round-local packet and claim-gate preview are the preferred preflight artifacts because they let the team check:
+
+- whether the current CSV already covers the essential matrix cells
+- whether native Safari and real-hardware evidence is still missing before import
+- whether the round should stay in collection mode instead of moving into release-review prep
 
 The ops overview should also surface the current claim-gate state inline so a reviewer can see:
 

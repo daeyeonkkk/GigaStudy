@@ -147,6 +147,7 @@ This creates one named folder for the still-open real-world evidence tracks:
 When `C:\my_project\DreamCatcher` exists, the scaffold defaults there so the evidence round stays outside the repo and outside `PROJECT_FOUNDATION`.
 
 Once a round exists, prefer passing `--round-root <round>` to the human-rating and environment-validation CLIs so metadata, generated corpora, reports, claim gates, evidence bundles, and preview JSON all stay inside that same round folder.
+That now includes round-local `environment_validation_packet.preview.json` and `environment_validation_claim_gate.preview.{json,md}` outputs before ops import.
 
 ### Evidence Round Audit
 
@@ -164,7 +165,7 @@ cd apps/api
 uv run python scripts/refresh_evidence_round.py --round-root <round>
 ```
 
-This rebuilds the round-local support artifacts in place: generated human-rating corpus, calibration/threshold/claim/evidence-bundle outputs when the audio sources are ready, environment-validation preview JSON, and the round audit files.
+This rebuilds the round-local support artifacts in place: generated human-rating corpus, calibration/threshold/claim/evidence-bundle outputs when the audio sources are ready, environment-validation preview JSON, round-local environment packet and claim-gate previews, and the round audit files.
 
 ### Browser Environment Claim Gate
 

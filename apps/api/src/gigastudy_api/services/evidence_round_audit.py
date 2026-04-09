@@ -5,9 +5,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from gigastudy_api.api.schemas.ops import EnvironmentValidationPacketSummaryResponse
 from gigastudy_api.services.calibration import load_calibration_corpus
+from gigastudy_api.services.environment_validation_claim_gate import ESSENTIAL_MATRIX_LABELS
 from gigastudy_api.services.evidence_rounds import resolve_evidence_round_paths
 from gigastudy_api.services.environment_validation_import import load_environment_validation_sheet
+from gigastudy_api.services.environment_validation_round_preview import (
+    build_round_environment_validation_preview,
+)
 from gigastudy_api.services.human_rating_builder import load_human_rating_metadata
 from gigastudy_api.services.real_vocal_corpus import (
     CorpusInventoryReport,
@@ -36,10 +41,19 @@ class HumanRatingRoundAudit(BaseModel):
 class EnvironmentValidationRoundAudit(BaseModel):
     sheet_present: bool
     generated_requests_present: bool
+    packet_present: bool
+    claim_gate_json_present: bool
+    claim_gate_markdown_present: bool
     row_count: int = Field(ge=0)
     outcome_counts: dict[str, int]
     browsers: list[str]
     operating_systems: list[str]
+    preview_packet_summary: EnvironmentValidationPacketSummaryResponse | None = None
+    release_claim_ready: bool | None = None
+    covered_matrix_count: int | None = Field(default=None, ge=0)
+    total_required_matrix_cells: int | None = Field(default=None, ge=0)
+    missing_required_matrix_labels: list[str] = Field(default_factory=list)
+    artifacts: list[EvidenceRoundArtifactStatus] = Field(default_factory=list)
     error: str | None = None
 
 
@@ -117,7 +131,18 @@ def _inspect_environment_validation_round(round_root: Path) -> EnvironmentValida
     browsers: set[str] = set()
     operating_systems: set[str] = set()
     row_count = 0
+    preview_packet_summary: EnvironmentValidationPacketSummaryResponse | None = None
+    release_claim_ready: bool | None = None
+    covered_matrix_count: int | None = None
+    total_required_matrix_cells: int | None = None
+    missing_required_matrix_labels: list[str] = []
     error: str | None = None
+    artifacts = [
+        _artifact_status("generated_requests_json", paths.environment_validation_generated_requests_path),
+        _artifact_status("packet_json", paths.environment_validation_packet_json_path),
+        _artifact_status("claim_gate_json", paths.environment_validation_claim_gate_json_path),
+        _artifact_status("claim_gate_markdown", paths.environment_validation_claim_gate_markdown_path),
+    ]
 
     if paths.environment_validation_sheet_path.exists():
         try:
@@ -126,16 +151,36 @@ def _inspect_environment_validation_round(round_root: Path) -> EnvironmentValida
             outcome_counts.update(row.outcome for row in rows)
             browsers.update(row.browser for row in rows)
             operating_systems.update(row.os for row in rows)
+            preview = build_round_environment_validation_preview(paths.root)
+            preview_packet_summary = preview.packet.summary
+            release_claim_ready = preview.claim_gate.release_claim_ready
+            covered_matrix_count = preview.claim_gate.covered_matrix_count
+            total_required_matrix_cells = preview.claim_gate.total_required_matrix_cells
+            covered_required_labels = {
+                cell.label for cell in preview.packet.required_matrix if cell.covered
+            }
+            missing_required_matrix_labels = [
+                label for label in ESSENTIAL_MATRIX_LABELS if label not in covered_required_labels
+            ]
         except Exception as exc:  # pragma: no cover - defensive path
             error = str(exc)
 
     return EnvironmentValidationRoundAudit(
         sheet_present=paths.environment_validation_sheet_path.exists(),
         generated_requests_present=paths.environment_validation_generated_requests_path.exists(),
+        packet_present=paths.environment_validation_packet_json_path.exists(),
+        claim_gate_json_present=paths.environment_validation_claim_gate_json_path.exists(),
+        claim_gate_markdown_present=paths.environment_validation_claim_gate_markdown_path.exists(),
         row_count=row_count,
         outcome_counts=dict(sorted(outcome_counts.items())),
         browsers=sorted(browser for browser in browsers if browser),
         operating_systems=sorted(os_name for os_name in operating_systems if os_name),
+        preview_packet_summary=preview_packet_summary,
+        release_claim_ready=release_claim_ready,
+        covered_matrix_count=covered_matrix_count,
+        total_required_matrix_cells=total_required_matrix_cells,
+        missing_required_matrix_labels=missing_required_matrix_labels,
+        artifacts=artifacts,
         error=error,
     )
 
@@ -170,6 +215,18 @@ def inspect_evidence_round(round_root: Path) -> EvidenceRoundAuditReport:
         next_actions.append("Collect browser and hardware validation rows in the round CSV before review.")
     elif not environment_validation.generated_requests_present:
         next_actions.append("Preview or import the environment-validation CSV so this round has normalized request JSON.")
+    elif (
+        not environment_validation.packet_present
+        or not environment_validation.claim_gate_json_present
+        or not environment_validation.claim_gate_markdown_present
+    ):
+        next_actions.append(
+            "Run the round refresh so this round has its local environment-validation packet and claim-gate preview before ops import."
+        )
+    elif environment_validation.release_claim_ready is False:
+        next_actions.append(
+            "Collect more native Safari and real-hardware validation rows until the round-local browser claim gate is ready for review."
+        )
 
     if not next_actions:
         next_actions.append("This round has its current support artifacts in place; the remaining work is collecting and reviewing real evidence.")
@@ -227,6 +284,9 @@ def render_evidence_round_audit_markdown(report: EvidenceRoundAuditReport) -> st
             "",
             f"- CSV present: {'yes' if report.environment_validation.sheet_present else 'no'}",
             f"- Generated requests JSON present: {'yes' if report.environment_validation.generated_requests_present else 'no'}",
+            f"- Packet JSON present: {'yes' if report.environment_validation.packet_present else 'no'}",
+            f"- Claim-gate JSON present: {'yes' if report.environment_validation.claim_gate_json_present else 'no'}",
+            f"- Claim-gate Markdown present: {'yes' if report.environment_validation.claim_gate_markdown_present else 'no'}",
             f"- Row count: {report.environment_validation.row_count}",
             f"- Outcome counts: {report.environment_validation.outcome_counts or '{}'}",
             f"- Browsers: {', '.join(report.environment_validation.browsers) if report.environment_validation.browsers else 'none'}",
@@ -234,8 +294,23 @@ def render_evidence_round_audit_markdown(report: EvidenceRoundAuditReport) -> st
         ]
     )
 
+    if report.environment_validation.preview_packet_summary is not None:
+        lines.extend(
+            [
+                f"- Preview total runs: {report.environment_validation.preview_packet_summary.total_validation_runs}",
+                f"- Preview PASS / WARN / FAIL: {report.environment_validation.preview_packet_summary.pass_run_count} / {report.environment_validation.preview_packet_summary.warn_run_count} / {report.environment_validation.preview_packet_summary.fail_run_count}",
+                f"- Preview release-claim ready: {'yes' if report.environment_validation.release_claim_ready else 'no'}",
+                f"- Preview covered matrix: {report.environment_validation.covered_matrix_count}/{report.environment_validation.total_required_matrix_cells}",
+                f"- Missing essential matrix labels: {', '.join(report.environment_validation.missing_required_matrix_labels) if report.environment_validation.missing_required_matrix_labels else 'none'}",
+            ]
+        )
+
     if report.environment_validation.error:
         lines.append(f"- Environment-validation audit error: {report.environment_validation.error}")
+
+    lines.extend(["", "### Environment Validation Artifacts", ""])
+    for artifact in report.environment_validation.artifacts:
+        lines.append(f"- {artifact.label}: {'present' if artifact.exists else 'missing'} ({artifact.path})")
 
     lines.extend(["", "## Next Actions", ""])
     for action in report.next_actions:

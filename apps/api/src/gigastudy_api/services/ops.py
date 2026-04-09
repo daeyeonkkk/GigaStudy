@@ -49,6 +49,10 @@ from gigastudy_api.services.environment_validation_import import (
     build_environment_validation_requests,
     load_environment_validation_sheet_text,
 )
+from gigastudy_api.services.environment_validation_packet_builder import (
+    EnvironmentValidationEvidenceItem,
+    build_environment_validation_packet_from_items,
+)
 from gigastudy_api.services.melody import MELODY_MODEL_VERSION, PYIN_FALLBACK_MODEL_VERSION
 from gigastudy_api.services.projects import get_or_create_default_user
 
@@ -309,61 +313,44 @@ def build_environment_validation_packet(session: Session) -> EnvironmentValidati
         build_environment_validation_run_response(validation_run)
         for validation_run in validation_runs
     ]
-
-    matrix_labels = (
-        ("Windows + Chrome + USB microphone + wired headphones", _matches_windows_chrome_usb_headphones),
-        ("Windows + Firefox + built-in microphone + built-in speakers", _matches_windows_firefox_builtin),
-        ("macOS + Safari + built-in microphone + built-in speakers", _matches_macos_safari_builtin),
-        ("macOS + Safari + Bluetooth output", _matches_macos_safari_bluetooth),
-        ("macOS + Chrome + wired headphones", _matches_macos_chrome_wired),
-        ("iPadOS or iOS Safari", _matches_mobile_safari),
-    )
-
-    required_matrix = [
-        EnvironmentValidationMatrixCellResponse(
-            label=label,
-            covered=(match_count := sum(1 for run in validation_runs if matcher(run))) > 0,
-            run_count=match_count,
+    evidence_items = [
+        EnvironmentValidationEvidenceItem(
+            label=run.label,
+            tester=run.tester,
+            device_name=run.device_name,
+            os=run.os,
+            browser=run.browser,
+            input_device=run.input_device,
+            output_route=run.output_route,
+            outcome=run.outcome.value,
+            secure_context=run.secure_context,
+            microphone_permission_before=run.microphone_permission_before,
+            microphone_permission_after=run.microphone_permission_after,
+            recording_mime_type=run.recording_mime_type,
+            audio_context_mode=run.audio_context_mode,
+            offline_audio_context_mode=run.offline_audio_context_mode,
+            actual_sample_rate=run.actual_sample_rate,
+            base_latency=run.base_latency,
+            output_latency=run.output_latency,
+            warning_flags=list(run.warning_flags_json or []),
+            take_recording_succeeded=run.take_recording_succeeded,
+            analysis_succeeded=run.analysis_succeeded,
+            playback_succeeded=run.playback_succeeded,
+            audible_issues=run.audible_issues,
+            permission_issues=run.permission_issues,
+            unexpected_warnings=run.unexpected_warnings,
+            follow_up=run.follow_up,
+            notes=run.notes,
+            validated_at=run.validated_at,
         )
-        for label, matcher in matrix_labels
+        for run in validation_runs
     ]
 
-    pass_runs = sum(1 for run in validation_runs if run.outcome == ValidationOutcome.PASS)
-    warn_runs = sum(1 for run in validation_runs if run.outcome == ValidationOutcome.WARN)
-    fail_runs = sum(1 for run in validation_runs if run.outcome == ValidationOutcome.FAIL)
-    native_safari_runs = sum(1 for run in validation_runs if _is_native_safari_like(run))
-    real_hardware_recording_successes = sum(
-        1
-        for run in validation_runs
-        if run.take_recording_succeeded is True and _looks_like_real_hardware_run(run)
-    )
-
-    claim_guardrails = _build_environment_claim_guardrails(
-        validation_runs=validation_runs,
+    return build_environment_validation_packet_from_items(
+        evidence_items,
         diagnostics=diagnostics,
-        required_matrix=required_matrix,
-    )
-    compatibility_notes = _build_environment_compatibility_notes(
-        validation_runs=validation_runs,
-        diagnostics=diagnostics,
-    )
-
-    return EnvironmentValidationPacketResponse(
-        generated_at=datetime.now(timezone.utc),
-        summary=EnvironmentValidationPacketSummaryResponse(
-            total_validation_runs=len(validation_runs),
-            pass_run_count=pass_runs,
-            warn_run_count=warn_runs,
-            fail_run_count=fail_runs,
-            native_safari_run_count=native_safari_runs,
-            real_hardware_recording_success_count=real_hardware_recording_successes,
-            environments_with_warning_flags=diagnostics.summary.profiles_with_warnings,
-        ),
-        required_matrix=required_matrix,
-        environment_diagnostics=diagnostics,
         recent_validation_runs=validation_run_responses,
-        claim_guardrails=claim_guardrails,
-        compatibility_notes=compatibility_notes,
+        generated_from="ops_environment_validation_packet",
     )
 
 
@@ -577,137 +564,3 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
         ],
     )
 
-
-def _normalize_text(value: str | None) -> str:
-    return (value or "").strip().lower()
-
-
-def _contains_any(value: str | None, needles: tuple[str, ...]) -> bool:
-    normalized = _normalize_text(value)
-    return any(needle in normalized for needle in needles)
-
-
-def _matches_windows_chrome_usb_headphones(run: EnvironmentValidationRun) -> bool:
-    return (
-        _contains_any(run.os, ("windows",))
-        and _contains_any(run.browser, ("chrome",))
-        and _contains_any(run.input_device, ("usb",))
-        and _contains_any(run.output_route, ("wired", "headphone"))
-    )
-
-
-def _matches_windows_firefox_builtin(run: EnvironmentValidationRun) -> bool:
-    return (
-        _contains_any(run.os, ("windows",))
-        and _contains_any(run.browser, ("firefox",))
-        and _contains_any(run.input_device, ("built-in", "builtin"))
-        and _contains_any(run.output_route, ("speaker", "built-in", "builtin"))
-    )
-
-
-def _matches_macos_safari_builtin(run: EnvironmentValidationRun) -> bool:
-    return (
-        _contains_any(run.os, ("macos", "mac os"))
-        and _is_native_safari_like(run)
-        and _contains_any(run.input_device, ("built-in", "builtin"))
-        and _contains_any(run.output_route, ("speaker", "built-in", "builtin"))
-    )
-
-
-def _matches_macos_safari_bluetooth(run: EnvironmentValidationRun) -> bool:
-    return (
-        _contains_any(run.os, ("macos", "mac os"))
-        and _is_native_safari_like(run)
-        and _contains_any(run.output_route, ("bluetooth", "airpods"))
-    )
-
-
-def _matches_macos_chrome_wired(run: EnvironmentValidationRun) -> bool:
-    return (
-        _contains_any(run.os, ("macos", "mac os"))
-        and _contains_any(run.browser, ("chrome",))
-        and _contains_any(run.output_route, ("wired", "headphone"))
-    )
-
-
-def _matches_mobile_safari(run: EnvironmentValidationRun) -> bool:
-    return (
-        _contains_any(run.os, ("ios", "ipados"))
-        and _is_native_safari_like(run)
-    )
-
-
-def _is_native_safari_like(run: EnvironmentValidationRun) -> bool:
-    return _contains_any(run.browser, ("safari",)) and not _contains_any(run.browser, ("chrome", "chromium"))
-
-
-def _looks_like_real_hardware_run(run: EnvironmentValidationRun) -> bool:
-    return bool(_normalize_text(run.device_name)) and not _contains_any(run.device_name, ("playwright", "fixture"))
-
-
-def _build_environment_claim_guardrails(
-    *,
-    validation_runs: list[EnvironmentValidationRun],
-    diagnostics: OpsEnvironmentDiagnosticsResponse,
-    required_matrix: list[EnvironmentValidationMatrixCellResponse],
-) -> list[str]:
-    guardrails = [
-        "This packet summarizes current browser and hardware evidence; it does not close the native Safari or real-hardware checklist items by itself.",
-        "Release notes should distinguish seeded automation coverage from native hardware validation coverage.",
-    ]
-
-    if not any(run.covered for run in required_matrix if "Safari" in run.label):
-        guardrails.append(
-            "No native Safari or Safari-like validation run is logged in the required matrix, so Safari support claims should stay conservative."
-        )
-    if not any(run.take_recording_succeeded is True for run in validation_runs):
-        guardrails.append(
-            "No successful real validation recording run is logged yet, so recorder reliability claims should stay open."
-        )
-    if diagnostics.summary.profiles_with_warnings > 0:
-        guardrails.append(
-            "Warning flags still exist in captured environments, so release notes should mention known browser-audio caveats where relevant."
-        )
-    if any(run.outcome == ValidationOutcome.FAIL for run in validation_runs):
-        guardrails.append(
-            "At least one validation run is marked FAIL, so unresolved environment blockers remain."
-        )
-
-    return guardrails
-
-
-def _build_environment_compatibility_notes(
-    *,
-    validation_runs: list[EnvironmentValidationRun],
-    diagnostics: OpsEnvironmentDiagnosticsResponse,
-) -> list[str]:
-    notes: list[str] = []
-
-    if any(
-        flag.flag == "missing_offline_audio_context"
-        for flag in diagnostics.warning_flags
-    ):
-        notes.append(
-            "Some environments still report missing offline rendering support, so playback or local mixdown capability may be degraded."
-        )
-    if any(
-        flag.flag == "legacy_webkit_audio_context_only"
-        for flag in diagnostics.warning_flags
-    ):
-        notes.append(
-            "Safari-family fallback paths still matter in current field data because legacy WebKit audio contexts are present in saved profiles."
-        )
-    if any(run.playback_succeeded is False for run in validation_runs):
-        notes.append(
-            "At least one manual validation run reports playback failure or degradation, so playback support should be described by environment rather than as universal."
-        )
-    if any(run.microphone_permission_after == "denied" for run in validation_runs):
-        notes.append(
-            "Permission recovery remains a compatibility concern in some environments and should be called out in support notes."
-        )
-    if not notes:
-        notes.append(
-            "No additional compatibility warnings were inferred from the stored validation runs and diagnostics snapshot."
-        )
-
-    return notes

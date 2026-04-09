@@ -119,10 +119,15 @@ def test_refresh_evidence_round_skips_human_reports_until_audio_is_resolved(tmp_
 
     assert result.generated_corpus_written is True
     assert result.environment_preview_written is True
+    assert result.environment_packet_written is True
+    assert result.environment_claim_gate_written is True
     assert result.human_reports_written is False
     assert result.human_reports_skip_reason == "generated_corpus_has_unresolved_audio_sources"
     assert paths.human_rating_generated_corpus_path.exists()
     assert paths.environment_validation_generated_requests_path.exists()
+    assert paths.environment_validation_packet_json_path.exists()
+    assert paths.environment_validation_claim_gate_json_path.exists()
+    assert paths.environment_validation_claim_gate_markdown_path.exists()
     assert paths.audit_json_path.exists()
     assert paths.audit_markdown_path.exists()
     assert not paths.human_rating_calibration_json_path.exists()
@@ -147,6 +152,8 @@ def test_refresh_evidence_round_builds_support_artifacts_for_fixture_backed_roun
 
     assert result.generated_corpus_written is True
     assert result.environment_preview_written is True
+    assert result.environment_packet_written is True
+    assert result.environment_claim_gate_written is True
     assert result.human_reports_written is True
     assert result.human_reports_skip_reason is None
     assert paths.human_rating_generated_corpus_path.exists()
@@ -157,6 +164,9 @@ def test_refresh_evidence_round_builds_support_artifacts_for_fixture_backed_roun
     assert paths.human_rating_claim_gate_json_path.exists()
     assert paths.human_rating_claim_gate_markdown_path.exists()
     assert paths.environment_validation_generated_requests_path.exists()
+    assert paths.environment_validation_packet_json_path.exists()
+    assert paths.environment_validation_claim_gate_json_path.exists()
+    assert paths.environment_validation_claim_gate_markdown_path.exists()
     assert paths.audit_json_path.exists()
     assert paths.audit_markdown_path.exists()
     assert any(paths.human_rating_evidence_output_dir.iterdir())

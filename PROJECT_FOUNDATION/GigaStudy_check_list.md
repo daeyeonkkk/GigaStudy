@@ -152,6 +152,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] An environment validation intake template and importer exist for preparing native browser and hardware evidence before it reaches ops.
 - [x] The external evidence-round scaffold also seeds browser and hardware validation intake outside `PROJECT_FOUNDATION`.
 - [x] Environment-validation intake CLIs can target one named evidence round directly instead of repeating CSV and preview-output paths.
+- [x] One round-local browser and hardware packet plus claim-gate preview can be regenerated from an evidence-round CSV before ops import.
 - [x] Ops can preview and import external environment-validation CSV evidence directly instead of relying on CLI-only intake.
 - [x] A native browser and hardware validation protocol exists in `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`.
 - [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.

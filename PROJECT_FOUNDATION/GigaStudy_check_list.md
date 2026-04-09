@@ -129,6 +129,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A human-rating corpus comparison workflow exists, even though the real evidence corpus is not populated yet.
 - [x] A human-rating intake template and consensus builder exist for preparing real-vocal evidence.
 - [x] A threshold-fit report tool exists for future human-rated corpora, even though the evidence corpus is still open.
+- [x] A human-rating evidence bundle workflow exists for packaging calibration, threshold-fit, and claim guardrails into release-review artifacts.
 - [ ] Real human vocal fixtures or a trusted human-rating corpus are part of the release-quality evidence.
 - [ ] Threshold calibration has been validated against human raters strongly enough to claim a human-trustworthy intonation judge.
 

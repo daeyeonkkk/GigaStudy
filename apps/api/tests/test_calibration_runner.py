@@ -119,3 +119,27 @@ def test_render_calibration_summary_markdown_includes_human_rating_summary() -> 
 
     assert "Human-rating agreement:" in markdown
     assert "rated notes" in markdown
+
+
+def test_load_calibration_corpus_reads_utf8_bom_json(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "calibration-bom.json"
+    manifest_path.write_text(
+        "{\n"
+        '  "corpus_id": "bom-calibration-test",\n'
+        '  "description": "BOM coverage",\n'
+        '  "cases": [\n'
+        "    {\n"
+        '      "case_id": "case-a",\n'
+        '      "description": "Case A",\n'
+        '      "project_title": "Case A",\n'
+        '      "guide_source": {"source_kind": "named_fixture", "fixture_name": "guide_centered_vocalish"},\n'
+        '      "take_source": {"source_kind": "named_fixture", "fixture_name": "take_sharp_attack_vocalish"}\n'
+        "    }\n"
+        "  ]\n"
+        "}\n",
+        encoding="utf-8-sig",
+    )
+
+    corpus = load_calibration_corpus(manifest_path)
+
+    assert corpus.corpus_id == "bom-calibration-test"

@@ -136,7 +136,7 @@ class CalibrationRunSummary(BaseModel):
 
 
 def load_calibration_corpus(manifest_path: Path) -> CalibrationCorpus:
-    return CalibrationCorpus.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+    return CalibrationCorpus.model_validate_json(manifest_path.read_text(encoding="utf-8-sig"))
 
 
 def _resolve_audio_source_bytes(source: AudioSourceSpec, base_dir: Path | None = None) -> bytes:

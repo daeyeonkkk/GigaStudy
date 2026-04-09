@@ -28,8 +28,12 @@ The repo now supports:
   `apps/api/scripts/build_human_rating_corpus.py`
 - a threshold-fit CLI:
   `apps/api/scripts/fit_human_rating_thresholds.py`
+- an evidence-bundle CLI:
+  `apps/api/scripts/build_human_rating_evidence_bundle.py`
+- UTF-8 BOM-safe manifest loading for Windows-edited calibration JSON files
 - runner support for `human_ratings` and `minimum_human_agreement_ratio`
 - Markdown and JSON summaries that include human-rating agreement
+- Markdown and JSON release-review bundles that package calibration summary, threshold-fit output, and claim guardrails together
 - synthetic test coverage proving the comparison path works
 
 The repo does **not** yet include:
@@ -113,14 +117,23 @@ uv run python scripts/run_intonation_calibration.py --manifest calibration/human
 uv run python scripts/fit_human_rating_thresholds.py --manifest calibration/human_rating_corpus.generated.json
 ```
 
-7. Save the JSON and Markdown outputs as release evidence outside the template file.
-8. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
+7. Build the release-review evidence bundle:
+
+```bash
+uv run python scripts/build_human_rating_evidence_bundle.py --manifest calibration/human_rating_corpus.generated.json
+```
+
+This writes the calibration summary, threshold-fit report, and combined evidence bundle into `apps/api/calibration/output/`.
+
+8. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
+9. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
 
 ## 5. What Closes The Checklist
 
 This workflow alone closes only the support-path gap:
 
 - the repo can now compare scorer output against human note labels
+- the repo can now package calibration summary, threshold recommendations, and claim guardrails into one release-review bundle
 
 This workflow does **not** close:
 

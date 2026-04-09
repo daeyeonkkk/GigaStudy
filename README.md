@@ -102,6 +102,16 @@ uv run python scripts/fit_human_rating_thresholds.py --manifest calibration/huma
 
 This runs the generated human-rated corpus through the calibration flow and emits candidate `strict`, `basic`, and `beginner` cent bands as a report.
 
+### Human Rating Evidence Bundle
+
+```bash
+cd apps/api
+uv run python scripts/build_human_rating_evidence_bundle.py --manifest calibration/human_rating_corpus.generated.json
+```
+
+This packages the calibration summary, threshold-fit report, and release-claim guardrails into `apps/api/calibration/output/`.
+Those outputs are review artifacts, not canonical foundation docs.
+
 ## Current Product State
 
 - P0 MVP flow is implemented from project creation through export.
@@ -117,6 +127,7 @@ This runs the generated human-rated corpus through the calibration flow and emit
 - The calibration runner now also supports note-level human-rating comparison summaries and optional agreement thresholds, so future real-rater evidence can be attached without inventing a second evaluation path.
 - The repo now also includes a human-rating intake builder plus metadata and sheet templates, so raw rater labels can be turned into a calibration corpus without hand-authoring the final manifest JSON.
 - The repo now also includes a threshold-fit report path for candidate difficulty bands, so future human-rated corpora can yield repeatable `strict / basic / beginner` recommendations instead of ad hoc threshold notes.
+- The repo now also includes a human-rating evidence-bundle path, so future release reviews can attach calibration summary, threshold-fit output, and claim guardrails without assembling them by hand.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 - DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
 - The browser audio stack is now wired end-to-end in product code: `AudioWorklet` powers live input metering during take capture, waveform and contour previews run in a `Web Worker`, that preview path uses a small `WASM` helper for peak math, and `OfflineAudioContext` remains the local mixdown engine.
@@ -150,6 +161,7 @@ This runs the generated human-rated corpus through the calibration flow and emit
 - Use `PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.
 - Prefer the new human-rating intake builder workflow over editing the final corpus JSON by hand.
 - Use the threshold-fit report as the default way to propose difficulty-tier cent bands once a real human-rated corpus exists.
+- Use the evidence-bundle CLI as the default way to package human-rating release evidence once a corpus round has been run.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.

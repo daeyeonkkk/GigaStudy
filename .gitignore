@@ -29,4 +29,6 @@ test-results/
 apps/api/.e2e/
 apps/api/.e2e-storage/
 apps/api/calibration/*.generated.json
+apps/api/calibration/output/*
+!apps/api/calibration/output/README.md
 output/playwright/

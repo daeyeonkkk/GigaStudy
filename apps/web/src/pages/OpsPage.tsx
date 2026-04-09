@@ -446,7 +446,7 @@ export function OpsPage() {
 
   if (pageState.phase === 'loading') {
     return (
-      <div className="page-shell">
+      <div className="page-shell ops-page">
         <section className="panel studio-panel">
           <p className="eyebrow">Phase 7</p>
           <h1>Loading operations overview</h1>
@@ -460,7 +460,7 @@ export function OpsPage() {
 
   if (pageState.phase === 'error') {
     return (
-      <div className="page-shell">
+      <div className="page-shell ops-page">
         <section className="panel studio-panel">
           <p className="eyebrow">Phase 7</p>
           <h1>Operations overview unavailable</h1>
@@ -478,10 +478,10 @@ export function OpsPage() {
   const validationRuns = payload.recent_environment_validation_runs
 
   return (
-    <div className="page-shell">
-      <section className="panel studio-panel">
-        <div className="studio-header">
-          <div>
+    <div className="page-shell ops-page">
+      <section className="panel studio-panel ops-shell">
+        <div className="studio-header ops-shell__header">
+          <div className="ops-shell__copy">
             <p className="eyebrow">Phase 7</p>
             <h1>Operations overview and release gate</h1>
             <p className="panel__summary">
@@ -490,7 +490,7 @@ export function OpsPage() {
             </p>
           </div>
 
-          <div className="button-row">
+          <div className="button-row ops-shell__actions">
             <button
               className="button-secondary"
               type="button"
@@ -519,8 +519,8 @@ export function OpsPage() {
           </p>
         ) : null}
 
-        <div className="card-grid">
-          <article className="info-card">
+        <div className="card-grid ops-kpi-strip">
+          <article className="info-card ops-kpi-card">
             <h3>Release summary</h3>
             <div className="mini-grid">
               <div className="mini-card">
@@ -542,7 +542,7 @@ export function OpsPage() {
             </div>
           </article>
 
-          <article className="info-card">
+          <article className="info-card ops-kpi-card">
             <h3>Policies</h3>
             <div className="mini-grid">
               <div className="mini-card">
@@ -566,14 +566,14 @@ export function OpsPage() {
         </div>
       </section>
 
-      <section className="section">
-        <div className="section__header">
+      <section className="section ops-section ops-section--versions">
+        <div className="section__header ops-section__header">
           <p className="eyebrow">Model Trace</p>
           <h2>Track which engine versions are active</h2>
         </div>
 
         <div className="card-grid">
-          <article className="info-card">
+          <article className="info-card ops-info-card">
             <h3>Analysis versions</h3>
             <ul>
               {payload.model_versions.analysis.map((version) => (
@@ -582,7 +582,7 @@ export function OpsPage() {
             </ul>
           </article>
 
-          <article className="info-card">
+          <article className="info-card ops-info-card">
             <h3>Melody versions</h3>
             <ul>
               {payload.model_versions.melody.map((version) => (
@@ -591,7 +591,7 @@ export function OpsPage() {
             </ul>
           </article>
 
-          <article className="info-card">
+          <article className="info-card ops-info-card">
             <h3>Arrangement engine</h3>
             <ul>
               {payload.model_versions.arrangement_engine.map((version) => (
@@ -602,14 +602,14 @@ export function OpsPage() {
         </div>
       </section>
 
-      <section className="section">
-        <div className="section__header">
+      <section className="section ops-section ops-section--diagnostics">
+        <div className="section__header ops-section__header">
           <p className="eyebrow">Environment Diagnostics</p>
           <h2>Track browser audio variability before it becomes a support mystery</h2>
         </div>
 
         <div className="card-grid">
-          <article className="info-card">
+          <article className="info-card ops-info-card">
             <h3>DeviceProfile coverage</h3>
             <div className="mini-grid">
               <div className="mini-card">
@@ -631,7 +631,7 @@ export function OpsPage() {
             </div>
           </article>
 
-          <article className="info-card">
+          <article className="info-card ops-info-card">
             <h3>Warning distribution</h3>
             {environmentDiagnostics.warning_flags.length === 0 ? (
               <div className="empty-card">
@@ -650,7 +650,7 @@ export function OpsPage() {
             )}
           </article>
 
-          <article className="info-card">
+          <article className="info-card ops-info-card">
             <h3>Browser matrix</h3>
             {environmentDiagnostics.browser_matrix.length === 0 ? (
               <div className="empty-card">
@@ -678,8 +678,8 @@ export function OpsPage() {
         </div>
       </section>
 
-      <section className="section section--split">
-        <article className="panel studio-block">
+      <section className="section section--split ops-section ops-section--validation">
+        <article className="panel studio-block ops-panel">
           <p className="eyebrow">Validation Log</p>
           <h2>Record a native browser or real-hardware validation run</h2>
           <p className="panel__summary">
@@ -1148,7 +1148,7 @@ export function OpsPage() {
           </form>
         </article>
 
-        <article className="panel studio-block">
+        <article className="panel studio-block ops-panel">
           <p className="eyebrow">Recent Validation Runs</p>
           <h2>Keep native browser checks visible next to the diagnostics baseline</h2>
 
@@ -1229,8 +1229,8 @@ export function OpsPage() {
         </article>
       </section>
 
-      <section className="section section--split">
-        <article className="panel studio-block">
+      <section className="section section--split ops-section ops-section--recovery">
+        <article className="panel studio-block ops-panel">
           <p className="eyebrow">Failed Tracks</p>
           <h2>Inspect failed uploads and processing state</h2>
 
@@ -1289,7 +1289,7 @@ export function OpsPage() {
           </div>
         </article>
 
-        <article className="panel studio-block">
+        <article className="panel studio-block ops-panel">
           <p className="eyebrow">Analysis Jobs</p>
           <h2>Retry failed jobs and inspect model usage</h2>
 
@@ -1357,8 +1357,8 @@ export function OpsPage() {
         </article>
       </section>
 
-      <section className="section">
-        <div className="section__header">
+      <section className="section ops-section ops-section--profiles">
+        <div className="section__header ops-section__header">
           <p className="eyebrow">Recent Profiles</p>
           <h2>Inspect the latest captured audio environments</h2>
         </div>

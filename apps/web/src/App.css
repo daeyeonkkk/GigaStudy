@@ -2256,7 +2256,205 @@
   stroke-width: 2.5;
 }
 
+.ops-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.14fr) minmax(320px, 0.86fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.ops-shell {
+  grid-column: 1 / -1;
+  gap: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(214, 104, 50, 0.09), transparent 26%),
+    linear-gradient(180deg, rgba(255, 251, 245, 0.94), rgba(247, 240, 229, 0.88));
+}
+
+.ops-shell__header {
+  align-items: flex-start;
+}
+
+.ops-shell__copy {
+  max-width: 52rem;
+}
+
+.ops-shell__copy h1 {
+  max-width: 18ch;
+}
+
+.ops-shell__actions {
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.ops-kpi-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ops-kpi-card,
+.ops-info-card,
+.ops-panel {
+  border-color: rgba(34, 62, 83, 0.1);
+  background: rgba(255, 252, 247, 0.86);
+  box-shadow:
+    0 18px 42px rgba(31, 48, 64, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.ops-kpi-card h3,
+.ops-info-card h3 {
+  margin-bottom: 14px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ops-section {
+  margin: 0;
+}
+
+.ops-section__header {
+  margin-bottom: 14px;
+}
+
+.ops-section__header h2 {
+  max-width: 24ch;
+}
+
+.ops-section--validation {
+  order: 1;
+  grid-column: 1;
+}
+
+.ops-section--recovery {
+  order: 2;
+  grid-column: 2;
+  grid-template-columns: 1fr;
+}
+
+.ops-section--versions {
+  order: 3;
+  grid-column: 2;
+  padding: 22px 24px 24px;
+  border: 1px solid rgba(34, 62, 83, 0.1);
+  border-radius: 28px;
+  background: rgba(255, 252, 247, 0.84);
+  box-shadow:
+    0 18px 42px rgba(31, 48, 64, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.ops-section--versions .card-grid {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.ops-section--diagnostics,
+.ops-section--profiles {
+  grid-column: 1 / -1;
+  padding: 22px 24px 24px;
+  border: 1px solid rgba(34, 62, 83, 0.1);
+  border-radius: 28px;
+  background: rgba(255, 252, 247, 0.84);
+  box-shadow:
+    0 18px 42px rgba(31, 48, 64, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.ops-section--diagnostics {
+  order: 4;
+}
+
+.ops-section--profiles {
+  order: 5;
+}
+
+.ops-section--diagnostics .card-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.ops-section--profiles .ops-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ops-section--validation .panel__summary,
+.ops-section--recovery .panel__summary {
+  max-width: 44rem;
+}
+
+.ops-section--validation .project-form {
+  gap: 16px;
+}
+
+.ops-section--validation .ops-list,
+.ops-section--recovery .ops-list {
+  gap: 12px;
+}
+
+.ops-page .mini-card {
+  min-height: 92px;
+  background: rgba(246, 241, 233, 0.9);
+  border-color: rgba(34, 62, 83, 0.08);
+}
+
+.ops-page .mini-card strong {
+  line-height: 1.45;
+}
+
+.ops-page .ticket-list li {
+  align-items: flex-start;
+}
+
+.ops-page .ops-card {
+  background: rgba(248, 244, 238, 0.86);
+}
+
+.ops-page .ops-card__header strong {
+  display: block;
+}
+
+.ops-page .ops-card__header span {
+  line-height: 1.45;
+}
+
+.ops-page .ops-chip-list {
+  gap: 8px;
+}
+
+.ops-page .status-pill {
+  align-self: flex-start;
+}
+
 @media (max-width: 980px) {
+  .ops-page {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-section--validation,
+  .ops-section--recovery,
+  .ops-section--versions,
+  .ops-section--diagnostics,
+  .ops-section--profiles {
+    grid-column: 1;
+  }
+
+  .ops-section--versions,
+  .ops-section--diagnostics,
+  .ops-section--profiles {
+    padding: 20px 22px 22px;
+  }
+
+  .ops-section--diagnostics .card-grid,
+  .ops-section--profiles .ops-list {
+    grid-template-columns: 1fr;
+  }
+
   .arrangement-topbar,
   .arrangement-grid {
     grid-template-columns: 1fr;
@@ -2337,6 +2535,19 @@
 }
 
 @media (max-width: 640px) {
+  .ops-shell__actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .ops-shell__actions > * {
+    width: 100%;
+  }
+
+  .ops-kpi-strip {
+    grid-template-columns: 1fr;
+  }
+
   .arrangement-topbar {
     padding: 18px;
   }

@@ -51,8 +51,7 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Project working rules, storage conventions, and execution discipline.
 - `UI_MOCKUPS/`
   Repo-visible mockup exports for the first canonical screens so implementation can compare against actual design files, not only prose wireframes.
-  Current implemented targets are `home-v1`, `studio-v1`, `arrangement-v1`, and `shared-review-v1`.
-  Frozen mockup exports now also exist for `ops-v1`.
+  Current implemented targets are `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`.
 
 ## Working Rule
 

@@ -84,6 +84,7 @@ Date: 2026-04-09
 - The Studio page now follows the `studio-v1` mockup closely enough to stop reading as stacked tools: a top utility strip, central waveform canvas, lower transport and track lane rail, right-side inspector, and anchored deep-work sections now behave like one rehearsal workspace instead of a phase-by-phase card stack.
 - The Arrangement screen now exists as a dedicated `/projects/:projectId/arrangement` workspace and follows the `arrangement-v1` mockup closely enough to read as one score-first comparison and export surface instead of another subsection buried in the studio page.
 - The Shared Review screen now follows the `shared-review-v1` mockup closely enough to read like a frozen review desk instead of a generic read-only detail page: selected take on the left, frozen score canvas in the center, and score summary plus note highlight on the right.
+- The Ops screen now follows the `ops-v1` mockup closely enough to read like a dense release desk instead of a generic stack of admin cards: KPI strip on top, validation and recovery work areas in the middle, and diagnostics plus recent environment capture at the bottom.
 - The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
@@ -93,7 +94,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `53 passed`
+- Result: `54 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
 - Scope now also includes a calibration-runner regression path that executes the synthetic vocal baseline manifest through isolated upload and analysis flows.
@@ -125,6 +126,10 @@ Date: 2026-04-09
   plus the matching `iPhone 13` capture.
 - Result:
   the refactored Home page was visually reviewed in desktop and mobile layouts against `UI_WIREFRAMES_V1.md`, and the first screen now matches the intended poster-like product entry much more closely than the previous utility dashboard.
+- Visual browser review:
+  `npx playwright screenshot --device="Desktop Chrome" --full-page http://127.0.0.1:5173/ops output/playwright/ops-loaded.png`
+- Result:
+  the refactored Ops page was visually reviewed against `ops-v1` after wiring a real API-backed preview, and the screen now reads like a utility-only release desk without dictating the product-wide visual tone.
 - Browser release-gate smoke path: `npm run test:e2e`
 - Result: `22 passed`, `5 skipped`
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
@@ -167,14 +172,14 @@ Date: 2026-04-09
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
-- The product now has one chosen visual direction, and the `Home`, `Studio`, `Arrangement`, and `Shared Review` screens have been brought into that system first. The larger implementation gap is now concentrated in `Ops`.
-- The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, but the actual `Ops` implementation has not yet been brought into close visual alignment with its target layout.
-- The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, and `shared-review-v1`. The remaining design-system gap is the missing shared editable Figma source plus the still-open `Ops` implementation pass.
+- The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
+- The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, and the implemented UI now has a concrete target for every first-wave route instead of leaving `Ops` as the remaining visual outlier.
+- The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is now the missing shared editable Figma source rather than another unrefactored product screen.
 
 ## Recommended Next Work
 
-1. Continue the UI refactor against the mockup track in screen order: `Ops` next, while keeping ops visually subordinate to the core rehearsal workflow.
-2. Create or connect a shared editable Figma source for the canonical product mockups, then record the frozen version id for each implemented screen and for the still-open `Ops` target.
+1. Create or connect a shared editable Figma source for the canonical product mockups, then record the frozen version id for each implemented screen now that the first-wave routes all have repo-visible targets.
+2. Keep the implemented `Ops` surface subordinate to the rehearsal product tone by reviewing future ops-only additions against `ops-v1` instead of letting utility styles leak back into core screens.
 3. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
 4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.

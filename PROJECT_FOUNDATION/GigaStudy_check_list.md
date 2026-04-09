@@ -164,7 +164,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
 - [x] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
 - [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
-- [ ] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
+- [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
 
 ## 17. Mockup Track
 

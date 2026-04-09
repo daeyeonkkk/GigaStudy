@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import pytest
@@ -9,7 +10,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.models import Project, User
 from gigastudy_api.db.session import get_db_session
+from gigastudy_api.config import get_settings
 from gigastudy_api.main import app
+from gigastudy_api.services.projects import get_or_create_default_user
 
 
 @pytest.fixture
@@ -81,6 +84,34 @@ def test_project_creation_reuses_default_user(client: TestClient, tmp_path: Path
 
     assert len(users) == 1
     assert len(projects) == 2
+
+
+def test_get_or_create_default_user_recovers_from_insert_race(tmp_path: Path) -> None:
+    database_path = tmp_path / "projects-race.db"
+    engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    Base.metadata.create_all(engine)
+    settings = get_settings()
+
+    with SessionLocal() as session:
+        original_flush = session.flush
+
+        def racing_flush(*args: object, **kwargs: object) -> None:
+            with SessionLocal() as competing_session:
+                competing_session.add(User(nickname=settings.default_user_nickname))
+                competing_session.commit()
+
+            original_flush(*args, **kwargs)
+
+        with patch.object(session, "flush", side_effect=racing_flush):
+            user = get_or_create_default_user(session)
+
+        assert user.nickname == settings.default_user_nickname
+
+    with SessionLocal() as verification_session:
+        users = verification_session.scalars(select(User)).all()
+
+    assert len(users) == 1
 
 
 def test_get_project_returns_404_for_unknown_id(client: TestClient) -> None:

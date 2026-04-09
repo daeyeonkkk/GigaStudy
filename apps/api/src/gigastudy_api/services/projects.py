@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.projects import ProjectCreateRequest, ProjectUpdateRequest
@@ -19,8 +20,21 @@ def get_or_create_default_user(session: Session) -> User:
 
     user = User(nickname=settings.default_user_nickname)
     session.add(user)
-    session.flush()
-    return user
+    captured_error: IntegrityError | None = None
+    try:
+        session.flush()
+        return user
+    except IntegrityError as error:
+        captured_error = error
+        session.rollback()
+
+    existing_user = session.scalar(
+        select(User).where(User.nickname == settings.default_user_nickname)
+    )
+    if existing_user is None:
+        raise captured_error
+
+    return existing_user
 
 
 def create_project(session: Session, payload: ProjectCreateRequest) -> Project:

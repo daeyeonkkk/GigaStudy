@@ -1,0 +1,30 @@
+{
+  "corpus_id": "human-rating-corpus-template",
+  "description": "Case metadata template for future human-recorded vocal calibration rounds. Pair this with human_rating_sheet.template.csv and build_human_rating_corpus.py.",
+  "evidence_kind": "human_rating_corpus",
+  "cases": [
+    {
+      "case_id": "replace-with-real-vocal-case",
+      "description": "Example case metadata for a human-recorded guide and take pair.",
+      "project_title": "Human rating template case",
+      "base_key": "C",
+      "bpm": 90,
+      "guide_source": {
+        "source_kind": "wav_path",
+        "wav_path": "replace/with/guide.wav",
+        "filename": "guide.wav"
+      },
+      "take_source": {
+        "source_kind": "wav_path",
+        "wav_path": "replace/with/take.wav",
+        "filename": "take.wav"
+      },
+      "minimum_human_agreement_ratio": 0.67,
+      "expectation": {
+        "note_index": 0,
+        "expected_pitch_quality_mode": "NOTE_EVENT_V1",
+        "expected_harmony_reference_mode": "CHORD_AWARE"
+      }
+    }
+  ]
+}

@@ -19,8 +19,13 @@ It only means the repo now has a repeatable path for attaching human-rating evid
 
 The repo now supports:
 
+- template inputs for the collection round:
+  `apps/api/calibration/human_rating_cases.template.json`
+  `apps/api/calibration/human_rating_sheet.template.csv`
 - a manifest template for human-rated corpora:
   `apps/api/calibration/human_rating_corpus.template.json`
+- a corpus builder CLI:
+  `apps/api/scripts/build_human_rating_corpus.py`
 - runner support for `human_ratings` and `minimum_human_agreement_ratio`
 - Markdown and JSON summaries that include human-rating agreement
 - synthetic test coverage proving the comparison path works
@@ -32,6 +37,16 @@ The repo does **not** yet include:
 - release evidence strong enough to market the scorer as a human-level intonation judge
 
 ## 2. Manifest Contract
+
+Recommended intake path:
+
+1. maintain case metadata in `human_rating_cases.template.json`
+2. collect raw rater labels in `human_rating_sheet.template.csv`
+3. build a generated corpus JSON with `build_human_rating_corpus.py`
+4. run the calibration runner against that generated corpus
+
+The direct `human_rating_corpus.template.json` file still exists as a final-shape reference.
+For real collection rounds, the builder workflow is preferred over manual editing.
 
 Each calibration case may include:
 
@@ -77,12 +92,17 @@ If these bands change after real-rater analysis, the runner and report should be
 
 1. Record or curate a real singer guide and take pair.
 2. Confirm the note indexing that the scorer returns for that case.
-3. Ask multiple raters to label attack direction, sustain direction, and acceptability.
-4. Build a consensus note record and write it into the manifest.
+3. Ask multiple raters to label attack direction, sustain direction, and acceptability in the rating sheet CSV.
+4. Build the consensus corpus:
+
+```bash
+uv run python scripts/build_human_rating_corpus.py --output calibration/human_rating_corpus.generated.json
+```
+
 5. Run the calibration CLI:
 
 ```bash
-uv run python scripts/run_intonation_calibration.py --manifest calibration/human_rating_corpus.template.json
+uv run python scripts/run_intonation_calibration.py --manifest calibration/human_rating_corpus.generated.json
 ```
 
 6. Save the JSON and Markdown outputs as release evidence outside the template file.

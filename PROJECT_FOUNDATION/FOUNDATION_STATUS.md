@@ -80,6 +80,7 @@ Date: 2026-04-09
 - Arrangement MusicXML export now runs through `music21`, so the runtime export path now uses a standard music notation library instead of only the local custom MusicXML builder.
 - The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
 - The calibration runner now also supports note-level human-rating comparison summaries plus optional agreement thresholds, so the repo can attach real-rater evidence without inventing a separate evaluation path later.
+- The repo now also has a human-rating intake builder with metadata and sheet templates, so future real-vocal rounds can turn raw per-rater labels into a calibration corpus without hand-editing final manifests.
 - The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
 - The foundation now also has a reference-led wireframe pack for Home, Studio, Arrangement, Shared Review, and Ops, so the next UI refactor has one canonical screen set instead of relying on scattered implementation screenshots.
 - The foundation now also has a first-class mockup track: editable design files are now the preferred visual source of truth, and repo-visible mockup exports are required so implementation can target concrete screens instead of only prose wireframes.
@@ -98,7 +99,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `56 passed`
+- Result: `60 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
 - Scope now also includes a calibration-runner regression path that executes the synthetic vocal baseline manifest through isolated upload and analysis flows.
@@ -114,6 +115,14 @@ Date: 2026-04-09
   `uv run pytest apps/api/tests/test_calibration_runner.py`
 - Result:
   passed with human-rating agreement coverage for note-level comparison summaries and Markdown output.
+- Human-rating builder regression:
+  `uv run pytest apps/api/tests/test_human_rating_builder.py`
+- Result:
+  passed with coverage for consensus aggregation, CSV loading, and unknown-case validation.
+- Human-rating builder CLI:
+  `uv run python scripts/build_human_rating_corpus.py`
+- Result:
+  passed against the seeded metadata and sheet templates, emitting a final-shape calibration corpus JSON with consensus labels and rater counts.
 - Production-stack smoke:
   `uv run python scripts/production_stack_smoke.py`
 - Result:
@@ -181,6 +190,7 @@ Date: 2026-04-09
 - Phase 9 still lacks the real-vocal fixture set and human-rating comparison needed to claim a human-trustworthy intonation judge.
 - The new calibration runner closes the repeatability gap for synthetic evidence, but it does not close the evidence gap for real singer data or human-rating alignment.
 - The new human-rating workflow closes the tooling gap for future human-rater comparison, but it still does not populate the corpus or prove release-quality human agreement by itself.
+- The new intake builder removes the remaining manual-manifest bottleneck, but the evidence gap is still real singer data, real raters, and reviewed threshold tuning.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
@@ -193,7 +203,7 @@ Date: 2026-04-09
 
 1. Upgrade the repo-local editable source into a shared Figma workflow when a write-capable design workflow is available, and record the frozen version id for each implemented screen.
 2. Keep the implemented `Ops` surface subordinate to the rehearsal product tone by reviewing future ops-only additions against `ops-v1` instead of letting utility styles leak back into core screens.
-3. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then feed them through `HUMAN_RATING_CALIBRATION_WORKFLOW.md` and compare scorer output against human ratings.
+3. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, collect labels through the sheet/template builder workflow, then compare scorer output against human ratings.
 4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
 6. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.

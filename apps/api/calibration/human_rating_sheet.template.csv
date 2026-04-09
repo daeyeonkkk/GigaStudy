@@ -1,0 +1,4 @@
+case_id,note_index,rater_id,attack_direction,sustain_direction,acceptability_label,notes
+replace-with-real-vocal-case,0,rater-a,sharp,centered,in_tune,"Slight overshoot at the start, then stable."
+replace-with-real-vocal-case,0,rater-b,sharp,centered,in_tune,"Attack feels high but sustain lands well."
+replace-with-real-vocal-case,0,rater-c,sharp,centered,review,"Start is noticeably high, sustain mostly okay."

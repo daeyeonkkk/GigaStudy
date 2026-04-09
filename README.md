@@ -82,6 +82,16 @@ uv run python scripts/run_intonation_calibration.py
 This runs the repeatable synthetic-vocal baseline in `apps/api/calibration/synthetic_vocal_baseline.json` through the real upload and analysis API flow.
 It is a regression path for the current note-event scorer, not a substitute for the still-open real-human calibration gate.
 When you are ready to compare against human raters, use `apps/api/calibration/human_rating_corpus.template.json` plus `PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the starting workflow.
+For new collection rounds, prefer the structured intake path: `apps/api/calibration/human_rating_cases.template.json`, `apps/api/calibration/human_rating_sheet.template.csv`, and `uv run python scripts/build_human_rating_corpus.py`.
+
+### Human Rating Corpus Builder
+
+```bash
+cd apps/api
+uv run python scripts/build_human_rating_corpus.py
+```
+
+This converts the seeded metadata JSON plus per-rater CSV sheet into the final calibration manifest shape that `run_intonation_calibration.py` can consume.
 
 ## Current Product State
 
@@ -96,6 +106,7 @@ When you are ready to compare against human raters, use `apps/api/calibration/hu
 - The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
 - The backend now also includes a manifest-driven calibration runner for the repeatable synthetic vocal baseline, so scorer changes can be checked against the same Phase 9 evidence set on demand.
 - The calibration runner now also supports note-level human-rating comparison summaries and optional agreement thresholds, so future real-rater evidence can be attached without inventing a second evaluation path.
+- The repo now also includes a human-rating intake builder plus metadata and sheet templates, so raw rater labels can be turned into a calibration corpus without hand-authoring the final manifest JSON.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 - DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
 - The admin ops view now aggregates those environment diagnostics into a browser matrix, warning-flag counts, and recent captured profiles for support and release triage.
@@ -126,6 +137,7 @@ When you are ready to compare against human raters, use `apps/api/calibration/hu
 - The first-wave product screens now all follow that visual system; next is to upgrade the repo-local editable source into a shared Figma workflow and keep future ops-only work from bleeding utility styling back into rehearsal screens.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Use `PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.
+- Prefer the new human-rating intake builder workflow over editing the final corpus JSON by hand.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.

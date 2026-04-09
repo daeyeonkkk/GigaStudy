@@ -300,6 +300,7 @@
 - signed cents, stability, confidence metric 추가
 - `voiced_prob` + RMS 기반 confidence weighting
 - chord-aware harmony와 key-only fallback labeling
+- human-rating intake sheet와 consensus builder
 - human-rating corpus manifest와 agreement report workflow
 - 실제 보컬 fixture와 threshold calibration
 - note-level 피드백 UI와 제품 카피 정합성 점검

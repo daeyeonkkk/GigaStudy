@@ -1,6 +1,6 @@
 {
   "corpus_id": "human-rating-corpus-template",
-  "description": "Template manifest for future human-recorded vocal calibration rounds. Replace wav_path values, human consensus labels, and agreement thresholds with real evidence before using it as a release gate.",
+  "description": "Final-shape manifest template for future human-recorded vocal calibration rounds. Prefer generating this shape from human_rating_cases.template.json plus human_rating_sheet.template.csv unless you intentionally need a manual fallback.",
   "evidence_kind": "human_rating_template",
   "cases": [
     {

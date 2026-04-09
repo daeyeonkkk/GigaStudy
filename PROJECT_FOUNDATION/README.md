@@ -43,7 +43,7 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 - `INTONATION_CALIBRATION_REPORT.md`
   Current calibration evidence, provisional threshold bands, and the claim gate for what the intonation scorer can and cannot promise today.
 - `HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-  Operational workflow for future real-vocal and human-rating evidence, including manifest structure, agreement summaries, and what still does not count as a closed claim gate.
+  Operational workflow for future real-vocal and human-rating evidence, including intake templates, consensus building, agreement summaries, and what still does not count as a closed claim gate.
 - `GigaStudy_check_list.md`
   Live checklist for scope control, implementation readiness, and release gating. Check marks should map only to verified implementation, not to intent.
 - `BROWSER_ENVIRONMENT_VALIDATION.md`

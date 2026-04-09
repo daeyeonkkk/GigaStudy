@@ -59,6 +59,8 @@ Date: 2026-04-09
   Chromium runs the full suite, while Firefox now also verifies the safer seeded paths for studio smoke, sharing, arrangement export, and arrangement playback.
   WebKit now also verifies the seeded studio smoke, sharing, and arrangement export paths, while its playback path remains blocked in this Windows automation environment because Web Audio is unavailable there.
 - The arrangement preview engine now also checks the legacy `webkitAudioContext` constructor so Safari-family browsers can use the same playback path when that legacy bridge exists.
+- The browser audio stack is now complete in product code across `AudioWorklet`, `Web Worker`, `OfflineAudioContext`, and `WASM`:
+  live recording uses an `AudioWorklet` input meter, waveform and contour preview generation runs through a `Web Worker`, that worker uses a small `WASM` math helper for peak processing, and local mixdown still renders through `OfflineAudioContext`.
 
 ## Reinforcement Added In This Pass
 
@@ -74,6 +76,7 @@ Date: 2026-04-09
 - A calibration report now records provisional threshold bands and a claim gate for what the scorer can and cannot promise today.
 - The studio now includes a lightweight chord timeline authoring and JSON import flow, so `CHORD_AWARE` harmony is reachable from the main workflow instead of only through preloaded project metadata.
 - The studio now also shows current browser audio capability warnings before save and the stored DeviceProfile warnings after save, which turns the remaining browser-hardware gap into something we can inspect instead of guess.
+- Browser capability snapshots now also capture `audio_worklet`, `web_worker`, and `web_assembly` readiness, so missing browser-audio stack pieces surface as first-class warning flags instead of staying implicit.
 - The ops overview now aggregates those DeviceProfile diagnostics into a browser matrix, warning-flag counts, and recent environment cards, which is the first foundation step from capture toward real hardware validation.
 - The ops overview can now also export an environment diagnostics report JSON, and the foundation now includes a dedicated browser-environment validation protocol for native Safari and real-hardware rounds.
 - The ops overview now also lets a reviewer save a structured PASS / WARN / FAIL validation run with browser, device, permission, playback, and follow-up notes, which turns the protocol into an actual product workflow.
@@ -175,6 +178,7 @@ Date: 2026-04-09
 - Ops overview export is now verified in Chromium, Firefox, and WebKit.
 - Ops overview manual validation-run capture is now also verified in Chromium, Firefox, and WebKit.
 - Chromium additionally covers the browser recorder transport with fake-microphone permission plus DeviceProfile capture and the repeated in-session endurance workflow.
+- Chromium recorder coverage now also verifies that the `AudioWorklet` live meter activates during browser take capture and that the resulting waveform preview reports the `Worker + WASM` path.
 - The DeviceProfile path now also verifies capability snapshot capture and warning-flag persistence through the API and studio snapshot.
 - Firefox intentionally skips the fake-microphone recorder path and the recorder-dependent endurance path because those currently depend on Chromium launch flags rather than portable browser behavior.
 - WebKit also intentionally skips the fake-microphone recorder path and the recorder-dependent endurance path, and it currently skips arrangement playback in this Windows automation environment because Playwright WebKit does not expose Web Audio there.

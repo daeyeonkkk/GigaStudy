@@ -119,6 +119,7 @@ This runs the generated human-rated corpus through the calibration flow and emit
 - The repo now also includes a threshold-fit report path for candidate difficulty bands, so future human-rated corpora can yield repeatable `strict / basic / beginner` recommendations instead of ad hoc threshold notes.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 - DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
+- The browser audio stack is now wired end-to-end in product code: `AudioWorklet` powers live input metering during take capture, waveform and contour previews run in a `Web Worker`, that preview path uses a small `WASM` helper for peak math, and `OfflineAudioContext` remains the local mixdown engine.
 - The admin ops view now aggregates those environment diagnostics into a browser matrix, warning-flag counts, and recent captured profiles for support and release triage.
 - The ops view can now also download an environment diagnostics report JSON, which is the baseline artifact for native Safari and real-hardware validation rounds.
 - The ops view now also stores structured manual validation runs, so PASS / WARN / FAIL browser checks live beside the diagnostics baseline.

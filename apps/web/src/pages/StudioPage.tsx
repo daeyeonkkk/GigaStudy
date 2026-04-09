@@ -23,6 +23,10 @@ import {
   getArrangementPartColor,
   getDefaultArrangementPartVolume,
 } from '../lib/arrangementParts'
+import {
+  createLiveInputMeter,
+  type LiveInputMeterController,
+} from '../lib/liveInputMeter'
 import { renderOfflineMixdown, type RenderedMixdown } from '../lib/mixdownAudio'
 import {
   pickSupportedRecordingMimeType,
@@ -392,6 +396,21 @@ function summarizeWebAudioSupport(snapshot: BrowserAudioCapabilitySnapshot | nul
   return 'Standard AudioContext'
 }
 
+function summarizeBrowserAudioStack(snapshot: BrowserAudioCapabilitySnapshot | null): string {
+  if (!snapshot) {
+    return 'Unknown'
+  }
+
+  const readyCount = [
+    snapshot.web_audio.audio_worklet ?? false,
+    snapshot.execution?.web_worker ?? false,
+    snapshot.execution?.web_assembly ?? false,
+    snapshot.web_audio.offline_audio_context,
+  ].filter(Boolean).length
+
+  return `${readyCount}/4 ready`
+}
+
 type TakesState =
   | { phase: 'loading'; items: TakeTrack[] }
   | { phase: 'ready'; items: TakeTrack[] }
@@ -404,6 +423,12 @@ type RecordingState =
   | { phase: 'uploading'; message: string }
   | { phase: 'success'; message: string }
   | { phase: 'error'; message: string }
+
+type LiveInputMeterState =
+  | { phase: 'idle'; peak: number; rms: number; message: string }
+  | { phase: 'active'; peak: number; rms: number; message: string }
+  | { phase: 'unsupported'; peak: number; rms: number; message: string }
+  | { phase: 'error'; peak: number; rms: number; message: string }
 
 type ConstraintDraft = {
   echoCancellation: boolean
@@ -1110,6 +1135,12 @@ export function StudioPage() {
     phase: 'idle',
     message: 'Ready to record the next take.',
   })
+  const [liveInputMeterState, setLiveInputMeterState] = useState<LiveInputMeterState>({
+    phase: 'idle',
+    peak: 0,
+    rms: 0,
+    message: 'AudioWorklet meter will arm when the next take starts.',
+  })
   const [metronomePreviewState, setMetronomePreviewState] = useState<ActionState>({
     phase: 'idle',
   })
@@ -1186,6 +1217,7 @@ export function StudioPage() {
   const guideFileInputRef = useRef<HTMLInputElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordingStreamRef = useRef<MediaStream | null>(null)
+  const liveInputMeterRef = useRef<LiveInputMeterController | null>(null)
   const recordingChunksRef = useRef<Blob[]>([])
   const recordingStartedAtRef = useRef<Date | null>(null)
   const recordingMimeTypeRef = useRef('audio/webm')
@@ -1299,6 +1331,57 @@ export function StudioPage() {
     }
   }
 
+  async function stopActiveLiveInputMeter(resetMessage = true): Promise<void> {
+    const activeMeter = liveInputMeterRef.current
+    liveInputMeterRef.current = null
+    if (activeMeter) {
+      await activeMeter.stop()
+    }
+
+    setLiveInputMeterState((current) => ({
+      phase: current.phase === 'unsupported' ? current.phase : 'idle',
+      peak: 0,
+      rms: 0,
+      message:
+        current.phase === 'unsupported'
+          ? current.message
+          : resetMessage
+            ? 'AudioWorklet meter will arm when the next take starts.'
+            : current.message,
+    }))
+  }
+
+  async function startLiveInputMeter(stream: MediaStream): Promise<void> {
+    await stopActiveLiveInputMeter(false)
+
+    const controller = await createLiveInputMeter(stream, (reading) => {
+      setLiveInputMeterState({
+        phase: 'active',
+        peak: reading.peak,
+        rms: reading.rms,
+        message: 'AudioWorklet meter active.',
+      })
+    })
+
+    liveInputMeterRef.current = controller
+    if (controller.mode === 'unsupported') {
+      setLiveInputMeterState({
+        phase: 'unsupported',
+        peak: 0,
+        rms: 0,
+        message: 'AudioWorklet meter is unavailable in this browser path.',
+      })
+      return
+    }
+
+    setLiveInputMeterState({
+      phase: 'active',
+      peak: 0,
+      rms: 0,
+      message: 'AudioWorklet meter active.',
+    })
+  }
+
   async function refreshCapabilityPreview(options?: {
     audioContext?: AudioContext | null
     microphonePermissionState?: 'granted' | 'prompt' | 'denied' | 'unknown' | null
@@ -1326,6 +1409,7 @@ export function StudioPage() {
 
   async function cleanupRecordingResources(): Promise<void> {
     await stopActiveMetronome()
+    await stopActiveLiveInputMeter()
 
     mediaRecorderRef.current = null
     recordingChunksRef.current = []
@@ -1591,6 +1675,10 @@ export function StudioPage() {
       const activeMetronome = metronomeControllerRef.current
       if (activeMetronome) {
         void activeMetronome.stop()
+      }
+      const activeMeter = liveInputMeterRef.current
+      if (activeMeter) {
+        void activeMeter.stop()
       }
 
       const activeStream = recordingStreamRef.current
@@ -2723,6 +2811,7 @@ export function StudioPage() {
       )
       const stream = await navigator.mediaDevices.getUserMedia(requestedConstraints)
       recordingStreamRef.current = stream
+      await startLiveInputMeter(stream)
 
       if (countInBeats > 0) {
         setRecordingState({
@@ -2799,6 +2888,7 @@ export function StudioPage() {
     }
 
     await stopActiveMetronome()
+    await stopActiveLiveInputMeter()
     setRecordingState({
       phase: 'uploading',
       message: 'Stopping the take and preparing upload...',
@@ -3307,6 +3397,16 @@ export function StudioPage() {
     recordingState.phase === 'counting-in' ||
     recordingState.phase === 'recording' ||
     recordingState.phase === 'uploading'
+  const liveInputMeterLevelPercent = Math.max(0, Math.min(100, liveInputMeterState.rms * 260))
+  const liveInputMeterPeakPercent = Math.max(0, Math.min(100, liveInputMeterState.peak * 140))
+  const liveInputMeterTone =
+    liveInputMeterState.phase === 'error'
+      ? 'error'
+      : liveInputMeterState.phase === 'unsupported'
+        ? 'loading'
+        : liveInputMeterState.phase === 'active'
+          ? 'ready'
+          : 'loading'
   const consoleMicLabel =
     permissionState.phase === 'granted'
       ? 'Mic ready'
@@ -4352,6 +4452,11 @@ export function StudioPage() {
                 <strong>{summarizeWebAudioSupport(currentCapabilitySnapshot)}</strong>
               </div>
               <div className="mini-card">
+                <span>Browser audio stack</span>
+                <strong>{summarizeBrowserAudioStack(currentCapabilitySnapshot)}</strong>
+                <small>Worklet, Worker, WASM, and offline render readiness.</small>
+              </div>
+              <div className="mini-card">
                 <span>Mic permission</span>
                 <strong>{currentCapabilitySnapshot?.permissions.microphone ?? 'unknown'}</strong>
               </div>
@@ -4745,6 +4850,49 @@ export function StudioPage() {
             >
               {recordingState.message}
             </p>
+
+            <div className="live-input-meter" aria-live="polite">
+              <div className="live-input-meter__header">
+                <div>
+                  <span className="shared-review-label">Live input</span>
+                  <strong>{liveInputMeterState.message}</strong>
+                </div>
+                <span className={`status-pill status-pill--${liveInputMeterTone}`}>
+                  {liveInputMeterState.phase}
+                </span>
+              </div>
+
+              <div
+                className="live-input-meter__bar"
+                role="meter"
+                aria-label="Live input meter"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(liveInputMeterLevelPercent)}
+              >
+                <div
+                  className="live-input-meter__fill"
+                  style={
+                    {
+                      '--meter-level': `${liveInputMeterLevelPercent}%`,
+                      '--meter-peak': `${liveInputMeterPeakPercent}%`,
+                    } as CSSProperties
+                  }
+                />
+              </div>
+
+              <div className="live-input-meter__meta">
+                <span>RMS {Math.round(liveInputMeterLevelPercent)}%</span>
+                <span>Peak {Math.round(liveInputMeterPeakPercent)}%</span>
+                <span>
+                  {liveInputMeterState.phase === 'active'
+                    ? 'AudioWorklet meter active'
+                    : liveInputMeterState.phase === 'unsupported'
+                      ? 'AudioWorklet unavailable'
+                      : 'Arms on record'}
+                </span>
+              </div>
+            </div>
 
             <div className="take-summary-grid">
               <div className="mini-card">

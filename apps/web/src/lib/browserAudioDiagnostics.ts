@@ -16,9 +16,14 @@ export type BrowserAudioCapabilitySnapshot = {
   web_audio: {
     audio_context: boolean
     audio_context_mode: 'standard' | 'webkit' | 'unavailable'
+    audio_worklet?: boolean
     offline_audio_context: boolean
     offline_audio_context_mode: 'standard' | 'webkit' | 'unavailable'
     output_latency_supported: boolean
+  }
+  execution?: {
+    web_assembly: boolean
+    web_worker: boolean
   }
   media_recorder: {
     supported: boolean
@@ -112,6 +117,10 @@ export async function collectBrowserAudioCapabilities(
           : typeof audioContextCtor !== 'undefined'
             ? 'webkit'
             : 'unavailable',
+      audio_worklet:
+        typeof audioContextCtor !== 'undefined' &&
+        typeof AudioWorkletNode !== 'undefined' &&
+        'audioWorklet' in audioContextCtor.prototype,
       offline_audio_context: typeof offlineAudioContextCtor !== 'undefined',
       offline_audio_context_mode:
         typeof window !== 'undefined' && window.OfflineAudioContext
@@ -124,6 +133,10 @@ export async function collectBrowserAudioCapabilities(
         ('outputLatency' in liveAudioContext ||
           typeof (liveAudioContext as AudioContext & { outputLatency?: number }).outputLatency !==
             'undefined'),
+    },
+    execution: {
+      web_assembly: typeof WebAssembly !== 'undefined',
+      web_worker: typeof Worker !== 'undefined',
     },
     media_recorder: {
       supported: typeof MediaRecorder !== 'undefined',
@@ -168,11 +181,20 @@ export function deriveBrowserAudioWarningFlags(
   if (snapshot.web_audio.audio_context_mode === 'webkit') {
     flags.push('legacy_webkit_audio_context_only')
   }
+  if (!snapshot.web_audio.audio_worklet) {
+    flags.push('missing_audio_worklet')
+  }
   if (!snapshot.web_audio.offline_audio_context) {
     flags.push('missing_offline_audio_context')
   }
   if (!snapshot.web_audio.output_latency_supported) {
     flags.push('output_latency_unavailable')
+  }
+  if (!snapshot.execution?.web_worker) {
+    flags.push('missing_web_worker')
+  }
+  if (!snapshot.execution?.web_assembly) {
+    flags.push('missing_web_assembly')
   }
   if (!snapshot.media_recorder.supported) {
     flags.push('missing_media_recorder')
@@ -204,10 +226,16 @@ export function getBrowserAudioWarningLabel(flag: string): string {
       return 'Web Audio playback is unavailable.'
     case 'legacy_webkit_audio_context_only':
       return 'Playback depends on the legacy webkitAudioContext bridge.'
+    case 'missing_audio_worklet':
+      return 'AudioWorklet is unavailable, so live input metering falls back or stays disabled.'
     case 'missing_offline_audio_context':
       return 'OfflineAudioContext is unavailable, so local mixdown may fail.'
     case 'output_latency_unavailable':
       return 'The browser does not expose output latency on this path.'
+    case 'missing_web_worker':
+      return 'Web Worker is unavailable, so audio preview work cannot leave the main thread.'
+    case 'missing_web_assembly':
+      return 'WebAssembly is unavailable, so browser-side audio math cannot use the WASM path.'
     case 'missing_media_recorder':
       return 'MediaRecorder is unavailable, so browser take capture cannot start.'
     case 'no_supported_recording_mime_type':

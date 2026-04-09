@@ -249,6 +249,7 @@ async function prepareBrowserRecording(page: Page): Promise<void> {
 async function recordBrowserTake(page: Page, takeNumber: number): Promise<void> {
   await page.getByRole('button', { name: 'Start take' }).click()
   await expect(page.getByText('Recording in progress. Stop when the take is done.', { exact: true })).toBeVisible()
+  await expect(page.getByText('AudioWorklet meter active', { exact: true })).toBeVisible()
   await page.waitForTimeout(1400)
   await page.getByRole('button', { name: 'Stop take' }).click()
   await expect(page.getByText(new RegExp(`Take ${takeNumber} uploaded and ready\\.`))).toBeVisible({
@@ -480,6 +481,9 @@ test('release gate recording flow captures a take through browser microphone tra
 
   await recordBrowserTake(page, 1)
   await expect(recorderPanel.getByText('Latest ready take', { exact: true })).toBeVisible()
+  const waveformPreview = page.locator('.waveform-preview').first()
+  await expect(waveformPreview.getByText('Preview pipeline', { exact: true })).toBeVisible()
+  await expect(waveformPreview.getByText('Worker + WASM', { exact: true })).toBeVisible()
 })
 
 test('release gate arrangement playback shows transport progress and can be stopped cleanly', async ({

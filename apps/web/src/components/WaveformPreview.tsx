@@ -48,12 +48,28 @@ function buildContourPath(
   return segments.join(' ')
 }
 
+function getPreviewPipelineLabel(preview: AudioPreviewData): string {
+  switch (preview.pipeline) {
+    case 'worker-wasm':
+      return 'Worker + WASM'
+    case 'worker-js-fallback':
+      return 'Worker fallback'
+    case 'main-thread-fallback':
+      return 'Main thread fallback'
+    case 'server-artifact':
+      return 'Server artifact'
+    default:
+      return preview.source === 'remote' ? 'Server artifact' : 'Browser preview'
+  }
+}
+
 export function WaveformPreview({ preview }: WaveformPreviewProps) {
   const width = 720
   const height = 180
   const waveformPath = buildWaveformPath(preview.waveform, width, height)
   const contourPath = buildContourPath(preview.contour, width, height)
   const contourPointCount = preview.contour.filter((value) => value !== null).length
+  const pipelineLabel = getPreviewPipelineLabel(preview)
 
   return (
     <div className="waveform-preview">
@@ -72,6 +88,10 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
           <span>Contour points</span>
           <strong>{contourPointCount}</strong>
         </div>
+        <div className="mini-card">
+          <span>Preview pipeline</span>
+          <strong>{pipelineLabel}</strong>
+        </div>
       </div>
 
       <svg
@@ -87,8 +107,8 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
       </svg>
 
       <p className="status-card__hint">
-        Waveform is a browser-generated peak preview. Contour is a temporary pitch estimate for
-        quick “did the take land” feedback.
+        Waveform is a fast practice preview, not the final scorer input. Contour gives quick
+        take-shape feedback while server-side note analysis stays authoritative.
       </p>
     </div>
   )

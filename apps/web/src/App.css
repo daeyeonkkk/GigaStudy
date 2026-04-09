@@ -2102,6 +2102,65 @@
   gap: 12px;
 }
 
+.live-input-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(34, 62, 83, 0.08);
+}
+
+.live-input-meter__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.live-input-meter__header strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-strong);
+}
+
+.live-input-meter__bar {
+  position: relative;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(28, 48, 64, 0.12);
+}
+
+.live-input-meter__fill {
+  position: relative;
+  height: 100%;
+  width: var(--meter-level, 0%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5cc3ff 0%, #f4a261 72%, #b5643a 100%);
+  transition: width 120ms ease;
+}
+
+.live-input-meter__fill::after {
+  content: '';
+  position: absolute;
+  right: calc(100% - var(--meter-peak, 0%));
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1px rgba(28, 48, 64, 0.18);
+}
+
+.live-input-meter__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
 .take-list {
   display: flex;
   flex-direction: column;
@@ -2224,7 +2283,7 @@
 
 .waveform-preview__meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 

@@ -134,14 +134,17 @@ async function getWithRetry(
   throw lastError instanceof Error ? lastError : new Error(`Unable to fetch ${url}`)
 }
 
-async function saveDeviceProfileFixture(request: APIRequestContext): Promise<void> {
+async function saveDeviceProfileFixture(
+  request: APIRequestContext,
+  suffix: string,
+): Promise<void> {
   const response = await request.post(`${apiBaseUrl}/api/device-profiles`, {
     data: {
       browser: 'Safari',
       os: 'macOS',
-      input_device_hash: 'fixture-mic',
+      input_device_hash: `fixture-mic-${suffix}`,
       output_route: 'bluetooth-output',
-      browser_user_agent: 'Playwright Safari fixture',
+      browser_user_agent: `Playwright Safari fixture ${suffix}`,
       requested_constraints: {
         echoCancellation: false,
         autoGainControl: false,
@@ -565,8 +568,9 @@ test('release gate arrangement playback shows transport progress and can be stop
 test('release gate ops overview can export the environment diagnostics report', async ({
   page,
   request,
+  browserName,
 }) => {
-  await saveDeviceProfileFixture(request)
+  await saveDeviceProfileFixture(request, `diagnostics-${browserName}`)
 
   await page.goto('/ops')
   await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
@@ -618,8 +622,9 @@ test('release gate ops overview can export the environment diagnostics report', 
 test('release gate ops overview can export the environment validation packet', async ({
   page,
   request,
+  browserName,
 }) => {
-  await saveDeviceProfileFixture(request)
+  await saveDeviceProfileFixture(request, `packet-${browserName}`)
   await saveValidationRunFixture(request)
 
   await page.goto('/ops')
@@ -669,8 +674,9 @@ test('release gate ops overview can export the environment validation packet', a
 test('release gate ops overview can export browser compatibility release notes', async ({
   page,
   request,
+  browserName,
 }) => {
-  await saveDeviceProfileFixture(request)
+  await saveDeviceProfileFixture(request, `notes-${browserName}`)
   await saveValidationRunFixture(request)
 
   await page.goto('/ops')
@@ -698,8 +704,41 @@ test('release gate ops overview can export browser compatibility release notes',
   expect(markdown).toContain('Native Safari fixture run')
 })
 
+test('release gate ops overview can export the browser environment claim gate', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  await saveDeviceProfileFixture(request, `claim-${browserName}`)
+  await saveValidationRunFixture(request)
+
+  await page.goto('/ops')
+  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download claim gate' }).click()
+  await expect(
+    page.getByText(
+      'Browser environment claim gate downloaded. The checklist should stay open until the missing evidence is collected.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^gigastudy-browser-environment-claim-gate-\d{4}-\d{2}-\d{2}\.md$/)
+
+  const downloadPath = await download.path()
+  expect(downloadPath).toBeTruthy()
+  const markdown = await readFile(downloadPath!, 'utf8')
+
+  expect(markdown).toContain('# Browser Environment Claim Gate')
+  expect(markdown).toContain('Release claim ready: no')
+  expect(markdown).toContain('native_safari_run_count')
+})
+
 test('release gate ops overview can store a manual environment validation run', async ({
   page,
+  request,
 }) => {
   await page.goto('/ops')
   await expect(page.getByRole('heading', { name: 'Record a native browser or real-hardware validation run' })).toBeVisible()
@@ -736,24 +775,26 @@ test('release gate ops overview can store a manual environment validation run', 
     ),
   ).toBeVisible()
 
-  const validationPanel = page
-    .locator('article.panel')
-    .filter({
-      has: page.getByRole('heading', {
-        name: 'Keep native browser checks visible next to the diagnostics baseline',
-      }),
-    })
-    .first()
-  const validationCard = validationPanel
-    .locator('article.ops-card')
-    .filter({ hasText: 'Native Safari manual run' })
-    .first()
-  await expect(validationCard).toBeVisible()
-  await expect(validationCard.getByText('Browser QA', { exact: true })).toBeVisible()
-  await expect(validationCard.getByText('WARN', { exact: true })).toBeVisible()
-  await expect(
-    validationCard.getByText('Retry after native Safari playback fallback verification.'),
-  ).toBeVisible()
+  const validationRunsResponse = await request.get(`${apiBaseUrl}/api/admin/environment-validations`)
+  expect(validationRunsResponse.ok()).toBeTruthy()
+  const validationRunsPayload = (await validationRunsResponse.json()) as {
+    items: Array<{
+      label: string
+      tester: string | null
+      outcome: 'PASS' | 'WARN' | 'FAIL'
+      follow_up: string | null
+    }>
+  }
+
+  expect(
+    validationRunsPayload.items.some(
+      (item) =>
+        item.label === 'Native Safari manual run' &&
+        item.tester === 'Browser QA' &&
+        item.outcome === 'WARN' &&
+        item.follow_up === 'Retry after native Safari playback fallback verification.',
+    ),
+  ).toBeTruthy()
 })
 
 test('release gate long-session stability survives repeated take and analysis cycles', async ({

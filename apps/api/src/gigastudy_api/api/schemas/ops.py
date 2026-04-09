@@ -95,6 +95,36 @@ class EnvironmentValidationPacketResponse(BaseModel):
     compatibility_notes: list[str] = Field(default_factory=list)
 
 
+class EnvironmentValidationClaimGatePolicyResponse(BaseModel):
+    minimum_total_validation_runs: int = Field(ge=1)
+    minimum_native_safari_run_count: int = Field(ge=0)
+    minimum_real_hardware_recording_success_count: int = Field(ge=0)
+    minimum_covered_matrix_cells: int = Field(ge=0)
+    maximum_fail_run_count: int = Field(ge=0)
+    required_matrix_labels: list[str] = Field(default_factory=list)
+
+
+class EnvironmentValidationClaimGateCheckResponse(BaseModel):
+    key: str
+    passed: bool
+    actual: str
+    expected: str
+    message: str
+
+
+class EnvironmentValidationClaimGateResponse(BaseModel):
+    evaluated_at: datetime
+    generated_from: str = "ops_environment_validation_claim_gate"
+    release_claim_ready: bool
+    summary_message: str
+    policy: EnvironmentValidationClaimGatePolicyResponse
+    packet_summary: EnvironmentValidationPacketSummaryResponse
+    covered_matrix_count: int = Field(ge=0)
+    total_required_matrix_cells: int = Field(ge=0)
+    checks: list[EnvironmentValidationClaimGateCheckResponse] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+
+
 class EnvironmentValidationRunCreateRequest(BaseModel):
     label: str = Field(min_length=1, max_length=160)
     tester: str | None = Field(default=None, max_length=120)

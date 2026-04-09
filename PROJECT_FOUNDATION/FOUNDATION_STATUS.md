@@ -82,6 +82,7 @@ Date: 2026-04-09
 - The ops overview now also lets a reviewer save a structured PASS / WARN / FAIL validation run with browser, device, permission, playback, and follow-up notes, which turns the protocol into an actual product workflow.
 - The ops overview can now also export an environment validation packet, so diagnostics, manual validation runs, matrix coverage, compatibility notes, and release-claim guardrails can be packaged into one release-review artifact.
 - The ops overview can now also export a browser compatibility release-note draft, so the stored validation evidence can be translated into publishable compatibility notes without rewriting the same unsupported-path caveats by hand.
+- The ops overview can now also export a browser and hardware claim gate, so the team can evaluate whether current native-browser evidence is strong enough to even begin a support-claim review.
 - The repo now also has a spreadsheet-friendly environment-validation intake template plus importer, so native browser or hardware evidence collected outside the app can still be normalized before it reaches ops.
 - The API now has a first-class storage backend abstraction with local and S3-compatible object storage backends, and the upload, processing, melody export, arrangement export, and download routes now run through that shared storage contract instead of hard-coded local file paths.
 - The backend runtime now also includes first-class PostgreSQL and S3-compatible client drivers (`psycopg` and `boto3`), and the repo includes a local PostgreSQL + MinIO bootstrap compose file for production-like storage rehearsals.
@@ -116,7 +117,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `79 passed`
+- Result: `81 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes environment-validation intake parsing and request-shape generation from CSV evidence sheets.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
@@ -202,7 +203,7 @@ Date: 2026-04-09
 - Result:
   the repo-local editable source renders all five canonical artboards in one browser-visible file and is now a valid equivalent editable source for the mockup track.
 - Browser release-gate smoke path: `npm run test:e2e`
-- Result: `28 passed`, `5 skipped`
+- Result: `31 passed`, `5 skipped`
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
 - Scope now also includes the dedicated Arrangement workspace route across Chromium, Firefox, and WebKit, verifying that the score-first compare surface, export actions, and studio deep-edit handoff are reachable as their own product workspace.
 - Scope now also includes the refactored Shared Review layout across Chromium, Firefox, and WebKit, verifying the selected-take rail, frozen review canvas, and explicit read-only warning language on the shared viewer.
@@ -211,6 +212,7 @@ Date: 2026-04-09
 - Ops overview manual validation-run capture is now also verified in Chromium, Firefox, and WebKit.
 - Ops overview environment-validation-packet export is now also verified in Chromium, Firefox, and WebKit.
 - Ops overview browser-compatibility release-note export is now also verified in Chromium, Firefox, and WebKit.
+- Ops overview browser-environment claim-gate export is now also verified in Chromium, Firefox, and WebKit.
 - Environment-validation intake regression:
   `uv run pytest apps/api/tests/test_environment_validation_import.py`
 - Result:
@@ -262,6 +264,7 @@ Date: 2026-04-09
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
 - The new environment validation packet makes release-review evidence easier to package, but it still does not replace actual native Safari or real-hardware coverage.
 - The new browser compatibility release-note draft makes publishing caveats easier, but it still depends on honest underlying validation evidence rather than creating that evidence itself.
+- The new browser environment claim gate removes another subjective review bottleneck, but it still evaluates stored evidence rather than creating native Safari or broad real-hardware coverage by itself.
 - The new environment-validation importer removes another manual bottleneck, but it still does not count as native Safari or real-hardware evidence until those runs are actually collected.
 - The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
 - The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, and the implemented UI now has a concrete target for every first-wave route instead of leaving `Ops` as the remaining visual outlier.

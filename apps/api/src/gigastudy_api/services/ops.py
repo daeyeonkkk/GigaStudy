@@ -37,6 +37,10 @@ from gigastudy_api.db.models import (
 )
 from gigastudy_api.services.analysis import ANALYSIS_MODEL_VERSION
 from gigastudy_api.services.arrangements import ARRANGEMENT_ENGINE_VERSION
+from gigastudy_api.services.environment_validation_claim_gate import (
+    evaluate_environment_validation_claim_gate,
+    render_environment_validation_claim_gate_markdown,
+)
 from gigastudy_api.services.melody import MELODY_MODEL_VERSION, PYIN_FALLBACK_MODEL_VERSION
 from gigastudy_api.services.projects import get_or_create_default_user
 
@@ -388,6 +392,16 @@ def render_environment_validation_release_notes(packet: EnvironmentValidationPac
 
     lines.append("")
     return "\n".join(lines)
+
+
+def build_environment_validation_claim_gate(session: Session):
+    packet = build_environment_validation_packet(session)
+    return evaluate_environment_validation_claim_gate(packet)
+
+
+def render_environment_validation_claim_gate(session: Session) -> str:
+    result = build_environment_validation_claim_gate(session)
+    return render_environment_validation_claim_gate_markdown(result)
 
 
 def get_ops_overview(session: Session) -> OpsOverviewResponse:

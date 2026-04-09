@@ -128,8 +128,9 @@ After a manual validation round:
 3. Save a structured validation run in the ops validation log
 4. Download a fresh environment diagnostics report
 5. Download the environment validation packet from ops
-6. Attach the packet plus diagnostics report to release notes or the validation log
-7. Compare new warning flags against the previous baseline
+6. Download the browser environment claim gate from ops
+7. Attach the packet plus diagnostics report to release notes or the validation log
+8. Compare new warning flags against the previous baseline
 
 The environment validation packet is the preferred release-review artifact because it packages:
 
@@ -147,6 +148,13 @@ The browser compatibility release-note draft is the preferred publishing artifac
 - unsupported or not-yet-validated paths
 - recent manual validation run summaries
 
+The browser environment claim gate is the preferred checklist-review artifact because it translates the stored evidence into:
+
+- whether the required native Safari and real-hardware matrix cells are covered
+- whether enough successful real-hardware recording runs exist
+- whether FAIL runs still block claim review
+- whether the checklist should remain open even if release notes can already be drafted
+
 ## Release Gate Expectations
 
 Before claiming improved browser support in release notes:
@@ -155,6 +163,7 @@ Before claiming improved browser support in release notes:
 - at least one real-hardware recording run must be recorded
 - warning flags added by the new environment must be explained
 - the exported environment validation packet must be reviewed for uncovered matrix cells and guardrails
+- the exported browser environment claim gate must be reviewed before discussing checklist closure
 - the exported browser compatibility release-note draft must be reviewed before updating support claims
 - any unsupported path must be described honestly in product and ops notes
 

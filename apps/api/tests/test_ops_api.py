@@ -453,3 +453,140 @@ def test_environment_validation_release_notes_render_markdown(client: TestClient
     assert "## Compatibility Notes" in markdown
     assert "## Claim Guardrails" in markdown
     assert "Native Safari speaker run" in markdown
+
+
+def test_environment_validation_claim_gate_reports_not_ready_when_matrix_is_thin(client: TestClient) -> None:
+    response = client.post(
+        "/api/admin/environment-validations",
+        json={
+            "label": "Native Safari Bluetooth run",
+            "tester": "QA lead",
+            "device_name": "MacBook Air 15",
+            "os": "macOS 15.4",
+            "browser": "Safari 18",
+            "input_device": "Built-in Microphone",
+            "output_route": "AirPods Bluetooth",
+            "outcome": "WARN",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": None,
+            "audio_context_mode": "webkit",
+            "offline_audio_context_mode": "unavailable",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.017,
+            "output_latency": 0.039,
+            "warning_flags": ["legacy_webkit_audio_context_only", "missing_offline_audio_context"],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": False,
+            "validated_at": datetime(2026, 4, 9, 11, 0, tzinfo=timezone.utc).isoformat(),
+        },
+    )
+    assert response.status_code == 200
+
+    gate_response = client.get("/api/admin/environment-validation-claim-gate")
+    assert gate_response.status_code == 200
+    gate_payload = gate_response.json()
+
+    assert gate_payload["generated_from"] == "ops_environment_validation_claim_gate"
+    assert gate_payload["release_claim_ready"] is False
+    assert any(
+        check["key"] == "required_matrix_labels" and check["passed"] is False
+        for check in gate_payload["checks"]
+    )
+    assert any("native Safari" in action or "matrix" in action.lower() for action in gate_payload["next_actions"])
+
+    markdown_response = client.get("/api/admin/environment-validation-claim-gate.md")
+    assert markdown_response.status_code == 200
+    assert "# Browser Environment Claim Gate" in markdown_response.text
+    assert "Release claim ready: no" in markdown_response.text
+
+
+def test_environment_validation_claim_gate_can_mark_review_ready(client: TestClient) -> None:
+    create_payloads = [
+        {
+            "label": "Windows Chrome wired run",
+            "tester": "QA lead",
+            "device_name": "Focusrite test rig",
+            "os": "Windows 11",
+            "browser": "Chrome 136",
+            "input_device": "USB microphone",
+            "output_route": "Wired headphones",
+            "outcome": "PASS",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": "audio/webm",
+            "audio_context_mode": "standard",
+            "offline_audio_context_mode": "standard",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.012,
+            "output_latency": 0.021,
+            "warning_flags": [],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": True,
+            "validated_at": datetime(2026, 4, 9, 11, 10, tzinfo=timezone.utc).isoformat(),
+        },
+        {
+            "label": "Native Safari speaker run",
+            "tester": "QA lead",
+            "device_name": "MacBook Pro 14",
+            "os": "macOS 15.4",
+            "browser": "Safari 18",
+            "input_device": "Built-in Microphone",
+            "output_route": "Built-in Speakers",
+            "outcome": "PASS",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": "audio/mp4",
+            "audio_context_mode": "webkit",
+            "offline_audio_context_mode": "unavailable",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.018,
+            "output_latency": 0.041,
+            "warning_flags": [],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": True,
+            "validated_at": datetime(2026, 4, 9, 11, 20, tzinfo=timezone.utc).isoformat(),
+        },
+        {
+            "label": "Native Safari Bluetooth run",
+            "tester": "QA lead",
+            "device_name": "MacBook Air 15",
+            "os": "macOS 15.4",
+            "browser": "Safari 18",
+            "input_device": "Built-in Microphone",
+            "output_route": "AirPods Bluetooth",
+            "outcome": "PASS",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": "audio/mp4",
+            "audio_context_mode": "webkit",
+            "offline_audio_context_mode": "unavailable",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.019,
+            "output_latency": 0.042,
+            "warning_flags": [],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": True,
+            "validated_at": datetime(2026, 4, 9, 11, 30, tzinfo=timezone.utc).isoformat(),
+        },
+    ]
+
+    for payload in create_payloads:
+        response = client.post("/api/admin/environment-validations", json=payload)
+        assert response.status_code == 200
+
+    gate_response = client.get("/api/admin/environment-validation-claim-gate")
+    assert gate_response.status_code == 200
+    gate_payload = gate_response.json()
+
+    assert gate_payload["release_claim_ready"] is True
+    assert gate_payload["covered_matrix_count"] >= 3
+    assert all(check["passed"] for check in gate_payload["checks"])

@@ -3,6 +3,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.ops import (
+    EnvironmentValidationClaimGateResponse,
     EnvironmentValidationRunCreateRequest,
     EnvironmentValidationRunListResponse,
     EnvironmentValidationPacketResponse,
@@ -12,10 +13,12 @@ from gigastudy_api.api.schemas.ops import (
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.ops import (
     build_environment_validation_packet,
+    build_environment_validation_claim_gate,
     build_environment_validation_run_response,
     create_environment_validation_run,
     get_ops_overview,
     list_environment_validation_runs,
+    render_environment_validation_claim_gate,
     render_environment_validation_release_notes,
 )
 
@@ -43,6 +46,20 @@ def get_environment_validation_release_notes_endpoint(
 ) -> str:
     packet = build_environment_validation_packet(session)
     return render_environment_validation_release_notes(packet)
+
+
+@router.get("/environment-validation-claim-gate", response_model=EnvironmentValidationClaimGateResponse)
+def get_environment_validation_claim_gate_endpoint(
+    session: Session = Depends(get_db_session),
+) -> EnvironmentValidationClaimGateResponse:
+    return build_environment_validation_claim_gate(session)
+
+
+@router.get("/environment-validation-claim-gate.md", response_class=PlainTextResponse)
+def get_environment_validation_claim_gate_markdown_endpoint(
+    session: Session = Depends(get_db_session),
+) -> str:
+    return render_environment_validation_claim_gate(session)
 
 
 @router.get("/environment-validations", response_model=EnvironmentValidationRunListResponse)

@@ -177,6 +177,13 @@ type EnvironmentValidationPacket = {
   compatibility_notes: string[]
 }
 
+type EnvironmentValidationClaimGate = {
+  evaluated_at: string
+  generated_from: 'ops_environment_validation_claim_gate'
+  release_claim_ready: boolean
+  summary_message: string
+}
+
 type ValidationFormState = {
   label: string
   tester: string
@@ -478,6 +485,52 @@ export function OpsPage() {
     }
   }
 
+  async function handleDownloadValidationClaimGate(): Promise<void> {
+    setActionState({
+      phase: 'submitting',
+      message: 'Evaluating whether browser and hardware evidence is strong enough for a release-claim review...',
+    })
+
+    try {
+      const markdownResponse = await fetch(buildApiUrl('/api/admin/environment-validation-claim-gate.md'))
+      if (!markdownResponse.ok) {
+        throw new Error(
+          await readErrorMessage(markdownResponse, 'Unable to build the browser environment claim gate.'),
+        )
+      }
+
+      const jsonResponse = await fetch(buildApiUrl('/api/admin/environment-validation-claim-gate'))
+      if (!jsonResponse.ok) {
+        throw new Error(
+          await readErrorMessage(jsonResponse, 'Unable to load the browser environment claim gate summary.'),
+        )
+      }
+
+      const markdown = await markdownResponse.text()
+      const summary = (await jsonResponse.json()) as EnvironmentValidationClaimGate
+      const dateToken = new Date().toISOString().slice(0, 10)
+      downloadTextReport(
+        `gigastudy-browser-environment-claim-gate-${dateToken}.md`,
+        markdown,
+        'text/markdown',
+      )
+      setActionState({
+        phase: 'success',
+        message: summary.release_claim_ready
+          ? 'Browser environment claim gate downloaded. Evidence is strong enough to begin a release-claim review.'
+          : 'Browser environment claim gate downloaded. The checklist should stay open until the missing evidence is collected.',
+      })
+    } catch (error) {
+      setActionState({
+        phase: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to build the browser environment claim gate.',
+      })
+    }
+  }
+
   async function handleCreateValidationRun(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     setActionState({
@@ -624,6 +677,14 @@ export function OpsPage() {
               onClick={() => void handleDownloadValidationReleaseNotes()}
             >
               Download compatibility notes
+            </button>
+
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={() => void handleDownloadValidationClaimGate()}
+            >
+              Download claim gate
             </button>
 
             <Link className="back-link" to="/">

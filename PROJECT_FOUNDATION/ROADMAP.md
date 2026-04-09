@@ -21,6 +21,7 @@
 ### 2.1 제품 / UX 축
 
 - 한국어 중심 용어 체계 정리
+- canonical UI direction을 `UI_DESIGN_DIRECTION.md`의 `Quiet Studio Console`로 고정
 - 오디오 설정, 정렬 상태, 저신뢰도 상태를 설명 가능한 UI로 노출
 - 재녹음과 후보 비교 흐름을 최소 클릭으로 유지
 
@@ -135,6 +136,7 @@
 목표:
 
 - 사용자가 왜 점수가 나왔는지 이해하고 바로 재시도할 수 있는 학습 UI를 만든다.
+- 이 단계 이후의 시각 리팩터는 `Quiet Studio Console` 방향을 기준으로 한다.
 
 주요 작업:
 

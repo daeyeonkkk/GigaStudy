@@ -112,6 +112,7 @@ It is a regression path for the current note-event scorer, not a substitute for 
 
 ## Current Hardening Focus
 
+- Lock the visual refactor to the `Quiet Studio Console` direction in `PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md` and stop adding one-off local UI styles.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
@@ -123,6 +124,7 @@ It is a regression path for the current note-event scorer, not a substitute for 
 
 - [Master Plan](./PROJECT_FOUNDATION/GigaStudy_master_plan.md)
 - [Roadmap](./PROJECT_FOUNDATION/ROADMAP.md)
+- [UI Design Direction](./PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md)
 - [Phase 1 Backlog](./PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
 - [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/PHASE9_INTONATION_BACKLOG.md)
 - [Intonation Calibration Report](./PROJECT_FOUNDATION/INTONATION_CALIBRATION_REPORT.md)

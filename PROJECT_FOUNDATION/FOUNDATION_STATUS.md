@@ -1,6 +1,6 @@
 # Foundation Status
 
-Date: 2026-04-08
+Date: 2026-04-09
 
 ## Sources Checked
 
@@ -8,6 +8,7 @@ Date: 2026-04-08
 - `ROADMAP.md`
 - `INTONATION_ANALYSIS_ASSESSMENT.md`
 - `INTONATION_CALIBRATION_REPORT.md`
+- `UI_DESIGN_DIRECTION.md`
 - `PHASE9_INTONATION_BACKLOG.md`
 - `PHASE1_BACKLOG.md`
 - `GigaStudy_check_list.md`
@@ -74,6 +75,7 @@ Date: 2026-04-08
 - Melody MIDI export now runs through `note-seq`, and arrangement MIDI export now also uses `note-seq` instead of the local hand-rolled MIDI serializer.
 - Arrangement MusicXML export now runs through `music21`, so the runtime export path now uses a standard music notation library instead of only the local custom MusicXML builder.
 - The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
+- The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -143,6 +145,7 @@ Date: 2026-04-08
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
+- The product now has one chosen visual direction, but the current home page and parts of the studio still reflect the earlier environment-validation emphasis rather than the new `Quiet Studio Console` direction. The design decision is locked; the implementation refactor is still ahead.
 
 ## Recommended Next Work
 

@@ -100,6 +100,7 @@ Date: 2026-04-09
 - The repo now also has a repeatable evidence-round scaffold script, so real-vocal WAV collection and native-browser spreadsheet intake can start in one named folder outside `PROJECT_FOUNDATION` instead of scattering ad hoc files through the repo.
 - The human-rating and environment-validation CLIs can now also target one named evidence round directly through `--round-root`, so corpus build, calibration, threshold fit, claim gate, evidence bundle generation, and validation-sheet import no longer need repeated manual file-path wiring.
 - The repo now also has an evidence-round audit path, so one command can summarize which human-rating and browser-validation artifacts are present, which generated outputs still need to be run, and what the next collection step is for that round.
+- The repo now also has an evidence-round refresh path, so one command can rebuild the generated human corpus, human-rating support reports, environment-validation preview JSON, and round audit back into the same round before review.
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
@@ -243,6 +244,7 @@ Date: 2026-04-09
 - Result:
   passed against a temporary output root, creating a human-rating plus environment-validation round scaffold without touching `PROJECT_FOUNDATION`.
 - Evidence-round `--round-root` workflow smoke:
+  `uv run python scripts/refresh_evidence_round.py --round-root <round>`,
   `uv run python scripts/build_human_rating_corpus.py --round-root <round>`,
   `uv run python scripts/inspect_evidence_round.py --round-root <round>`,
   `uv run python scripts/inspect_human_rating_corpus.py --round-root <round>`,
@@ -254,6 +256,10 @@ Date: 2026-04-09
   `uv run python scripts/import_environment_validation_runs.py --round-root <round>`
 - Result:
   build and inventory commands passed directly against the fresh scaffold, while calibration, threshold-fit, claim-gate, and evidence-bundle commands were then re-run after replacing the round's generated corpus with the seeded fixture manifest. The round scaffold now acts as one reusable working root for both Phase 9 and Phase 10 support CLIs, and each command writes its generated outputs back into the round instead of relying on repeated ad hoc path arguments.
+- Evidence-round refresh regression:
+  `uv run pytest apps/api/tests/test_evidence_round_refresh.py`
+- Result:
+  passed with one placeholder-audio round that correctly skips calibration reports and one fixture-backed round that rebuilds generated corpus, human-rating reports, environment preview JSON, and round audit in place.
 - Evidence-round audit regression:
   `uv run pytest apps/api/tests/test_evidence_round_audit.py`
 - Result:
@@ -299,6 +305,7 @@ Date: 2026-04-09
 - The new evidence-round scaffold removes another prep bottleneck for real-human and real-hardware collection, but it still does not create the evidence by itself; the remaining open checklist items still require actual singers, raters, and native hardware runs.
 - The new `--round-root` CLI defaults remove another workflow-friction bottleneck for evidence collection, but they still do not create real singer data or native-hardware logs by themselves.
 - The new evidence-round audit removes another coordination bottleneck during collection, but it still does not replace real singer audio, human raters, or native Safari / real-hardware logs.
+- The new evidence-round refresh removes another manual rebuild bottleneck during collection, but it still only regenerates support artifacts from whatever evidence is already in the round.
 - The new curated home-photo layer improves atmosphere on the entry screen, but it is intentionally limited to one non-identifying ambient image and should not become a shortcut around the broader mockup discipline.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.

@@ -157,6 +157,15 @@ uv run python scripts/inspect_evidence_round.py --round-root <round>
 
 This gives one summary of what that round already has, what generated support artifacts are still missing, and what the next collection step should be before review.
 
+### Evidence Round Refresh
+
+```bash
+cd apps/api
+uv run python scripts/refresh_evidence_round.py --round-root <round>
+```
+
+This rebuilds the round-local support artifacts in place: generated human-rating corpus, calibration/threshold/claim/evidence-bundle outputs when the audio sources are ready, environment-validation preview JSON, and the round audit files.
+
 ### Browser Environment Claim Gate
 
 After validation runs are loaded into ops, use the ops UI or call `/api/admin/environment-validation-claim-gate`.

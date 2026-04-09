@@ -240,6 +240,12 @@ def test_ops_overview_reports_failures_and_model_versions(client: TestClient) ->
         and item["audio_context_mode"] == "webkit"
         for item in payload["environment_diagnostics"]["recent_profiles"]
     )
+    assert payload["environment_claim_gate"]["release_claim_ready"] is False
+    assert payload["environment_claim_gate"]["checks"]
+    assert any(
+        check["key"] == "native_safari_run_count" and check["passed"] is False
+        for check in payload["environment_claim_gate"]["checks"]
+    )
     assert any(item["failure_message"] for item in payload["failed_tracks"])
     assert any(item["status"] == "FAILED" for item in payload["recent_analysis_jobs"])
 
@@ -299,6 +305,7 @@ def test_environment_validation_runs_can_be_created_and_listed(client: TestClien
     assert len(overview_payload["recent_environment_validation_runs"]) == 1
     assert overview_payload["recent_environment_validation_runs"][0]["tester"] == "QA lead"
     assert overview_payload["recent_environment_validation_runs"][0]["outcome"] == "WARN"
+    assert overview_payload["environment_claim_gate"]["summary_message"]
 
 
 def test_environment_validation_packet_reports_matrix_and_guardrails(client: TestClient) -> None:

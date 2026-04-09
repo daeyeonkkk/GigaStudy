@@ -132,6 +132,7 @@ type OpsOverview = {
   policies: OpsPolicies
   model_versions: OpsModelVersions
   environment_diagnostics: OpsEnvironmentDiagnostics
+  environment_claim_gate: EnvironmentValidationClaimGate
   recent_environment_validation_runs: EnvironmentValidationRun[]
   failed_tracks: FailedTrackSummary[]
   recent_analysis_jobs: AnalysisJobSummary[]
@@ -182,6 +183,33 @@ type EnvironmentValidationClaimGate = {
   generated_from: 'ops_environment_validation_claim_gate'
   release_claim_ready: boolean
   summary_message: string
+  policy: {
+    minimum_total_validation_runs: number
+    minimum_native_safari_run_count: number
+    minimum_real_hardware_recording_success_count: number
+    minimum_covered_matrix_cells: number
+    maximum_fail_run_count: number
+    required_matrix_labels: string[]
+  }
+  packet_summary: {
+    total_validation_runs: number
+    pass_run_count: number
+    warn_run_count: number
+    fail_run_count: number
+    native_safari_run_count: number
+    real_hardware_recording_success_count: number
+    environments_with_warning_flags: number
+  }
+  covered_matrix_count: number
+  total_required_matrix_cells: number
+  checks: Array<{
+    key: string
+    passed: boolean
+    actual: string
+    expected: string
+    message: string
+  }>
+  next_actions: string[]
 }
 
 type ValidationFormState = {
@@ -631,6 +659,8 @@ export function OpsPage() {
 
   const { payload } = pageState
   const environmentDiagnostics = payload.environment_diagnostics
+  const environmentClaimGate = payload.environment_claim_gate
+  const failedClaimChecks = environmentClaimGate.checks.filter((check) => !check.passed)
   const validationRuns = payload.recent_environment_validation_runs
 
   return (
@@ -740,6 +770,90 @@ export function OpsPage() {
               <div className="mini-card">
                 <span>Analysis jobs</span>
                 <strong>{payload.summary.analysis_job_count}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article className="info-card ops-kpi-card ops-claim-gate-card">
+            <div className="ops-claim-gate-card__header">
+              <div>
+                <h3>Claim gate</h3>
+                <p className="panel__summary">
+                  See whether native-browser and real-hardware evidence is strong enough to begin
+                  checklist-closure review.
+                </p>
+              </div>
+              <span
+                className={`status-pill ${
+                  environmentClaimGate.release_claim_ready ? 'status-pill--success' : 'status-pill--warning'
+                }`}
+              >
+                {environmentClaimGate.release_claim_ready ? 'Review ready' : 'Keep checklist open'}
+              </span>
+            </div>
+
+            <p className="ops-claim-gate-card__summary">{environmentClaimGate.summary_message}</p>
+
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Validation runs</span>
+                <strong>
+                  {environmentClaimGate.packet_summary.total_validation_runs}/
+                  {environmentClaimGate.policy.minimum_total_validation_runs}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Native Safari</span>
+                <strong>
+                  {environmentClaimGate.packet_summary.native_safari_run_count}/
+                  {environmentClaimGate.policy.minimum_native_safari_run_count}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Real hardware rec</span>
+                <strong>
+                  {environmentClaimGate.packet_summary.real_hardware_recording_success_count}/
+                  {environmentClaimGate.policy.minimum_real_hardware_recording_success_count}
+                </strong>
+              </div>
+              <div className="mini-card">
+                <span>Matrix coverage</span>
+                <strong>
+                  {environmentClaimGate.covered_matrix_count}/
+                  {environmentClaimGate.policy.minimum_covered_matrix_cells}
+                </strong>
+              </div>
+            </div>
+
+            <div className="ops-claim-gate-card__detail">
+              <div>
+                <h4>Blocking checks</h4>
+                {failedClaimChecks.length === 0 ? (
+                  <p>All current policy checks passed. Review notes and compatibility copy before widening support claims.</p>
+                ) : (
+                  <ul className="ticket-list ops-claim-gate-list">
+                    {failedClaimChecks.map((check) => (
+                      <li key={check.key}>
+                        <strong>{check.key}</strong>
+                        <span>
+                          {check.actual} vs {check.expected}
+                        </span>
+                        <span>{check.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <h4>Next actions</h4>
+                <ul className="ticket-list ops-claim-gate-list">
+                  {environmentClaimGate.next_actions.map((action) => (
+                    <li key={action}>
+                      <span>{action}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </article>

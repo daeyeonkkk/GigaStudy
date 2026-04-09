@@ -335,6 +335,7 @@
 - ops overview의 manual validation run log를 실제 검증 기록 저장소로 사용
 - spreadsheet-friendly intake template과 importer로 외부 수집 evidence를 ops에 들여오기
 - browser / hardware claim gate로 checklist-closure review readiness를 반복 가능하게 판정
+- ops overview에서 현재 browser / hardware claim gate 상태를 inline으로 확인하고 바로 release-review blocker를 읽을 수 있게 함
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` 기준 matrix 실행
 - native Safari / WebKit recording, permission, playback 검증
 - output route 차이:

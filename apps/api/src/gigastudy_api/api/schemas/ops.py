@@ -223,6 +223,7 @@ class OpsOverviewResponse(BaseModel):
     policies: OpsPolicyResponse
     model_versions: OpsModelVersionsResponse
     environment_diagnostics: OpsEnvironmentDiagnosticsResponse
+    environment_claim_gate: EnvironmentValidationClaimGateResponse
     recent_environment_validation_runs: list[EnvironmentValidationRunResponse] = Field(default_factory=list)
     failed_tracks: list[FailedTrackSummaryResponse] = Field(default_factory=list)
     recent_analysis_jobs: list[AnalysisJobSummaryResponse] = Field(default_factory=list)

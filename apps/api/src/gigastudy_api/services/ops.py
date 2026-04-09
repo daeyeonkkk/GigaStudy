@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from gigastudy_api.api.schemas.ops import (
     AnalysisJobSummaryResponse,
+    EnvironmentValidationClaimGateResponse,
     EnvironmentValidationRunCreateRequest,
     EnvironmentValidationMatrixCellResponse,
     EnvironmentValidationPacketResponse,
@@ -407,6 +408,7 @@ def render_environment_validation_claim_gate(session: Session) -> str:
 def get_ops_overview(session: Session) -> OpsOverviewResponse:
     settings = get_settings()
     recent_limit = max(1, settings.ops_recent_limit)
+    environment_claim_gate = build_environment_validation_claim_gate(session)
 
     summary = OpsSummaryResponse(
         project_count=_count_records(
@@ -491,6 +493,9 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
         environment_diagnostics=_build_environment_diagnostics(
             session,
             recent_limit=recent_limit,
+        ),
+        environment_claim_gate=EnvironmentValidationClaimGateResponse.model_validate(
+            environment_claim_gate
         ),
         recent_environment_validation_runs=[
             build_environment_validation_run_response(validation_run)

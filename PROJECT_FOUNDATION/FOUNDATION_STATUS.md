@@ -83,6 +83,7 @@ Date: 2026-04-09
 - The ops overview can now also export an environment validation packet, so diagnostics, manual validation runs, matrix coverage, compatibility notes, and release-claim guardrails can be packaged into one release-review artifact.
 - The ops overview can now also export a browser compatibility release-note draft, so the stored validation evidence can be translated into publishable compatibility notes without rewriting the same unsupported-path caveats by hand.
 - The ops overview can now also export a browser and hardware claim gate, so the team can evaluate whether current native-browser evidence is strong enough to even begin a support-claim review.
+- The ops overview now also surfaces the current browser and hardware claim gate inline, so blockers and next evidence-collection steps are visible before anyone exports the Markdown artifact.
 - The repo now also has a spreadsheet-friendly environment-validation intake template plus importer, so native browser or hardware evidence collected outside the app can still be normalized before it reaches ops.
 - The API now has a first-class storage backend abstraction with local and S3-compatible object storage backends, and the upload, processing, melody export, arrangement export, and download routes now run through that shared storage contract instead of hard-coded local file paths.
 - The backend runtime now also includes first-class PostgreSQL and S3-compatible client drivers (`psycopg` and `boto3`), and the repo includes a local PostgreSQL + MinIO bootstrap compose file for production-like storage rehearsals.
@@ -213,6 +214,7 @@ Date: 2026-04-09
 - Ops overview environment-validation-packet export is now also verified in Chromium, Firefox, and WebKit.
 - Ops overview browser-compatibility release-note export is now also verified in Chromium, Firefox, and WebKit.
 - Ops overview browser-environment claim-gate export is now also verified in Chromium, Firefox, and WebKit.
+- Ops overview now also verifies the inline browser-environment claim-gate summary across Chromium, Firefox, and WebKit before export is triggered.
 - Environment-validation intake regression:
   `uv run pytest apps/api/tests/test_environment_validation_import.py`
 - Result:
@@ -257,6 +259,7 @@ Date: 2026-04-09
 - The new corpus inventory tool removes another pre-calibration bottleneck, but it still does not populate a trusted real-vocal corpus or justify closing the human-trust checklist items by itself.
 - The new threshold-fit report removes the last ad hoc step in proposing difficulty bands, but it still does not count as validated human-threshold evidence until a real corpus is run through it.
 - The new claim gate removes another subjective review bottleneck, but it still evaluates the current evidence rather than creating that evidence; the real-human checklist items remain open until a trusted corpus actually passes it.
+- The inline browser/hardware claim-gate summary removes another small review bottleneck inside ops, but it still does not create native Safari or broad real-hardware evidence by itself.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.

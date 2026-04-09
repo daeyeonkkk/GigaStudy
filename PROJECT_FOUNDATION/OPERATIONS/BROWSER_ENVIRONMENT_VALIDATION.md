@@ -125,12 +125,13 @@ After a manual validation round:
 
 1. Save DeviceProfiles from the tested environments
 2. Refresh `/ops`
-3. Save a structured validation run in the ops validation log
-4. Download a fresh environment diagnostics report
-5. Download the environment validation packet from ops
-6. Download the browser environment claim gate from ops
-7. Attach the packet plus diagnostics report to release notes or the validation log
-8. Compare new warning flags against the previous baseline
+3. Review the inline browser environment claim gate summary in ops before exporting anything
+4. Save a structured validation run in the ops validation log
+5. Download a fresh environment diagnostics report
+6. Download the environment validation packet from ops
+7. Download the browser environment claim gate from ops
+8. Attach the packet plus diagnostics report to release notes or the validation log
+9. Compare new warning flags against the previous baseline
 
 The environment validation packet is the preferred release-review artifact because it packages:
 
@@ -154,6 +155,12 @@ The browser environment claim gate is the preferred checklist-review artifact be
 - whether enough successful real-hardware recording runs exist
 - whether FAIL runs still block claim review
 - whether the checklist should remain open even if release notes can already be drafted
+
+The ops overview should also surface the current claim-gate state inline so a reviewer can see:
+
+- whether the checklist should stay open
+- which evidence checks are currently blocking release-claim review
+- what the next evidence-collection actions are before exporting the detailed Markdown artifact
 
 ## Release Gate Expectations
 

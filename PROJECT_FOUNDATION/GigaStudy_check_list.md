@@ -143,6 +143,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A release-review environment validation packet can be exported from ops with matrix coverage, guardrails, and compatibility notes.
 - [x] A browser compatibility release-note draft can be exported from ops from the current validation evidence.
 - [x] A browser and hardware claim gate can be exported from ops to decide whether support-claim review should begin.
+- [x] Ops overview surfaces the current browser and hardware claim-gate state inline without requiring an export step first.
 - [x] An environment validation intake template and importer exist for preparing native browser and hardware evidence before it reaches ops.
 - [x] A native browser and hardware validation protocol exists in `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`.
 - [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.

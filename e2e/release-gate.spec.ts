@@ -193,6 +193,38 @@ async function saveDeviceProfileFixture(request: APIRequestContext): Promise<voi
   expect(response.ok()).toBeTruthy()
 }
 
+async function saveValidationRunFixture(request: APIRequestContext): Promise<void> {
+  const response = await request.post(`${apiBaseUrl}/api/admin/environment-validations`, {
+    data: {
+      label: 'Native Safari fixture run',
+      tester: 'Playwright QA',
+      device_name: 'MacBook Pro 14',
+      os: 'macOS 15.4',
+      browser: 'Safari 18',
+      input_device: 'Built-in Microphone',
+      output_route: 'AirPods Bluetooth',
+      outcome: 'WARN',
+      secure_context: true,
+      microphone_permission_before: 'prompt',
+      microphone_permission_after: 'granted',
+      recording_mime_type: null,
+      audio_context_mode: 'webkit',
+      offline_audio_context_mode: 'unavailable',
+      actual_sample_rate: 48000,
+      base_latency: 0.018,
+      output_latency: 0.041,
+      warning_flags: ['legacy_webkit_audio_context_only', 'missing_offline_audio_context'],
+      take_recording_succeeded: true,
+      analysis_succeeded: true,
+      playback_succeeded: false,
+      follow_up: 'Playback fallback still needs native Safari confirmation.',
+      notes: 'Recording path passed, playback remained environment-limited.',
+      validated_at: new Date().toISOString(),
+    },
+  })
+  expect(response.ok()).toBeTruthy()
+}
+
 async function createStudioProject(page: Page, title: string): Promise<string> {
   await page.goto('/')
   await page.getByLabel('Project title').fill(title)
@@ -580,6 +612,57 @@ test('release gate ops overview can export the environment diagnostics report', 
     report.environment_diagnostics.warning_flags.some(
       (warning) => warning.flag === 'legacy_webkit_audio_context_only',
     ),
+  ).toBeTruthy()
+})
+
+test('release gate ops overview can export the environment validation packet', async ({
+  page,
+  request,
+}) => {
+  await saveDeviceProfileFixture(request)
+  await saveValidationRunFixture(request)
+
+  await page.goto('/ops')
+  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download validation packet' }).click()
+  await expect(
+    page.getByText(
+      'Environment validation packet downloaded. Use it for release notes, compatibility notes, and native-browser evidence review.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^gigastudy-environment-validation-packet-\d{4}-\d{2}-\d{2}\.json$/)
+
+  const downloadPath = await download.path()
+  expect(downloadPath).toBeTruthy()
+  const reportText = await readFile(downloadPath!, 'utf8')
+  const packet = JSON.parse(reportText) as {
+    generated_from: string
+    summary: {
+      total_validation_runs: number
+      native_safari_run_count: number
+    }
+    required_matrix: Array<{
+      label: string
+      covered: boolean
+    }>
+    compatibility_notes: string[]
+  }
+
+  expect(packet.generated_from).toBe('ops_environment_validation_packet')
+  expect(packet.summary.total_validation_runs).toBeGreaterThanOrEqual(1)
+  expect(packet.summary.native_safari_run_count).toBeGreaterThanOrEqual(1)
+  expect(
+    packet.required_matrix.some(
+      (item) => item.label === 'macOS + Safari + Bluetooth output' && item.covered,
+    ),
+  ).toBeTruthy()
+  expect(
+    packet.compatibility_notes.some((item) => item.includes('legacy WebKit audio contexts')),
   ).toBeTruthy()
 })
 

@@ -124,8 +124,17 @@ After a manual validation round:
 2. Refresh `/ops`
 3. Save a structured validation run in the ops validation log
 4. Download a fresh environment diagnostics report
-5. Attach the report to release notes or the validation log
-6. Compare new warning flags against the previous baseline
+5. Download the environment validation packet from ops
+6. Attach the packet plus diagnostics report to release notes or the validation log
+7. Compare new warning flags against the previous baseline
+
+The environment validation packet is the preferred release-review artifact because it packages:
+
+- the latest diagnostics snapshot
+- recent manual validation runs
+- required matrix coverage
+- claim guardrails
+- compatibility notes inferred from the stored evidence
 
 ## Release Gate Expectations
 
@@ -134,6 +143,7 @@ Before claiming improved browser support in release notes:
 - at least one native Safari or WebKit run must be recorded
 - at least one real-hardware recording run must be recorded
 - warning flags added by the new environment must be explained
+- the exported environment validation packet must be reviewed for uncovered matrix cells and guardrails
 - any unsupported path must be described honestly in product and ops notes
 
 ## Current Honest Product Claim

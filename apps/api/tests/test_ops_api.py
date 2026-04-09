@@ -299,3 +299,115 @@ def test_environment_validation_runs_can_be_created_and_listed(client: TestClien
     assert len(overview_payload["recent_environment_validation_runs"]) == 1
     assert overview_payload["recent_environment_validation_runs"][0]["tester"] == "QA lead"
     assert overview_payload["recent_environment_validation_runs"][0]["outcome"] == "WARN"
+
+
+def test_environment_validation_packet_reports_matrix_and_guardrails(client: TestClient) -> None:
+    save_device_profile(
+        client,
+        browser="Safari",
+        os="macOS",
+        input_device_hash="built-in",
+        output_route="Bluetooth output",
+        diagnostic_flags=["legacy_webkit_audio_context_only", "missing_offline_audio_context"],
+        microphone_permission="prompt",
+        recording_mime_type=None,
+        audio_context_mode="webkit",
+        offline_audio_context_mode="unavailable",
+    )
+    save_device_profile(
+        client,
+        browser="Chrome",
+        os="Windows",
+        input_device_hash="usb-mic",
+        output_route="wired headphones",
+        diagnostic_flags=[],
+        microphone_permission="granted",
+        recording_mime_type="audio/webm",
+        audio_context_mode="standard",
+        offline_audio_context_mode="standard",
+    )
+
+    create_payloads = [
+        {
+            "label": "Native Safari Bluetooth run",
+            "tester": "QA lead",
+            "device_name": "MacBook Air 15",
+            "os": "macOS 15.4",
+            "browser": "Safari 18",
+            "input_device": "Built-in Microphone",
+            "output_route": "AirPods Bluetooth",
+            "outcome": "WARN",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": None,
+            "audio_context_mode": "webkit",
+            "offline_audio_context_mode": "unavailable",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.017,
+            "output_latency": 0.039,
+            "warning_flags": ["legacy_webkit_audio_context_only", "missing_offline_audio_context"],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": False,
+            "follow_up": "Playback still needs native Safari review.",
+            "validated_at": datetime(2026, 4, 9, 8, 40, tzinfo=timezone.utc).isoformat(),
+        },
+        {
+            "label": "Windows Chrome wired run",
+            "tester": "QA lead",
+            "device_name": "Focusrite test rig",
+            "os": "Windows 11",
+            "browser": "Chrome 136",
+            "input_device": "USB microphone",
+            "output_route": "Wired headphones",
+            "outcome": "PASS",
+            "secure_context": True,
+            "microphone_permission_before": "prompt",
+            "microphone_permission_after": "granted",
+            "recording_mime_type": "audio/webm",
+            "audio_context_mode": "standard",
+            "offline_audio_context_mode": "standard",
+            "actual_sample_rate": 48000,
+            "base_latency": 0.012,
+            "output_latency": 0.021,
+            "warning_flags": [],
+            "take_recording_succeeded": True,
+            "analysis_succeeded": True,
+            "playback_succeeded": True,
+            "validated_at": datetime(2026, 4, 9, 9, 0, tzinfo=timezone.utc).isoformat(),
+        },
+    ]
+
+    for payload in create_payloads:
+        response = client.post("/api/admin/environment-validations", json=payload)
+        assert response.status_code == 200
+
+    packet_response = client.get("/api/admin/environment-validation-packet")
+    assert packet_response.status_code == 200
+    packet_payload = packet_response.json()
+
+    assert packet_payload["generated_from"] == "ops_environment_validation_packet"
+    assert packet_payload["summary"]["total_validation_runs"] == 2
+    assert packet_payload["summary"]["pass_run_count"] == 1
+    assert packet_payload["summary"]["warn_run_count"] == 1
+    assert packet_payload["summary"]["native_safari_run_count"] == 1
+    assert packet_payload["summary"]["real_hardware_recording_success_count"] == 2
+    assert any(
+        item["label"] == "macOS + Safari + Bluetooth output" and item["covered"] is True
+        for item in packet_payload["required_matrix"]
+    )
+    assert any(
+        item["label"] == "Windows + Chrome + USB microphone + wired headphones" and item["covered"] is True
+        for item in packet_payload["required_matrix"]
+    )
+    assert any(
+        "native Safari or Safari-like validation run" in item or "Warning flags still exist" in item
+        for item in packet_payload["claim_guardrails"]
+    )
+    assert any(
+        "legacy WebKit audio contexts" in item or "playback failure or degradation" in item
+        for item in packet_payload["compatibility_notes"]
+    )
+    assert packet_payload["environment_diagnostics"]["summary"]["total_device_profiles"] == 2
+    assert len(packet_payload["recent_validation_runs"]) == 2

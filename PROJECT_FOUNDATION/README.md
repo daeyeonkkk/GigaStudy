@@ -77,7 +77,7 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 - `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
   Workflow for future real-vocal and human-rating evidence, including intake templates, consensus building, threshold-fit reporting, and evidence-bundle packaging.
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-  Native browser and hardware validation protocol built on top of the ops diagnostics baseline.
+  Native browser and hardware validation protocol built on top of the ops diagnostics baseline, including the environment validation packet workflow for release review.
 - `OPERATIONS/WORKING_PRINCIPLES.md`
   Project working rules, storage conventions, and foundation hygiene discipline.
 

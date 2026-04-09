@@ -68,6 +68,33 @@ class OpsEnvironmentDiagnosticsResponse(BaseModel):
     recent_profiles: list[OpsEnvironmentProfileResponse] = Field(default_factory=list)
 
 
+class EnvironmentValidationMatrixCellResponse(BaseModel):
+    label: str
+    covered: bool
+    run_count: int = Field(ge=0)
+
+
+class EnvironmentValidationPacketSummaryResponse(BaseModel):
+    total_validation_runs: int = Field(ge=0)
+    pass_run_count: int = Field(ge=0)
+    warn_run_count: int = Field(ge=0)
+    fail_run_count: int = Field(ge=0)
+    native_safari_run_count: int = Field(ge=0)
+    real_hardware_recording_success_count: int = Field(ge=0)
+    environments_with_warning_flags: int = Field(ge=0)
+
+
+class EnvironmentValidationPacketResponse(BaseModel):
+    generated_at: datetime
+    generated_from: str = "ops_environment_validation_packet"
+    summary: EnvironmentValidationPacketSummaryResponse
+    required_matrix: list[EnvironmentValidationMatrixCellResponse] = Field(default_factory=list)
+    environment_diagnostics: OpsEnvironmentDiagnosticsResponse
+    recent_validation_runs: list["EnvironmentValidationRunResponse"] = Field(default_factory=list)
+    claim_guardrails: list[str] = Field(default_factory=list)
+    compatibility_notes: list[str] = Field(default_factory=list)
+
+
 class EnvironmentValidationRunCreateRequest(BaseModel):
     label: str = Field(min_length=1, max_length=160)
     tester: str | None = Field(default=None, max_length=120)

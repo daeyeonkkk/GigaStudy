@@ -154,6 +154,29 @@ type EnvironmentDiagnosticsExport = {
   environment_diagnostics: OpsEnvironmentDiagnostics
 }
 
+type EnvironmentValidationPacket = {
+  generated_at: string
+  generated_from: 'ops_environment_validation_packet'
+  summary: {
+    total_validation_runs: number
+    pass_run_count: number
+    warn_run_count: number
+    fail_run_count: number
+    native_safari_run_count: number
+    real_hardware_recording_success_count: number
+    environments_with_warning_flags: number
+  }
+  required_matrix: Array<{
+    label: string
+    covered: boolean
+    run_count: number
+  }>
+  environment_diagnostics: OpsEnvironmentDiagnostics
+  recent_validation_runs: EnvironmentValidationRun[]
+  claim_guardrails: string[]
+  compatibility_notes: string[]
+}
+
 type ValidationFormState = {
   label: string
   tester: string
@@ -375,6 +398,35 @@ export function OpsPage() {
     })
   }
 
+  async function handleDownloadValidationPacket(): Promise<void> {
+    setActionState({
+      phase: 'submitting',
+      message: 'Building the environment validation packet from saved diagnostics and manual runs...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl('/api/admin/environment-validation-packet'))
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to build the environment validation packet.'))
+      }
+
+      const payload = (await response.json()) as EnvironmentValidationPacket
+      const dateToken = new Date().toISOString().slice(0, 10)
+      downloadJsonReport(`gigastudy-environment-validation-packet-${dateToken}.json`, payload)
+      setActionState({
+        phase: 'success',
+        message:
+          'Environment validation packet downloaded. Use it for release notes, compatibility notes, and native-browser evidence review.',
+      })
+    } catch (error) {
+      setActionState({
+        phase: 'error',
+        message:
+          error instanceof Error ? error.message : 'Unable to build the environment validation packet.',
+      })
+    }
+  }
+
   async function handleCreateValidationRun(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     setActionState({
@@ -505,6 +557,14 @@ export function OpsPage() {
               onClick={() => handleDownloadEnvironmentReport(environmentDiagnostics)}
             >
               Download environment report
+            </button>
+
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={() => void handleDownloadValidationPacket()}
+            >
+              Download validation packet
             </button>
 
             <Link className="back-link" to="/">

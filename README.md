@@ -134,6 +134,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The admin ops view now aggregates those environment diagnostics into a browser matrix, warning-flag counts, and recent captured profiles for support and release triage.
 - The ops view can now also download an environment diagnostics report JSON, which is the baseline artifact for native Safari and real-hardware validation rounds.
 - The ops view now also stores structured manual validation runs, so PASS / WARN / FAIL browser checks live beside the diagnostics baseline.
+- The ops view can now also download an environment validation packet, so diagnostics, manual validation runs, matrix coverage, compatibility notes, and release guardrails can be handed to release review as one JSON artifact.
 - A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
 - The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
@@ -166,7 +167,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.
 - Expand browser hardening into real hardware-variable recording checks, native Safari/WebKit audio validation, and richer endurance runs, using the new capability snapshot, warning flags, and ops diagnostics view as the inspection baseline.
-- Follow the browser environment validation protocol in `PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks.
+- Follow the browser environment validation protocol in `PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks, and use the exported environment validation packet as the default release-review artifact.
 
 ## Foundation Docs
 

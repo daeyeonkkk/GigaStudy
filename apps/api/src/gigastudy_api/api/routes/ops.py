@@ -4,11 +4,13 @@ from sqlalchemy.orm import Session
 from gigastudy_api.api.schemas.ops import (
     EnvironmentValidationRunCreateRequest,
     EnvironmentValidationRunListResponse,
+    EnvironmentValidationPacketResponse,
     EnvironmentValidationRunResponse,
     OpsOverviewResponse,
 )
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.ops import (
+    build_environment_validation_packet,
     build_environment_validation_run_response,
     create_environment_validation_run,
     get_ops_overview,
@@ -24,6 +26,13 @@ def get_ops_overview_endpoint(
     session: Session = Depends(get_db_session),
 ) -> OpsOverviewResponse:
     return get_ops_overview(session)
+
+
+@router.get("/environment-validation-packet", response_model=EnvironmentValidationPacketResponse)
+def get_environment_validation_packet_endpoint(
+    session: Session = Depends(get_db_session),
+) -> EnvironmentValidationPacketResponse:
+    return build_environment_validation_packet(session)
 
 
 @router.get("/environment-validations", response_model=EnvironmentValidationRunListResponse)

@@ -342,6 +342,7 @@
 
 - environment diagnostics report JSON
 - manual validation run entries
+- environment validation packet for release review
 - native browser validation run log
 - browser / hardware compatibility notes
 

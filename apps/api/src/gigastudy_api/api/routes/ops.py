@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.ops import (
     EnvironmentValidationClaimGateResponse,
+    EnvironmentValidationImportPreviewResponse,
+    EnvironmentValidationImportRequest,
+    EnvironmentValidationImportResultResponse,
     EnvironmentValidationRunCreateRequest,
     EnvironmentValidationRunListResponse,
     EnvironmentValidationPacketResponse,
@@ -17,7 +20,9 @@ from gigastudy_api.services.ops import (
     build_environment_validation_run_response,
     create_environment_validation_run,
     get_ops_overview,
+    import_environment_validation_runs_from_text,
     list_environment_validation_runs,
+    preview_environment_validation_import,
     render_environment_validation_claim_gate,
     render_environment_validation_release_notes,
 )
@@ -79,3 +84,24 @@ def create_environment_validation_run_endpoint(
 ) -> EnvironmentValidationRunResponse:
     item = create_environment_validation_run(session, payload)
     return build_environment_validation_run_response(item)
+
+
+@router.post(
+    "/environment-validations/import-preview",
+    response_model=EnvironmentValidationImportPreviewResponse,
+)
+def preview_environment_validation_import_endpoint(
+    payload: EnvironmentValidationImportRequest,
+) -> EnvironmentValidationImportPreviewResponse:
+    return preview_environment_validation_import(payload.csv_text)
+
+
+@router.post(
+    "/environment-validations/import",
+    response_model=EnvironmentValidationImportResultResponse,
+)
+def import_environment_validation_runs_endpoint(
+    payload: EnvironmentValidationImportRequest,
+    session: Session = Depends(get_db_session),
+) -> EnvironmentValidationImportResultResponse:
+    return import_environment_validation_runs_from_text(session, payload.csv_text)

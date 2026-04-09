@@ -145,6 +145,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A browser and hardware claim gate can be exported from ops to decide whether support-claim review should begin.
 - [x] Ops overview surfaces the current browser and hardware claim-gate state inline without requiring an export step first.
 - [x] An environment validation intake template and importer exist for preparing native browser and hardware evidence before it reaches ops.
+- [x] Ops can preview and import external environment-validation CSV evidence directly instead of relying on CLI-only intake.
 - [x] A native browser and hardware validation protocol exists in `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`.
 - [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.
 - [x] Chromium seeded release-gate coverage exists for recording, playback, export, sharing, and endurance.

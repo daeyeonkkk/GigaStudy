@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session, joinedload
 from gigastudy_api.api.schemas.ops import (
     AnalysisJobSummaryResponse,
     EnvironmentValidationClaimGateResponse,
+    EnvironmentValidationImportPreviewItemResponse,
+    EnvironmentValidationImportPreviewResponse,
+    EnvironmentValidationImportResultResponse,
     EnvironmentValidationRunCreateRequest,
     EnvironmentValidationMatrixCellResponse,
     EnvironmentValidationPacketResponse,
@@ -41,6 +44,10 @@ from gigastudy_api.services.arrangements import ARRANGEMENT_ENGINE_VERSION
 from gigastudy_api.services.environment_validation_claim_gate import (
     evaluate_environment_validation_claim_gate,
     render_environment_validation_claim_gate_markdown,
+)
+from gigastudy_api.services.environment_validation_import import (
+    build_environment_validation_requests,
+    load_environment_validation_sheet_text,
 )
 from gigastudy_api.services.melody import MELODY_MODEL_VERSION, PYIN_FALLBACK_MODEL_VERSION
 from gigastudy_api.services.projects import get_or_create_default_user
@@ -217,6 +224,43 @@ def create_environment_validation_run(
     session.commit()
     session.refresh(validation_run)
     return validation_run
+
+
+def preview_environment_validation_import(
+    csv_text: str,
+) -> EnvironmentValidationImportPreviewResponse:
+    rows = load_environment_validation_sheet_text(csv_text)
+    requests = build_environment_validation_requests(rows)
+    return EnvironmentValidationImportPreviewResponse(
+        item_count=len(requests),
+        items=[
+            EnvironmentValidationImportPreviewItemResponse.model_validate(
+                request.model_dump(mode="python")
+            )
+            for request in requests
+        ],
+    )
+
+
+def import_environment_validation_runs_from_text(
+    session: Session,
+    csv_text: str,
+) -> EnvironmentValidationImportResultResponse:
+    preview = preview_environment_validation_import(csv_text)
+    created_items = [
+        create_environment_validation_run(
+            session,
+            EnvironmentValidationRunCreateRequest.model_validate(item.model_dump(mode="python")),
+        )
+        for item in preview.items
+    ]
+    return EnvironmentValidationImportResultResponse(
+        imported_count=len(created_items),
+        items=[
+            build_environment_validation_run_response(item)
+            for item in created_items
+        ],
+    )
 
 
 def build_environment_validation_run_response(

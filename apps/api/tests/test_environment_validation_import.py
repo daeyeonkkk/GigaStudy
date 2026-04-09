@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from gigastudy_api.services.environment_validation_import import (
     build_environment_validation_requests,
     load_environment_validation_sheet,
+    load_environment_validation_sheet_text,
     render_environment_validation_requests_json,
 )
 
@@ -85,3 +86,18 @@ def test_render_environment_validation_requests_json_includes_runs() -> None:
 
     assert '"label": "Native Safari built-in run"' in rendered
     assert '"browser": "Chrome 136"' in rendered
+
+
+def test_load_environment_validation_sheet_text_reads_csv_without_filesystem() -> None:
+    csv_text = "\n".join(
+        [
+            "label,tester,device_name,os,browser,input_device,output_route,outcome,secure_context,microphone_permission_before,microphone_permission_after,recording_mime_type,audio_context_mode,offline_audio_context_mode,actual_sample_rate,base_latency_ms,output_latency_ms,warning_flags,take_recording_succeeded,analysis_succeeded,playback_succeeded,audible_issues,permission_issues,unexpected_warnings,follow_up,notes,validated_at",
+            "Windows Chrome wired run,QA lead,Focusrite rig,Windows 11,Chrome 136,USB microphone,Wired headphones,PASS,TRUE,prompt,granted,audio/webm,standard,standard,48000,12,21,,TRUE,TRUE,TRUE,,,,Looks stable,,2026-04-09T12:00:00Z",
+        ]
+    )
+
+    rows = load_environment_validation_sheet_text(csv_text)
+
+    assert len(rows) == 1
+    assert rows[0].browser == "Chrome 136"
+    assert rows[0].take_recording_succeeded is True

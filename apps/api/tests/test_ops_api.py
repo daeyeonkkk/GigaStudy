@@ -597,3 +597,38 @@ def test_environment_validation_claim_gate_can_mark_review_ready(client: TestCli
     assert gate_payload["release_claim_ready"] is True
     assert gate_payload["covered_matrix_count"] >= 3
     assert all(check["passed"] for check in gate_payload["checks"])
+
+
+def test_environment_validation_import_preview_and_submit(client: TestClient) -> None:
+    csv_text = "\n".join(
+        [
+            "label,tester,device_name,os,browser,input_device,output_route,outcome,secure_context,microphone_permission_before,microphone_permission_after,recording_mime_type,audio_context_mode,offline_audio_context_mode,actual_sample_rate,base_latency_ms,output_latency_ms,warning_flags,take_recording_succeeded,analysis_succeeded,playback_succeeded,audible_issues,permission_issues,unexpected_warnings,follow_up,notes,validated_at",
+            'Imported Safari run,QA lead,MacBook Pro 14,macOS 15.4,Safari 18,Built-in Microphone,AirPods Bluetooth,WARN,TRUE,prompt,granted,,webkit,unavailable,48000,18,41,"legacy_webkit_audio_context_only, missing_offline_audio_context",TRUE,TRUE,FALSE,Playback degraded,Prompt recovery required,missing_offline_audio_context,Retry on native Safari,Imported from spreadsheet,2026-04-09T12:10:00Z',
+            "Imported Chrome run,QA lead,USB rig,Windows 11,Chrome 136,USB microphone,Wired headphones,PASS,TRUE,prompt,granted,audio/webm,standard,standard,48000,12,21,,TRUE,TRUE,TRUE,,,,,2026-04-09T12:20:00Z",
+        ]
+    )
+
+    preview_response = client.post(
+        "/api/admin/environment-validations/import-preview",
+        json={"csv_text": csv_text},
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["item_count"] == 2
+    assert preview_payload["items"][0]["browser"] == "Safari 18"
+    assert preview_payload["items"][1]["outcome"] == "PASS"
+
+    import_response = client.post(
+        "/api/admin/environment-validations/import",
+        json={"csv_text": csv_text},
+    )
+    assert import_response.status_code == 200
+    import_payload = import_response.json()
+    assert import_payload["imported_count"] == 2
+    assert import_payload["items"][0]["label"] == "Imported Safari run"
+    assert import_payload["items"][1]["device_name"] == "USB rig"
+
+    runs_response = client.get("/api/admin/environment-validations")
+    assert runs_response.status_code == 200
+    runs_payload = runs_response.json()
+    assert len(runs_payload["items"]) == 2

@@ -175,7 +175,9 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The ops view can now also download a browser compatibility release-note draft, so unsupported paths and environment caveats can be reviewed as Markdown before publishing support claims.
 - The ops view can now also download a browser and hardware claim gate, so checklist-closure review does not depend on ad hoc judgment.
 - The ops overview now also shows the current browser and hardware claim gate inline, so blockers and next evidence-collection steps are visible before exporting the Markdown artifact.
+- The ops overview now also lets reviewers preview and import spreadsheet-style environment validation CSV evidence directly, so external QA rounds no longer depend on a CLI-only intake path.
 - The repo now also includes a spreadsheet-friendly environment-validation intake template and importer, so native browser or real-hardware evidence collected outside the product UI can still be normalized before it reaches ops.
+- That external evidence can now also be previewed and imported directly from the ops screen after paste or file load, while the CLI importer remains available for automation-heavy rounds.
 - A browser-level release-gate smoke path now covers project creation, studio entry, guide and take attachment, chord timeline save, and chord-aware note-feedback visibility.
 - The browser release gate also covers read-only sharing: create a share link, open the frozen viewer, and verify access disappears after deactivation.
 - The browser release gate now also covers melody extraction, arrangement candidate generation, and MusicXML/MIDI/guide-WAV export reachability from the score view.
@@ -213,6 +215,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - Follow the browser environment validation protocol in `PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` when running manual native-browser checks, and use the exported environment validation packet as the default release-review artifact.
 - Use the exported browser environment claim gate before discussing whether native Safari or real-hardware checklist items can close.
 - Start that review from the inline claim-gate summary in ops, then export the Markdown artifact once the current blockers are understood.
+- When QA delivers spreadsheet-style hardware evidence, preview and import it in ops first so the packet, claim gate, and release-note exports all read from the same stored runs.
 - Use the exported browser compatibility release-note draft as the default publishing aid once the packet has been reviewed.
 - Prefer the environment-validation CSV template plus importer when QA or external testers collect hardware evidence outside the ops UI.
 

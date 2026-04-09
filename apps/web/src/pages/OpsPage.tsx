@@ -101,6 +101,46 @@ type EnvironmentValidationRun = {
   updated_at: string
 }
 
+type EnvironmentValidationImportPreviewItem = {
+  label: string
+  tester: string | null
+  device_name: string
+  os: string
+  browser: string
+  input_device: string | null
+  output_route: string | null
+  outcome: 'PASS' | 'WARN' | 'FAIL'
+  secure_context: boolean | null
+  microphone_permission_before: string | null
+  microphone_permission_after: string | null
+  recording_mime_type: string | null
+  audio_context_mode: string | null
+  offline_audio_context_mode: string | null
+  actual_sample_rate: number | null
+  base_latency: number | null
+  output_latency: number | null
+  warning_flags: string[]
+  take_recording_succeeded: boolean | null
+  analysis_succeeded: boolean | null
+  playback_succeeded: boolean | null
+  audible_issues: string | null
+  permission_issues: string | null
+  unexpected_warnings: string | null
+  follow_up: string | null
+  notes: string | null
+  validated_at: string
+}
+
+type EnvironmentValidationImportPreview = {
+  item_count: number
+  items: EnvironmentValidationImportPreviewItem[]
+}
+
+type EnvironmentValidationImportResult = {
+  imported_count: number
+  items: EnvironmentValidationRun[]
+}
+
 type FailedTrackSummary = {
   track_id: string
   project_id: string
@@ -346,6 +386,9 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 export function OpsPage() {
   const [pageState, setPageState] = useState<PageState>({ phase: 'loading' })
   const [actionState, setActionState] = useState<ActionState>({ phase: 'idle' })
+  const [validationImportText, setValidationImportText] = useState('')
+  const [validationImportPreview, setValidationImportPreview] =
+    useState<EnvironmentValidationImportPreview | null>(null)
   const [validationFormState, setValidationFormState] = useState<ValidationFormState>(
     initialValidationFormState,
   )
@@ -624,6 +667,118 @@ export function OpsPage() {
       setActionState({
         phase: 'error',
         message: error instanceof Error ? error.message : 'Unable to save the validation run.',
+      })
+    }
+  }
+
+  async function handleValidationImportFile(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    const text = await file.text()
+    setValidationImportText(text)
+    setValidationImportPreview(null)
+    setActionState({
+      phase: 'success',
+      message: `Loaded ${file.name}. Preview the CSV before importing the runs into ops.`,
+    })
+    event.target.value = ''
+  }
+
+  async function handlePreviewValidationImport(): Promise<void> {
+    if (!validationImportText.trim()) {
+      setActionState({
+        phase: 'error',
+        message: 'Paste CSV intake text or load a CSV file before previewing the import.',
+      })
+      return
+    }
+
+    setActionState({
+      phase: 'submitting',
+      message: 'Previewing external validation rows before they touch the ops log...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl('/api/admin/environment-validations/import-preview'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ csv_text: validationImportText }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to preview the validation CSV import.'))
+      }
+
+      const payload = (await response.json()) as EnvironmentValidationImportPreview
+      setValidationImportPreview(payload)
+      setActionState({
+        phase: 'success',
+        message:
+          payload.item_count > 0
+            ? `Preview ready for ${payload.item_count} validation run(s). Review the rows before importing them.`
+            : 'The CSV parsed successfully, but it did not contain any non-empty validation rows.',
+      })
+    } catch (error) {
+      setActionState({
+        phase: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to preview the validation CSV import.',
+      })
+    }
+  }
+
+  async function handleSubmitValidationImport(): Promise<void> {
+    if (!validationImportText.trim()) {
+      setActionState({
+        phase: 'error',
+        message: 'Paste CSV intake text or load a CSV file before importing runs into ops.',
+      })
+      return
+    }
+
+    setActionState({
+      phase: 'submitting',
+      message: 'Importing external validation rows into the ops log and refreshing the overview...',
+    })
+
+    try {
+      const response = await fetch(buildApiUrl('/api/admin/environment-validations/import'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ csv_text: validationImportText }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Unable to import the validation CSV rows.'))
+      }
+
+      const payload = (await response.json()) as EnvironmentValidationImportResult
+      await loadOverview()
+      setValidationImportPreview(null)
+      setValidationImportText('')
+      setActionState({
+        phase: 'success',
+        message:
+          payload.imported_count > 0
+            ? `Imported ${payload.imported_count} validation run(s) from the external CSV into ops.`
+            : 'The CSV import completed, but no validation rows were created.',
+      })
+    } catch (error) {
+      setActionState({
+        phase: 'error',
+        message:
+          error instanceof Error ? error.message : 'Unable to import the validation CSV rows.',
       })
     }
   }
@@ -973,6 +1128,142 @@ export function OpsPage() {
       </section>
 
       <section className="section section--split ops-section ops-section--validation">
+        <article className="panel studio-block ops-panel">
+          <p className="eyebrow">Import Intake</p>
+          <h2>Preview and import external validation sheets</h2>
+          <p className="panel__summary">
+            If QA or real-hardware rounds were captured outside ops, paste the CSV here or load the
+            spreadsheet export first. Review the parsed runs before importing them into the release log.
+          </p>
+
+          <div className="project-form ops-import-form">
+            <label className="field">
+              <span>Environment validation CSV</span>
+              <textarea
+                className="text-input text-area"
+                name="validationImportText"
+                value={validationImportText}
+                onChange={(event) => {
+                  setValidationImportText(event.target.value)
+                  setValidationImportPreview(null)
+                }}
+                placeholder="Paste the environment_validation_runs CSV here."
+                rows={10}
+              />
+            </label>
+
+            <div className="button-row">
+              <label className="button-secondary button-secondary--small ops-file-button">
+                Load CSV file
+                <input
+                  className="ops-file-input"
+                  type="file"
+                  accept=".csv,text/csv"
+                  aria-label="Validation CSV file"
+                  onChange={(event) => void handleValidationImportFile(event)}
+                />
+              </label>
+
+              <button
+                className="button-secondary button-secondary--small"
+                type="button"
+                onClick={() => void handlePreviewValidationImport()}
+              >
+                Preview import
+              </button>
+
+              <button
+                className="button-primary button-secondary--small"
+                type="button"
+                onClick={() => void handleSubmitValidationImport()}
+                disabled={!validationImportPreview || validationImportPreview.item_count === 0}
+              >
+                Import previewed runs
+              </button>
+            </div>
+
+            {validationImportPreview ? (
+              <div className="ops-import-preview">
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Preview rows</span>
+                    <strong>{validationImportPreview.item_count}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>PASS / WARN / FAIL</span>
+                    <strong>
+                      {
+                        validationImportPreview.items.filter((item) => item.outcome === 'PASS').length
+                      }{' '}
+                      /{' '}
+                      {
+                        validationImportPreview.items.filter((item) => item.outcome === 'WARN').length
+                      }{' '}
+                      /{' '}
+                      {
+                        validationImportPreview.items.filter((item) => item.outcome === 'FAIL').length
+                      }
+                    </strong>
+                  </div>
+                </div>
+
+                {validationImportPreview.item_count === 0 ? (
+                  <div className="empty-card">
+                    <p>No importable rows were found in the CSV input.</p>
+                    <p>Check that the sheet still includes headers and at least one non-empty row.</p>
+                  </div>
+                ) : (
+                  <div className="ops-list">
+                    {validationImportPreview.items.map((item, index) => (
+                      <article className="ops-card" key={`${item.label}-${item.validated_at}-${index}`}>
+                        <div className="ops-card__header">
+                          <div>
+                            <strong>{item.label}</strong>
+                            <span>
+                              {item.browser} / {item.os} / {item.device_name}
+                            </span>
+                          </div>
+
+                          <span
+                            className={`status-pill ${
+                              item.outcome === 'PASS'
+                                ? 'status-pill--success'
+                                : item.outcome === 'FAIL'
+                                  ? 'status-pill--danger'
+                                  : 'status-pill--warning'
+                            }`}
+                          >
+                            {item.outcome}
+                          </span>
+                        </div>
+
+                        <div className="mini-grid">
+                          <div className="mini-card">
+                            <span>Output route</span>
+                            <strong>{item.output_route ?? 'Not captured'}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Recorder MIME</span>
+                            <strong>{item.recording_mime_type ?? 'Unavailable'}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Validated</span>
+                            <strong>{formatDate(item.validated_at)}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>Warnings</span>
+                            <strong>{item.warning_flags.length}</strong>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </article>
+
         <article className="panel studio-block ops-panel">
           <p className="eyebrow">Validation Log</p>
           <h2>Record a native browser or real-hardware validation run</h2>

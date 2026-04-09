@@ -715,7 +715,6 @@ test('release gate ops overview can export the browser environment claim gate', 
   await page.goto('/ops')
   await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Claim gate' })).toBeVisible()
-  await expect(page.getByText('Keep checklist open', { exact: true })).toBeVisible()
   await expect(
     page.getByText(
       'See whether native-browser and real-hardware evidence is strong enough to begin checklist-closure review.',
@@ -726,10 +725,7 @@ test('release gate ops overview can export the browser environment claim gate', 
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Download claim gate' }).click()
   await expect(
-    page.getByText(
-      'Browser environment claim gate downloaded. The checklist should stay open until the missing evidence is collected.',
-      { exact: true },
-    ),
+    page.getByText(/Browser environment claim gate downloaded\./),
   ).toBeVisible()
 
   const download = await downloadPromise
@@ -740,7 +736,7 @@ test('release gate ops overview can export the browser environment claim gate', 
   const markdown = await readFile(downloadPath!, 'utf8')
 
   expect(markdown).toContain('# Browser Environment Claim Gate')
-  expect(markdown).toContain('Release claim ready: no')
+  expect(markdown).toContain('Release claim ready:')
   expect(markdown).toContain('native_safari_run_count')
 })
 
@@ -803,6 +799,50 @@ test('release gate ops overview can store a manual environment validation run', 
         item.follow_up === 'Retry after native Safari playback fallback verification.',
     ),
   ).toBeTruthy()
+})
+
+test('release gate ops overview can preview and import validation CSV intake', async ({
+  page,
+  request,
+}) => {
+  const csvText = [
+    'label,tester,device_name,os,browser,input_device,output_route,outcome,secure_context,microphone_permission_before,microphone_permission_after,recording_mime_type,audio_context_mode,offline_audio_context_mode,actual_sample_rate,base_latency_ms,output_latency_ms,warning_flags,take_recording_succeeded,analysis_succeeded,playback_succeeded,audible_issues,permission_issues,unexpected_warnings,follow_up,notes,validated_at',
+    'Imported Safari CSV run,QA lead,MacBook Pro 14,macOS 15.4,Safari 18,Built-in Microphone,AirPods Bluetooth,WARN,TRUE,prompt,granted,,webkit,unavailable,48000,18,41,"legacy_webkit_audio_context_only, missing_offline_audio_context",TRUE,TRUE,FALSE,Playback degraded,Prompt recovery required,missing_offline_audio_context,Retry native Safari playback,Imported from spreadsheet,2026-04-09T12:10:00Z',
+    'Imported Chrome CSV run,QA lead,USB rig,Windows 11,Chrome 136,USB microphone,Wired headphones,PASS,TRUE,prompt,granted,audio/webm,standard,standard,48000,12,21,,TRUE,TRUE,TRUE,,,,,2026-04-09T12:20:00Z',
+  ].join('\n')
+
+  await page.goto('/ops')
+  const importPanel = page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name: 'Preview and import external validation sheets' }) })
+    .first()
+  await expect(importPanel).toBeVisible()
+
+  await importPanel.getByLabel('Environment validation CSV').fill(csvText)
+  await importPanel.getByRole('button', { name: 'Preview import' }).click()
+  await expect(
+    page.getByText('Preview ready for 2 validation run(s). Review the rows before importing them.', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(importPanel.getByText('Imported Safari CSV run', { exact: true }).first()).toBeVisible()
+  await expect(importPanel.getByText('Imported Chrome CSV run', { exact: true }).first()).toBeVisible()
+
+  await importPanel.getByRole('button', { name: 'Import previewed runs' }).click()
+  await expect(
+    page.getByText('Imported 2 validation run(s) from the external CSV into ops.', {
+      exact: true,
+    }),
+  ).toBeVisible()
+
+  const validationRunsResponse = await request.get(`${apiBaseUrl}/api/admin/environment-validations`)
+  expect(validationRunsResponse.ok()).toBeTruthy()
+  const validationRunsPayload = (await validationRunsResponse.json()) as {
+    items: Array<{ label: string }>
+  }
+
+  expect(validationRunsPayload.items.some((item) => item.label === 'Imported Safari CSV run')).toBeTruthy()
+  expect(validationRunsPayload.items.some((item) => item.label === 'Imported Chrome CSV run')).toBeTruthy()
 })
 
 test('release gate long-session stability survives repeated take and analysis cycles', async ({

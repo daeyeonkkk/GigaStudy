@@ -155,6 +155,14 @@ class EnvironmentValidationRunCreateRequest(BaseModel):
     validated_at: datetime
 
 
+class EnvironmentValidationImportRequest(BaseModel):
+    csv_text: str = Field(min_length=1)
+
+
+class EnvironmentValidationImportPreviewItemResponse(EnvironmentValidationRunCreateRequest):
+    pass
+
+
 class EnvironmentValidationRunResponse(BaseModel):
     validation_run_id: UUID
     label: str
@@ -189,6 +197,16 @@ class EnvironmentValidationRunResponse(BaseModel):
 
 
 class EnvironmentValidationRunListResponse(BaseModel):
+    items: list[EnvironmentValidationRunResponse] = Field(default_factory=list)
+
+
+class EnvironmentValidationImportPreviewResponse(BaseModel):
+    item_count: int = Field(ge=0)
+    items: list[EnvironmentValidationImportPreviewItemResponse] = Field(default_factory=list)
+
+
+class EnvironmentValidationImportResultResponse(BaseModel):
+    imported_count: int = Field(ge=0)
     items: list[EnvironmentValidationRunResponse] = Field(default_factory=list)
 
 

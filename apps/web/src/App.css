@@ -2500,6 +2500,32 @@
   gap: 12px;
 }
 
+.ops-import-form {
+  gap: 16px;
+}
+
+.ops-file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.ops-file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ops-import-preview {
+  display: grid;
+  gap: 14px;
+}
+
+.text-area {
+  min-height: 220px;
+  resize: vertical;
+}
+
 .ops-page .mini-card {
   min-height: 92px;
   background: rgba(246, 241, 233, 0.9);

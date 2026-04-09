@@ -117,9 +117,10 @@ Before a manual validation round:
 3. Download the environment diagnostics report
 4. Use that report as the baseline for the round
 5. If testers are collecting evidence outside the product UI, start from `apps/api/environment_validation/environment_validation_runs.template.csv`
-6. Convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
-7. Review the preview JSON or submit the rows into the API
-8. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
+6. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
+7. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
+8. Review the preview rows before importing them into the ops log
+9. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
 
 After a manual validation round:
 
@@ -161,6 +162,12 @@ The ops overview should also surface the current claim-gate state inline so a re
 - whether the checklist should stay open
 - which evidence checks are currently blocking release-claim review
 - what the next evidence-collection actions are before exporting the detailed Markdown artifact
+
+The ops overview should also support CSV preview/import for external evidence so a reviewer can:
+
+- paste or load spreadsheet-style QA evidence
+- inspect parsed PASS / WARN / FAIL rows before they touch the log
+- import the reviewed rows into the same validation history that powers packet, claim-gate, and release-note exports
 
 ## Release Gate Expectations
 

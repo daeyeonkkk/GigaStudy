@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from io import StringIO
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -98,43 +99,13 @@ class EnvironmentValidationSheetRow(BaseModel):
 
 def load_environment_validation_sheet(sheet_path: Path) -> list[EnvironmentValidationSheetRow]:
     with sheet_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        rows: list[EnvironmentValidationSheetRow] = []
-        for raw_row in reader:
-            if not any(str(value or "").strip() for value in raw_row.values()):
-                continue
-            rows.append(
-                EnvironmentValidationSheetRow(
-                    label=str(raw_row.get("label") or "").strip(),
-                    tester=raw_row.get("tester"),
-                    device_name=str(raw_row.get("device_name") or "").strip(),
-                    os=str(raw_row.get("os") or "").strip(),
-                    browser=str(raw_row.get("browser") or "").strip(),
-                    input_device=raw_row.get("input_device"),
-                    output_route=raw_row.get("output_route"),
-                    outcome=str(raw_row.get("outcome") or "").strip().upper(),
-                    secure_context=_parse_optional_bool(raw_row.get("secure_context")),
-                    microphone_permission_before=raw_row.get("microphone_permission_before"),
-                    microphone_permission_after=raw_row.get("microphone_permission_after"),
-                    recording_mime_type=raw_row.get("recording_mime_type"),
-                    audio_context_mode=raw_row.get("audio_context_mode"),
-                    offline_audio_context_mode=raw_row.get("offline_audio_context_mode"),
-                    actual_sample_rate=_parse_optional_int(raw_row.get("actual_sample_rate")),
-                    base_latency=_parse_optional_latency_seconds(raw_row.get("base_latency_ms")),
-                    output_latency=_parse_optional_latency_seconds(raw_row.get("output_latency_ms")),
-                    warning_flags=_parse_warning_flags(raw_row.get("warning_flags")),
-                    take_recording_succeeded=_parse_optional_bool(raw_row.get("take_recording_succeeded")),
-                    analysis_succeeded=_parse_optional_bool(raw_row.get("analysis_succeeded")),
-                    playback_succeeded=_parse_optional_bool(raw_row.get("playback_succeeded")),
-                    audible_issues=raw_row.get("audible_issues"),
-                    permission_issues=raw_row.get("permission_issues"),
-                    unexpected_warnings=raw_row.get("unexpected_warnings"),
-                    follow_up=raw_row.get("follow_up"),
-                    notes=raw_row.get("notes"),
-                    validated_at=str(raw_row.get("validated_at") or "").strip(),
-                )
-            )
-        return rows
+        return _load_environment_validation_rows(csv.DictReader(handle))
+
+
+def load_environment_validation_sheet_text(sheet_text: str) -> list[EnvironmentValidationSheetRow]:
+    normalized_text = sheet_text.lstrip("\ufeff")
+    handle = StringIO(normalized_text)
+    return _load_environment_validation_rows(csv.DictReader(handle))
 
 
 def build_environment_validation_requests(
@@ -178,3 +149,44 @@ def render_environment_validation_requests_json(
     requests: list[EnvironmentValidationRunCreateRequest],
 ) -> str:
     return json.dumps([request.model_dump(mode="json") for request in requests], indent=2)
+
+
+def _load_environment_validation_rows(
+    reader: csv.DictReader,
+) -> list[EnvironmentValidationSheetRow]:
+    rows: list[EnvironmentValidationSheetRow] = []
+    for raw_row in reader:
+        if not any(str(value or "").strip() for value in raw_row.values()):
+            continue
+        rows.append(
+            EnvironmentValidationSheetRow(
+                label=str(raw_row.get("label") or "").strip(),
+                tester=raw_row.get("tester"),
+                device_name=str(raw_row.get("device_name") or "").strip(),
+                os=str(raw_row.get("os") or "").strip(),
+                browser=str(raw_row.get("browser") or "").strip(),
+                input_device=raw_row.get("input_device"),
+                output_route=raw_row.get("output_route"),
+                outcome=str(raw_row.get("outcome") or "").strip().upper(),
+                secure_context=_parse_optional_bool(raw_row.get("secure_context")),
+                microphone_permission_before=raw_row.get("microphone_permission_before"),
+                microphone_permission_after=raw_row.get("microphone_permission_after"),
+                recording_mime_type=raw_row.get("recording_mime_type"),
+                audio_context_mode=raw_row.get("audio_context_mode"),
+                offline_audio_context_mode=raw_row.get("offline_audio_context_mode"),
+                actual_sample_rate=_parse_optional_int(raw_row.get("actual_sample_rate")),
+                base_latency=_parse_optional_latency_seconds(raw_row.get("base_latency_ms")),
+                output_latency=_parse_optional_latency_seconds(raw_row.get("output_latency_ms")),
+                warning_flags=_parse_warning_flags(raw_row.get("warning_flags")),
+                take_recording_succeeded=_parse_optional_bool(raw_row.get("take_recording_succeeded")),
+                analysis_succeeded=_parse_optional_bool(raw_row.get("analysis_succeeded")),
+                playback_succeeded=_parse_optional_bool(raw_row.get("playback_succeeded")),
+                audible_issues=raw_row.get("audible_issues"),
+                permission_issues=raw_row.get("permission_issues"),
+                unexpected_warnings=raw_row.get("unexpected_warnings"),
+                follow_up=raw_row.get("follow_up"),
+                notes=raw_row.get("notes"),
+                validated_at=str(raw_row.get("validated_at") or "").strip(),
+            )
+        )
+    return rows

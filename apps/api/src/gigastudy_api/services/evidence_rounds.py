@@ -13,6 +13,8 @@ ROUND_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 class EvidenceRoundPaths:
     root: Path
     readme: Path
+    audit_json_path: Path
+    audit_markdown_path: Path
     human_rating_dir: Path
     human_rating_audio_guides_dir: Path
     human_rating_audio_takes_dir: Path
@@ -77,6 +79,8 @@ def resolve_evidence_round_paths(round_root: Path) -> EvidenceRoundPaths:
     return EvidenceRoundPaths(
         root=resolved_root,
         readme=resolved_root / "README.md",
+        audit_json_path=resolved_root / "round-audit.json",
+        audit_markdown_path=resolved_root / "round-audit.md",
         human_rating_dir=human_rating_dir,
         human_rating_audio_guides_dir=human_rating_audio_guides_dir,
         human_rating_audio_takes_dir=human_rating_audio_takes_dir,
@@ -131,6 +135,7 @@ def render_evidence_round_readme(
             "",
             "```bash",
             f"cd {repo_root / 'apps' / 'api'}",
+            "uv run python scripts/inspect_evidence_round.py --round-root <round>",
             "uv run python scripts/inspect_human_rating_corpus.py --round-root <round>",
             "uv run python scripts/build_human_rating_corpus.py --round-root <round>",
             "uv run python scripts/run_intonation_calibration.py --round-root <round>",
@@ -152,6 +157,7 @@ def render_evidence_round_readme(
             "",
             "```bash",
             f"cd {repo_root / 'apps' / 'api'}",
+            "uv run python scripts/inspect_evidence_round.py --round-root <round>",
             "uv run python scripts/import_environment_validation_runs.py --round-root <round>",
             "```",
             "",

@@ -124,6 +124,7 @@ uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
 4. Download the environment diagnostics report
 5. Use that report as the baseline for the round
 6. If testers are collecting evidence outside the product UI, start from the generated `environment-validation/environment_validation_runs.csv` file inside that round scaffold
+7. Run `uv run python scripts/inspect_evidence_round.py --round-root <round>` when you want one summary of what the round is still missing before review
 7. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
 8. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
    Prefer `uv run python scripts/import_environment_validation_runs.py --round-root <round>` so the round CSV and generated preview JSON stay together.

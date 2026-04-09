@@ -148,6 +148,15 @@ When `C:\my_project\DreamCatcher` exists, the scaffold defaults there so the evi
 
 Once a round exists, prefer passing `--round-root <round>` to the human-rating and environment-validation CLIs so metadata, generated corpora, reports, claim gates, evidence bundles, and preview JSON all stay inside that same round folder.
 
+### Evidence Round Audit
+
+```bash
+cd apps/api
+uv run python scripts/inspect_evidence_round.py --round-root <round>
+```
+
+This gives one summary of what that round already has, what generated support artifacts are still missing, and what the next collection step should be before review.
+
 ### Browser Environment Claim Gate
 
 After validation runs are loaded into ops, use the ops UI or call `/api/admin/environment-validation-claim-gate`.

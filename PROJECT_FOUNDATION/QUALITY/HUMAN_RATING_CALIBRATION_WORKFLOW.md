@@ -19,6 +19,8 @@ It only means the repo now has a repeatable path for attaching human-rating evid
 
 The repo now supports:
 
+- an evidence-round audit CLI:
+  `apps/api/scripts/inspect_evidence_round.py`
 - template inputs for the collection round:
   `apps/api/calibration/human_rating_cases.template.json`
   `apps/api/calibration/human_rating_sheet.template.csv`
@@ -122,6 +124,7 @@ If these bands change after real-rater analysis, the runner and report should be
 4. Inspect the metadata file or generated corpus before calibration:
 
 ```bash
+uv run python scripts/inspect_evidence_round.py --round-root <round>
 uv run python scripts/inspect_human_rating_corpus.py --round-root <round>
 ```
 
@@ -174,6 +177,7 @@ This writes the calibration summary, threshold-fit report, claim gate, and combi
 
 This workflow alone closes only the support-path gap:
 
+- the repo can now audit one evidence round and say what is present, missing, and next across human-rating and browser-validation collection
 - the repo can now compare scorer output against human note labels
 - the repo can now inspect whether real-vocal source files and rating coverage are actually ready before calibration
 - the repo can now evaluate whether the current corpus is even strong enough to start a threshold-closure review

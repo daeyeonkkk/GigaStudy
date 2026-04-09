@@ -267,8 +267,11 @@ async function runChordAwareAnalysis(page: Page): Promise<void> {
 }
 
 async function extractMelodyDraft(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Extract melody draft' }).click()
-  await expect(page.getByText(/Melody draft saved with/i)).toBeVisible()
+  const melodyPanel = getMelodyExtractionPanel(page)
+  await melodyPanel.getByRole('button', { name: 'Extract melody draft' }).click()
+  await expect(melodyPanel.getByText(/Melody draft saved with/i)).toBeVisible({
+    timeout: 20000,
+  })
 }
 
 async function generateArrangementCandidates(page: Page): Promise<void> {
@@ -298,6 +301,12 @@ function getArrangementEnginePanel(page: Page) {
   return page
     .locator('article')
     .filter({ has: page.getByRole('heading', { name: 'Generate candidate A/B/C from the latest melody draft' }) })
+}
+
+function getMelodyExtractionPanel(page: Page) {
+  return page
+    .locator('article')
+    .filter({ has: page.getByRole('heading', { name: 'Turn the selected take into a quantized melody draft' }) })
 }
 
 function getScoreViewPanel(page: Page) {

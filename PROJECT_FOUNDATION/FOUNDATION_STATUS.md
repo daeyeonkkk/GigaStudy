@@ -79,6 +79,7 @@ Date: 2026-04-09
 - The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
 - The foundation now also has a reference-led wireframe pack for Home, Studio, Arrangement, Shared Review, and Ops, so the next UI refactor has one canonical screen set instead of relying on scattered implementation screenshots.
 - The Home page now follows that wireframe pack closely enough to act like a product-facing studio entry screen instead of an environment-validation dashboard, while still preserving the real project-creation flow and API status check.
+- The Studio page now follows the integrated console wireframe closely enough to stop reading as stacked tools: a top utility strip, central waveform canvas, lower transport and track lane rail, right-side inspector, and anchored deep-work sections now behave like one rehearsal workspace instead of a phase-by-phase card stack.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -108,6 +109,7 @@ Date: 2026-04-09
 - Web lint: `npm run lint:web`
 - Web build: `npm run build:web`
 - Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
+- The Studio integrated-console refactor now also keeps the browser release gate green after the shell and workbench split, so the visual restructuring did not break the seeded product paths.
 - Visual browser review:
   `npx playwright screenshot --device="Desktop Chrome" --wait-for-timeout=1600 --full-page http://127.0.0.1:4173 output/playwright/home-wireframe.png`
   plus the matching `iPhone 13` capture.
@@ -153,12 +155,12 @@ Date: 2026-04-09
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
-- The product now has one chosen visual direction, and the Home page has been brought into that system first. The larger implementation gap is now concentrated in `Studio`, `Arrangement`, `Shared Review`, and `Ops`.
-- The product now also has a canonical wireframe pack, but the actual `Studio`, `Arrangement`, `Shared Review`, and `Ops` implementations have not yet been brought into close visual alignment with those layouts.
+- The product now has one chosen visual direction, and both the Home and Studio screens have been brought into that system first. The larger implementation gap is now concentrated in `Arrangement`, `Shared Review`, and `Ops`.
+- The product now also has a canonical wireframe pack, but the actual `Arrangement`, `Shared Review`, and `Ops` implementations have not yet been brought into close visual alignment with those layouts.
 
 ## Recommended Next Work
 
-1. Continue the UI refactor against `UI_WIREFRAMES_V1.md` in screen order: `Studio` next, then `Arrangement`, while keeping `Shared Review` and `Ops` visually subordinate to the product workflow.
+1. Continue the UI refactor against `UI_WIREFRAMES_V1.md` in screen order: `Arrangement` next, then `Shared Review`, while keeping `Ops` visually subordinate to the product workflow.
 2. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
 3. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 4. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.

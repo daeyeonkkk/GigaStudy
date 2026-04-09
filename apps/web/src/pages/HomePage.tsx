@@ -250,7 +250,7 @@ export function HomePage() {
                     className={`home-visual__note ${
                       index === 3 ? 'home-visual__note--alert' : ''
                     }`}
-                    key={note}
+                    key={`${note}-${index}`}
                   >
                     {note}
                   </span>

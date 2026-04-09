@@ -110,11 +110,12 @@ It is a regression path for the current note-event scorer, not a substitute for 
 - The browser release gate now also covers manual environment validation run capture in Chromium, Firefox, and WebKit.
 - The PostgreSQL + S3-compatible product storage path is now exercised by a repeatable smoke script instead of staying an optional note.
 - The foundation now also includes a reference-led wireframe pack for the canonical Home, Studio, Arrangement, Shared Review, and Ops screens, so the next UI refactor can follow one agreed layout system.
+- The Home and Studio screens now both follow that wireframe pack closely enough to read like one product system instead of a utility dashboard plus a stacked tool page.
 
 ## Current Hardening Focus
 
 - Keep the visual refactor locked to `PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
-- The Home entry screen now follows that wireframe pack; continue next with Studio, then Arrangement, while keeping Shared Review and Ops aligned to the same system without letting ops aesthetics dominate the product.
+- The Home entry screen and Studio console now follow that wireframe pack; continue next with Arrangement, then Shared Review, while keeping Ops aligned to the same system without letting ops aesthetics dominate the product.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.

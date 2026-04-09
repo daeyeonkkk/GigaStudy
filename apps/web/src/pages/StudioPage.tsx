@@ -4,7 +4,6 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
-import { currentLaneTickets } from '../data/phase1'
 import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
 import { buildApiUrl } from '../lib/api'
 import { getAudioContextConstructor } from '../lib/audioContext'
@@ -44,6 +43,18 @@ type ActionState =
   | { phase: 'submitting'; message?: string }
   | { phase: 'success'; message: string }
   | { phase: 'error'; message: string }
+
+const studioWorkbenchLinks = [
+  { id: 'harmony-authoring', label: 'Chords' },
+  { id: 'audio-setup', label: 'Audio setup' },
+  { id: 'recording', label: 'Recording' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'melody', label: 'Melody' },
+  { id: 'arrangement', label: 'Arrangement' },
+  { id: 'score-playback', label: 'Score' },
+  { id: 'mixdown', label: 'Mixdown' },
+  { id: 'sharing', label: 'History / Share' },
+] as const
 
 type DeviceProfile = {
   device_profile_id: string
@@ -3280,6 +3291,8 @@ export function StudioPage() {
     arrangementDurationMs > 0
       ? Math.min(1, arrangementPlaybackPositionMs / arrangementDurationMs)
       : 0
+  const readyTakeCount = takesState.items.filter((take) => take.track_status === 'READY').length
+  const totalTrackCount = takesState.items.length + (guide ? 1 : 0)
   const guideMixer = guide ? mixerState[guide.track_id] : null
   const guideWavExportUrl = guide?.guide_wav_artifact_url ?? null
   const mixdownPlaybackUrl = mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null
@@ -3294,18 +3307,66 @@ export function StudioPage() {
     recordingState.phase === 'counting-in' ||
     recordingState.phase === 'recording' ||
     recordingState.phase === 'uploading'
+  const consoleMicLabel =
+    permissionState.phase === 'granted'
+      ? 'Mic ready'
+      : permissionState.phase === 'error'
+        ? 'Mic blocked'
+        : latestProfile
+          ? 'Profile saved'
+          : 'Mic pending'
+  const consoleMicTone =
+    permissionState.phase === 'granted'
+      ? 'ready'
+      : permissionState.phase === 'error'
+        ? 'error'
+        : 'loading'
+  const consoleChordLabel = chordMarkerCount > 0 ? 'Chords ready' : 'Key-only'
+  const consoleAlignmentLabel =
+    selectedTake?.alignment_confidence === null || selectedTake?.alignment_confidence === undefined
+      ? 'n/a'
+      : formatConfidence(selectedTake.alignment_confidence)
+  const inspectorDirectionValue =
+    selectedNoteFeedback?.sustain_median_cents ?? selectedNoteFeedback?.attack_signed_cents ?? null
 
   return (
     <div className="page-shell">
-      <section className="panel studio-panel">
-        <div className="studio-header">
-          <div>
-            <p className="eyebrow">Studio Foundation</p>
+      <section className="studio-console-shell">
+        <div className="studio-console-strip">
+          <div className="studio-console-strip__title">
+            <p className="eyebrow">GigaStudy Studio</p>
             <h1>{project.title}</h1>
             <p className="panel__summary">
-              This studio entry follows the PROJECT_FOUNDATION sequence: attach a guide,
-              capture real microphone settings, then move into recording-ready flows.
+              One rehearsal console for guide-backed takes, note-level feedback, melody draft extraction,
+              arrangement preview, and export.
             </p>
+          </div>
+
+          <div className="studio-console-strip__meta">
+            <span className="studio-utility-chip">
+              <strong>{transportBpm} BPM</strong>
+              <small>{project.time_signature ?? '4/4'}</small>
+            </span>
+            <span className="studio-utility-chip">
+              <strong>{project.base_key ?? 'Unset key'}</strong>
+              <small>{project.mode ?? 'practice'}</small>
+            </span>
+            <span className="studio-utility-chip">
+              <strong>{consoleChordLabel}</strong>
+              <small>{chordMarkerCount > 0 ? `${chordMarkerCount} markers` : 'Harmony fallback'}</small>
+            </span>
+            <span className={`studio-utility-chip studio-utility-chip--${consoleMicTone}`}>
+              <strong>{consoleMicLabel}</strong>
+              <small>{latestProfile ? latestProfile.output_route : 'No saved profile yet'}</small>
+            </span>
+            <span className="studio-utility-chip">
+              <strong>Count-in {countInBeats}</strong>
+              <small>{metronomeEnabled ? 'Metronome on' : 'Metronome off'}</small>
+            </span>
+            <span className="studio-utility-chip">
+              <strong>Alignment {consoleAlignmentLabel}</strong>
+              <small>{selectedTake ? `Take ${selectedTake.take_no ?? '?'}` : 'No take selected'}</small>
+            </span>
           </div>
 
           <Link className="back-link" to="/">
@@ -3313,49 +3374,465 @@ export function StudioPage() {
           </Link>
         </div>
 
-        <div className="meta-grid">
-          <article className="info-card">
-            <h3>Project metadata</h3>
-            <dl className="studio-meta">
-              <div>
-                <dt>ID</dt>
-                <dd>{project.project_id}</dd>
+        <div className="studio-console-grid">
+          <div className="studio-console-main">
+            <article className="panel studio-console-canvas">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">Main Canvas</p>
+                  <h2>Waveform and contour canvas</h2>
+                </div>
+                <span
+                  className={`status-pill ${
+                    selectedTakePreview
+                      ? 'status-pill--ready'
+                      : waveformState.phase === 'error'
+                        ? 'status-pill--error'
+                        : 'status-pill--loading'
+                  }`}
+                >
+                  {selectedTakePreview
+                    ? 'Canvas ready'
+                    : waveformState.phase === 'error'
+                      ? 'Preview error'
+                      : 'Waiting for take'}
+                </span>
               </div>
-              <div>
-                <dt>BPM</dt>
-                <dd>{project.bpm ?? 'Unset'}</dd>
-              </div>
-              <div>
-                <dt>Base key</dt>
-                <dd>{project.base_key ?? 'Unset'}</dd>
-              </div>
-              <div>
-                <dt>Time signature</dt>
-                <dd>{project.time_signature ?? 'Unset'}</dd>
-              </div>
-              <div>
-                <dt>Mode</dt>
-                <dd>{project.mode ?? 'practice'}</dd>
-              </div>
-              <div>
-                <dt>Created</dt>
-                <dd>{formatDate(project.created_at)}</dd>
-              </div>
-            </dl>
-          </article>
 
-          <article className="info-card">
-            <h3>Current lane tickets</h3>
-            <ul>
-              {currentLaneTickets.map((ticket) => (
-                <li key={ticket}>{ticket}</li>
-              ))}
-            </ul>
-          </article>
+              {selectedTake ? (
+                <div className="support-stack">
+                  <div className="mini-grid">
+                    <div className="mini-card">
+                      <span>Selected take</span>
+                      <strong>Take {selectedTake.take_no ?? '?'}</strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>Status</span>
+                      <strong>{selectedTake.track_status}</strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>Duration</span>
+                      <strong>{formatDuration(selectedTake.duration_ms)}</strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>Preview source</span>
+                      <strong>
+                        {selectedTakePreview
+                          ? selectedTakePreview.source === 'local'
+                            ? 'Local blob'
+                            : 'Stored audio'
+                          : 'Not ready'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {selectedTakePreview ? (
+                    <WaveformPreview preview={selectedTakePreview} />
+                  ) : (
+                    <div className="empty-card">
+                      <p>No waveform preview is available yet.</p>
+                      <p>Record a take or select a processed take with stored audio.</p>
+                    </div>
+                  )}
+
+                  {selectedTakePlaybackUrl ? (
+                    <div className="audio-preview">
+                      <p className="json-label">Selected take playback</p>
+                      <ManagedAudioPlayer
+                        muted={isTrackMutedByMixer(selectedTake.track_id)}
+                        src={selectedTakePlaybackUrl}
+                        volume={mixerState[selectedTake.track_id]?.volume ?? 1}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="empty-card">
+                  <p>No take is selected.</p>
+                  <p>Record the first take or select one from the lower transport lane.</p>
+                </div>
+              )}
+            </article>
+
+            <article className="panel studio-console-transport">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">Transport + Track Lane</p>
+                  <h2>Keep recording, selection, and quick playback in one lower rail</h2>
+                </div>
+                <span className="status-pill status-pill--ready">{totalTrackCount} tracks</span>
+              </div>
+
+              <div className="studio-console-actions">
+                <button
+                  className="button-primary"
+                  type="button"
+                  disabled={isRecordingBusy}
+                  onClick={() => void handleStartRecording()}
+                >
+                  {recordingState.phase === 'counting-in'
+                    ? 'Counting in...'
+                    : recordingState.phase === 'uploading'
+                      ? 'Uploading...'
+                      : 'Record take'}
+                </button>
+
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={recordingState.phase !== 'recording'}
+                  onClick={() => void handleStopRecording()}
+                >
+                  Stop recorder
+                </button>
+
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={metronomePreviewState.phase === 'submitting'}
+                  onClick={() => void handlePreviewMetronome()}
+                >
+                  {metronomePreviewState.phase === 'submitting'
+                    ? 'Playing preview...'
+                    : 'Preview metronome'}
+                </button>
+
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={selectedTake === null || analysisState.phase === 'submitting'}
+                  onClick={() => void handleRunAnalysis()}
+                >
+                  {analysisState.phase === 'submitting'
+                    ? 'Analyzing...'
+                    : 'Analyze selected take'}
+                </button>
+              </div>
+
+              <p
+                className={
+                  recordingState.phase === 'error' || analysisState.phase === 'error'
+                    ? 'form-error'
+                    : 'status-card__hint'
+                }
+              >
+                {recordingState.phase === 'error'
+                  ? recordingState.message
+                  : analysisState.phase === 'error'
+                    ? analysisState.message
+                    : metronomePreviewState.phase === 'success'
+                      ? metronomePreviewState.message
+                      : selectedTake
+                        ? 'Use this lower rail to rehearse, switch takes, and rerun the score without leaving the console.'
+                        : 'Connect a guide, request the microphone, then record the first take from here.'}
+              </p>
+
+              {(guide?.source_artifact_url || selectedTakePlaybackUrl) ? (
+                <div className="studio-console-players">
+                  {guide?.source_artifact_url ? (
+                    <div className="studio-console-player">
+                      <span>Guide playback</span>
+                      <ManagedAudioPlayer
+                        muted={guide ? isTrackMutedByMixer(guide.track_id) : false}
+                        src={guide.source_artifact_url}
+                        volume={guideMixer?.volume ?? 0.85}
+                      />
+                    </div>
+                  ) : null}
+
+                  {selectedTakePlaybackUrl ? (
+                    <div className="studio-console-player">
+                      <span>Selected take</span>
+                      <ManagedAudioPlayer
+                        muted={selectedTake ? isTrackMutedByMixer(selectedTake.track_id) : false}
+                        src={selectedTakePlaybackUrl}
+                        volume={selectedTake ? (mixerState[selectedTake.track_id]?.volume ?? 1) : 1}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="track-lane">
+                {guide ? (
+                  <div className="track-row">
+                    <div className="track-row__meta">
+                      <strong>Guide</strong>
+                      <span>{guide.track_status}</span>
+                    </div>
+
+                    <div className="track-row__controls">
+                      <button
+                        className="button-secondary button-secondary--small"
+                        type="button"
+                        onClick={() =>
+                          updateMixerTrack(guide.track_id, {
+                            muted: !(mixerState[guide.track_id]?.muted ?? false),
+                          })
+                        }
+                      >
+                        {(mixerState[guide.track_id]?.muted ?? false) ? 'Unmute' : 'Mute'}
+                      </button>
+
+                      <button
+                        className="button-secondary button-secondary--small"
+                        type="button"
+                        onClick={() =>
+                          updateMixerTrack(guide.track_id, {
+                            solo: !(mixerState[guide.track_id]?.solo ?? false),
+                          })
+                        }
+                      >
+                        {(mixerState[guide.track_id]?.solo ?? false) ? 'Unsolo' : 'Solo'}
+                      </button>
+
+                      <label className="track-row__slider">
+                        <span>Volume</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={mixerState[guide.track_id]?.volume ?? 0.85}
+                          onChange={(event) =>
+                            updateMixerTrack(guide.track_id, {
+                              volume: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+
+                {takesState.items.map((take) => {
+                  const progress = takeUploadProgress[take.track_id]
+
+                  return (
+                    <div
+                      className={`track-row ${
+                        selectedTake?.track_id === take.track_id ? 'track-row--selected' : ''
+                      }`}
+                      key={`console-track-${take.track_id}`}
+                    >
+                      <div className="track-row__meta">
+                        <strong>Take {take.take_no ?? '?'}</strong>
+                        <span>
+                          {take.track_status}
+                          {take.latest_score ? ` · ${formatPercent(take.latest_score.total_score)}` : ''}
+                        </span>
+                      </div>
+
+                      <div className="track-row__controls">
+                        {typeof progress === 'number' && progress < 100 ? (
+                          <span className="studio-inline-status">Upload {progress}%</span>
+                        ) : null}
+
+                        <button
+                          className="button-secondary button-secondary--small"
+                          type="button"
+                          onClick={() => setSelectedTakeId(take.track_id)}
+                        >
+                          {selectedTake?.track_id === take.track_id ? 'Selected' : 'Select'}
+                        </button>
+
+                        <button
+                          className="button-secondary button-secondary--small"
+                          type="button"
+                          onClick={() =>
+                            updateMixerTrack(take.track_id, {
+                              muted: !(mixerState[take.track_id]?.muted ?? false),
+                            })
+                          }
+                        >
+                          {(mixerState[take.track_id]?.muted ?? false) ? 'Unmute' : 'Mute'}
+                        </button>
+
+                        <button
+                          className="button-secondary button-secondary--small"
+                          type="button"
+                          onClick={() =>
+                            updateMixerTrack(take.track_id, {
+                              solo: !(mixerState[take.track_id]?.solo ?? false),
+                            })
+                          }
+                        >
+                          {(mixerState[take.track_id]?.solo ?? false) ? 'Unsolo' : 'Solo'}
+                        </button>
+
+                        <label className="track-row__slider">
+                          <span>Volume</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={mixerState[take.track_id]?.volume ?? 1}
+                            onChange={(event) =>
+                              updateMixerTrack(take.track_id, {
+                                volume: Number(event.target.value),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {takesState.items.length === 0 ? (
+                  <div className="empty-card">
+                    <p>No takes yet.</p>
+                    <p>Record the first take to open the lane and waveform review flow.</p>
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          </div>
+
+          <aside className="panel studio-console-inspector">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Inspector</p>
+                <h2>Keep score, note direction, and environment risk visible</h2>
+              </div>
+              <span
+                className={`status-pill ${
+                  selectedTakeScore
+                    ? 'status-pill--ready'
+                    : selectedTakeAnalysisJob?.status === 'FAILED'
+                      ? 'status-pill--error'
+                      : 'status-pill--loading'
+                }`}
+              >
+                {selectedTakeScore ? 'Scored take' : selectedTakeAnalysisJob?.status ?? 'Waiting'}
+              </span>
+            </div>
+
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>Selected take</span>
+                <strong>{selectedTake ? `Take ${selectedTake.take_no ?? '?'}` : 'None'}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Ready takes</span>
+                <strong>{readyTakeCount}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Pitch mode</span>
+                <strong>{getPitchQualityModeLabel(selectedTakeScore?.pitch_quality_mode)}</strong>
+              </div>
+              <div className="mini-card">
+                <span>Harmony mode</span>
+                <strong>{getHarmonyReferenceLabel(selectedTakeScore?.harmony_reference_mode)}</strong>
+              </div>
+            </div>
+
+            <div className="score-grid">
+              <div className="score-card">
+                <span>Pitch</span>
+                <strong>{formatPercent(selectedTakeScore?.pitch_score ?? null)}</strong>
+              </div>
+              <div className="score-card">
+                <span>Rhythm</span>
+                <strong>{formatPercent(selectedTakeScore?.rhythm_score ?? null)}</strong>
+              </div>
+              <div className="score-card">
+                <span>Harmony fit</span>
+                <strong>{formatPercent(selectedTakeScore?.harmony_fit_score ?? null)}</strong>
+              </div>
+              <div className="score-card score-card--highlight">
+                <span>Total</span>
+                <strong>{formatPercent(selectedTakeScore?.total_score ?? null)}</strong>
+              </div>
+            </div>
+
+            {selectedNoteFeedback ? (
+              <article className="studio-inspector-note">
+                <div className="studio-inspector-note__header">
+                  <div>
+                    <span>Weak note</span>
+                    <strong>
+                      {midiToPitchName(selectedNoteFeedback.target_midi)} · Note {selectedNoteFeedback.note_index + 1}
+                    </strong>
+                  </div>
+                  <span
+                    className={`candidate-chip candidate-chip--${getPitchDirectionTone(
+                      inspectorDirectionValue,
+                    )}`}
+                  >
+                    {getPitchDirectionLabel(inspectorDirectionValue)}
+                  </span>
+                </div>
+
+                <p>{selectedNoteFeedback.message}</p>
+
+                <div className="mini-grid">
+                  <div className="mini-card">
+                    <span>Attack</span>
+                    <strong>{formatSignedCents(selectedNoteFeedback.attack_signed_cents)}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Sustain</span>
+                    <strong>{formatSignedCents(selectedNoteFeedback.sustain_median_cents)}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Timing</span>
+                    <strong>{formatSignedMs(selectedNoteFeedback.timing_offset_ms)}</strong>
+                  </div>
+                  <div className="mini-card">
+                    <span>Confidence</span>
+                    <strong>{formatConfidence(selectedNoteFeedback.confidence)}</strong>
+                  </div>
+                </div>
+              </article>
+            ) : (
+              <div className="empty-card">
+                <p>No note detail is selected yet.</p>
+                <p>Run analysis, then use the detailed note feedback section below for per-note correction work.</p>
+              </div>
+            )}
+
+            <div className="support-stack">
+              <div className="mini-card mini-card--stack">
+                <span>Environment warnings</span>
+                <strong>
+                  {currentCapabilityWarnings.length > 0
+                    ? `${currentCapabilityWarnings.length} active`
+                    : 'No active warnings'}
+                </strong>
+                <small>
+                  {currentCapabilityWarnings.length > 0
+                    ? currentCapabilityWarnings
+                        .slice(0, 3)
+                        .map((flag) => getBrowserAudioWarningLabel(flag))
+                        .join(' · ')
+                    : 'Recorder, permission, and Web Audio surfaces look usable on this path.'}
+                </small>
+              </div>
+
+              <div className="mini-card mini-card--stack">
+                <span>Detailed workbench</span>
+                <strong>Deep edit tools stay below the console shell</strong>
+                <small>
+                  Use the lower sections for DeviceProfile inspection, chord authoring, JSON editing, arrangement editing,
+                  mixdown saving, version history, and share management.
+                </small>
+              </div>
+            </div>
+          </aside>
         </div>
+
+        <nav className="studio-workrail" aria-label="studio workbench">
+          {studioWorkbenchLinks.map((link) => (
+            <a className="studio-workrail__link" href={`#${link.id}`} key={link.id}>
+              {link.label}
+            </a>
+          ))}
+        </nav>
       </section>
 
-      <section className="section">
+      <section className="section" id="harmony-authoring">
         <div className="section__header">
           <p className="eyebrow">Phase 9 Reachability</p>
           <h2>Attach a chord timeline so harmony-fit can leave key-only fallback</h2>
@@ -3606,7 +4083,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="audio-setup">
         <div className="section__header">
           <p className="eyebrow">FE-02 and FE-03</p>
           <h2>Audio setup and guide connection</h2>
@@ -4089,7 +4566,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="recording">
         <div className="section__header">
           <p className="eyebrow">FE-03 and FE-04</p>
           <h2>Transport prep and take recording</h2>
@@ -4393,7 +4870,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="track-lane">
         <div className="section__header">
           <p className="eyebrow">BE-05, FE-05, FE-06</p>
           <h2>Studio snapshot, track lane, and preview</h2>
@@ -4639,7 +5116,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="analysis">
         <div className="section__header">
           <p className="eyebrow">Phase 2</p>
           <h2>Post-recording alignment and scoring</h2>
@@ -5177,7 +5654,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="melody">
         <div className="section__header">
           <p className="eyebrow">Phase 3</p>
           <h2>Audio-to-MIDI melody draft</h2>
@@ -5401,7 +5878,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="arrangement">
         <div className="section__header">
           <p className="eyebrow">Phase 4</p>
           <h2>Rule-based arrangement candidates</h2>
@@ -5795,7 +6272,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="score-playback">
         <div className="section__header">
           <p className="eyebrow">Phase 6</p>
           <h2>Score rendering, guide playback, and export</h2>
@@ -6039,7 +6516,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="mixdown">
         <div className="section__header">
           <p className="eyebrow">BE-06 and FE-07</p>
           <h2>Offline mixdown preview and save</h2>
@@ -6250,7 +6727,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="sharing">
         <div className="section__header">
           <p className="eyebrow">Phase 8</p>
           <h2>Project history and read-only sharing</h2>

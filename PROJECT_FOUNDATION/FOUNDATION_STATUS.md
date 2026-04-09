@@ -96,6 +96,7 @@ Date: 2026-04-09
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
+- The repo now also has a claim-gate evaluator for human-rated corpora, so the team can repeatably decide whether current evidence is strong enough to even begin threshold-closure review.
 - Calibration manifest loading is now also UTF-8 BOM-safe, so Windows-edited human-rating corpus files do not break the runner or evidence-bundle flow.
 - The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
 - The foundation now also has a reference-led wireframe pack for Home, Studio, Arrangement, Shared Review, and Ops, so the next UI refactor has one canonical screen set instead of relying on scattered implementation screenshots.
@@ -115,7 +116,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `76 passed`
+- Result: `79 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes environment-validation intake parsing and request-shape generation from CSV evidence sheets.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
@@ -156,6 +157,14 @@ Date: 2026-04-09
   `uv run python scripts/fit_human_rating_thresholds.py --manifest ...`
 - Result:
   passed on a named-fixture generated corpus, producing candidate `strict / basic / beginner` cent bands from human-rating labels.
+- Claim-gate regression:
+  `uv run pytest apps/api/tests/test_calibration_claim_gate.py`
+- Result:
+  passed with coverage for synthetic/template rejection, review-ready positive cases, and custom policy thresholds.
+- Claim-gate CLI:
+  `uv run python scripts/evaluate_human_rating_claim_gate.py --manifest calibration/human_rating_seeded_fixture.json`
+- Result:
+  passed on the seeded fixture manifest, producing a `not ready` gate with explicit reasons instead of leaving threshold-closure review as an ad hoc judgment.
 - Human-rating evidence-bundle regression:
   `uv run pytest apps/api/tests/test_calibration_evidence.py`
 - Result:
@@ -245,6 +254,7 @@ Date: 2026-04-09
 - The new intake builder removes the remaining manual-manifest bottleneck, but the evidence gap is still real singer data, real raters, and reviewed threshold tuning.
 - The new corpus inventory tool removes another pre-calibration bottleneck, but it still does not populate a trusted real-vocal corpus or justify closing the human-trust checklist items by itself.
 - The new threshold-fit report removes the last ad hoc step in proposing difficulty bands, but it still does not count as validated human-threshold evidence until a real corpus is run through it.
+- The new claim gate removes another subjective review bottleneck, but it still evaluates the current evidence rather than creating that evidence; the real-human checklist items remain open until a trusted corpus actually passes it.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.

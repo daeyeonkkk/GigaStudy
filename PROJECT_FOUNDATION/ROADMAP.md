@@ -304,6 +304,7 @@
 - real-vocal corpus inventory / validation report for audio-path and rating coverage sanity checks
 - human-rating corpus manifest와 agreement report workflow
 - threshold-fit report generator for difficulty tiers
+- claim gate evaluator for deciding whether threshold evidence is strong enough to review checklist closure
 - 실제 보컬 fixture와 threshold calibration
 - note-level 피드백 UI와 제품 카피 정합성 점검
 

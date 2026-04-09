@@ -183,6 +183,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A canonical mockup workflow is documented in `DESIGN/UI_MOCKUP_TRACK.md`.
 - [x] Repo-visible mockup exports exist for the first visual-priority screens in `DESIGN/UI_MOCKUPS/`.
 - [x] A shared Figma file or equivalent editable design source exists for the canonical product mockups.
+- [x] Any approved real-photo ambient asset used on brand-facing surfaces is copied into a repo-owned path without modifying the original source library.
 - [x] `Home`, `Studio`, and `Arrangement` each have a frozen mockup version that implementation can target directly.
 - [x] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
 - [x] Each visually refactored screen references the mockup version it implements, rather than only the low-fidelity wireframe.

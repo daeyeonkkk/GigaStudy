@@ -50,6 +50,12 @@ Each canonical mockup should have:
 - a version label such as `v1`
 - a short implementation note describing what code screen should target it
 
+If a canonical mockup uses real photography, it should also record:
+
+- the approved source image identifier
+- the repo-owned copied asset path used by implementation
+- the reason that image is safe to use, such as `non-identifying ambient environment`
+
 Recommended naming:
 
 - `home-v1`

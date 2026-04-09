@@ -111,6 +111,7 @@ Date: 2026-04-09
 - The Ops screen now follows the `ops-v1` mockup closely enough to read like a dense release desk instead of a generic stack of admin cards: KPI strip on top, validation and recovery work areas in the middle, and diagnostics plus recent environment capture at the bottom.
 - The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
 - The foundation now also has an equivalent editable design source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the product no longer depends on frozen SVG exports alone when updating canonical screen mockups.
+- The Home page now also uses one curated non-identifying ambient photo from the user-owned external library as a supporting visual layer, and the selected source `C:\my_project\DCIM\102_PANA\IMG_9729.JPG` has been copied into the repo-owned path `apps/web/public/photography/home-ambient-quiet-hall.jpg` without modifying `C:\my_project\DCIM`.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -207,6 +208,7 @@ Date: 2026-04-09
 - Browser release-gate smoke path: `npm run test:e2e`
 - Result: `34 passed`, `5 skipped`
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
+- The same browser release gate now also proves the Home entry still works after adding the curated ambient photo layer, because project creation still starts from the Home surface in every browser run.
 - Scope now also includes the dedicated Arrangement workspace route across Chromium, Firefox, and WebKit, verifying that the score-first compare surface, export actions, and studio deep-edit handoff are reachable as their own product workspace.
 - Scope now also includes the refactored Shared Review layout across Chromium, Firefox, and WebKit, verifying the selected-take rail, frozen review canvas, and explicit read-only warning language on the shared viewer.
 - Arrangement playback progress plus stop/reset behavior is now verified in Chromium and Firefox.
@@ -263,6 +265,7 @@ Date: 2026-04-09
 - The new claim gate removes another subjective review bottleneck, but it still evaluates the current evidence rather than creating that evidence; the real-human checklist items remain open until a trusted corpus actually passes it.
 - The inline browser/hardware claim-gate summary removes another small review bottleneck inside ops, but it still does not create native Safari or broad real-hardware evidence by itself.
 - The new ops CSV preview/import flow removes another intake bottleneck for external QA evidence, but it still does not replace the need for actual native Safari or broad real-hardware validation runs.
+- The new curated home-photo layer improves atmosphere on the entry screen, but it is intentionally limited to one non-identifying ambient image and should not become a shortcut around the broader mockup discipline.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.

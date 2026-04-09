@@ -354,6 +354,26 @@
   box-shadow: var(--panel-shadow);
 }
 
+.home-proof__photo {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.home-proof__photo img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 22px;
+  border: 1px solid rgba(34, 62, 83, 0.12);
+  filter: saturate(0.82) contrast(1.02);
+}
+
+.home-proof__photo figcaption {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
 .home-proof__row {
   padding: 18px 0;
   border-bottom: 1px solid rgba(34, 62, 83, 0.1);

@@ -159,6 +159,13 @@ What we should not borrow literally:
 - copper accent for action and transport
 - soft teal or cyan only where audio contour or signal guidance benefits from it
 
+### Photography
+
+- real photography is allowed only as a supporting atmospheric layer on brand-facing surfaces such as `Home`
+- prefer non-identifying environmental shots with room depth, lighting, and structural focus
+- avoid event reportage, recognizable faces, and imagery that introduces a narrative unrelated to vocal practice
+- when a user-owned photo is approved, copy only the selected asset into a repo-owned path and leave the source library untouched
+
 ### Core Contrast
 
 - dark structure
@@ -244,6 +251,7 @@ Should not feel like:
 Design rule:
 
 - the current engineering-heavy hero copy should be replaced in the visual refactor
+- a supporting visual may use one curated real-photo ambient asset if it stays non-identifying and reads as atmosphere rather than as reportage
 
 ### Screen 2. Studio
 

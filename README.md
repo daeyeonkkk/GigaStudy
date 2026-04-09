@@ -193,6 +193,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - Seeded mockup exports now exist for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`.
 - A repo-local equivalent editable design source now also exists under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the canonical mockups are editable in-repo even before a shared Figma file is connected.
 - The Home, Studio, Arrangement, Shared Review, and Ops screens now follow that visual system closely enough to read like one product workspace family instead of a utility dashboard plus stacked tool panels.
+- The Home screen now also carries one curated non-identifying ambient photo copied from the user-owned external library into a repo-owned asset path, so the entry surface can gain real atmosphere without coupling the app to the raw photo archive.
 - Arrangement work now also has its own dedicated `/projects/:projectId/arrangement` route, so score comparison and export can happen in a score-first workspace instead of only inside the studio page.
 - Shared review now also reads like a frozen review desk instead of a generic details page, making the read-only boundary much clearer for recipients.
 

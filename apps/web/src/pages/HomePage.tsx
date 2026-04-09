@@ -83,6 +83,7 @@ const nextStudioOutputs = [
 
 const waveformBars = [24, 40, 58, 72, 44, 66, 80, 55, 68, 38, 61, 82, 52, 74, 47] as const
 const notePreview = ['C4', 'E4', 'G4', 'A4', 'G4', 'E4'] as const
+const ambientVenuePhoto = '/photography/home-ambient-quiet-hall.jpg'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -329,6 +330,17 @@ export function HomePage() {
         </div>
 
         <div className="home-proof__board" aria-label="workflow proof">
+          <figure className="home-proof__photo">
+            <img
+              src={ambientVenuePhoto}
+              alt="Quiet hall interior with rows of chairs, warm lighting, and a clear front focal point."
+            />
+            <figcaption>
+              Calm room depth, one front focus, and restrained light. The product should feel this
+              composed when practice begins.
+            </figcaption>
+          </figure>
+
           <article className="home-proof__row">
             <span>Recording lane</span>
             <strong>Guide + multi-take transport</strong>

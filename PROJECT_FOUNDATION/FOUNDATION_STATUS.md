@@ -10,6 +10,7 @@ Date: 2026-04-09
 - `INTONATION_CALIBRATION_REPORT.md`
 - `UI_DESIGN_DIRECTION.md`
 - `UI_WIREFRAMES_V1.md`
+- `UI_MOCKUP_TRACK.md`
 - `PHASE9_INTONATION_BACKLOG.md`
 - `PHASE1_BACKLOG.md`
 - `GigaStudy_check_list.md`
@@ -78,8 +79,10 @@ Date: 2026-04-09
 - The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
 - The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
 - The foundation now also has a reference-led wireframe pack for Home, Studio, Arrangement, Shared Review, and Ops, so the next UI refactor has one canonical screen set instead of relying on scattered implementation screenshots.
+- The foundation now also has a first-class mockup track: editable design files are now the preferred visual source of truth, and repo-visible mockup exports are required so implementation can target concrete screens instead of only prose wireframes.
 - The Home page now follows that wireframe pack closely enough to act like a product-facing studio entry screen instead of an environment-validation dashboard, while still preserving the real project-creation flow and API status check.
 - The Studio page now follows the integrated console wireframe closely enough to stop reading as stacked tools: a top utility strip, central waveform canvas, lower transport and track lane rail, right-side inspector, and anchored deep-work sections now behave like one rehearsal workspace instead of a phase-by-phase card stack.
+- The repo now also includes seeded mockup exports for `Home`, `Studio`, and `Arrangement` under `PROJECT_FOUNDATION/UI_MOCKUPS/`, so the next visual refactors can anchor against visible design files inside the repo even before a shared Figma source is fully established.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -110,6 +113,11 @@ Date: 2026-04-09
 - Web build: `npm run build:web`
 - Result: passed, with the existing OSMD bundle-size warning still present during `vite build`.
 - The Studio integrated-console refactor now also keeps the browser release gate green after the shell and workbench split, so the visual restructuring did not break the seeded product paths.
+- Mockup export render check:
+  `npx playwright screenshot --device="Desktop Chrome" "file:///.../UI_MOCKUPS/home-v1.svg"`
+  plus the matching `studio-v1.svg` and `arrangement-v1.svg` capture.
+- Result:
+  the seeded mockup exports for `Home`, `Studio`, and `Arrangement` all render cleanly as browser-visible design files inside the repo and are usable as a concrete visual baseline.
 - Visual browser review:
   `npx playwright screenshot --device="Desktop Chrome" --wait-for-timeout=1600 --full-page http://127.0.0.1:4173 output/playwright/home-wireframe.png`
   plus the matching `iPhone 13` capture.
@@ -156,12 +164,14 @@ Date: 2026-04-09
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
 - The product now has one chosen visual direction, and both the Home and Studio screens have been brought into that system first. The larger implementation gap is now concentrated in `Arrangement`, `Shared Review`, and `Ops`.
-- The product now also has a canonical wireframe pack, but the actual `Arrangement`, `Shared Review`, and `Ops` implementations have not yet been brought into close visual alignment with those layouts.
+- The product now also has a canonical wireframe pack plus initial mockup exports, but the actual `Arrangement`, `Shared Review`, and `Ops` implementations have not yet been brought into close visual alignment with those layouts.
+- The new mockup track makes the design workflow more concrete, but a shared editable Figma source and per-screen frozen version references still need to be established before we can say the visual system is fully locked.
 
 ## Recommended Next Work
 
-1. Continue the UI refactor against `UI_WIREFRAMES_V1.md` in screen order: `Arrangement` next, then `Shared Review`, while keeping `Ops` visually subordinate to the product workflow.
-2. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
-3. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
-4. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
-5. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
+1. Continue the UI refactor against the new mockup track in screen order: `Arrangement` next, then `Shared Review`, while keeping `Ops` visually subordinate to the product workflow.
+2. Create or connect a shared editable Figma source for the canonical product mockups, then record the frozen version id for each implemented screen.
+3. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
+4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
+5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
+6. Use `BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.

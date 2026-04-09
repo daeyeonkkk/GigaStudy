@@ -165,3 +165,12 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [ ] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
 - [ ] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
 - [ ] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
+
+## 17. Mockup Track
+
+- [x] A canonical mockup workflow is documented in `UI_MOCKUP_TRACK.md`.
+- [x] Repo-visible mockup exports exist for the first visual-priority screens in `UI_MOCKUPS/`.
+- [ ] A shared Figma file or equivalent editable design source exists for the canonical product mockups.
+- [x] `Home`, `Studio`, and `Arrangement` each have a frozen mockup version that implementation can target directly.
+- [ ] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
+- [ ] Each visually refactored screen references the mockup version it implements, rather than only the low-fidelity wireframe.

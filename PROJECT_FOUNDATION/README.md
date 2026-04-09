@@ -11,14 +11,15 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 2. `ROADMAP.md`
 3. `UI_DESIGN_DIRECTION.md`
 4. `UI_WIREFRAMES_V1.md`
-5. `INTONATION_ANALYSIS_ASSESSMENT.md`
-6. `INTONATION_CALIBRATION_REPORT.md`
-7. `PHASE1_BACKLOG.md`
-8. `PHASE9_INTONATION_BACKLOG.md`
-9. `GigaStudy_check_list.md`
-10. `BROWSER_ENVIRONMENT_VALIDATION.md`
-11. `FOUNDATION_STATUS.md`
-12. `WORKING_PRINCIPLES.md`
+5. `UI_MOCKUP_TRACK.md`
+6. `INTONATION_ANALYSIS_ASSESSMENT.md`
+7. `INTONATION_CALIBRATION_REPORT.md`
+8. `PHASE1_BACKLOG.md`
+9. `PHASE9_INTONATION_BACKLOG.md`
+10. `GigaStudy_check_list.md`
+11. `BROWSER_ENVIRONMENT_VALIDATION.md`
+12. `FOUNDATION_STATUS.md`
+13. `WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -30,6 +31,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Canonical visual direction for the product, including the chosen art direction, reference read, screen priorities, and hard UI rules for future visual refactors.
 - `UI_WIREFRAMES_V1.md`
   Reference-led low-fidelity wireframe pack for the canonical home, studio, arrangement, shared, and ops screens.
+- `UI_MOCKUP_TRACK.md`
+  Canonical mockup workflow, including how editable design files and repo-visible export assets should be used as the implementation source of truth.
 - `PHASE1_BACKLOG.md`
   Build backlog for the first recording pipeline and studio foundation slice.
 - `PHASE9_INTONATION_BACKLOG.md`
@@ -46,6 +49,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Evaluation of the current scoring engine, what critique is accepted, and the approved quality track for a more human-trustworthy intonation analyzer.
 - `WORKING_PRINCIPLES.md`
   Project working rules, storage conventions, and execution discipline.
+- `UI_MOCKUPS/`
+  Repo-visible mockup exports for the first canonical screens so implementation can compare against actual design files, not only prose wireframes.
 
 ## Working Rule
 

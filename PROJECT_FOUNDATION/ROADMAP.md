@@ -47,6 +47,13 @@
 - 모델 버전 기록
 - 재시도와 오류 로그
 
+### 2.5 시각 산출물 축
+
+- canonical mockup source of truth를 `UI_MOCKUP_TRACK.md`로 고정
+- Figma 또는 동등한 디자인 파일을 선호하되, repo 안에는 항상 export된 mockup asset을 함께 둔다
+- `Home`, `Studio`, `Arrangement`를 먼저 high-fidelity mockup으로 고정한 뒤 구현에 연결
+- 구현 화면은 임의 해석보다 frozen mockup 버전을 우선 기준으로 삼는다
+
 ## 3. 단계별 로드맵
 
 ### Phase 0. 프로젝트 기반 확정

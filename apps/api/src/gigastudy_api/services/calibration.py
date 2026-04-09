@@ -53,6 +53,28 @@ class CalibrationExpectation(BaseModel):
     expected_harmony_reference_mode: str | None = None
 
 
+class HumanRatingNote(BaseModel):
+    note_index: int = 0
+    attack_direction: str | None = None
+    sustain_direction: str | None = None
+    acceptability_label: str | None = None
+    notes: str | None = None
+    rater_count: int | None = None
+
+    @model_validator(mode="after")
+    def validate_labels(self) -> "HumanRatingNote":
+        directional_values = {"sharp", "centered", "flat", "unclear"}
+        acceptability_values = {"in_tune", "review", "corrective", "unclear"}
+
+        if self.attack_direction is not None and self.attack_direction not in directional_values:
+            raise ValueError("attack_direction must be one of sharp, centered, flat, unclear.")
+        if self.sustain_direction is not None and self.sustain_direction not in directional_values:
+            raise ValueError("sustain_direction must be one of sharp, centered, flat, unclear.")
+        if self.acceptability_label is not None and self.acceptability_label not in acceptability_values:
+            raise ValueError("acceptability_label must be one of in_tune, review, corrective, unclear.")
+        return self
+
+
 class CalibrationCase(BaseModel):
     case_id: str
     description: str
@@ -62,7 +84,20 @@ class CalibrationCase(BaseModel):
     chord_timeline_json: list[dict[str, object]] | None = None
     guide_source: AudioSourceSpec
     take_source: AudioSourceSpec
-    expectation: CalibrationExpectation
+    expectation: CalibrationExpectation | None = None
+    human_ratings: list[HumanRatingNote] = Field(default_factory=list)
+    minimum_human_agreement_ratio: float | None = None
+
+    @model_validator(mode="after")
+    def validate_human_rating_controls(self) -> "CalibrationCase":
+        if self.minimum_human_agreement_ratio is None:
+            return self
+
+        if not 0.0 <= self.minimum_human_agreement_ratio <= 1.0:
+            raise ValueError("minimum_human_agreement_ratio must be between 0.0 and 1.0.")
+        if not self.human_ratings:
+            raise ValueError("human_ratings are required when minimum_human_agreement_ratio is set.")
+        return self
 
 
 class CalibrationCorpus(BaseModel):
@@ -81,6 +116,7 @@ class CalibrationCaseResult(BaseModel):
     harmony_reference_mode: str | None = None
     note_feedback: dict[str, object] | None = None
     analysis_model_version: str | None = None
+    human_rating_summary: dict[str, object] | None = None
 
 
 class CalibrationRunSummary(BaseModel):
@@ -94,6 +130,9 @@ class CalibrationRunSummary(BaseModel):
     failed_cases: int
     all_passed: bool
     cases: list[CalibrationCaseResult]
+    rated_case_count: int = 0
+    rated_note_count: int = 0
+    human_rating_agreement_ratio: float | None = None
 
 
 def load_calibration_corpus(manifest_path: Path) -> CalibrationCorpus:
@@ -248,6 +287,18 @@ def _classify_direction(value: float | int | None, centered_cents: float = DEFAU
     return "sharp" if numeric_value > 0 else "flat"
 
 
+def _classify_acceptability_label(value: float | int | None) -> str:
+    if value is None:
+        return "missing"
+
+    numeric_value = abs(float(value))
+    if numeric_value <= 8.0:
+        return "in_tune"
+    if numeric_value <= 20.0:
+        return "review"
+    return "corrective"
+
+
 def _evaluate_expectation(
     expectation: CalibrationExpectation,
     latest_score: dict[str, object],
@@ -325,6 +376,98 @@ def _evaluate_expectation(
     return note_feedback, failures
 
 
+def _evaluate_human_ratings(
+    human_ratings: list[HumanRatingNote],
+    latest_score: dict[str, object],
+) -> tuple[dict[str, object] | None, list[str]]:
+    if not human_ratings:
+        return None, []
+
+    note_feedback_items = latest_score.get("note_feedback_json")
+    if not isinstance(note_feedback_items, list):
+        return {
+            "rated_note_count": len(human_ratings),
+            "matched_axes": 0,
+            "total_axes": 0,
+            "agreement_ratio": None,
+            "note_results": [],
+        }, ["Missing note_feedback_json for human rating comparison."]
+
+    total_axes = 0
+    matched_axes = 0
+    note_results: list[dict[str, object]] = []
+    failures: list[str] = []
+
+    for rating in human_ratings:
+        actual_note = note_feedback_items[rating.note_index] if len(note_feedback_items) > rating.note_index else None
+        actual_attack_direction = None
+        actual_sustain_direction = None
+        actual_acceptability_label = None
+        note_total_axes = 0
+        note_matched_axes = 0
+
+        if isinstance(actual_note, dict):
+            actual_attack_direction = _classify_direction(actual_note.get("attack_signed_cents"))
+            actual_sustain_direction = _classify_direction(actual_note.get("sustain_median_cents"))
+            actual_acceptability_label = _classify_acceptability_label(actual_note.get("sustain_median_cents"))
+        else:
+            failures.append(f"Missing note feedback for human-rated note index {rating.note_index}.")
+
+        comparison_result: dict[str, object] = {
+            "note_index": rating.note_index,
+            "human_attack_direction": rating.attack_direction,
+            "actual_attack_direction": actual_attack_direction,
+            "attack_matches": None,
+            "human_sustain_direction": rating.sustain_direction,
+            "actual_sustain_direction": actual_sustain_direction,
+            "sustain_matches": None,
+            "human_acceptability_label": rating.acceptability_label,
+            "actual_acceptability_label": actual_acceptability_label,
+            "acceptability_matches": None,
+            "rater_count": rating.rater_count,
+            "notes": rating.notes,
+        }
+
+        if rating.attack_direction is not None and rating.attack_direction != "unclear":
+            note_total_axes += 1
+            attack_matches = actual_attack_direction == rating.attack_direction
+            comparison_result["attack_matches"] = attack_matches
+            if attack_matches:
+                note_matched_axes += 1
+
+        if rating.sustain_direction is not None and rating.sustain_direction != "unclear":
+            note_total_axes += 1
+            sustain_matches = actual_sustain_direction == rating.sustain_direction
+            comparison_result["sustain_matches"] = sustain_matches
+            if sustain_matches:
+                note_matched_axes += 1
+
+        if rating.acceptability_label is not None and rating.acceptability_label != "unclear":
+            note_total_axes += 1
+            acceptability_matches = actual_acceptability_label == rating.acceptability_label
+            comparison_result["acceptability_matches"] = acceptability_matches
+            if acceptability_matches:
+                note_matched_axes += 1
+
+        total_axes += note_total_axes
+        matched_axes += note_matched_axes
+        comparison_result["matched_axes"] = note_matched_axes
+        comparison_result["total_axes"] = note_total_axes
+        comparison_result["agreement_ratio"] = (
+            round(note_matched_axes / note_total_axes, 4) if note_total_axes else None
+        )
+        note_results.append(comparison_result)
+
+    agreement_ratio = round(matched_axes / total_axes, 4) if total_axes else None
+    return {
+        "rated_note_count": len(human_ratings),
+        "matched_axes": matched_axes,
+        "total_axes": total_axes,
+        "agreement_ratio": agreement_ratio,
+        "note_results": note_results,
+    }, failures
+
+
 def run_calibration_corpus(
     corpus: CalibrationCorpus,
     *,
@@ -354,7 +497,24 @@ def run_calibration_corpus(
             analysis_response.raise_for_status()
             analysis_payload = analysis_response.json()
             latest_score = analysis_payload["latest_score"]
-            note_feedback, failures = _evaluate_expectation(case.expectation, latest_score)
+            failures: list[str] = []
+            note_feedback: dict[str, object] | None = None
+            if case.expectation is not None:
+                note_feedback, expectation_failures = _evaluate_expectation(case.expectation, latest_score)
+                failures.extend(expectation_failures)
+
+            human_rating_summary, human_rating_failures = _evaluate_human_ratings(case.human_ratings, latest_score)
+            failures.extend(human_rating_failures)
+            if (
+                case.minimum_human_agreement_ratio is not None
+                and human_rating_summary is not None
+                and human_rating_summary.get("agreement_ratio") is not None
+                and float(human_rating_summary["agreement_ratio"]) < case.minimum_human_agreement_ratio
+            ):
+                failures.append(
+                    "Expected human_rating_agreement_ratio >= "
+                    f"{case.minimum_human_agreement_ratio}, got {human_rating_summary['agreement_ratio']}."
+                )
 
             case_results.append(
                 CalibrationCaseResult(
@@ -366,11 +526,28 @@ def run_calibration_corpus(
                     harmony_reference_mode=latest_score.get("harmony_reference_mode"),
                     note_feedback=note_feedback,
                     analysis_model_version=analysis_payload["latest_job"].get("model_version"),
+                    human_rating_summary=human_rating_summary,
                 )
             )
 
     passed_cases = sum(1 for case_result in case_results if case_result.passed)
     failed_cases = len(case_results) - passed_cases
+    rated_case_count = sum(1 for case_result in case_results if case_result.human_rating_summary is not None)
+    rated_note_count = sum(
+        int(case_result.human_rating_summary.get("rated_note_count", 0))
+        for case_result in case_results
+        if case_result.human_rating_summary is not None
+    )
+    matched_axes = sum(
+        int(case_result.human_rating_summary.get("matched_axes", 0))
+        for case_result in case_results
+        if case_result.human_rating_summary is not None
+    )
+    total_axes = sum(
+        int(case_result.human_rating_summary.get("total_axes", 0))
+        for case_result in case_results
+        if case_result.human_rating_summary is not None
+    )
     return CalibrationRunSummary(
         corpus_id=corpus.corpus_id,
         description=corpus.description,
@@ -382,6 +559,9 @@ def run_calibration_corpus(
         failed_cases=failed_cases,
         all_passed=failed_cases == 0,
         cases=case_results,
+        rated_case_count=rated_case_count,
+        rated_note_count=rated_note_count,
+        human_rating_agreement_ratio=(round(matched_axes / total_axes, 4) if total_axes else None),
     )
 
 
@@ -394,10 +574,20 @@ def render_calibration_summary_markdown(summary: CalibrationRunSummary) -> str:
         f"- Run at: {summary.run_at.isoformat()}",
         f"- Manifest: {summary.manifest_path or 'inline'}",
         f"- Result: {summary.passed_cases}/{summary.total_cases} cases passed",
-        "",
-        "## Cases",
-        "",
     ]
+    if summary.human_rating_agreement_ratio is not None:
+        lines.append(
+            "- Human-rating agreement: "
+            f"{summary.human_rating_agreement_ratio} across {summary.rated_note_count} rated notes "
+            f"in {summary.rated_case_count} cases"
+        )
+    lines.extend(
+        [
+            "",
+            "## Cases",
+            "",
+        ]
+    )
 
     for case_result in summary.cases:
         lines.append(f"### {case_result.case_id}")
@@ -417,6 +607,13 @@ def render_calibration_summary_markdown(summary: CalibrationRunSummary) -> str:
                 f"sustain={note.get('sustain_median_cents')}, "
                 f"confidence={note.get('confidence')}, "
                 f"message={note.get('message')}"
+            )
+        if case_result.human_rating_summary:
+            lines.append(
+                "- Human-rating agreement: "
+                f"{case_result.human_rating_summary.get('agreement_ratio')} "
+                f"({case_result.human_rating_summary.get('matched_axes')}/"
+                f"{case_result.human_rating_summary.get('total_axes')} axes)"
             )
         if case_result.failures:
             lines.append("- Failures:")

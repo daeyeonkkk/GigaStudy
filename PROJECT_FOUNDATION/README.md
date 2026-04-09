@@ -14,12 +14,13 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 5. `UI_MOCKUP_TRACK.md`
 6. `INTONATION_ANALYSIS_ASSESSMENT.md`
 7. `INTONATION_CALIBRATION_REPORT.md`
-8. `PHASE1_BACKLOG.md`
-9. `PHASE9_INTONATION_BACKLOG.md`
-10. `GigaStudy_check_list.md`
-11. `BROWSER_ENVIRONMENT_VALIDATION.md`
-12. `FOUNDATION_STATUS.md`
-13. `WORKING_PRINCIPLES.md`
+8. `HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+9. `PHASE1_BACKLOG.md`
+10. `PHASE9_INTONATION_BACKLOG.md`
+11. `GigaStudy_check_list.md`
+12. `BROWSER_ENVIRONMENT_VALIDATION.md`
+13. `FOUNDATION_STATUS.md`
+14. `WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -41,6 +42,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Execution backlog for the note-level intonation quality track, including signed cents, note segmentation, confidence weighting, and calibration work.
 - `INTONATION_CALIBRATION_REPORT.md`
   Current calibration evidence, provisional threshold bands, and the claim gate for what the intonation scorer can and cannot promise today.
+- `HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+  Operational workflow for future real-vocal and human-rating evidence, including manifest structure, agreement summaries, and what still does not count as a closed claim gate.
 - `GigaStudy_check_list.md`
   Live checklist for scope control, implementation readiness, and release gating. Check marks should map only to verified implementation, not to intent.
 - `BROWSER_ENVIRONMENT_VALIDATION.md`

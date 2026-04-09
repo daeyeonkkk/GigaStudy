@@ -81,6 +81,7 @@ uv run python scripts/run_intonation_calibration.py
 
 This runs the repeatable synthetic-vocal baseline in `apps/api/calibration/synthetic_vocal_baseline.json` through the real upload and analysis API flow.
 It is a regression path for the current note-event scorer, not a substitute for the still-open real-human calibration gate.
+When you are ready to compare against human raters, use `apps/api/calibration/human_rating_corpus.template.json` plus `PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the starting workflow.
 
 ## Current Product State
 
@@ -94,6 +95,7 @@ It is a regression path for the current note-event scorer, not a substitute for 
 - The studio now exposes note-level correction UI, confidence badges, and clear `note-level` versus `fallback` analysis mode labels.
 - The backend regression suite now includes vocal-like synthetic intonation cases and a written calibration report for current claim limits.
 - The backend now also includes a manifest-driven calibration runner for the repeatable synthetic vocal baseline, so scorer changes can be checked against the same Phase 9 evidence set on demand.
+- The calibration runner now also supports note-level human-rating comparison summaries and optional agreement thresholds, so future real-rater evidence can be attached without inventing a second evaluation path.
 - The studio now includes a lightweight chord timeline editor and JSON import path so chord-aware harmony is reachable without leaving the main workflow.
 - DeviceProfile capture now also stores browser audio capability snapshots and diagnostic warning flags, so permission and Web Audio differences are visible per environment instead of hidden behind one-off setup failures.
 - The admin ops view now aggregates those environment diagnostics into a browser matrix, warning-flag counts, and recent captured profiles for support and release triage.
@@ -123,6 +125,7 @@ It is a regression path for the current note-event scorer, not a substitute for 
 - Use `PROJECT_FOUNDATION/UI_MOCKUP_TRACK.md` plus the editable source under `PROJECT_FOUNDATION/UI_EDITABLE_SOURCE/` and the exports under `PROJECT_FOUNDATION/UI_MOCKUPS/` as the visual implementation baseline, not prose interpretation alone.
 - The first-wave product screens now all follow that visual system; next is to upgrade the repo-local editable source into a shared Figma workflow and keep future ops-only work from bleeding utility styling back into rehearsal screens.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
+- Use `PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.
@@ -138,6 +141,7 @@ It is a regression path for the current note-event scorer, not a substitute for 
 - [Phase 1 Backlog](./PROJECT_FOUNDATION/PHASE1_BACKLOG.md)
 - [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/PHASE9_INTONATION_BACKLOG.md)
 - [Intonation Calibration Report](./PROJECT_FOUNDATION/INTONATION_CALIBRATION_REPORT.md)
+- [Human Rating Calibration Workflow](./PROJECT_FOUNDATION/HUMAN_RATING_CALIBRATION_WORKFLOW.md)
 - [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
 - [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
 - [Intonation Assessment](./PROJECT_FOUNDATION/INTONATION_ANALYSIS_ASSESSMENT.md)

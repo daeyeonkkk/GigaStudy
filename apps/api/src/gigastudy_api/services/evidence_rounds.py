@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+import re
+import shutil
+
+
+ROUND_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+@dataclass(frozen=True)
+class EvidenceRoundPaths:
+    root: Path
+    readme: Path
+    human_rating_dir: Path
+    human_rating_audio_guides_dir: Path
+    human_rating_audio_takes_dir: Path
+    human_rating_cases_path: Path
+    human_rating_sheet_path: Path
+    human_rating_reference_corpus_path: Path
+    environment_validation_dir: Path
+    environment_validation_sheet_path: Path
+
+
+def resolve_project_root(service_path: Path | None = None) -> Path:
+    current = service_path or Path(__file__).resolve()
+    return current.parents[5]
+
+
+def resolve_api_root(project_root: Path | None = None) -> Path:
+    resolved_project_root = project_root or resolve_project_root()
+    return resolved_project_root / "apps" / "api"
+
+
+def default_evidence_rounds_root(project_root: Path | None = None) -> Path:
+    resolved_project_root = project_root or resolve_project_root()
+    dreamcatcher_root = resolved_project_root.parent / "DreamCatcher"
+
+    if dreamcatcher_root.exists():
+        return dreamcatcher_root / "GigaStudyEvidenceRounds"
+
+    return resolved_project_root / "apps" / "api" / "output" / "evidence_rounds"
+
+
+def validate_round_id(round_id: str) -> str:
+    normalized = round_id.strip()
+
+    if not normalized:
+        raise ValueError("round_id must not be empty.")
+
+    if not ROUND_ID_PATTERN.fullmatch(normalized):
+        raise ValueError("round_id may contain only letters, numbers, dots, underscores, and dashes.")
+
+    return normalized
+
+
+def render_evidence_round_readme(
+    *,
+    round_id: str,
+    repo_root: Path,
+    uses_dreamcatcher_root: bool,
+) -> str:
+    storage_note = (
+        "This round is scaffolded under DreamCatcher by default so real-world collection files stay "
+        "out of the repository and out of PROJECT_FOUNDATION."
+        if uses_dreamcatcher_root
+        else "This round is scaffolded under the repo fallback output path because no DreamCatcher root "
+        "was found in the current workspace."
+    )
+
+    return "\n".join(
+        [
+            f"# GigaStudy Evidence Round: {round_id}",
+            "",
+            storage_note,
+            "",
+            "## Human Rating",
+            "",
+            "- Put real guide WAV files under `human-rating/audio/guides/`.",
+            "- Put real take WAV files under `human-rating/audio/takes/`.",
+            "- Update `human-rating/human_rating_cases.json` so each case points to the real WAV paths.",
+            "- Fill `human-rating/human_rating_sheet.csv` with per-rater note labels.",
+            "- Use `human-rating/human_rating_corpus.reference.json` only as a final-shape reference.",
+            "",
+            "Recommended commands:",
+            "",
+            "```bash",
+            f"cd {repo_root / 'apps' / 'api'}",
+            "uv run python scripts/inspect_human_rating_corpus.py --metadata calibration/human_rating_cases.template.json",
+            "uv run python scripts/build_human_rating_corpus.py --metadata <round>/human-rating/human_rating_cases.json --ratings <round>/human-rating/human_rating_sheet.csv --output <round>/human-rating/human_rating_corpus.generated.json",
+            "uv run python scripts/run_intonation_calibration.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
+            "uv run python scripts/fit_human_rating_thresholds.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
+            "uv run python scripts/evaluate_human_rating_claim_gate.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
+            "uv run python scripts/build_human_rating_evidence_bundle.py --manifest <round>/human-rating/human_rating_corpus.generated.json",
+            "```",
+            "",
+            "Foundation workflow reference:",
+            f"- `{repo_root / 'PROJECT_FOUNDATION' / 'QUALITY' / 'HUMAN_RATING_CALIBRATION_WORKFLOW.md'}`",
+            "",
+            "## Browser And Hardware Validation",
+            "",
+            "- Fill `environment-validation/environment_validation_runs.csv` with native browser and hardware validation results.",
+            "- Prefer importing those rows through the ops UI preview/import panel when the app is running.",
+            "- Use the CLI importer when the round is easier to normalize offline first.",
+            "",
+            "Recommended command:",
+            "",
+            "```bash",
+            f"cd {repo_root / 'apps' / 'api'}",
+            "uv run python scripts/import_environment_validation_runs.py --csv <round>/environment-validation/environment_validation_runs.csv",
+            "```",
+            "",
+            "Foundation workflow reference:",
+            f"- `{repo_root / 'PROJECT_FOUNDATION' / 'OPERATIONS' / 'BROWSER_ENVIRONMENT_VALIDATION.md'}`",
+            "",
+            "## Round Closeout",
+            "",
+            "- Keep generated evidence bundles, manually collected WAVs, and spreadsheet artifacts in this round folder.",
+            "- Do not copy those files into `PROJECT_FOUNDATION`.",
+            "- Only promote summary conclusions into the foundation docs after review.",
+        ]
+    )
+
+
+def create_evidence_round_scaffold(
+    *,
+    round_id: str,
+    output_root: Path | None = None,
+    project_root: Path | None = None,
+    api_root: Path | None = None,
+    overwrite: bool = False,
+) -> EvidenceRoundPaths:
+    normalized_round_id = validate_round_id(round_id)
+    resolved_project_root = project_root or resolve_project_root()
+    resolved_api_root = api_root or resolve_api_root(resolved_project_root)
+    resolved_output_root = (output_root or default_evidence_rounds_root(resolved_project_root)).resolve()
+    round_root = resolved_output_root / normalized_round_id
+
+    if round_root.exists() and not overwrite:
+        raise FileExistsError(f"Evidence round already exists: {round_root}")
+
+    round_root.mkdir(parents=True, exist_ok=True)
+
+    human_rating_dir = round_root / "human-rating"
+    human_rating_audio_guides_dir = human_rating_dir / "audio" / "guides"
+    human_rating_audio_takes_dir = human_rating_dir / "audio" / "takes"
+    environment_validation_dir = round_root / "environment-validation"
+
+    for directory in (
+        human_rating_dir,
+        human_rating_audio_guides_dir,
+        human_rating_audio_takes_dir,
+        environment_validation_dir,
+    ):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    human_rating_cases_path = human_rating_dir / "human_rating_cases.json"
+    human_rating_sheet_path = human_rating_dir / "human_rating_sheet.csv"
+    human_rating_reference_corpus_path = human_rating_dir / "human_rating_corpus.reference.json"
+    environment_validation_sheet_path = environment_validation_dir / "environment_validation_runs.csv"
+    readme_path = round_root / "README.md"
+
+    shutil.copy2(
+        resolved_api_root / "calibration" / "human_rating_cases.template.json",
+        human_rating_cases_path,
+    )
+    shutil.copy2(
+        resolved_api_root / "calibration" / "human_rating_sheet.template.csv",
+        human_rating_sheet_path,
+    )
+    shutil.copy2(
+        resolved_api_root / "calibration" / "human_rating_corpus.template.json",
+        human_rating_reference_corpus_path,
+    )
+    shutil.copy2(
+        resolved_api_root / "environment_validation" / "environment_validation_runs.template.csv",
+        environment_validation_sheet_path,
+    )
+
+    uses_dreamcatcher_root = (
+        resolved_project_root.parent / "DreamCatcher"
+    ).exists() and resolved_output_root.is_relative_to((resolved_project_root.parent / "DreamCatcher").resolve())
+    readme_path.write_text(
+        render_evidence_round_readme(
+            round_id=normalized_round_id,
+            repo_root=resolved_project_root,
+            uses_dreamcatcher_root=uses_dreamcatcher_root,
+        ),
+        encoding="utf-8",
+    )
+
+    return EvidenceRoundPaths(
+        root=round_root,
+        readme=readme_path,
+        human_rating_dir=human_rating_dir,
+        human_rating_audio_guides_dir=human_rating_audio_guides_dir,
+        human_rating_audio_takes_dir=human_rating_audio_takes_dir,
+        human_rating_cases_path=human_rating_cases_path,
+        human_rating_sheet_path=human_rating_sheet_path,
+        human_rating_reference_corpus_path=human_rating_reference_corpus_path,
+        environment_validation_dir=environment_validation_dir,
+        environment_validation_sheet_path=environment_validation_sheet_path,
+    )

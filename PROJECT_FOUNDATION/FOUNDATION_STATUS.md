@@ -86,6 +86,7 @@ Date: 2026-04-09
 - The ops overview now also surfaces the current browser and hardware claim gate inline, so blockers and next evidence-collection steps are visible before anyone exports the Markdown artifact.
 - The ops overview now also supports CSV preview/import for external validation evidence, so spreadsheet-based QA or hardware logs can be reviewed and imported without falling back to a CLI-only path.
 - The repo now also has a spreadsheet-friendly environment-validation intake template plus importer, so native browser or hardware evidence collected outside the app can still be normalized before it reaches ops.
+- The evidence-round scaffold now also seeds the browser and hardware validation CSV template into that same external round folder, so Phase 9 and Phase 10 collection can start from one shared round id instead of separate ad hoc prep steps.
 - The API now has a first-class storage backend abstraction with local and S3-compatible object storage backends, and the upload, processing, melody export, arrangement export, and download routes now run through that shared storage contract instead of hard-coded local file paths.
 - The backend runtime now also includes first-class PostgreSQL and S3-compatible client drivers (`psycopg` and `boto3`), and the repo includes a local PostgreSQL + MinIO bootstrap compose file for production-like storage rehearsals.
 - The production stack path is now operational instead of aspirational: the repo includes a production env example, automatic MinIO bucket bootstrap, and a repeatable smoke script that runs the core project → guide → take → analysis → melody → arrangement → export flow against PostgreSQL plus S3-compatible storage.
@@ -96,6 +97,7 @@ Date: 2026-04-09
 - The backend now also has a repeatable intonation calibration runner with a manifest-driven synthetic vocal baseline, so Phase 9 evidence can be re-run through the real upload and analysis path instead of living only inside one-off test functions.
 - The calibration runner now also supports note-level human-rating comparison summaries plus optional agreement thresholds, so the repo can attach real-rater evidence without inventing a separate evaluation path later.
 - The repo now also has a human-rating intake builder with metadata and sheet templates, so future real-vocal rounds can turn raw per-rater labels into a calibration corpus without hand-editing final manifests.
+- The repo now also has a repeatable evidence-round scaffold script, so real-vocal WAV collection and native-browser spreadsheet intake can start in one named folder outside `PROJECT_FOUNDATION` instead of scattering ad hoc files through the repo.
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
@@ -120,7 +122,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `83 passed`
+- Result: `87 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes environment-validation intake parsing and request-shape generation from CSV evidence sheets.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
@@ -227,6 +229,14 @@ Date: 2026-04-09
   `uv run python scripts/import_environment_validation_runs.py --csv environment_validation/environment_validation_runs.template.csv`
 - Result:
   passed against the seeded template CSV, emitting normalized JSON with blank-row skipping and import-time timestamp fallback for omitted `validated_at` values.
+- Evidence-round scaffold regression:
+  `uv run pytest apps/api/tests/test_evidence_rounds.py`
+- Result:
+  passed with coverage for DreamCatcher-root preference, repo-output fallback, template copying, and round-id validation.
+- Evidence-round scaffold CLI:
+  `uv run python scripts/create_evidence_round.py --round-id smoke-round --output-root ...`
+- Result:
+  passed against a temporary output root, creating a human-rating plus environment-validation round scaffold without touching `PROJECT_FOUNDATION`.
 - Chromium additionally covers the browser recorder transport with fake-microphone permission plus DeviceProfile capture and the repeated in-session endurance workflow.
 - Chromium recorder coverage now also verifies that the `AudioWorklet` live meter activates during browser take capture and that the resulting waveform preview reports the `Worker + WASM` path.
 - The DeviceProfile path now also verifies capability snapshot capture and warning-flag persistence through the API and studio snapshot.
@@ -265,6 +275,7 @@ Date: 2026-04-09
 - The new claim gate removes another subjective review bottleneck, but it still evaluates the current evidence rather than creating that evidence; the real-human checklist items remain open until a trusted corpus actually passes it.
 - The inline browser/hardware claim-gate summary removes another small review bottleneck inside ops, but it still does not create native Safari or broad real-hardware evidence by itself.
 - The new ops CSV preview/import flow removes another intake bottleneck for external QA evidence, but it still does not replace the need for actual native Safari or broad real-hardware validation runs.
+- The new evidence-round scaffold removes another prep bottleneck for real-human and real-hardware collection, but it still does not create the evidence by itself; the remaining open checklist items still require actual singers, raters, and native hardware runs.
 - The new curated home-photo layer improves atmosphere on the entry screen, but it is intentionally limited to one non-identifying ambient image and should not become a shortcut around the broader mockup discipline.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
 - The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.

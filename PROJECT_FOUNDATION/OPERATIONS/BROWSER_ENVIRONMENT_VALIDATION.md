@@ -112,15 +112,22 @@ Mark the run as `FAIL` if:
 
 Before a manual validation round:
 
-1. Open `/ops`
-2. Refresh overview
-3. Download the environment diagnostics report
-4. Use that report as the baseline for the round
-5. If testers are collecting evidence outside the product UI, start from `apps/api/environment_validation/environment_validation_runs.template.csv`
-6. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
-7. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
-8. Review the preview rows before importing them into the ops log
-9. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
+1. Create a round scaffold outside `PROJECT_FOUNDATION`:
+
+```bash
+cd C:\my_project\GigaStudy\apps\api
+uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
+```
+
+2. Open `/ops`
+3. Refresh overview
+4. Download the environment diagnostics report
+5. Use that report as the baseline for the round
+6. If testers are collecting evidence outside the product UI, start from the generated `environment-validation/environment_validation_runs.csv` file inside that round scaffold
+7. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
+8. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
+9. Review the preview rows before importing them into the ops log
+10. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
 
 After a manual validation round:
 
@@ -141,6 +148,9 @@ The environment validation packet is the preferred release-review artifact becau
 - required matrix coverage
 - claim guardrails
 - compatibility notes inferred from the stored evidence
+
+By default, the evidence-round scaffold prefers `C:\my_project\DreamCatcher\GigaStudyEvidenceRounds\...`
+when the workspace has a `DreamCatcher` root available, so native-browser notes, spreadsheets, and external artifacts stay outside the repo.
 
 The browser compatibility release-note draft is the preferred publishing artifact because it translates that packet into:
 

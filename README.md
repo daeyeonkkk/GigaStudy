@@ -132,6 +132,20 @@ uv run python scripts/import_environment_validation_runs.py --csv environment_va
 This converts spreadsheet-style native browser or real-hardware validation evidence into the API request shape used by ops.
 Add `--api-base-url http://127.0.0.1:8000` to submit the rows directly into the running API.
 
+### Evidence Round Scaffold
+
+```bash
+cd apps/api
+uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
+```
+
+This creates one named folder for the still-open real-world evidence tracks:
+
+- human-rating WAV and sheet collection
+- native browser and hardware validation CSV intake
+
+When `C:\my_project\DreamCatcher` exists, the scaffold defaults there so the evidence round stays outside the repo and outside `PROJECT_FOUNDATION`.
+
 ### Browser Environment Claim Gate
 
 After validation runs are loaded into ops, use the ops UI or call `/api/admin/environment-validation-claim-gate`.
@@ -161,6 +175,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The backend now also includes a manifest-driven calibration runner for the repeatable synthetic vocal baseline, so scorer changes can be checked against the same Phase 9 evidence set on demand.
 - The calibration runner now also supports note-level human-rating comparison summaries and optional agreement thresholds, so future real-rater evidence can be attached without inventing a second evaluation path.
 - The repo now also includes a human-rating intake builder plus metadata and sheet templates, so raw rater labels can be turned into a calibration corpus without hand-authoring the final manifest JSON.
+- The repo now also includes a repeatable evidence-round scaffold, so real-vocal and browser-hardware collection can start in one named folder outside `PROJECT_FOUNDATION`.
 - The repo now also includes a real-vocal corpus inventory tool, so collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before calibration and threshold fitting.
 - The repo now also includes a threshold-fit report path for candidate difficulty bands, so future human-rated corpora can yield repeatable `strict / basic / beginner` recommendations instead of ad hoc threshold notes.
 - The repo now also includes a claim-gate evaluator, so the team can repeatably decide whether current human-rating evidence is strong enough to even begin threshold-closure review.

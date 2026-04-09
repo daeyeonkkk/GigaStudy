@@ -46,12 +46,28 @@ The repo does **not** yet include:
 - calibrated difficulty thresholds validated by human raters
 - release evidence strong enough to market the scorer as a human-level intonation judge
 
+## 1a. Round Scaffold
+
+Before collecting a real evidence round, create a dedicated scaffold outside `PROJECT_FOUNDATION`:
+
+```bash
+cd C:\my_project\GigaStudy\apps\api
+uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
+```
+
+Default behavior:
+
+- prefer `C:\my_project\DreamCatcher\GigaStudyEvidenceRounds\...` when `DreamCatcher` exists in the workspace root
+- otherwise fall back to `apps/api/output/evidence_rounds/`
+
+This keeps real WAV files, rating sheets, and generated corpus artifacts out of the canonical docs tree.
+
 ## 2. Manifest Contract
 
 Recommended intake path:
 
-1. maintain case metadata in `human_rating_cases.template.json`
-2. collect raw rater labels in `human_rating_sheet.template.csv`
+1. create a round scaffold and maintain case metadata in that round's `human-rating/human_rating_cases.json`
+2. collect raw rater labels in that round's `human-rating/human_rating_sheet.csv`
 3. build a generated corpus JSON with `build_human_rating_corpus.py`
 4. run the calibration runner against that generated corpus
 
@@ -100,58 +116,59 @@ If these bands change after real-rater analysis, the runner and report should be
 
 ## 4. Recommended Collection Flow
 
-1. Record or curate a real singer guide and take pair.
-2. Inspect the metadata file or generated corpus before calibration:
+1. Create the round scaffold and place the real guide/take WAV files into the generated `human-rating/audio/guides/` and `human-rating/audio/takes/` folders.
+2. Update the generated `human-rating/human_rating_cases.json` metadata file so each case points to the real WAV paths for that round.
+3. Fill the generated `human-rating/human_rating_sheet.csv` file with per-rater note labels.
+4. Inspect the metadata file or generated corpus before calibration:
 
 ```bash
-uv run python scripts/inspect_human_rating_corpus.py --metadata calibration/human_rating_cases.template.json
+uv run python scripts/inspect_human_rating_corpus.py --metadata <round>/human-rating/human_rating_cases.json
 ```
 
 Use `--require-real-audio --fail-on-missing` once the collection round has switched from fixtures to actual wav files.
 For workflow smoke only, `apps/api/calibration/human_rating_seeded_fixture.json` is available as a seeded non-release manifest.
 
-3. Confirm the note indexing that the scorer returns for that case.
-4. Ask multiple raters to label attack direction, sustain direction, and acceptability in the rating sheet CSV.
-5. Build the consensus corpus:
+5. Confirm the note indexing that the scorer returns for that case.
+6. Build the consensus corpus:
 
 ```bash
-uv run python scripts/build_human_rating_corpus.py --output calibration/human_rating_corpus.generated.json
+uv run python scripts/build_human_rating_corpus.py --metadata <round>/human-rating/human_rating_cases.json --ratings <round>/human-rating/human_rating_sheet.csv --output <round>/human-rating/human_rating_corpus.generated.json
 ```
 
-6. Inspect the generated corpus inventory:
+7. Inspect the generated corpus inventory:
 
 ```bash
-uv run python scripts/inspect_human_rating_corpus.py --manifest calibration/human_rating_corpus.generated.json
+uv run python scripts/inspect_human_rating_corpus.py --manifest <round>/human-rating/human_rating_corpus.generated.json
 ```
 
-7. Run the calibration CLI:
+8. Run the calibration CLI:
 
 ```bash
-uv run python scripts/run_intonation_calibration.py --manifest calibration/human_rating_corpus.generated.json
+uv run python scripts/run_intonation_calibration.py --manifest <round>/human-rating/human_rating_corpus.generated.json
 ```
 
-8. Fit candidate difficulty thresholds:
+9. Fit candidate difficulty thresholds:
 
 ```bash
-uv run python scripts/fit_human_rating_thresholds.py --manifest calibration/human_rating_corpus.generated.json
+uv run python scripts/fit_human_rating_thresholds.py --manifest <round>/human-rating/human_rating_corpus.generated.json
 ```
 
-9. Evaluate whether the current corpus is even strong enough to begin a closure discussion:
+10. Evaluate whether the current corpus is even strong enough to begin a closure discussion:
 
 ```bash
-uv run python scripts/evaluate_human_rating_claim_gate.py --manifest calibration/human_rating_corpus.generated.json
+uv run python scripts/evaluate_human_rating_claim_gate.py --manifest <round>/human-rating/human_rating_corpus.generated.json
 ```
 
-10. Build the release-review evidence bundle:
+11. Build the release-review evidence bundle:
 
 ```bash
-uv run python scripts/build_human_rating_evidence_bundle.py --manifest calibration/human_rating_corpus.generated.json
+uv run python scripts/build_human_rating_evidence_bundle.py --manifest <round>/human-rating/human_rating_corpus.generated.json
 ```
 
 This writes the calibration summary, threshold-fit report, and combined evidence bundle into `apps/api/calibration/output/`.
 
-11. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
-12. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
+12. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
+13. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
 
 ## 5. What Closes The Checklist
 

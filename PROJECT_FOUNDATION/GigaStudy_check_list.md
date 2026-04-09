@@ -128,6 +128,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A repeatable synthetic-vocal calibration runner exists and can be rerun from a manifest.
 - [x] A human-rating corpus comparison workflow exists, even though the real evidence corpus is not populated yet.
 - [x] A human-rating intake template and consensus builder exist for preparing real-vocal evidence.
+- [x] A repeatable external evidence-round scaffold exists so real-vocal and rater assets can be collected outside `PROJECT_FOUNDATION`.
 - [x] A real-vocal corpus inventory and validation tool exists for checking audio-path integrity, WAV metadata, and rating coverage before calibration runs.
 - [x] A threshold-fit report tool exists for future human-rated corpora, even though the evidence corpus is still open.
 - [x] A human-rating evidence bundle workflow exists for packaging calibration, threshold-fit, and claim guardrails into release-review artifacts.
@@ -145,6 +146,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A browser and hardware claim gate can be exported from ops to decide whether support-claim review should begin.
 - [x] Ops overview surfaces the current browser and hardware claim-gate state inline without requiring an export step first.
 - [x] An environment validation intake template and importer exist for preparing native browser and hardware evidence before it reaches ops.
+- [x] The external evidence-round scaffold also seeds browser and hardware validation intake outside `PROJECT_FOUNDATION`.
 - [x] Ops can preview and import external environment-validation CSV evidence directly instead of relying on CLI-only intake.
 - [x] A native browser and hardware validation protocol exists in `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`.
 - [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.

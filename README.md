@@ -112,6 +112,7 @@ It is a regression path for the current note-event scorer, not a substitute for 
 - The foundation now also includes a reference-led wireframe pack for the canonical Home, Studio, Arrangement, Shared Review, and Ops screens, so the next UI refactor can follow one agreed layout system.
 - The foundation now also includes a mockup track plus repo-visible mockup exports, so visual implementation can target explicit design files instead of only textual wireframes.
 - Seeded mockup exports now exist for all five canonical screens under `PROJECT_FOUNDATION/UI_MOCKUPS/`.
+- A repo-local equivalent editable design source now also exists under `PROJECT_FOUNDATION/UI_EDITABLE_SOURCE/`, so the canonical mockups are editable in-repo even before a shared Figma file is connected.
 - The Home, Studio, Arrangement, Shared Review, and Ops screens now follow that visual system closely enough to read like one product workspace family instead of a utility dashboard plus stacked tool panels.
 - Arrangement work now also has its own dedicated `/projects/:projectId/arrangement` route, so score comparison and export can happen in a score-first workspace instead of only inside the studio page.
 - Shared review now also reads like a frozen review desk instead of a generic details page, making the read-only boundary much clearer for recipients.
@@ -119,8 +120,8 @@ It is a regression path for the current note-event scorer, not a substitute for 
 ## Current Hardening Focus
 
 - Keep the visual refactor locked to `PROJECT_FOUNDATION/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
-- Use `PROJECT_FOUNDATION/UI_MOCKUP_TRACK.md` plus the exported assets under `PROJECT_FOUNDATION/UI_MOCKUPS/` as the next visual implementation baseline, not prose interpretation alone.
-- The first-wave product screens now all follow that visual system; next is to anchor them in a shared editable Figma source and keep future ops-only work from bleeding utility styling back into rehearsal screens.
+- Use `PROJECT_FOUNDATION/UI_MOCKUP_TRACK.md` plus the editable source under `PROJECT_FOUNDATION/UI_EDITABLE_SOURCE/` and the exports under `PROJECT_FOUNDATION/UI_MOCKUPS/` as the visual implementation baseline, not prose interpretation alone.
+- The first-wave product screens now all follow that visual system; next is to upgrade the repo-local editable source into a shared Figma workflow and keep future ops-only work from bleeding utility styling back into rehearsal screens.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.

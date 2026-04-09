@@ -22,3 +22,5 @@ These are the seeded visual baseline exports for the canonical product screens.
 
 They do not replace a shared editable Figma source.
 They make the design target visible inside the repo until that editable source is fully established.
+
+The current equivalent editable source lives in `../UI_EDITABLE_SOURCE/`.

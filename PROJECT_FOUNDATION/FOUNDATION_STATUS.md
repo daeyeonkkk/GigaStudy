@@ -11,6 +11,7 @@ Date: 2026-04-09
 - `UI_DESIGN_DIRECTION.md`
 - `UI_WIREFRAMES_V1.md`
 - `UI_MOCKUP_TRACK.md`
+- `UI_EDITABLE_SOURCE/README.md`
 - `PHASE9_INTONATION_BACKLOG.md`
 - `PHASE1_BACKLOG.md`
 - `GigaStudy_check_list.md`
@@ -86,6 +87,7 @@ Date: 2026-04-09
 - The Shared Review screen now follows the `shared-review-v1` mockup closely enough to read like a frozen review desk instead of a generic read-only detail page: selected take on the left, frozen score canvas in the center, and score summary plus note highlight on the right.
 - The Ops screen now follows the `ops-v1` mockup closely enough to read like a dense release desk instead of a generic stack of admin cards: KPI strip on top, validation and recovery work areas in the middle, and diagnostics plus recent environment capture at the bottom.
 - The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
+- The foundation now also has an equivalent editable design source under `PROJECT_FOUNDATION/UI_EDITABLE_SOURCE/`, so the product no longer depends on frozen SVG exports alone when updating canonical screen mockups.
 - Backend model versions now report:
   - analysis: `librosa-pyin-note-events-v4`
   - melody: `librosa-pyin-melody-v2`
@@ -130,6 +132,10 @@ Date: 2026-04-09
   `npx playwright screenshot --device="Desktop Chrome" --full-page http://127.0.0.1:5173/ops output/playwright/ops-loaded.png`
 - Result:
   the refactored Ops page was visually reviewed against `ops-v1` after wiring a real API-backed preview, and the screen now reads like a utility-only release desk without dictating the product-wide visual tone.
+- Editable source render check:
+  `npx playwright screenshot --device="Desktop Chrome" --full-page file:///.../UI_EDITABLE_SOURCE/quiet-studio-console-v1.html output/playwright/ui-editable-source.png`
+- Result:
+  the repo-local editable source renders all five canonical artboards in one browser-visible file and is now a valid equivalent editable source for the mockup track.
 - Browser release-gate smoke path: `npm run test:e2e`
 - Result: `22 passed`, `5 skipped`
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
@@ -174,11 +180,11 @@ Date: 2026-04-09
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
 - The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
 - The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, and the implemented UI now has a concrete target for every first-wave route instead of leaving `Ops` as the remaining visual outlier.
-- The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is now the missing shared editable Figma source rather than another unrefactored product screen.
+- The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is now upgrading the repo-local editable source into a shared Figma workflow rather than creating the first editable source from scratch.
 
 ## Recommended Next Work
 
-1. Create or connect a shared editable Figma source for the canonical product mockups, then record the frozen version id for each implemented screen now that the first-wave routes all have repo-visible targets.
+1. Upgrade the repo-local editable source into a shared Figma workflow when a write-capable design workflow is available, and record the frozen version id for each implemented screen.
 2. Keep the implemented `Ops` surface subordinate to the rehearsal product tone by reviewing future ops-only additions against `ops-v1` instead of letting utility styles leak back into core screens.
 3. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, then compare scorer output against human ratings.
 4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.

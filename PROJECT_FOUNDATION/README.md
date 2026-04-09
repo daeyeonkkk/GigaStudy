@@ -33,6 +33,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
   Reference-led low-fidelity wireframe pack for the canonical home, studio, arrangement, shared, and ops screens.
 - `UI_MOCKUP_TRACK.md`
   Canonical mockup workflow, including how editable design files and repo-visible export assets should be used as the implementation source of truth.
+- `UI_EDITABLE_SOURCE/`
+  Repo-local equivalent editable design source for the canonical product mockups.
 - `PHASE1_BACKLOG.md`
   Build backlog for the first recording pipeline and studio foundation slice.
 - `PHASE9_INTONATION_BACKLOG.md`
@@ -52,6 +54,8 @@ It defines the MVP boundary, implementation order, release gate, and the checkli
 - `UI_MOCKUPS/`
   Repo-visible mockup exports for the first canonical screens so implementation can compare against actual design files, not only prose wireframes.
   Current implemented targets are `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`.
+- `UI_EDITABLE_SOURCE/`
+  Repo-local editable HTML and CSS artboards used as the current equivalent editable design source until a shared Figma file is connected.
 
 ## Working Rule
 

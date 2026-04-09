@@ -13,6 +13,7 @@ From this point forward, GigaStudy treats explicit mockup files as the preferred
 
 1. Editable design source
    Preferred: shared Figma file with named frames and frozen version references.
+   Current equivalent: repo-local HTML and CSS artboards under `UI_EDITABLE_SOURCE/`.
 2. Repo-visible mockup exports
    Required: exported PNG, SVG, or equivalent files under `PROJECT_FOUNDATION/UI_MOCKUPS/`.
 3. Low-fidelity wireframe pack
@@ -71,7 +72,13 @@ Because this repo already has working Home and Studio implementations, we will s
 
 That is a bridge step, not the final state.
 
-Preferred end state:
+Current bridge state:
+
+- repo-local editable source under `UI_EDITABLE_SOURCE/`
+- exported SVG assets in the repo
+- code implementation tied to a named mockup version
+
+Preferred future upgrade:
 
 - shared editable Figma source
 - exported PNG or SVG assets in the repo
@@ -96,3 +103,13 @@ The repo now carries seeded exports for:
 - `Ops`
 
 They live under `UI_MOCKUPS/` and should be treated as the first visible visual baseline for continuing the refactor.
+
+## 8. Current Editable Source
+
+The repo now also carries an equivalent editable source at:
+
+- `UI_EDITABLE_SOURCE/quiet-studio-console-v1.html`
+- `UI_EDITABLE_SOURCE/quiet-studio-console-v1.css`
+
+This source is now sufficient to close the "shared Figma file or equivalent editable design source exists" checklist item.
+It does not remove the preference for a future shared Figma file.

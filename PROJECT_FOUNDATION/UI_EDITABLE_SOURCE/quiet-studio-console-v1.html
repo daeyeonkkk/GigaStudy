@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GigaStudy Quiet Studio Console v1</title>
+    <link rel="stylesheet" href="./quiet-studio-console-v1.css" />
+  </head>
+  <body>
+    <main class="source-shell">
+      <header class="source-header">
+        <div class="source-header__copy">
+          <p class="eyebrow">Editable Source</p>
+          <h1>Quiet Studio Console v1</h1>
+          <p>
+            Equivalent editable design source for the canonical GigaStudy product screens.
+            Update these artboards before refreshing the frozen exports under
+            <code>PROJECT_FOUNDATION/UI_MOCKUPS/</code>.
+          </p>
+        </div>
+        <div class="source-header__rail">
+          <span class="source-chip">Visual thesis: calm rehearsal desk, not a dashboard mosaic</span>
+          <span class="source-chip">Primary targets: Home, Studio, Arrangement, Shared, Ops</span>
+          <span class="source-chip">Version: v1</span>
+        </div>
+      </header>
+
+      <section class="artboard-grid">
+        <article class="artboard">
+          <div class="artboard__meta">
+            <div>
+              <p class="eyebrow">home-v1</p>
+              <h2>Home</h2>
+              <p>
+                Poster-like product entry. Product promise first, guided workflow second, no ops
+                dashboard language above the fold.
+              </p>
+            </div>
+            <div class="artboard__tags">
+              <span class="tag">target: /</span>
+              <span class="tag">implements: HomePage.tsx</span>
+            </div>
+          </div>
+          <div class="screen-frame screen-frame--home">
+            <div class="screen-topbar screen-topbar--dark">
+              <div class="screen-brand">
+                <strong>GigaStudy</strong>
+                <span>Vocal Studio</span>
+              </div>
+              <nav class="screen-nav">
+                <a href="#">Product</a>
+                <a href="#">Studio</a>
+                <a href="#">Docs</a>
+                <a href="#">Sign in</a>
+              </nav>
+            </div>
+            <div class="home-layout">
+              <div class="home-copy">
+                <p class="eyebrow">GigaStudy Vocal Studio</p>
+                <h3>Record the take. Review the pitch. Build the harmony.</h3>
+                <p>
+                  Guided vocal recording, note-level feedback, editable melody draft extraction,
+                  and arrangement export from one web studio.
+                </p>
+                <div class="button-row">
+                  <span class="button-primary">Start a Practice Project</span>
+                  <span class="button-secondary">Open Demo Studio</span>
+                </div>
+              </div>
+              <div class="home-visual">
+                <span class="home-visual__capsule">Live study chain</span>
+                <div class="wave-plane"></div>
+                <div class="home-metrics">
+                  <div class="metric-card"><span>Pitch mode</span><strong>Note-level</strong></div>
+                  <div class="metric-card"><span>Arrangement</span><strong>3 candidates</strong></div>
+                  <div class="metric-card"><span>Exports</span><strong>XML / MIDI / WAV</strong></div>
+                </div>
+              </div>
+            </div>
+            <div class="signal-row">
+              <div><span>Stage 1</span><strong>Guided recording</strong></div>
+              <div><span>Stage 2</span><strong>Note-level review</strong></div>
+              <div><span>Stage 3</span><strong>Arrangement candidates</strong></div>
+              <div><span>Stage 4</span><strong>Export package</strong></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="artboard">
+          <div class="artboard__meta">
+            <div>
+              <p class="eyebrow">studio-v1</p>
+              <h2>Studio</h2>
+              <p>
+                Integrated rehearsal console. One surface for transport, waveform review, note
+                feedback, and deep-work panels.
+              </p>
+            </div>
+            <div class="artboard__tags">
+              <span class="tag">target: /projects/:id/studio</span>
+              <span class="tag">implements: StudioPage.tsx</span>
+            </div>
+          </div>
+          <div class="screen-frame screen-frame--studio">
+            <div class="studio-shell">
+              <div class="screen-topbar screen-topbar--dark">
+                <div>
+                  <p class="eyebrow">GigaStudy Studio</p>
+                  <h3>Morning Warmup</h3>
+                  <p class="screen-note">
+                    One rehearsal console for guide-backed takes, note feedback, melody,
+                    arrangement, and export.
+                  </p>
+                </div>
+                <div class="studio-summary">
+                  <div class="summary-chip"><span>Tempo</span><strong>92 BPM / 4-4</strong></div>
+                  <div class="summary-chip"><span>Key</span><strong>A / practice</strong></div>
+                  <div class="summary-chip"><span>Harmony</span><strong>Chords ready</strong></div>
+                  <div class="summary-chip"><span>Mic</span><strong>Profile pending</strong></div>
+                </div>
+              </div>
+              <div class="studio-grid">
+                <section class="panel-light">
+                  <div class="panel-head">
+                    <p class="eyebrow">Main Canvas</p>
+                    <h3>Waveform and contour canvas</h3>
+                  </div>
+                  <div class="canvas-bars">
+                    <div class="transport-strip"></div>
+                    <div class="wave-canvas"></div>
+                  </div>
+                </section>
+                <aside class="panel-soft">
+                  <div class="panel-head">
+                    <p class="eyebrow">Inspector</p>
+                    <h3>Keep score and note detail visible</h3>
+                  </div>
+                  <div class="inspector-stack">
+                    <div class="review-box">
+                      <span>Selected take</span>
+                      <strong>Take 1 / note-level scorer / chord-aware</strong>
+                    </div>
+                    <div class="score-box-grid">
+                      <div class="score-box"><span>Pitch</span><strong>86</strong></div>
+                      <div class="score-box"><span>Rhythm</span><strong>91</strong></div>
+                    </div>
+                    <div class="review-box">
+                      <span>Weak note</span>
+                      <strong>A4 / attack +24c sharp / sustain +6c</strong>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <div class="transport-lane">
+                <span class="transport-pill transport-pill--accent">Record</span>
+                <span class="transport-pill">Stop</span>
+                <span class="transport-pill">Guide</span>
+                <span class="transport-pill">Metronome</span>
+                <span class="transport-pill">Count-in</span>
+                <span class="transport-status">Guide / ready</span>
+                <span class="transport-status">Take 1 / ready / 100 / 100</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="artboard">
+          <div class="artboard__meta">
+            <div>
+              <p class="eyebrow">arrangement-v1</p>
+              <h2>Arrangement</h2>
+              <p>
+                Score-first workspace. Candidate comparison, score review, playback, and export
+                live in one orchestration surface.
+              </p>
+            </div>
+            <div class="artboard__tags">
+              <span class="tag">target: /projects/:id/arrangement</span>
+              <span class="tag">implements: ArrangementPage.tsx</span>
+            </div>
+          </div>
+          <div class="screen-frame screen-frame--arrangement">
+            <div class="arrangement-shell">
+              <div class="screen-topbar screen-topbar--dark">
+                <div>
+                  <p class="eyebrow">Arrangement Workspace</p>
+                  <h3>Compare candidates. Inspect the score. Export the chosen chart.</h3>
+                </div>
+                <div class="studio-summary">
+                  <div class="summary-chip"><span>Draft</span><strong>Take 2 melody</strong></div>
+                  <div class="summary-chip"><span>Difficulty</span><strong>basic</strong></div>
+                  <div class="summary-chip"><span>Beatbox</span><strong>drive</strong></div>
+                </div>
+              </div>
+              <div class="arrangement-strip">
+                <div class="arrangement-strip__card"><span>Lead fit</span><strong>94</strong></div>
+                <div class="arrangement-strip__card"><span>Max leap</span><strong>perfect 4th</strong></div>
+                <div class="arrangement-strip__card"><span>Parallel alerts</span><strong>1 low-risk</strong></div>
+                <div class="arrangement-strip__card"><span>Exports</span><strong>MusicXML / MIDI / WAV</strong></div>
+              </div>
+              <div class="arrangement-grid">
+                <section class="score-paper">
+                  <div class="score-paper__headline">
+                    <p class="eyebrow">Score Canvas</p>
+                    <h3>Candidate B</h3>
+                    <p>Lead, Alto, Tenor, Bass, and beatbox support visible in one page.</p>
+                  </div>
+                </section>
+                <aside class="arrangement-right">
+                  <div class="candidate-stack">
+                    <article class="candidate-card">
+                      <div class="candidate-card__row"><strong>Candidate A</strong><span class="tag">safer</span></div>
+                      <p>Small leaps, low parallel penalty, softer support parts.</p>
+                    </article>
+                    <article class="candidate-card candidate-card--selected">
+                      <div class="candidate-card__row"><strong>Candidate B</strong><span class="tag">selected</span></div>
+                      <p>Balanced range spread with stronger alto motion and tighter cadence.</p>
+                    </article>
+                    <article class="candidate-card">
+                      <div class="candidate-card__row"><strong>Candidate C</strong><span class="tag">wider</span></div>
+                      <p>More contrast, slightly larger jumps, brighter ending texture.</p>
+                    </article>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="artboard">
+          <div class="artboard__meta">
+            <div>
+              <p class="eyebrow">shared-review-v1</p>
+              <h2>Shared Review</h2>
+              <p>
+                Frozen review desk. Clear read-only boundary, selected take context on the left,
+                and score plus summary in the center-right reading path.
+              </p>
+            </div>
+            <div class="artboard__tags">
+              <span class="tag">target: /share/:token</span>
+              <span class="tag">implements: SharedProjectPage.tsx</span>
+            </div>
+          </div>
+          <div class="screen-frame screen-frame--shared">
+            <div class="shared-shell">
+              <div class="screen-topbar screen-topbar--dark">
+                <div>
+                  <p class="eyebrow">Frozen Review</p>
+                  <h3>Read-only arrangement review with captured take context</h3>
+                </div>
+                <div class="studio-summary">
+                  <div class="summary-chip"><span>Share</span><strong>Review link</strong></div>
+                  <div class="summary-chip"><span>State</span><strong>Snapshot frozen</strong></div>
+                </div>
+              </div>
+              <div class="shared-strip">
+                <aside class="take-rail">
+                  <p class="eyebrow">Take Rail</p>
+                  <h3>Selected take</h3>
+                  <div class="take-rail__item take-rail__item--active">
+                    <strong>Take 2</strong>
+                    <p>Alignment confidence 0.93</p>
+                  </div>
+                  <div class="take-rail__item">
+                    <strong>Take 1</strong>
+                    <p>Stored for comparison</p>
+                  </div>
+                </aside>
+                <section class="frozen-canvas">
+                  <p class="eyebrow">Frozen Canvas</p>
+                  <h3>Candidate B score view</h3>
+                </section>
+                <aside class="review-panel">
+                  <p class="eyebrow">Summary</p>
+                  <div class="review-panel__warning">Read-only share. Editing stays in the studio.</div>
+                  <div class="review-stack">
+                    <div class="review-box"><span>Pitch</span><strong>88</strong></div>
+                    <div class="review-box"><span>Rhythm</span><strong>91</strong></div>
+                    <div class="review-box"><span>Highlight</span><strong>Attack settles after note 12</strong></div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="artboard">
+          <div class="artboard__meta">
+            <div>
+              <p class="eyebrow">ops-v1</p>
+              <h2>Ops</h2>
+              <p>
+                Utility-only release desk. Dense and operational, but visually subordinate to the
+                rehearsal workflow.
+              </p>
+            </div>
+            <div class="artboard__tags">
+              <span class="tag">target: /ops</span>
+              <span class="tag">implements: OpsPage.tsx</span>
+            </div>
+          </div>
+          <div class="screen-frame screen-frame--ops">
+            <div class="ops-shell">
+              <div class="screen-topbar">
+                <div>
+                  <p class="eyebrow">Phase 7</p>
+                  <h3>Operations overview and release gate</h3>
+                  <p class="screen-note">
+                    Keep failure visibility, environment validation, and release evidence in one
+                    dense utility surface.
+                  </p>
+                </div>
+                <div class="button-row">
+                  <span class="button-secondary">Refresh overview</span>
+                  <span class="button-secondary">Download environment report</span>
+                  <span class="button-secondary">Back to home</span>
+                </div>
+              </div>
+              <div class="ops-strip">
+                <div class="ops-mini"><span>Projects</span><strong>12</strong></div>
+                <div class="ops-mini"><span>Ready takes</span><strong>34</strong></div>
+                <div class="ops-mini"><span>Failed tracks</span><strong>2</strong></div>
+                <div class="ops-mini"><span>Failed analysis jobs</span><strong>1</strong></div>
+              </div>
+              <div class="ops-zone">
+                <section class="ops-form">
+                  <p class="eyebrow">Validation Log</p>
+                  <h3>Record a native browser or real-hardware validation run</h3>
+                  <div class="ops-form__grid">
+                    <div class="ops-input">Run label</div>
+                    <div class="ops-input">Tester</div>
+                    <div class="ops-input">Device name</div>
+                    <div class="ops-input">Validated at</div>
+                    <div class="ops-input">OS</div>
+                    <div class="ops-input">Browser</div>
+                    <div class="ops-input">Input device</div>
+                    <div class="ops-input">Output route</div>
+                  </div>
+                  <div class="button-row">
+                    <span class="button-primary">Save validation run</span>
+                  </div>
+                </section>
+                <aside class="ops-column">
+                  <section class="ops-jobs">
+                    <p class="eyebrow">Recovery</p>
+                    <h3>Failed tracks and analysis jobs</h3>
+                    <div class="ops-list">
+                      <div class="ops-list__item">
+                        <strong>Warmup Session / take 3</strong>
+                        <p>Retry processing / stored upload timed out during canonical render.</p>
+                      </div>
+                      <div class="ops-list__item">
+                        <strong>Morning Drill / analysis v4</strong>
+                        <p>Retry job / low-confidence harmonic parse after chord fallback.</p>
+                      </div>
+                    </div>
+                  </section>
+                  <section class="ops-runs">
+                    <p class="eyebrow">Recent Validation Runs</p>
+                    <h3>Keep native browser checks visible next to the diagnostics baseline</h3>
+                    <div class="ops-list">
+                      <div class="ops-list__item">
+                        <strong>Native Safari manual run / WARN</strong>
+                        <p>Recording passed. Playback still needs fallback verification.</p>
+                      </div>
+                      <div class="ops-list__item">
+                        <strong>Firefox laptop run / PASS</strong>
+                        <p>Guide playback and exports matched baseline with no warnings.</p>
+                      </div>
+                    </div>
+                  </section>
+                </aside>
+              </div>
+              <section class="ops-diagnostics">
+                <p class="eyebrow">Environment Diagnostics</p>
+                <h3>Track browser audio variability before it becomes a support mystery</h3>
+                <div class="ops-diagnostics__grid">
+                  <div class="ops-diagnostics__column">
+                    <strong>Coverage</strong>
+                    <ul>
+                      <li>Profiles captured / 18</li>
+                      <li>Profiles with warnings / 6</li>
+                      <li>Browser families / 4</li>
+                      <li>Warning types / 5</li>
+                    </ul>
+                  </div>
+                  <div class="ops-diagnostics__column">
+                    <strong>Warning distribution</strong>
+                    <ul>
+                      <li>missing_offline_audio_context / 3</li>
+                      <li>legacy_webkit_audio_context_only / 2</li>
+                      <li>unsupported_recorder_mime / 1</li>
+                    </ul>
+                  </div>
+                  <div class="ops-diagnostics__column">
+                    <strong>Recent profiles</strong>
+                    <ul>
+                      <li>Safari / macOS / built-in speakers / 2 warnings</li>
+                      <li>Chrome / Windows / USB mic / no warnings</li>
+                      <li>Firefox / Ubuntu / monitor audio / 1 warning</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

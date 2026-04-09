@@ -417,12 +417,20 @@ def _evaluate_human_ratings(
             "note_index": rating.note_index,
             "human_attack_direction": rating.attack_direction,
             "actual_attack_direction": actual_attack_direction,
+            "actual_attack_signed_cents": (
+                actual_note.get("attack_signed_cents") if isinstance(actual_note, dict) else None
+            ),
             "attack_matches": None,
             "human_sustain_direction": rating.sustain_direction,
             "actual_sustain_direction": actual_sustain_direction,
+            "actual_sustain_median_cents": (
+                actual_note.get("sustain_median_cents") if isinstance(actual_note, dict) else None
+            ),
             "sustain_matches": None,
             "human_acceptability_label": rating.acceptability_label,
             "actual_acceptability_label": actual_acceptability_label,
+            "actual_confidence": actual_note.get("confidence") if isinstance(actual_note, dict) else None,
+            "actual_note_score": actual_note.get("note_score") if isinstance(actual_note, dict) else None,
             "acceptability_matches": None,
             "rater_count": rating.rater_count,
             "notes": rating.notes,

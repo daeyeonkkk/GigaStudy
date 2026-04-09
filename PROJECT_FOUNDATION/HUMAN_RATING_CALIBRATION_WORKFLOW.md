@@ -26,6 +26,8 @@ The repo now supports:
   `apps/api/calibration/human_rating_corpus.template.json`
 - a corpus builder CLI:
   `apps/api/scripts/build_human_rating_corpus.py`
+- a threshold-fit CLI:
+  `apps/api/scripts/fit_human_rating_thresholds.py`
 - runner support for `human_ratings` and `minimum_human_agreement_ratio`
 - Markdown and JSON summaries that include human-rating agreement
 - synthetic test coverage proving the comparison path works
@@ -105,8 +107,14 @@ uv run python scripts/build_human_rating_corpus.py --output calibration/human_ra
 uv run python scripts/run_intonation_calibration.py --manifest calibration/human_rating_corpus.generated.json
 ```
 
-6. Save the JSON and Markdown outputs as release evidence outside the template file.
-7. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
+6. Fit candidate difficulty thresholds:
+
+```bash
+uv run python scripts/fit_human_rating_thresholds.py --manifest calibration/human_rating_corpus.generated.json
+```
+
+7. Save the JSON and Markdown outputs as release evidence outside the template file.
+8. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
 
 ## 5. What Closes The Checklist
 

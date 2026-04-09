@@ -65,7 +65,7 @@ class HumanRatingSheetRow(BaseModel):
 
 
 def load_human_rating_metadata(metadata_path: Path) -> HumanRatingMetadataCorpus:
-    return HumanRatingMetadataCorpus.model_validate_json(metadata_path.read_text(encoding="utf-8"))
+    return HumanRatingMetadataCorpus.model_validate_json(metadata_path.read_text(encoding="utf-8-sig"))
 
 
 def load_human_rating_sheet(sheet_path: Path) -> list[HumanRatingSheetRow]:

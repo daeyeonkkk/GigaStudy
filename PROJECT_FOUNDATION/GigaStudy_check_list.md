@@ -128,6 +128,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A repeatable synthetic-vocal calibration runner exists and can be rerun from a manifest.
 - [x] A human-rating corpus comparison workflow exists, even though the real evidence corpus is not populated yet.
 - [x] A human-rating intake template and consensus builder exist for preparing real-vocal evidence.
+- [x] A threshold-fit report tool exists for future human-rated corpora, even though the evidence corpus is still open.
 - [ ] Real human vocal fixtures or a trusted human-rating corpus are part of the release-quality evidence.
 - [ ] Threshold calibration has been validated against human raters strongly enough to claim a human-trustworthy intonation judge.
 

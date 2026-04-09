@@ -62,6 +62,7 @@ The repo now also has a first-class workflow for future human-rating comparison:
 - manifest support for note-level `human_ratings`
 - input templates plus a builder for turning raw rater labels into a corpus manifest
 - per-case and per-run human-agreement summaries
+- a threshold-fit report path for candidate difficulty bands
 - optional `minimum_human_agreement_ratio` gating
 - a dedicated workflow note in `HUMAN_RATING_CALIBRATION_WORKFLOW.md`
 

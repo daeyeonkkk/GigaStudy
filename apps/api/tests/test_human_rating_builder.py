@@ -6,6 +6,7 @@ from gigastudy_api.services.human_rating_builder import (
     HumanRatingMetadataCorpus,
     HumanRatingSheetRow,
     build_human_rating_corpus,
+    load_human_rating_metadata,
     load_human_rating_sheet,
     render_human_rating_corpus_json,
 )
@@ -132,6 +133,30 @@ def test_load_human_rating_sheet_reads_template_csv(tmp_path: Path) -> None:
     assert rows[0].attack_direction == "sharp"
     assert rows[1].attack_direction is None
     assert rows[1].sustain_direction == "flat"
+
+
+def test_load_human_rating_metadata_reads_utf8_bom_json(tmp_path: Path) -> None:
+    metadata_path = tmp_path / "metadata.json"
+    metadata_path.write_text(
+        "{\n"
+        '  "corpus_id": "bom-metadata-test",\n'
+        '  "description": "BOM metadata coverage",\n'
+        '  "cases": [\n'
+        "    {\n"
+        '      "case_id": "case-a",\n'
+        '      "description": "Case A",\n'
+        '      "project_title": "Case A",\n'
+        '      "guide_source": {"source_kind": "named_fixture", "fixture_name": "guide_centered_vocalish"},\n'
+        '      "take_source": {"source_kind": "named_fixture", "fixture_name": "take_sharp_attack_vocalish"}\n'
+        "    }\n"
+        "  ]\n"
+        "}\n",
+        encoding="utf-8-sig",
+    )
+
+    metadata = load_human_rating_metadata(metadata_path)
+
+    assert metadata.corpus_id == "bom-metadata-test"
 
 
 def test_build_human_rating_corpus_rejects_unknown_case_ids() -> None:

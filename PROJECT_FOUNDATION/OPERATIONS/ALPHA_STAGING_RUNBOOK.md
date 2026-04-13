@@ -93,6 +93,21 @@ Important handling rule:
 - for a personal alpha, a `User API token` is acceptable
 - for a longer-lived shared system, an `Account API token` is the stronger default if your role allows it
 
+Recommended minimal settings for the current personal alpha:
+
+- token type:
+  `User API token`
+- permission:
+  `Object Read & Write`
+- bucket scope:
+  `Apply to specific buckets only`
+- selected bucket:
+  `gigastudy-alpha`
+- TTL:
+  `Forever`
+- IP filtering:
+  leave blank unless you deliberately want to pin one IP
+
 ### 2.2 Neon
 
 Prepare these:

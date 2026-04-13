@@ -7,16 +7,10 @@ param(
     [string]$EnvFile,
 
     [string]$Region = "asia-northeast3",
-    [string]$ServiceName = "gigastudy-api-alpha",
     [string]$Repository = "gigastudy-alpha",
     [string]$ImageName = "gigastudy-api",
     [string]$ImageTag = "latest",
-    [string]$Memory = "1Gi",
-    [string]$Cpu = "1",
-    [int]$MaxInstances = 1,
-    [int]$MinInstances = 0,
-    [int]$Concurrency = 1,
-    [string]$Timeout = "300s",
+    [string]$JobName = "gigastudy-api-alpha-migrate",
     [switch]$DryRun
 )
 
@@ -57,24 +51,45 @@ $buildArgs = @(
     "--project", $ProjectId
 )
 
-$deployArgs = @(
-    "run", "deploy", $ServiceName,
+$jobDescribeArgs = @(
+    "run", "jobs", "describe", $JobName,
+    "--project", $ProjectId,
+    "--region", $Region
+)
+
+$jobCreateArgs = @(
+    "run", "jobs", "create", $JobName,
     "--image", $imageUrl,
     "--project", $ProjectId,
     "--region", $Region,
-    "--allow-unauthenticated",
-    "--port", "8080",
-    "--cpu", $Cpu,
-    "--memory", $Memory,
-    "--min-instances", $MinInstances,
-    "--max-instances", $MaxInstances,
-    "--concurrency", $Concurrency,
-    "--timeout", $Timeout,
+    "--tasks", "1",
+    "--max-retries", "0",
+    "--parallelism", "1",
+    "--command", "/app/scripts/run_api_alembic_upgrade.sh",
     "--env-vars-file", $resolvedCloudRunEnvFile
 )
 
-Write-Host "Alpha backend target image:" $imageUrl
-Write-Host "Alpha backend env file:" $resolvedEnvFile
+$jobUpdateArgs = @(
+    "run", "jobs", "update", $JobName,
+    "--image", $imageUrl,
+    "--project", $ProjectId,
+    "--region", $Region,
+    "--tasks", "1",
+    "--max-retries", "0",
+    "--parallelism", "1",
+    "--command", "/app/scripts/run_api_alembic_upgrade.sh",
+    "--env-vars-file", $resolvedCloudRunEnvFile
+)
+
+$jobExecuteArgs = @(
+    "run", "jobs", "execute", $JobName,
+    "--project", $ProjectId,
+    "--region", $Region,
+    "--wait"
+)
+
+Write-Host "Alpha remote migration target image:" $imageUrl
+Write-Host "Alpha remote migration env file:" $resolvedEnvFile
 
 if ($DryRun) {
     Write-Host ""
@@ -82,7 +97,10 @@ if ($DryRun) {
     Write-Host "[dry-run] gcloud $($repositoryCreateArgs -join ' ')"
     Write-Host "[dry-run] gcloud auth configure-docker $Region-docker.pkg.dev --quiet"
     Write-Host "[dry-run] gcloud $($buildArgs -join ' ')"
-    Write-Host "[dry-run] gcloud $($deployArgs -join ' ')"
+    Write-Host "[dry-run] gcloud $($jobDescribeArgs -join ' ')"
+    Write-Host "[dry-run] gcloud $($jobCreateArgs -join ' ')"
+    Write-Host "[dry-run] gcloud $($jobUpdateArgs -join ' ')"
+    Write-Host "[dry-run] gcloud $($jobExecuteArgs -join ' ')"
     exit 0
 }
 
@@ -104,12 +122,26 @@ if ($LASTEXITCODE -ne 0) {
 Invoke-Gcloud -Executable $gcloud @buildArgs
 try {
     if ($LASTEXITCODE -ne 0) {
-        throw "Cloud Build failed."
+        throw "Cloud Build failed while preparing the remote migration image."
     }
 
-    Invoke-Gcloud -Executable $gcloud @deployArgs
+    Invoke-Gcloud -Executable $gcloud @jobDescribeArgs 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        throw "Cloud Run deploy failed."
+        Invoke-Gcloud -Executable $gcloud @jobCreateArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create Cloud Run job $JobName."
+        }
+    }
+    else {
+        Invoke-Gcloud -Executable $gcloud @jobUpdateArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to update Cloud Run job $JobName."
+        }
+    }
+
+    Invoke-Gcloud -Executable $gcloud @jobExecuteArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cloud Run migration job failed."
     }
 }
 finally {

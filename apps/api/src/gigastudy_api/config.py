@@ -1,7 +1,8 @@
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -26,7 +27,7 @@ class Settings(BaseSettings):
     analysis_timeout_seconds: int = 15
     upload_session_expiry_minutes: int = 30
     ops_recent_limit: int = 8
-    cors_origins: list[str] = [
+    cors_origins: Annotated[list[str], NoDecode] = [
         "http://127.0.0.1:5173",
         "http://localhost:5173",
     ]

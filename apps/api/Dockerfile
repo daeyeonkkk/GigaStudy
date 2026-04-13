@@ -29,7 +29,8 @@ COPY scripts ./scripts
 
 RUN pip install --no-cache-dir uv \
     && cd /app/apps/api \
-    && uv sync --frozen --no-dev
+    && uv sync --frozen --no-dev \
+    && chmod +x /app/scripts/run_api_alembic_upgrade.sh
 
 EXPOSE 8080
 

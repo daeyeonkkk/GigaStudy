@@ -215,5 +215,6 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A Cloud Run-ready backend container exists and includes both Python and Node for the Basic Pitch runtime.
 - [x] Browser audio uploads can bypass the API service through direct object-storage upload URLs.
 - [x] Repo-owned alpha env templates and deploy scripts exist for Cloud Run backend deployment, Neon migration, and Cloudflare Pages deployment.
+- [x] A remote Cloud Run job fallback exists for Neon migration when local outbound PostgreSQL access is blocked.
 - [x] The web build ships a Cloudflare Pages SPA fallback redirect file for client-side routes.
 - [ ] One real HTTPS staging environment has been verified end to end on the chosen alpha stack.

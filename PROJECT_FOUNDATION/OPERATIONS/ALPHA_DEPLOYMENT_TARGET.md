@@ -263,6 +263,8 @@ Current state after this review:
 - containerize the backend: done, including local Docker build plus runtime smoke with Node, Python, Basic Pitch assets, and `/api/health`
 - switch uploads to direct object storage: done for S3-compatible storage backends, while local development keeps the API upload fallback
 - add repo-owned staging env templates and deploy scripts: done, with dry-run verification for backend deploy and Neon migration plus a real web build that emits the Pages `_redirects` fallback
+- add a remote Cloud Run job fallback for Neon migration when local outbound PostgreSQL traffic is blocked: done
+- add a monorepo-aware Cloud Build config for `apps/api/Dockerfile`: done
 - verify one staging environment: open
 
 For the actual operator sequence, use:

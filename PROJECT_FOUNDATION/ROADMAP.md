@@ -409,6 +409,7 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
   Cloudflare Pages + Cloud Run + Neon + R2.
 - Direct browser-to-object-storage upload is now implemented for S3-compatible storage backends, while local development keeps the API upload fallback.
 - The Cloud Run backend container has now been verified locally through `docker build`, runtime Node/Python checks, and an in-container `/api/health` smoke.
+- The alpha path now also has a remote Cloud Run Job fallback for Neon migration, so staging can continue even when the operator machine cannot open outbound PostgreSQL connections.
 - The repo-side staging scaffold now also exists:
   `apps/api/.env.alpha.example`, `apps/web/.env.alpha.example`, `scripts/migrate_alpha_database.ps1`, `scripts/deploy_alpha_backend.ps1`, `scripts/deploy_alpha_frontend.ps1`, and `apps/web/public/_redirects`.
 - The remaining deployment blocker is:

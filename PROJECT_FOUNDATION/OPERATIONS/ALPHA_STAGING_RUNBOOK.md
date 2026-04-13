@@ -217,6 +217,21 @@ gcloud config set project <real-gcp-project-id>
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project <real-gcp-project-id>
 ```
 
+If local Neon access times out from the operator machine:
+
+- do not keep retrying local `uv run alembic upgrade head`
+- use the repo-owned remote fallback instead:
+
+```powershell
+pwsh -File scripts/migrate_alpha_database_remote.ps1 -ProjectId <real-gcp-project-id> -EnvFile apps/api/.env.alpha
+```
+
+Why this fallback exists:
+
+- some local networks block outbound PostgreSQL traffic on port `5432`
+- the Cloud Run / Cloud Build environment can still reach Neon even when the operator laptop cannot
+- the migration job reuses the same backend container image and env file instead of inventing a second migration path
+
 ## 3. Local Files The User Must Fill
 
 Create real local files from the repo templates.
@@ -302,6 +317,20 @@ After the user has prepared the accounts and filled the local env files, the rep
 ```powershell
 pwsh -File scripts/migrate_alpha_database.ps1 -EnvFile apps/api/.env.alpha
 ```
+
+Fallback when local PostgreSQL traffic is blocked:
+
+```powershell
+pwsh -File scripts/migrate_alpha_database_remote.ps1 -ProjectId <gcp-project-id> -EnvFile apps/api/.env.alpha
+```
+
+This fallback:
+
+- builds the verified backend image in Artifact Registry
+- creates or updates a one-task Cloud Run Job
+- runs `/app/scripts/run_api_alembic_upgrade.sh` inside that job
+- waits for the migration execution result before returning
+- converts the local dotenv-style `apps/api/.env.alpha` into a temporary Cloud Run YAML env file so the operator does not need to maintain two secret files
 
 ### 4.2 Deploy backend to Cloud Run
 

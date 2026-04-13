@@ -225,6 +225,33 @@ When the user is ready to continue, the fastest safe handoff is:
    - frontend deploy
    - real staging verification
 
+## 6A. Fastest Next Order During Setup
+
+If the operator already created the R2 bucket and S3 API credentials, the fastest next order is:
+
+1. finish the Cloudflare Pages build setup first
+   - fix build settings
+   - retry the build
+   - confirm the Pages URL exists
+2. record the Cloudflare values locally
+   - account id
+   - Pages project name
+   - Pages URL
+   - R2 bucket name
+   - R2 access key id
+   - R2 secret access key
+3. create the Neon database and copy the final connection string
+4. create the GCP project and enable Cloud Run, Cloud Build, and Artifact Registry
+5. only then fill:
+   - `apps/api/.env.alpha`
+   - `apps/web/.env.alpha`
+
+This order is preferred because:
+
+- it closes the current Pages blocker while the operator is already in Cloudflare
+- it avoids filling local env files with partial placeholders too early
+- it reduces the chance of mixing the wrong Pages URL or Cloudflare account id into the backend env
+
 ## 7. Current Truth
 
 - Repo scaffolding: done

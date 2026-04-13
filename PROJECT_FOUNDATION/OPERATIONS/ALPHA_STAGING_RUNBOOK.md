@@ -185,6 +185,8 @@ Prepare these:
 3. Install and log in with `gcloud`
    - On Windows, if `gcloud` is not already available in the terminal, install Google Cloud CLI before the deploy step.
    - During `gcloud auth login`, if the CLI asks which cloud project to use, prefer creating a fresh alpha project instead of selecting an unrelated older project.
+   - If `gcloud` is installed but not on `PATH`, use the Cloud SDK shell or the default Windows install path:
+     `C:\Users\<user>\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`
 4. Pick one region
    - recommended starting point:
      `asia-northeast3`
@@ -193,6 +195,11 @@ You will need these values:
 
 - GCP project id
 - chosen region
+
+Current operator checkpoint:
+
+- if `gcloud services enable ...` fails with `Billing account for project ... is not found`,
+  attach billing to the GCP project first and rerun the service-enable command before continuing.
 
 ## 3. Local Files The User Must Fill
 

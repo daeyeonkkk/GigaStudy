@@ -370,6 +370,7 @@ Date: 2026-04-09
 - The new environment-validation importer removes another manual bottleneck, but it still does not count as native Safari or real-hardware evidence until those runs are actually collected.
 - The alpha deployment track now has repo-side container verification plus direct object-storage uploads for S3-compatible storage backends, and the remaining infrastructure blocker is one verified HTTPS staging environment on the chosen stack.
 - The Cloudflare Pages side of that staging path is now live on `gigastudy-alpha.pages.dev`, so the remaining work is backend cloud deploy plus end-to-end HTTPS verification rather than frontend host setup.
+- The operator path has now also confirmed the next concrete infrastructure blocker: the GCP alpha project exists and `gcloud` is authenticated, but Cloud Run / Cloud Build / Artifact Registry enablement is currently blocked until billing is attached to `gigastudy-alpha`.
 - The repo now also has alpha-specific env templates plus deploy scripts for the chosen stack: `apps/api/.env.alpha.example`, `apps/web/.env.alpha.example`, `scripts/deploy_alpha_backend.ps1`, `scripts/migrate_alpha_database.ps1`, and `scripts/deploy_alpha_frontend.ps1`.
 - Those staging helpers are now verified at the repo level through dry-run command generation for backend deploy and Neon migration plus a real `npm run build:web` pass for the Pages deploy path.
 - The web build now also ships a top-level `_redirects` file, so Cloudflare Pages can serve client-side routes through the SPA entry instead of breaking deep links.

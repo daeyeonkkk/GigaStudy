@@ -14,6 +14,8 @@ __pycache__/
 .env.*
 !.env.example
 !apps/api/.env.production.example
+!apps/api/.env.alpha.example
+!apps/web/.env.alpha.example
 
 .DS_Store
 Thumbs.db

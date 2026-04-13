@@ -23,8 +23,7 @@ However, the proposal is not `drop in and deploy today` as written.
 Three repo-specific gaps matter before this becomes the real staging path:
 
 1. the frontend build settings in the proposal do not exactly match this monorepo
-2. uploads still pass through the API service instead of going direct to object storage
-3. one verified HTTPS staging environment still does not exist on the chosen stack
+2. one verified HTTPS staging environment still does not exist on the chosen stack
 
 ## 2. Official Cost And Limit Check
 
@@ -170,17 +169,17 @@ In the current local session, Docker daemon verification was blocked because Doc
 
 ### Upload Flow
 
-The current product upload flow still writes audio through API upload endpoints like:
+The Cloud Run blocker here is now closed.
 
-- `PUT /api/uploads/tracks/{track_id}`
+For S3-compatible storage backends, the current product upload flow can already return direct-upload targets for:
 
-That is workable locally, but it is a weak fit for Cloud Run because:
+- guide audio
+- take audio
+- mixdown audio
 
-- HTTP/1 request size is capped at 32 MiB
-- large uploads keep API instances busy
-- upload traffic increases backend cost and failure surface
+Local development still keeps the existing API upload proxy.
 
-So for the real alpha deployment path, browser-to-R2 direct upload should be treated as a deployment blocker, not as a later nice-to-have.
+That matters because Cloud Run HTTP/1 requests are still capped at 32 MiB and large audio uploads are a poor fit for a request-bound API service.
 
 ### Analysis Shape
 
@@ -195,6 +194,20 @@ The current repo already has a cleaner split:
 
 That split is good for alpha and should be preserved unless real usage proves otherwise.
 
+### Object Storage Layout
+
+The earlier recommendation to split alpha storage into two R2 buckets is fine in principle, but it does not match the current repo.
+
+Today the repo exposes one configured object-storage bucket through:
+
+- `GIGASTUDY_API_S3_BUCKET`
+
+So the correct alpha path for this repo is:
+
+- use one bucket for now
+- keep object keys partitioned by prefixes
+- revisit multi-bucket separation only if product or ops pressure actually justifies it
+
 ## 5. Recommended Alpha Sequence For GigaStudy
 
 1. Deploy the frontend to Cloudflare Pages.
@@ -203,6 +216,26 @@ That split is good for alpha and should be preserved unless real usage proves ot
 4. Verify one HTTPS staging flow end to end:
    project -> guide -> take -> analysis -> melody -> arrangement -> share.
 5. Only then start collecting real-human and real-hardware evidence rounds.
+
+## 5A. Repo-Owned Staging Scaffold
+
+The repo now includes the following staging helpers:
+
+- `apps/api/.env.alpha.example`
+- `apps/web/.env.alpha.example`
+- `scripts/migrate_alpha_database.ps1`
+- `scripts/deploy_alpha_backend.ps1`
+- `scripts/deploy_alpha_frontend.ps1`
+- `apps/web/public/_redirects`
+
+Why this matters:
+
+- backend deploy now has one repeatable Cloud Run command path
+- Neon migration now has one repeatable Alembic command path
+- Pages deployment now has one repeatable manual deploy path
+- SPA deep links now have a repo-owned fallback for Pages hosting
+- the Pages path now has one documented caution:
+  if you create a brand-new Direct Upload project, Cloudflare does not let that same project switch to Git integration later
 
 ## 6. Recommendation
 
@@ -221,6 +254,7 @@ But the first real deployment slice should be:
 - document the target
 - containerize the backend
 - switch uploads to direct object storage
+- add repo-owned staging env templates and deploy scripts
 - verify one staging environment
 
 Current state after this review:
@@ -228,6 +262,7 @@ Current state after this review:
 - document the target: done
 - containerize the backend: done, including local Docker build plus runtime smoke with Node, Python, Basic Pitch assets, and `/api/health`
 - switch uploads to direct object storage: done for S3-compatible storage backends, while local development keeps the API upload fallback
+- add repo-owned staging env templates and deploy scripts: done, with dry-run verification for backend deploy and Neon migration plus a real web build that emits the Pages `_redirects` fallback
 - verify one staging environment: open
 
 ## 7. Sources
@@ -235,6 +270,9 @@ Current state after this review:
 - Cloudflare Pages limits and pricing:
   - https://developers.cloudflare.com/pages/platform/limits/
   - https://developers.cloudflare.com/pages/configuration/serving-pages/
+  - https://developers.cloudflare.com/pages/configuration/redirects/
+  - https://developers.cloudflare.com/pages/get-started/direct-upload/
+  - https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/
 - Neon pricing:
   - https://neon.tech/pricing
 - Cloudflare R2 pricing:

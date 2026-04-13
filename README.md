@@ -49,6 +49,31 @@ This is the current backend packaging target for the Phase 11 alpha deployment t
 S3-compatible storage backends now also return direct upload targets for guide, take, and mixdown audio, while local development keeps the API upload proxy.
 Local verification has now been completed with `docker build`, `node --version`, Basic Pitch asset presence, and a running `/api/health` smoke.
 
+### Alpha Staging Scaffold
+
+```bash
+pwsh -File scripts/migrate_alpha_database.ps1 -EnvFile apps/api/.env.alpha
+pwsh -File scripts/deploy_alpha_backend.ps1 -ProjectId <gcp-project> -EnvFile apps/api/.env.alpha
+pwsh -File scripts/deploy_alpha_frontend.ps1 -ProjectName <pages-project> -BranchName staging
+```
+
+Use these repo-owned templates as the starting point:
+
+- `apps/api/.env.alpha.example`
+- `apps/web/.env.alpha.example`
+
+For the current repo shape:
+
+- Cloud Run deploys the backend container
+- Neon is migrated with Alembic
+- Cloudflare Pages serves the built SPA
+- `apps/web/public/_redirects` keeps client-side routes working on Pages
+
+The current alpha path also uses one S3-compatible bucket via `GIGASTUDY_API_S3_BUCKET`, not two separate buckets.
+Keep prefixes inside that bucket for alpha unless ops pressure proves a split is worth it.
+If you create a brand-new Cloudflare Pages project as a Direct Upload project, remember that Cloudflare does not let that same project switch to Git integration later.
+Use the deploy script against an existing Git-integrated Pages project if you want to keep that future option open.
+
 ### API Test
 
 ```bash

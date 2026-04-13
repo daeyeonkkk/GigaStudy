@@ -184,6 +184,7 @@ Prepare these:
    - Artifact Registry
 3. Install and log in with `gcloud`
    - On Windows, if `gcloud` is not already available in the terminal, install Google Cloud CLI before the deploy step.
+   - During `gcloud auth login`, if the CLI asks which cloud project to use, prefer creating a fresh alpha project instead of selecting an unrelated older project.
 4. Pick one region
    - recommended starting point:
      `asia-northeast3`

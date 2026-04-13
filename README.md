@@ -330,3 +330,4 @@ Those outputs are review artifacts, not canonical foundation docs.
 - [Intonation Assessment](./PROJECT_FOUNDATION/QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md)
 - [Browser Environment Validation](./PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md)
 - [Alpha Deployment Target](./PROJECT_FOUNDATION/OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md)
+- [Alpha Staging Runbook](./PROJECT_FOUNDATION/OPERATIONS/ALPHA_STAGING_RUNBOOK.md)

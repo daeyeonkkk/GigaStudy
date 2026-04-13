@@ -265,6 +265,10 @@ Current state after this review:
 - add repo-owned staging env templates and deploy scripts: done, with dry-run verification for backend deploy and Neon migration plus a real web build that emits the Pages `_redirects` fallback
 - verify one staging environment: open
 
+For the actual operator sequence, use:
+
+- `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
+
 ## 7. Sources
 
 - Cloudflare Pages limits and pricing:

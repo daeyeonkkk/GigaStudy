@@ -35,6 +35,7 @@ class TakeUploadInitResponse(BaseModel):
     upload_url: str
     method: str = "PUT"
     storage_key: str
+    upload_headers: dict[str, str] = Field(default_factory=dict)
 
 
 class TakeCompleteRequest(BaseModel):

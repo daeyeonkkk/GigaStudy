@@ -46,6 +46,7 @@ docker run --rm -p 8080:8080 gigastudy-api-cloudrun:test
 Build the image from the repo root.
 The container includes both Python and Node because the backend runtime depends on the repo-local Basic Pitch helper at `scripts/basic_pitch_transcribe.cjs` plus the root `@spotify/basic-pitch` package.
 This is the current backend packaging target for the Phase 11 alpha deployment track.
+S3-compatible storage backends now also return direct upload targets for guide, take, and mixdown audio, while local development keeps the API upload proxy.
 
 ### API Test
 
@@ -286,7 +287,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - When QA delivers spreadsheet-style hardware evidence, preview and import it in ops first so the packet, claim gate, and release-note exports all read from the same stored runs.
 - Use the exported browser compatibility release-note draft as the default publishing aid once the packet has been reviewed.
 - Prefer the environment-validation CSV template plus importer when QA or external testers collect hardware evidence outside the ops UI.
-- Use `PROJECT_FOUNDATION/OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md` as the current deployment recommendation before setting up a public alpha stack, and treat backend containerization plus direct object-storage upload as the first deployment blockers to close.
+- Use `PROJECT_FOUNDATION/OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md` as the current deployment recommendation before setting up a public alpha stack, and treat backend container verification plus one verified HTTPS staging environment as the remaining first deployment blockers to close.
 
 ## Foundation Docs
 

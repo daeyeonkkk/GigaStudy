@@ -199,11 +199,10 @@ That split is good for alpha and should be preserved unless real usage proves ot
 
 1. Deploy the frontend to Cloudflare Pages.
 2. Point the backend at Neon PostgreSQL and R2.
-3. Move browser uploads to direct object-storage upload URLs.
-4. Wire `VITE_API_BASE_URL`, backend `CORS`, and `GIGASTUDY_API_PUBLIC_APP_URL`.
-5. Verify one HTTPS staging flow end to end:
+3. Wire `VITE_API_BASE_URL`, backend `CORS`, and `GIGASTUDY_API_PUBLIC_APP_URL`.
+4. Verify one HTTPS staging flow end to end:
    project -> guide -> take -> analysis -> melody -> arrangement -> share.
-6. Only then start collecting real-human and real-hardware evidence rounds.
+5. Only then start collecting real-human and real-hardware evidence rounds.
 
 ## 6. Recommendation
 
@@ -228,7 +227,7 @@ Current state after this review:
 
 - document the target: done
 - containerize the backend: implementation added, verification still open
-- switch uploads to direct object storage: open
+- switch uploads to direct object storage: done for S3-compatible storage backends, while local development keeps the API upload fallback
 - verify one staging environment: open
 
 ## 7. Sources

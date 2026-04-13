@@ -20,7 +20,7 @@ from gigastudy_api.services.guides import (
     get_track_source_path,
     store_track_upload,
 )
-from gigastudy_api.services.storage import build_storage_download_response
+from gigastudy_api.services.storage import build_storage_download_response, build_track_upload_target
 
 router = APIRouter()
 
@@ -37,14 +37,19 @@ def create_guide_upload_url_endpoint(
     session: Session = Depends(get_db_session),
 ) -> GuideUploadInitResponse:
     guide_track = create_guide_upload_session(session, project_id, payload)
-    upload_url = str(
-        request.url_for("upload_track_source_audio", track_id=str(guide_track.track_id))
+    upload_target = build_track_upload_target(
+        request,
+        track_id=guide_track.track_id,
+        storage_key=guide_track.storage_key or "",
+        content_type=payload.content_type,
     )
 
     return GuideUploadInitResponse(
         track_id=guide_track.track_id,
-        upload_url=upload_url,
-        storage_key=guide_track.storage_key or "",
+        upload_url=upload_target.upload_url,
+        method=upload_target.method,
+        storage_key=upload_target.storage_key,
+        upload_headers=upload_target.headers,
     )
 
 

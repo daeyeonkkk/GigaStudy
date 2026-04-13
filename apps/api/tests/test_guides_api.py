@@ -53,6 +53,7 @@ def test_guide_upload_lifecycle(client: TestClient) -> None:
     assert init_response.status_code == 201
     init_payload = init_response.json()
     assert init_payload["method"] == "PUT"
+    assert init_payload["upload_headers"] == {}
 
     upload_response = client.put(
         init_payload["upload_url"],

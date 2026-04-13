@@ -15,6 +15,7 @@ from gigastudy_api.services.mixdowns import (
     complete_mixdown_upload,
     create_mixdown_upload_session,
 )
+from gigastudy_api.services.storage import build_track_upload_target
 
 router = APIRouter(prefix="/projects")
 
@@ -31,14 +32,19 @@ def create_mixdown_upload_url_endpoint(
     session: Session = Depends(get_db_session),
 ) -> MixdownUploadInitResponse:
     mixdown_track = create_mixdown_upload_session(session, project_id, payload)
-    upload_url = str(
-        request.url_for("upload_track_source_audio", track_id=str(mixdown_track.track_id))
+    upload_target = build_track_upload_target(
+        request,
+        track_id=mixdown_track.track_id,
+        storage_key=mixdown_track.storage_key or "",
+        content_type=payload.content_type,
     )
 
     return MixdownUploadInitResponse(
         track_id=mixdown_track.track_id,
-        upload_url=upload_url,
-        storage_key=mixdown_track.storage_key or "",
+        upload_url=upload_target.upload_url,
+        method=upload_target.method,
+        storage_key=upload_target.storage_key,
+        upload_headers=upload_target.headers,
     )
 
 

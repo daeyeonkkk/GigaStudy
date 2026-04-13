@@ -38,6 +38,7 @@ import {
 } from '../lib/localizedLabels'
 import { renderOfflineMixdown, type RenderedMixdown } from '../lib/mixdownAudio'
 import {
+  buildUploadHeaders,
   pickSupportedRecordingMimeType,
   playCountInSequence,
   startMetronomeLoop,
@@ -115,6 +116,7 @@ type GuideUploadInitResponse = {
   upload_url: string
   method: 'PUT'
   storage_key: string
+  upload_headers: Record<string, string>
 }
 
 type AnalysisFeedbackItem = {
@@ -280,6 +282,7 @@ type TakeUploadInitResponse = {
   upload_url: string
   method: 'PUT'
   storage_key: string
+  upload_headers: Record<string, string>
 }
 
 type MixdownTrack = {
@@ -304,6 +307,7 @@ type MixdownUploadInitResponse = {
   upload_url: string
   method: 'PUT'
   storage_key: string
+  upload_headers: Record<string, string>
 }
 
 type StudioSnapshotResponse = {
@@ -2556,6 +2560,7 @@ export function StudioPage() {
         url: uploadSession.upload_url,
         method: uploadSession.method,
         blob: mixdownPreview.blob,
+        headers: uploadSession.upload_headers,
         contentType: 'audio/wav',
       })
 
@@ -2625,6 +2630,7 @@ export function StudioPage() {
         url: uploadSession.upload_url,
         method: uploadSession.method,
         blob: upload.blob,
+        headers: uploadSession.upload_headers,
         contentType: upload.contentType,
         onProgress: (progress) =>
           setTakeUploadProgress((current) => ({
@@ -3123,13 +3129,10 @@ export function StudioPage() {
       }
 
       const uploadSession = (await initResponse.json()) as GuideUploadInitResponse
+      const uploadHeaders = buildUploadHeaders(uploadSession.upload_headers, guideFile.type || undefined)
       const uploadResponse = await fetch(uploadSession.upload_url, {
         method: uploadSession.method,
-        headers: guideFile.type
-          ? {
-              'Content-Type': guideFile.type,
-            }
-          : undefined,
+        headers: uploadHeaders,
         body: guideFile,
       })
 

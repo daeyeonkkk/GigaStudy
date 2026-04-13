@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote
 
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
@@ -44,6 +45,20 @@ class FakeS3Client:
             "ContentLength": len(item["body"]),
             "ContentType": item.get("content_type"),
         }
+
+    def generate_presigned_url(
+        self,
+        ClientMethod: str,
+        Params: dict[str, object],
+        ExpiresIn: int,
+        HttpMethod: str,
+    ) -> str:
+        bucket = str(Params["Bucket"])
+        key = str(Params["Key"])
+        return (
+            f"https://presigned.minio.test/{bucket}/{quote(key, safe='/')}"
+            f"?client_method={ClientMethod}&http_method={HttpMethod}&expires_in={ExpiresIn}"
+        )
 
 
 @pytest.fixture
@@ -92,13 +107,15 @@ def test_guide_upload_roundtrip_works_with_s3_storage_backend(
     )
     assert init_response.status_code == 201
     init_payload = init_response.json()
+    assert init_payload["upload_url"].startswith("https://presigned.minio.test/gigastudy-test/")
+    assert init_payload["upload_headers"] == {"Content-Type": "audio/wav"}
 
-    upload_response = client.put(
-        init_payload["upload_url"],
-        content=wav_bytes,
-        headers={"Content-Type": "audio/wav"},
+    fake_s3.put_object(
+        Bucket="gigastudy-test",
+        Key=init_payload["storage_key"],
+        Body=wav_bytes,
+        ContentType="audio/wav",
     )
-    assert upload_response.status_code == 204
 
     complete_response = client.post(
         f"/api/projects/{project_id}/guide/complete",
@@ -116,3 +133,38 @@ def test_guide_upload_roundtrip_works_with_s3_storage_backend(
     assert canonical_response.headers["content-type"].startswith("audio/wav")
     assert any(key.endswith("-canonical.wav") for (_, key) in fake_s3.objects.keys())
     assert any(key.endswith("-frame-pitch.json") for (_, key) in fake_s3.objects.keys())
+
+
+def test_take_and_mixdown_upload_init_return_direct_targets_with_s3_storage_backend(
+    s3_client: tuple[TestClient, FakeS3Client],
+) -> None:
+    client, _ = s3_client
+
+    project_response = client.post("/api/projects", json={"title": "S3 Upload Targets"})
+    project_id = project_response.json()["project_id"]
+
+    take_create_response = client.post(
+        f"/api/projects/{project_id}/tracks",
+        json={"part_type": "LEAD"},
+    )
+    take_track_id = take_create_response.json()["track_id"]
+
+    take_init_response = client.post(
+        f"/api/tracks/{take_track_id}/upload-url",
+        json={"filename": "take.wav", "content_type": "audio/wav"},
+    )
+    assert take_init_response.status_code == 200
+    take_init_payload = take_init_response.json()
+    assert take_init_payload["upload_url"].startswith("https://presigned.minio.test/gigastudy-test/")
+    assert take_init_payload["upload_headers"] == {"Content-Type": "audio/wav"}
+    assert "/api/uploads/tracks/" not in take_init_payload["upload_url"]
+
+    mixdown_init_response = client.post(
+        f"/api/projects/{project_id}/mixdown/upload-url",
+        json={"filename": "mix.wav", "content_type": "audio/wav"},
+    )
+    assert mixdown_init_response.status_code == 201
+    mixdown_init_payload = mixdown_init_response.json()
+    assert mixdown_init_payload["upload_url"].startswith("https://presigned.minio.test/gigastudy-test/")
+    assert mixdown_init_payload["upload_headers"] == {"Content-Type": "audio/wav"}
+    assert "/api/uploads/tracks/" not in mixdown_init_payload["upload_url"]

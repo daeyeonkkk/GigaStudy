@@ -63,6 +63,7 @@ def test_take_upload_lifecycle_and_list(client: TestClient) -> None:
         json={"filename": "take-one.wav", "content_type": "audio/wav"},
     )
     assert init_response.status_code == 200
+    assert init_response.json()["upload_headers"] == {}
 
     upload_response = client.put(
         init_response.json()["upload_url"],

@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Iterator
@@ -10,6 +10,7 @@ import os
 import boto3
 from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
+from fastapi import Request
 from fastapi.responses import Response
 
 from gigastudy_api.config import Settings, get_settings
@@ -23,6 +24,14 @@ class StorageObjectNotFoundError(FileNotFoundError):
 class StoredObject:
     storage_key: str
     byte_size: int
+
+
+@dataclass(frozen=True)
+class StorageUploadTarget:
+    upload_url: str
+    method: str
+    storage_key: str
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 def build_project_storage_key(project_id: object, *segments: object) -> str:
@@ -164,6 +173,36 @@ class S3StorageBackend:
             if temp_path.exists():
                 temp_path.unlink()
 
+    def create_direct_upload_target(
+        self,
+        storage_key: str,
+        *,
+        content_type: str | None = None,
+        expires_in_seconds: int,
+    ) -> StorageUploadTarget:
+        normalized_key = self._normalize_key(storage_key)
+        params: dict[str, object] = {
+            "Bucket": self.bucket,
+            "Key": normalized_key,
+        }
+        headers: dict[str, str] = {}
+        if content_type:
+            params["ContentType"] = content_type
+            headers["Content-Type"] = content_type
+
+        upload_url = self.client.generate_presigned_url(
+            "put_object",
+            Params=params,
+            ExpiresIn=expires_in_seconds,
+            HttpMethod="PUT",
+        )
+        return StorageUploadTarget(
+            upload_url=upload_url,
+            method="PUT",
+            storage_key=normalized_key,
+            headers=headers,
+        )
+
 
 def _create_s3_client(settings: Settings):
     return boto3.client(
@@ -184,6 +223,29 @@ def get_storage_backend():
     if settings.storage_backend == "s3":
         return S3StorageBackend(settings)
     return LocalStorageBackend(Path(settings.storage_root).resolve())
+
+
+def build_track_upload_target(
+    request: Request,
+    *,
+    track_id: object,
+    storage_key: str,
+    content_type: str | None = None,
+) -> StorageUploadTarget:
+    backend = get_storage_backend()
+    if isinstance(backend, S3StorageBackend):
+        expires_in_seconds = max(get_settings().upload_session_expiry_minutes, 1) * 60
+        return backend.create_direct_upload_target(
+            storage_key,
+            content_type=content_type,
+            expires_in_seconds=expires_in_seconds,
+        )
+
+    return StorageUploadTarget(
+        upload_url=str(request.url_for("upload_track_source_audio", track_id=str(track_id))),
+        method="PUT",
+        storage_key=storage_key,
+    )
 
 
 def build_storage_download_response(

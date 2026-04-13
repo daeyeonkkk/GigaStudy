@@ -50,6 +50,7 @@ def test_mixdown_upload_lifecycle_updates_studio_snapshot(client: TestClient) ->
         json={"filename": "practice-mix.wav", "content_type": "audio/wav"},
     )
     assert init_response.status_code == 201
+    assert init_response.json()["upload_headers"] == {}
 
     upload_response = client.put(
         init_response.json()["upload_url"],

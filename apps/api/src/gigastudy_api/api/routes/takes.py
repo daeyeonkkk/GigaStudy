@@ -19,6 +19,7 @@ from gigastudy_api.services.takes import (
     create_take_upload_session,
     list_take_tracks,
 )
+from gigastudy_api.services.storage import build_track_upload_target
 
 router = APIRouter()
 
@@ -61,12 +62,19 @@ def create_take_upload_url_endpoint(
     session: Session = Depends(get_db_session),
 ) -> TakeUploadInitResponse:
     track = create_take_upload_session(session, track_id, payload)
-    upload_url = str(request.url_for("upload_track_source_audio", track_id=str(track.track_id)))
+    upload_target = build_track_upload_target(
+        request,
+        track_id=track.track_id,
+        storage_key=track.storage_key or "",
+        content_type=payload.content_type,
+    )
 
     return TakeUploadInitResponse(
         track_id=track.track_id,
-        upload_url=upload_url,
-        storage_key=track.storage_key or "",
+        upload_url=upload_target.upload_url,
+        method=upload_target.method,
+        storage_key=upload_target.storage_key,
+        upload_headers=upload_target.headers,
     )
 
 

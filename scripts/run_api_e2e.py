@@ -13,12 +13,24 @@ DB_PATH = E2E_DIR / "gigastudy_e2e.db"
 STORAGE_ROOT = API_DIR / ".e2e-storage"
 
 
+def _ignore_missing_tree_entry(function, path, error) -> None:
+    if isinstance(error, FileNotFoundError):
+        return
+    raise error
+
+
+def _remove_tree_best_effort(path: Path) -> None:
+    if not path.exists():
+        return
+    shutil.rmtree(path, onexc=_ignore_missing_tree_entry)
+
+
 def prepare_environment() -> None:
     E2E_DIR.mkdir(parents=True, exist_ok=True)
     if DB_PATH.exists():
         DB_PATH.unlink()
     if STORAGE_ROOT.exists():
-        shutil.rmtree(STORAGE_ROOT)
+        _remove_tree_best_effort(STORAGE_ROOT)
     STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
     os.environ.setdefault("GIGASTUDY_API_APP_ENV", "e2e")

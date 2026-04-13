@@ -4,10 +4,13 @@ export type MetronomeController = {
   stop: () => Promise<void>
 }
 
+type UploadHeaders = Record<string, string>
+
 type UploadBlobOptions = {
   url: string
   method: string
   blob: Blob
+  headers?: UploadHeaders
   contentType?: string
   onProgress?: (progress: number) => void
 }
@@ -129,19 +132,37 @@ export function listSupportedRecordingMimeTypes(): string[] {
   ].filter((candidate) => MediaRecorder.isTypeSupported(candidate))
 }
 
+function hasContentTypeHeader(headers: UploadHeaders): boolean {
+  return Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')
+}
+
+export function buildUploadHeaders(
+  headers?: UploadHeaders,
+  contentType?: string,
+): UploadHeaders | undefined {
+  const resolvedHeaders: UploadHeaders = { ...(headers ?? {}) }
+  if (contentType && !hasContentTypeHeader(resolvedHeaders)) {
+    resolvedHeaders['Content-Type'] = contentType
+  }
+
+  return Object.keys(resolvedHeaders).length > 0 ? resolvedHeaders : undefined
+}
+
 export function uploadBlobWithProgress({
   url,
   method,
   blob,
+  headers,
   contentType,
   onProgress,
 }: UploadBlobOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
+    const resolvedHeaders = buildUploadHeaders(headers, contentType)
 
     request.open(method, url)
-    if (contentType) {
-      request.setRequestHeader('Content-Type', contentType)
+    for (const [key, value] of Object.entries(resolvedHeaders ?? {})) {
+      request.setRequestHeader(key, value)
     }
 
     request.upload.onprogress = (event) => {
@@ -162,8 +183,8 @@ export function uploadBlobWithProgress({
       reject(new Error(`업로드에 실패했습니다. 상태 코드: ${request.status}`))
     }
 
-    request.onerror = () => reject(new Error('오디오를 올리는 중 네트워크 오류가 발생했습니다.'))
-    request.onabort = () => reject(new Error('오디오 업로드가 중단되었습니다.'))
+    request.onerror = () => reject(new Error('업로드 중 네트워크 오류가 발생했습니다.'))
+    request.onabort = () => reject(new Error('업로드가 중단되었습니다.'))
     request.send(blob)
   })
 }

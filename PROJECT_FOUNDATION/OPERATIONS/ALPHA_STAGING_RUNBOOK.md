@@ -174,6 +174,29 @@ Fill these placeholders:
 - `<r2-access-key-id>`
 - `<r2-secret-access-key>`
 
+Ready-to-paste backend template:
+
+```env
+GIGASTUDY_API_ENV=production
+GIGASTUDY_API_APP_NAME=GigaStudy API
+GIGASTUDY_API_CORS_ORIGINS=https://gigastudy-alpha.pages.dev
+GIGASTUDY_API_PUBLIC_APP_URL=https://gigastudy-alpha.pages.dev
+GIGASTUDY_API_DATABASE_URL=postgresql+psycopg://<neon-user>:<neon-password>@<neon-endpoint>/<neon-database>?sslmode=require
+GIGASTUDY_API_DATABASE_ECHO=false
+GIGASTUDY_API_DEFAULT_USER_NICKNAME=alpha-dev
+GIGASTUDY_API_STORAGE_BACKEND=s3
+GIGASTUDY_API_STORAGE_ROOT=./storage
+GIGASTUDY_API_S3_BUCKET=gigastudy-alpha
+GIGASTUDY_API_S3_REGION=auto
+GIGASTUDY_API_S3_ENDPOINT_URL=https://25b918bfa109d96c3c29be00ad0b34cc.r2.cloudflarestorage.com
+GIGASTUDY_API_S3_ACCESS_KEY_ID=<r2-access-key-id>
+GIGASTUDY_API_S3_SECRET_ACCESS_KEY=<r2-secret-access-key>
+GIGASTUDY_API_S3_SESSION_TOKEN=
+GIGASTUDY_API_S3_ADDRESSING_STYLE=path
+GIGASTUDY_API_BASIC_PITCH_NODE_BINARY=node
+GIGASTUDY_API_BASIC_PITCH_TIMEOUT_SECONDS=90
+```
+
 ### 3.2 Frontend env
 
 Create:
@@ -188,6 +211,18 @@ Leave `VITE_API_BASE_URL` blank until the first Cloud Run deploy returns the ser
 Then update it to:
 
 - `https://<cloud-run-service>.run.app`
+
+Ready-to-paste frontend template before backend deploy:
+
+```env
+VITE_API_BASE_URL=
+```
+
+Ready-to-paste frontend template after backend deploy:
+
+```env
+VITE_API_BASE_URL=https://<cloud-run-service>.run.app
+```
 
 ## 4. What We Can Do Together
 

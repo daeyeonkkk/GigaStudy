@@ -117,6 +117,31 @@ Prepare these:
 3. One role with password
 4. One connection string
 
+Recommended click path in the current Neon console:
+
+1. create or open one project
+2. open the project dashboard
+3. click `Connect`
+4. in the connection modal, choose:
+   - branch:
+     the default branch
+   - database:
+     the main alpha database
+   - role:
+     a role with password
+5. copy the generated connection string
+
+Recommended alpha choice:
+
+- start with the direct Postgres connection string first
+- if Neon also shows a pooled connection string, keep that as a later fallback only if Cloud Run connection pressure appears
+
+Why this is the current recommendation:
+
+- the alpha deployment is still small
+- migrations and debugging are simpler when the first connection path is the plain direct URL
+- if concurrency pressure appears later, we can switch the runtime env to the pooled URL
+
 Use a connection string that includes:
 
 - database host

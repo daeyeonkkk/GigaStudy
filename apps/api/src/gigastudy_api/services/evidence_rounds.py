@@ -19,6 +19,7 @@ class EvidenceRoundPaths:
     human_rating_audio_guides_dir: Path
     human_rating_audio_takes_dir: Path
     human_rating_references_dir: Path
+    human_rating_review_packets_dir: Path
     human_rating_cases_path: Path
     human_rating_sheet_path: Path
     human_rating_reference_corpus_path: Path
@@ -77,6 +78,7 @@ def resolve_evidence_round_paths(round_root: Path) -> EvidenceRoundPaths:
     human_rating_audio_guides_dir = human_rating_dir / "audio" / "guides"
     human_rating_audio_takes_dir = human_rating_dir / "audio" / "takes"
     human_rating_references_dir = human_rating_dir / "references"
+    human_rating_review_packets_dir = human_rating_dir / "review-packets"
     environment_validation_dir = resolved_root / "environment-validation"
     human_rating_reports_dir = human_rating_dir / "reports"
     human_rating_evidence_output_dir = human_rating_dir / "evidence-bundle"
@@ -90,6 +92,7 @@ def resolve_evidence_round_paths(round_root: Path) -> EvidenceRoundPaths:
         human_rating_audio_guides_dir=human_rating_audio_guides_dir,
         human_rating_audio_takes_dir=human_rating_audio_takes_dir,
         human_rating_references_dir=human_rating_references_dir,
+        human_rating_review_packets_dir=human_rating_review_packets_dir,
         human_rating_cases_path=human_rating_dir / "human_rating_cases.json",
         human_rating_sheet_path=human_rating_dir / "human_rating_sheet.csv",
         human_rating_reference_corpus_path=human_rating_dir / "human_rating_corpus.reference.json",
@@ -141,6 +144,7 @@ def render_evidence_round_readme(
             "- Put real take WAV files under `human-rating/audio/takes/`.",
             "- Keep neutral note-reference exports under `human-rating/references/` so raters can align note indices without reading system verdict text.",
             "- When available, note-level guide/take clip WAVs should live under `human-rating/references/clips/<case-id>/` for faster rater review.",
+            "- Review-ready HTML packets should live under `human-rating/review-packets/` so raters can open one file and listen through the case.",
             "- Prefer exporting a real GigaStudy guide/take pair into the round before editing metadata by hand.",
             "- Update `human-rating/human_rating_cases.json` so each case points to the real WAV paths.",
             "- Fill `human-rating/human_rating_sheet.csv` with per-rater note labels.",
@@ -218,6 +222,7 @@ def create_evidence_round_scaffold(
         scaffold_paths.human_rating_audio_guides_dir,
         scaffold_paths.human_rating_audio_takes_dir,
         scaffold_paths.human_rating_references_dir,
+        scaffold_paths.human_rating_review_packets_dir,
         scaffold_paths.environment_validation_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)

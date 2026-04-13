@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import json
 import re
 import shutil
@@ -79,6 +80,7 @@ class ExportedEvidenceRoundCase:
     rating_sheet_path: Path
     note_reference_json_path: Path | None
     note_reference_csv_path: Path | None
+    review_packet_html_path: Path | None
     template_case_removed: bool
     template_sheet_rows_removed: int
     expectation_seeded: bool
@@ -342,6 +344,9 @@ def _clear_note_reference_files(paths: EvidenceRoundPaths, *, case_id: str) -> N
     clips_root = paths.human_rating_references_dir / "clips" / case_id
     if clips_root.exists():
         shutil.rmtree(clips_root)
+    review_packet_path = paths.human_rating_review_packets_dir / f"{case_id}-review-packet.html"
+    if review_packet_path.exists():
+        review_packet_path.unlink()
 
 
 def _copy_canonical_wav(track: Track, output_path: Path, *, overwrite: bool) -> None:
@@ -356,6 +361,138 @@ def _copy_canonical_wav(track: Track, output_path: Path, *, overwrite: bool) -> 
     payload = get_storage_backend().read_bytes(canonical_artifact.storage_key)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(payload)
+
+
+def _render_review_packet_html(
+    *,
+    paths: EvidenceRoundPaths,
+    case_id: str,
+    project: Project,
+    guide_output_path: Path,
+    take_output_path: Path,
+    note_reference_json_path: Path,
+) -> str:
+    packet_dir = paths.human_rating_review_packets_dir
+    relative_guide_path = Path(
+        guide_output_path.relative_to(packet_dir).as_posix()
+        if guide_output_path.is_relative_to(packet_dir)
+        else Path("..") / guide_output_path.relative_to(paths.human_rating_dir)
+    )
+    relative_take_path = Path(
+        take_output_path.relative_to(packet_dir).as_posix()
+        if take_output_path.is_relative_to(packet_dir)
+        else Path("..") / take_output_path.relative_to(paths.human_rating_dir)
+    )
+    note_reference = json.loads(note_reference_json_path.read_text(encoding="utf-8"))
+    note_rows: list[str] = []
+    for note in note_reference["notes"]:
+        guide_clip_html = ""
+        if note.get("guide_clip_wav_path"):
+            guide_clip_rel = Path("..") / Path(str(note["guide_clip_wav_path"]))
+            guide_clip_html = (
+                f'<audio controls preload="none" src="{html.escape(guide_clip_rel.as_posix())}"></audio>'
+            )
+        take_clip_html = ""
+        if note.get("take_clip_wav_path"):
+            take_clip_rel = Path("..") / Path(str(note["take_clip_wav_path"]))
+            take_clip_html = (
+                f'<audio controls preload="none" src="{html.escape(take_clip_rel.as_posix())}"></audio>'
+            )
+        note_rows.append(
+            "".join(
+                [
+                    "<tr>",
+                    f"<td>{int(note['note_index'])}</td>",
+                    f"<td>{html.escape(str(note['target_note_label']))}</td>",
+                    f"<td>{int(note['start_ms'])} - {int(note['end_ms'])} ms</td>",
+                    f"<td>{guide_clip_html}</td>",
+                    f"<td>{take_clip_html}</td>",
+                    "<td>attack / sustain / acceptability / notes</td>",
+                    "</tr>",
+                ]
+            )
+        )
+
+    return "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="en">',
+            "<head>",
+            '  <meta charset="utf-8" />',
+            f"  <title>{html.escape(case_id)} review packet</title>",
+            "  <style>",
+            "    body { font-family: Arial, sans-serif; margin: 32px; color: #111827; }",
+            "    h1, h2 { margin-bottom: 8px; }",
+            "    p, li { line-height: 1.5; }",
+            "    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }",
+            "    .card { border: 1px solid #d1d5db; border-radius: 12px; padding: 16px; background: #f9fafb; }",
+            "    table { width: 100%; border-collapse: collapse; margin-top: 20px; }",
+            "    th, td { border: 1px solid #d1d5db; padding: 10px; vertical-align: top; }",
+            "    th { background: #f3f4f6; text-align: left; }",
+            "    audio { width: 100%; min-width: 220px; }",
+            "    .hint { color: #4b5563; font-size: 14px; }",
+            "  </style>",
+            "</head>",
+            "<body>",
+            f"  <h1>Human Rating Review Packet: {html.escape(case_id)}</h1>",
+            f"  <p><strong>Project:</strong> {html.escape(project.title)}</p>",
+            "  <p class=\"hint\">Use this packet with the round rating sheet. The packet is intentionally neutral: it provides note indices, target pitches, and audio references, but it does not show the scorer's sharp/flat verdict text.</p>",
+            "  <div class=\"pair\">",
+            "    <div class=\"card\">",
+            "      <h2>Full Guide</h2>",
+            f"      <audio controls preload=\"none\" src=\"{html.escape(relative_guide_path.as_posix())}\"></audio>",
+            "    </div>",
+            "    <div class=\"card\">",
+            "      <h2>Full Take</h2>",
+            f"      <audio controls preload=\"none\" src=\"{html.escape(relative_take_path.as_posix())}\"></audio>",
+            "    </div>",
+            "  </div>",
+            "  <h2>Per-Note Review</h2>",
+            "  <p class=\"hint\">Listen to the full take first, then use the note clips for precise per-note review.</p>",
+            "  <table>",
+            "    <thead>",
+            "      <tr>",
+            "        <th>Note</th>",
+            "        <th>Target</th>",
+            "        <th>Window</th>",
+            "        <th>Guide clip</th>",
+            "        <th>Take clip</th>",
+            "        <th>Fill in on sheet</th>",
+            "      </tr>",
+            "    </thead>",
+            "    <tbody>",
+            *note_rows,
+            "    </tbody>",
+            "  </table>",
+            "</body>",
+            "</html>",
+        ]
+    )
+
+
+def _write_review_packet_html(
+    *,
+    paths: EvidenceRoundPaths,
+    case_id: str,
+    project: Project,
+    guide_output_path: Path,
+    take_output_path: Path,
+    note_reference_json_path: Path,
+) -> Path:
+    packet_path = paths.human_rating_review_packets_dir / f"{case_id}-review-packet.html"
+    packet_path.parent.mkdir(parents=True, exist_ok=True)
+    packet_path.write_text(
+        _render_review_packet_html(
+            paths=paths,
+            case_id=case_id,
+            project=project,
+            guide_output_path=guide_output_path,
+            take_output_path=take_output_path,
+            note_reference_json_path=note_reference_json_path,
+        ),
+        encoding="utf-8",
+    )
+    return packet_path
 
 
 def export_project_take_to_evidence_round(
@@ -448,6 +585,7 @@ def export_project_take_to_evidence_round(
     removed_template_rows = _strip_template_sheet_rows(paths.human_rating_sheet_path)
     note_reference_json_path: Path | None = None
     note_reference_csv_path: Path | None = None
+    review_packet_html_path: Path | None = None
     note_clip_count = 0
     _clear_note_reference_files(paths, case_id=normalized_case_id)
     if note_payload is not None:
@@ -457,6 +595,14 @@ def export_project_take_to_evidence_round(
             note_payload=note_payload,
             guide_track=guide_track,
             take_track=take_track,
+        )
+        review_packet_html_path = _write_review_packet_html(
+            paths=paths,
+            case_id=normalized_case_id,
+            project=project,
+            guide_output_path=guide_output_path,
+            take_output_path=take_output_path,
+            note_reference_json_path=note_reference_json_path,
         )
 
     return ExportedEvidenceRoundCase(
@@ -471,6 +617,7 @@ def export_project_take_to_evidence_round(
         rating_sheet_path=paths.human_rating_sheet_path,
         note_reference_json_path=note_reference_json_path,
         note_reference_csv_path=note_reference_csv_path,
+        review_packet_html_path=review_packet_html_path,
         template_case_removed=template_case_removed,
         template_sheet_rows_removed=removed_template_rows,
         expectation_seeded=expectation is not None,

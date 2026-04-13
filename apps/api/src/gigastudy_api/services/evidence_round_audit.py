@@ -35,6 +35,7 @@ class HumanRatingRoundAudit(BaseModel):
     note_reference_csv_count: int = Field(ge=0)
     note_reference_json_count: int = Field(ge=0)
     note_clip_file_count: int = Field(ge=0)
+    review_packet_html_count: int = Field(ge=0)
     metadata_inventory: CorpusInventoryReport | None = None
     generated_corpus_inventory: CorpusInventoryReport | None = None
     artifacts: list[EvidenceRoundArtifactStatus]
@@ -77,8 +78,10 @@ def _inspect_human_rating_round(round_root: Path) -> HumanRatingRoundAudit:
     note_reference_csv_count = len(list(paths.human_rating_references_dir.glob("*.csv")))
     note_reference_json_count = len(list(paths.human_rating_references_dir.glob("*.json")))
     note_clip_file_count = len(list((paths.human_rating_references_dir / "clips").glob("**/*.wav")))
+    review_packet_html_count = len(list(paths.human_rating_review_packets_dir.glob("*.html")))
     artifacts = [
         _artifact_status("note_references_dir", paths.human_rating_references_dir),
+        _artifact_status("review_packets_dir", paths.human_rating_review_packets_dir),
         _artifact_status("calibration_json", paths.human_rating_calibration_json_path),
         _artifact_status("calibration_markdown", paths.human_rating_calibration_markdown_path),
         _artifact_status("threshold_json", paths.human_rating_threshold_json_path),
@@ -128,6 +131,7 @@ def _inspect_human_rating_round(round_root: Path) -> HumanRatingRoundAudit:
         note_reference_csv_count=note_reference_csv_count,
         note_reference_json_count=note_reference_json_count,
         note_clip_file_count=note_clip_file_count,
+        review_packet_html_count=review_packet_html_count,
         metadata_inventory=metadata_inventory,
         generated_corpus_inventory=generated_corpus_inventory,
         artifacts=artifacts,
@@ -211,6 +215,10 @@ def inspect_evidence_round(round_root: Path) -> EvidenceRoundAuditReport:
             next_actions.append(
                 "Export or create neutral note-reference files for this round before asking raters to label note indices."
             )
+        elif human_rating.review_packet_html_count == 0:
+            next_actions.append(
+                "Generate or restore a review packet HTML so raters can open one self-contained listening page for this case."
+            )
         elif human_rating.note_clip_file_count == 0:
             next_actions.append(
                 "Consider regenerating the exported case after analysis so note-level guide/take clip WAVs are available for faster rater review."
@@ -272,6 +280,7 @@ def render_evidence_round_audit_markdown(report: EvidenceRoundAuditReport) -> st
         f"- Note-reference CSV files: {report.human_rating.note_reference_csv_count}",
         f"- Note-reference JSON files: {report.human_rating.note_reference_json_count}",
         f"- Note clip WAV files: {report.human_rating.note_clip_file_count}",
+        f"- Review packet HTML files: {report.human_rating.review_packet_html_count}",
         f"- Generated corpus present: {'yes' if report.human_rating.generated_corpus_present else 'no'}",
     ]
 

@@ -165,6 +165,7 @@ def test_inspect_evidence_round_reports_missing_real_audio_and_generated_outputs
     assert report.human_rating.note_reference_csv_count == 0
     assert report.human_rating.note_reference_json_count == 0
     assert report.human_rating.note_clip_file_count == 0
+    assert report.human_rating.review_packet_html_count == 0
     assert report.environment_validation.row_count == 2
     assert report.environment_validation.generated_requests_present is False
     assert report.environment_validation.preview_packet_summary is not None
@@ -220,6 +221,7 @@ def test_inspect_evidence_round_reports_round_with_support_artifacts_in_place(tm
     assert report.human_rating.note_reference_csv_count == 0
     assert report.human_rating.note_reference_json_count == 0
     assert report.human_rating.note_clip_file_count == 0
+    assert report.human_rating.review_packet_html_count == 0
     assert report.environment_validation.row_count == 3
     assert report.environment_validation.outcome_counts == {"PASS": 3}
     assert report.environment_validation.packet_present is True

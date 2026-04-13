@@ -56,6 +56,7 @@ def test_create_evidence_round_scaffold_copies_templates_and_writes_readme(tmp_p
     assert scaffold.human_rating_audio_guides_dir.is_dir()
     assert scaffold.human_rating_audio_takes_dir.is_dir()
     assert scaffold.human_rating_references_dir.is_dir()
+    assert scaffold.human_rating_review_packets_dir.is_dir()
     assert scaffold.human_rating_cases_path.read_text(encoding="utf-8") == "{}"
     assert scaffold.environment_validation_sheet_path.read_text(encoding="utf-8") == "label\n"
     readme = scaffold.readme.read_text(encoding="utf-8")
@@ -65,6 +66,7 @@ def test_create_evidence_round_scaffold_copies_templates_and_writes_readme(tmp_p
     assert "export_project_case_to_evidence_round.py" in readme
     assert "human-rating/references/" in readme
     assert "human-rating/references/clips/" in readme
+    assert "human-rating/review-packets/" in readme
 
 
 def test_resolve_evidence_round_paths_exposes_generated_output_locations(tmp_path: Path) -> None:

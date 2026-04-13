@@ -78,6 +78,9 @@ def main() -> None:
                 "note_reference_csv_path": (
                     str(result.note_reference_csv_path) if result.note_reference_csv_path is not None else None
                 ),
+                "review_packet_html_path": (
+                    str(result.review_packet_html_path) if result.review_packet_html_path is not None else None
+                ),
                 "template_case_removed": result.template_case_removed,
                 "template_sheet_rows_removed": result.template_sheet_rows_removed,
                 "expectation_seeded": result.expectation_seeded,

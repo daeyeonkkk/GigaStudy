@@ -149,6 +149,7 @@ def test_export_project_take_to_evidence_round_replaces_seeded_template_and_writ
     assert result.note_reference_written is True
     assert result.note_reference_json_path is not None
     assert result.note_reference_csv_path is not None
+    assert result.review_packet_html_path is not None
     assert result.note_clip_count >= 2
 
     rating_sheet_lines = round_paths.human_rating_sheet_path.read_text(encoding="utf-8").splitlines()
@@ -168,6 +169,11 @@ def test_export_project_take_to_evidence_round_replaces_seeded_template_and_writ
     note_reference_csv_lines = result.note_reference_csv_path.read_text(encoding="utf-8").splitlines()
     assert note_reference_csv_lines[0].startswith("case_id,note_index,start_ms,end_ms")
     assert len(note_reference_csv_lines) >= 2
+    review_packet_html = result.review_packet_html_path.read_text(encoding="utf-8")
+    assert "<audio controls" in review_packet_html
+    assert "Human Rating Review Packet" in review_packet_html
+    assert note_reference_json["notes"][0]["guide_clip_wav_path"] in review_packet_html
+    assert "attack_signed_cents" not in review_packet_html
     first_guide_clip = round_paths.human_rating_dir / note_reference_json["notes"][0]["guide_clip_wav_path"]
     first_take_clip = round_paths.human_rating_dir / note_reference_json["notes"][0]["take_clip_wav_path"]
     assert first_guide_clip.exists()
@@ -223,6 +229,7 @@ def test_export_project_take_to_evidence_round_rejects_duplicate_case_without_ov
     assert first.note_reference_written is False
     assert first.note_reference_json_path is None
     assert first.note_reference_csv_path is None
+    assert first.review_packet_html_path is None
     assert first.note_clip_count == 0
 
     with session_factory() as session:

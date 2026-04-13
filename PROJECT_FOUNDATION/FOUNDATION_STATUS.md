@@ -122,6 +122,8 @@ Date: 2026-04-09
 - The round audit now also reports whether those neutral note-reference files exist, so a collection round can warn when raters are being asked to label notes without a stable index guide.
 - The same export path now also writes note-level guide/take clip WAV files for analyzed cases, so human raters can review one note at a time instead of repeatedly scrubbing the full recordings.
 - The round audit now also counts note-level clip WAV files, so the collection loop can tell whether a round has only metadata or also the faster per-note listening assets.
+- The export path now also writes a self-contained review packet HTML for analyzed cases, so raters can open one page that includes the full guide/take plus the per-note clip table instead of assembling those files manually.
+- The round audit now also counts review packet HTML files, so a round can distinguish between having raw assets and having a ready-to-open rater handoff package.
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
@@ -264,11 +266,11 @@ Date: 2026-04-09
 - Project-to-round export regression:
   `uv run pytest apps/api/tests/test_evidence_round_project_export.py`
 - Result:
-  passed with coverage for canonical guide/take WAV export, seeded template replacement, expectation seeding from latest score metadata, neutral note-reference export, note-level clip export, and duplicate-case protection.
+  passed with coverage for canonical guide/take WAV export, seeded template replacement, expectation seeding from latest score metadata, neutral note-reference export, note-level clip export, review packet HTML export, and duplicate-case protection.
 - Project-to-round export CLI:
   `uv run python scripts/export_project_case_to_evidence_round.py --round-root <round> --project-id <project-id> --take-track-id <take-track-id>`
 - Result:
-  passed in a local smoke flow after creating a scaffolded round, exporting a processed guide/take pair, and verifying that the round metadata now points at round-local canonical WAV files, neutral note-reference files, and note-level clip WAV files instead of the seeded template placeholders.
+  passed in a local smoke flow after creating a scaffolded round, exporting a processed guide/take pair, and verifying that the round metadata now points at round-local canonical WAV files, neutral note-reference files, note-level clip WAV files, and a review packet HTML instead of the seeded template placeholders.
 - Evidence-round scaffold CLI:
   `uv run python scripts/create_evidence_round.py --round-id smoke-round --output-root ...`
 - Result:

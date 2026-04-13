@@ -22,9 +22,9 @@ It is a good fit for GigaStudy's current architecture because the product is alr
 However, the proposal is not `drop in and deploy today` as written.
 Three repo-specific gaps matter before this becomes the real staging path:
 
-1. the backend does not yet have a Cloud Run container image
+1. the frontend build settings in the proposal do not exactly match this monorepo
 2. uploads still pass through the API service instead of going direct to object storage
-3. the frontend build settings in the proposal do not exactly match this monorepo
+3. one verified HTTPS staging environment still does not exist on the chosen stack
 
 ## 2. Official Cost And Limit Check
 
@@ -155,15 +155,18 @@ So the fastest alpha path is:
 
 ### Backend Packaging
 
-The repo does not currently contain a backend Dockerfile.
+The repo now includes a backend Dockerfile at `apps/api/Dockerfile`.
 
 That matters more than usual here because the melody path uses a Node helper for Basic Pitch.
-A real Cloud Run image for this repo should include:
+The Cloud Run image for this repo needs:
 
 - Python runtime
 - Node runtime
 - app dependencies
 - the Basic Pitch helper script and package path
+
+The repo-side packaging work is now in place, but checklist closure still requires a real image build and runtime smoke.
+In the current local session, Docker daemon verification was blocked because Docker Desktop was installed but not running.
 
 ### Upload Flow
 
@@ -195,13 +198,12 @@ That split is good for alpha and should be preserved unless real usage proves ot
 ## 5. Recommended Alpha Sequence For GigaStudy
 
 1. Deploy the frontend to Cloudflare Pages.
-2. Package the backend for Cloud Run with both Python and Node.
-3. Point the backend at Neon PostgreSQL and R2.
-4. Move browser uploads to direct object-storage upload URLs.
-5. Wire `VITE_API_BASE_URL`, backend `CORS`, and `GIGASTUDY_API_PUBLIC_APP_URL`.
-6. Verify one HTTPS staging flow end to end:
+2. Point the backend at Neon PostgreSQL and R2.
+3. Move browser uploads to direct object-storage upload URLs.
+4. Wire `VITE_API_BASE_URL`, backend `CORS`, and `GIGASTUDY_API_PUBLIC_APP_URL`.
+5. Verify one HTTPS staging flow end to end:
    project -> guide -> take -> analysis -> melody -> arrangement -> share.
-7. Only then start collecting real-human and real-hardware evidence rounds.
+6. Only then start collecting real-human and real-hardware evidence rounds.
 
 ## 6. Recommendation
 
@@ -221,6 +223,13 @@ But the first real deployment slice should be:
 - containerize the backend
 - switch uploads to direct object storage
 - verify one staging environment
+
+Current state after this review:
+
+- document the target: done
+- containerize the backend: implementation added, verification still open
+- switch uploads to direct object storage: open
+- verify one staging environment: open
 
 ## 7. Sources
 

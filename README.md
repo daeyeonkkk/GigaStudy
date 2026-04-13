@@ -36,6 +36,17 @@ If the web client and API run on different origins, set `GIGASTUDY_API_PUBLIC_AP
 The API now also supports `GIGASTUDY_API_STORAGE_BACKEND=s3` for S3-compatible object storage, and the Python dependencies now include both `psycopg` for PostgreSQL and `boto3` for object storage.
 The developer fallback is still SQLite + local filesystem, but the default product deployment profile is now PostgreSQL + S3-compatible storage and has a repeatable smoke path.
 
+### Cloud Run Backend Container
+
+```bash
+docker build -f apps/api/Dockerfile -t gigastudy-api-cloudrun:test .
+docker run --rm -p 8080:8080 gigastudy-api-cloudrun:test
+```
+
+Build the image from the repo root.
+The container includes both Python and Node because the backend runtime depends on the repo-local Basic Pitch helper at `scripts/basic_pitch_transcribe.cjs` plus the root `@spotify/basic-pitch` package.
+This is the current backend packaging target for the Phase 11 alpha deployment track.
+
 ### API Test
 
 ```bash

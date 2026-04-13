@@ -408,7 +408,7 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 - The reviewed low-cost alpha target is now:
   Cloudflare Pages + Cloud Run + Neon + R2.
 - The next deployment blockers are:
-  Cloud Run backend containerization with both Python and Node,
+  Cloud Run backend container verification with both Python and Node,
   direct browser-to-object-storage upload,
   and one verified HTTPS staging environment.
 - The detailed assessment for that path now lives in:

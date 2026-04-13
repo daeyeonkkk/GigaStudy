@@ -201,6 +201,21 @@ Current operator checkpoint:
 - if `gcloud services enable ...` fails with `Billing account for project ... is not found`,
   attach billing to the GCP project first and rerun the service-enable command before continuing.
 
+Console path for that step:
+
+1. open Google Cloud console with project `gigastudy-alpha`
+2. open `Billing`
+3. if you do not have a billing account yet, create one first
+4. if the project is not linked, choose `Link a billing account` or `Change billing`
+5. select the active billing account
+6. confirm the link
+
+After that, rerun:
+
+```powershell
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project gigastudy-alpha
+```
+
 ## 3. Local Files The User Must Fill
 
 Create real local files from the repo templates.

@@ -208,3 +208,10 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Supporting docs and assets are grouped under `BACKLOGS/`, `DESIGN/`, `QUALITY/`, and `OPERATIONS/`.
 - [x] The root index defines document placement rules and expected read order.
 - [x] Working rules now explicitly forbid dropping scratch files, screenshots, or generated evidence into the foundation root.
+
+## 19. Alpha Deployment Track
+
+- [x] A low-cost alpha deployment target is documented against current official platform limits and the current repo shape.
+- [ ] A Cloud Run-ready backend container exists and includes both Python and Node for the Basic Pitch runtime.
+- [ ] Browser audio uploads can bypass the API service through direct object-storage upload URLs.
+- [ ] One real HTTPS staging environment has been verified end to end on the chosen alpha stack.

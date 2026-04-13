@@ -15,6 +15,7 @@ Date: 2026-04-09
 - `DESIGN/UI_EDITABLE_SOURCE/README.md`
 - `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
 - `BACKLOGS/PHASE1_BACKLOG.md`
+- `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
 - `GigaStudy_check_list.md`
 
 ## Checklist Discipline
@@ -101,6 +102,7 @@ Date: 2026-04-09
 - The ops overview now also supports CSV preview/import for external validation evidence, so spreadsheet-based QA or hardware logs can be reviewed and imported without falling back to a CLI-only path.
 - The repo now also has a spreadsheet-friendly environment-validation intake template plus importer, so native browser or hardware evidence collected outside the app can still be normalized before it reaches ops.
 - The evidence-round scaffold now also seeds the browser and hardware validation CSV template into that same external round folder, so Phase 9 and Phase 10 collection can start from one shared round id instead of separate ad hoc prep steps.
+- The foundation now also has a reviewed alpha deployment target, and the currently recommended low-cost stack remains `Cloudflare Pages + Cloud Run + Neon + R2` with explicit repo-specific caveats for monorepo build settings, backend containerization, and direct-to-object-storage uploads.
 - The API now has a first-class storage backend abstraction with local and S3-compatible object storage backends, and the upload, processing, melody export, arrangement export, and download routes now run through that shared storage contract instead of hard-coded local file paths.
 - The backend runtime now also includes first-class PostgreSQL and S3-compatible client drivers (`psycopg` and `boto3`), and the repo includes a local PostgreSQL + MinIO bootstrap compose file for production-like storage rehearsals.
 - The production stack path is now operational instead of aspirational: the repo includes a production env example, automatic MinIO bucket bootstrap, and a repeatable smoke script that runs the core project → guide → take → analysis → melody → arrangement → export flow against PostgreSQL plus S3-compatible storage.
@@ -358,6 +360,7 @@ Date: 2026-04-09
 - The new browser compatibility release-note draft makes publishing caveats easier, but it still depends on honest underlying validation evidence rather than creating that evidence itself.
 - The new browser environment claim gate removes another subjective review bottleneck, but it still evaluates stored evidence rather than creating native Safari or broad real-hardware coverage by itself.
 - The new environment-validation importer removes another manual bottleneck, but it still does not count as native Safari or real-hardware evidence until those runs are actually collected.
+- The alpha deployment recommendation removes another planning bottleneck, but the repo still lacks a Cloud Run-ready backend container, direct object-storage uploads, and one verified HTTPS staging environment on the chosen stack.
 - The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
 - The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, and the implemented UI now has a concrete target for every first-wave route instead of leaving `Ops` as the remaining visual outlier.
 - The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is now upgrading the repo-local editable source into a shared Figma workflow rather than creating the first editable source from scratch.
@@ -370,3 +373,4 @@ Date: 2026-04-09
 4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
 6. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
+7. Use `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md` as the current source of truth for the low-cost alpha stack, then implement the next three deployment blockers in order: backend container, direct uploads, and one verified HTTPS staging environment.

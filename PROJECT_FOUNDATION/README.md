@@ -43,8 +43,9 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 10. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
 11. `GigaStudy_check_list.md`
 12. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-13. `FOUNDATION_STATUS.md`
-14. `OPERATIONS/WORKING_PRINCIPLES.md`
+13. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+14. `FOUNDATION_STATUS.md`
+15. `OPERATIONS/WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -79,6 +80,8 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
   Native browser and hardware validation protocol built on top of the ops diagnostics baseline, including round-local packet and claim-gate preview, intake/import, ops-side CSV preview, environment validation packet, claim-gate, and release-note draft workflows.
   Both workflows now start from the shared external evidence-round scaffold so real-world artifacts stay out of `PROJECT_FOUNDATION`.
+- `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+  Reviewed recommendation for the low-cost alpha hosting stack, including official vendor constraints and the current repo-specific deployment gaps.
 - `OPERATIONS/WORKING_PRINCIPLES.md`
   Project working rules, storage conventions, and foundation hygiene discipline.
 

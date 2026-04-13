@@ -275,6 +275,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - When QA delivers spreadsheet-style hardware evidence, preview and import it in ops first so the packet, claim gate, and release-note exports all read from the same stored runs.
 - Use the exported browser compatibility release-note draft as the default publishing aid once the packet has been reviewed.
 - Prefer the environment-validation CSV template plus importer when QA or external testers collect hardware evidence outside the ops UI.
+- Use `PROJECT_FOUNDATION/OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md` as the current deployment recommendation before setting up a public alpha stack, and treat backend containerization plus direct object-storage upload as the first deployment blockers to close.
 
 ## Foundation Docs
 
@@ -290,3 +291,4 @@ Those outputs are review artifacts, not canonical foundation docs.
 - [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
 - [Intonation Assessment](./PROJECT_FOUNDATION/QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md)
 - [Browser Environment Validation](./PROJECT_FOUNDATION/OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md)
+- [Alpha Deployment Target](./PROJECT_FOUNDATION/OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md)

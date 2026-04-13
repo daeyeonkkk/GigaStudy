@@ -402,3 +402,14 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 4. [INTONATION_ANALYSIS_ASSESSMENT.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md)
 5. [GigaStudy_check_list.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_check_list.md)
 6. [WORKING_PRINCIPLES.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/OPERATIONS/WORKING_PRINCIPLES.md)
+
+## 7. Alpha Deployment Follow-Up
+
+- The reviewed low-cost alpha target is now:
+  Cloudflare Pages + Cloud Run + Neon + R2.
+- The next deployment blockers are:
+  Cloud Run backend containerization with both Python and Node,
+  direct browser-to-object-storage upload,
+  and one verified HTTPS staging environment.
+- The detailed assessment for that path now lives in:
+  `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`

@@ -70,6 +70,12 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
   const contourPath = buildContourPath(preview.contour, width, height)
   const contourPointCount = preview.contour.filter((value) => value !== null).length
   const pipelineLabel = getPreviewPipelineLabel(preview)
+  const durationMs = preview.durationMs
+  const hasKnownDuration =
+    typeof durationMs === 'number' &&
+    Number.isFinite(durationMs) &&
+    durationMs >= 0
+  const durationLabel = hasKnownDuration ? `${(durationMs / 1000).toFixed(2)}초` : '알 수 없음'
 
   return (
     <div className="waveform-preview">
@@ -80,9 +86,7 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
         </div>
         <div className="mini-card">
           <span>길이</span>
-          <strong>
-            {preview.durationMs === null ? '알 수 없음' : `${(preview.durationMs / 1000).toFixed(2)}초`}
-          </strong>
+          <strong>{durationLabel}</strong>
         </div>
         <div className="mini-card">
           <span>컨투어 포인트</span>

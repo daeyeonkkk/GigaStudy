@@ -1,4 +1,5 @@
 import { getAudioContextConstructor } from './audioContext'
+import { normalizeAssetUrl } from './api'
 import { buildPitchContour, buildWaveform, toMonoSamples } from './audioPreviewMath'
 
 export type AudioPreviewData = {
@@ -112,7 +113,7 @@ export async function buildAudioPreviewFromBlob(blob: Blob): Promise<AudioPrevie
 }
 
 export async function buildAudioPreviewFromUrl(url: string): Promise<AudioPreviewData> {
-  const response = await fetch(url)
+  const response = await fetch(normalizeAssetUrl(url) ?? url)
   if (!response.ok) {
     throw new Error(`오디오 미리보기를 불러오지 못했습니다. 상태 코드: ${response.status}`)
   }

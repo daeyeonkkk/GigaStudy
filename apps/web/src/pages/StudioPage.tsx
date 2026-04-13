@@ -5,7 +5,7 @@ import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
 import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
-import { buildApiUrl } from '../lib/api'
+import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import { getAudioContextConstructor } from '../lib/audioContext'
 import {
   collectBrowserAudioCapabilities,
@@ -752,8 +752,8 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleString()
 }
 
-function formatDuration(durationMs: number | null): string {
-  if (durationMs === null) {
+function formatDuration(durationMs: number | null | undefined): string {
+  if (durationMs === null || durationMs === undefined || Number.isNaN(durationMs)) {
     return '아직 기록되지 않음'
   }
 
@@ -2475,7 +2475,7 @@ export function StudioPage() {
       return null
     }
 
-    return takePreviewUrls[track.track_id] ?? track.source_artifact_url ?? null
+    return takePreviewUrls[track.track_id] ?? normalizeAssetUrl(track.source_artifact_url) ?? null
   }
 
   async function handleRenderMixdown(): Promise<void> {
@@ -2483,12 +2483,12 @@ export function StudioPage() {
       takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
     const selectedTakeUrl = getSelectedTakePlaybackUrl(selectedTakeTrack)
     const mixdownSources = [
-      ...(guide?.source_artifact_url && !isTrackMutedByMixer(guide.track_id)
+      ...(guideSourceUrl && guide && !isTrackMutedByMixer(guide.track_id)
         ? [
             {
               gain: guideMixer?.volume ?? 0.85,
               label: 'Guide',
-              url: guide.source_artifact_url,
+              url: guideSourceUrl,
             },
           ]
         : []),
@@ -3410,8 +3410,14 @@ export function StudioPage() {
   const readyTakeCount = takesState.items.filter((take) => take.track_status === 'READY').length
   const totalTrackCount = takesState.items.length + (guide ? 1 : 0)
   const guideMixer = guide ? mixerState[guide.track_id] : null
-  const guideWavExportUrl = guide?.guide_wav_artifact_url ?? null
-  const mixdownPlaybackUrl = mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null
+  const guideSourceUrl = normalizeAssetUrl(guide?.source_artifact_url)
+  const guideWavExportUrl = normalizeAssetUrl(guide?.guide_wav_artifact_url)
+  const selectedArrangementMusicXmlUrl = normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url)
+  const selectedArrangementMidiUrl = normalizeAssetUrl(selectedArrangement?.midi_artifact_url)
+  const selectedTakeMelodyMidiUrl = normalizeAssetUrl(selectedTakeMelody?.midi_artifact_url)
+  const mixdownPlaybackUrl = normalizeAssetUrl(
+    mixdownPreview?.url ?? mixdownSummary?.source_artifact_url ?? null,
+  )
   const mixdownSourceLabel = mixdownPreview
     ? '로컬 오프라인 렌더'
     : mixdownSummary
@@ -3650,14 +3656,14 @@ export function StudioPage() {
                         : '가이드를 연결하고 마이크 권한을 받은 뒤 여기서 첫 테이크를 녹음해 주세요.'}
               </p>
 
-              {(guide?.source_artifact_url || selectedTakePlaybackUrl) ? (
+              {(guideSourceUrl || selectedTakePlaybackUrl) ? (
                 <div className="studio-console-players">
-                  {guide?.source_artifact_url ? (
+                  {guideSourceUrl ? (
                     <div className="studio-console-player">
                       <span>가이드 재생</span>
                       <ManagedAudioPlayer
                         muted={guide ? isTrackMutedByMixer(guide.track_id) : false}
-                        src={guide.source_artifact_url}
+                        src={guideSourceUrl}
                         volume={guideMixer?.volume ?? 0.85}
                       />
                     </div>
@@ -4676,12 +4682,12 @@ export function StudioPage() {
                   <p className="form-error">{guide.failure_message}</p>
                 ) : null}
 
-                {guide.source_artifact_url ? (
+                {guideSourceUrl ? (
                   <div className="audio-preview">
                     <p className="json-label">가이드 재생</p>
                     <ManagedAudioPlayer
                       muted={guide ? isTrackMutedByMixer(guide.track_id) : false}
-                      src={guide.source_artifact_url}
+                      src={guideSourceUrl}
                       volume={guideMixer?.volume ?? 0.85}
                     />
                   </div>
@@ -4957,7 +4963,8 @@ export function StudioPage() {
                 takesState.items.map((take) => {
                   const failedUpload = failedTakeUploads[take.track_id]
                   const progress = takeUploadProgress[take.track_id]
-                  const previewUrl = take.source_artifact_url ?? takePreviewUrls[take.track_id] ?? null
+                  const previewUrl =
+                    takePreviewUrls[take.track_id] ?? normalizeAssetUrl(take.source_artifact_url) ?? null
 
                   return (
                     <article
@@ -5920,10 +5927,10 @@ export function StudioPage() {
                     노트 추가
                   </button>
 
-                  {selectedTakeMelody?.midi_artifact_url ? (
+                  {selectedTakeMelodyMidiUrl ? (
                     <a
                       className="button-secondary"
-                      href={selectedTakeMelody.midi_artifact_url}
+                      href={selectedTakeMelodyMidiUrl}
                     >
                       MIDI 내려받기
                     </a>
@@ -6343,8 +6350,11 @@ export function StudioPage() {
                       </small>
                     </div>
 
-                    {arrangement.midi_artifact_url ? (
-                      <a className="button-secondary" href={arrangement.midi_artifact_url}>
+                    {normalizeAssetUrl(arrangement.midi_artifact_url) ? (
+                      <a
+                        className="button-secondary"
+                        href={normalizeAssetUrl(arrangement.midi_artifact_url) ?? undefined}
+                      >
                         편곡 MIDI 내보내기
                       </a>
                     ) : null}
@@ -6474,12 +6484,12 @@ export function StudioPage() {
               </div>
               <span
                 className={`status-pill ${
-                  selectedArrangement?.musicxml_artifact_url
+                  selectedArrangementMusicXmlUrl
                     ? 'status-pill--ready'
                     : 'status-pill--loading'
                 }`}
               >
-                {selectedArrangement?.musicxml_artifact_url ? 'MusicXML 준비됨' : 'MusicXML 대기 중'}
+                {selectedArrangementMusicXmlUrl ? 'MusicXML 준비됨' : 'MusicXML 대기 중'}
               </span>
             </div>
 
@@ -6489,14 +6499,14 @@ export function StudioPage() {
             </p>
 
             <div className="button-row">
-              {selectedArrangement?.musicxml_artifact_url ? (
-                <a className="button-primary" href={selectedArrangement.musicxml_artifact_url}>
+              {selectedArrangementMusicXmlUrl ? (
+                <a className="button-primary" href={selectedArrangementMusicXmlUrl}>
                   MusicXML 내보내기
                 </a>
               ) : null}
 
-              {selectedArrangement?.midi_artifact_url ? (
-                <a className="button-secondary" href={selectedArrangement.midi_artifact_url}>
+              {selectedArrangementMidiUrl ? (
+                <a className="button-secondary" href={selectedArrangementMidiUrl}>
                   편곡 MIDI 내보내기
                 </a>
               ) : null}
@@ -6510,7 +6520,7 @@ export function StudioPage() {
 
             {selectedArrangement ? (
               <ArrangementScore
-                musicXmlUrl={selectedArrangement.musicxml_artifact_url}
+                musicXmlUrl={selectedArrangementMusicXmlUrl}
                 playheadRatio={arrangementPlaybackRatio}
                 renderKey={`${selectedArrangement.arrangement_id}:${selectedArrangement.updated_at}`}
               />
@@ -6744,7 +6754,7 @@ export function StudioPage() {
               <div className="mini-card">
                 <span>가이드 소스</span>
                 <strong>
-                  {guide?.source_artifact_url
+                  {guideSourceUrl && guide
                     ? isTrackMutedByMixer(guide.track_id)
                       ? '믹서에서 음소거됨'
                       : '포함됨'

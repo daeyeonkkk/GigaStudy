@@ -1,6 +1,6 @@
 # GigaStudy Live Checklist
 
-Date: 2026-04-09
+Date: 2026-04-14
 Status rule: mark `[x]` only when implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
 
 ## 1. Product Alignment
@@ -188,6 +188,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A reference-led wireframe pack exists in `DESIGN/UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
 - [x] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
 - [x] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
+- [x] The deployed Studio route has been re-reviewed on desktop and narrow mobile widths so Korean headings, status pills, and card content wrap cleanly without horizontal overflow.
 - [x] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
 - [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
 - [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
@@ -217,4 +218,6 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Repo-owned alpha env templates and deploy scripts exist for Cloud Run backend deployment, Neon migration, and Cloudflare Pages deployment.
 - [x] A remote Cloud Run job fallback exists for Neon migration when local outbound PostgreSQL access is blocked.
 - [x] The web build ships a Cloudflare Pages SPA fallback redirect file for client-side routes.
-- [ ] One real HTTPS staging environment has been verified end to end on the chosen alpha stack.
+- [x] One real HTTPS staging environment has been verified end to end on the chosen alpha stack.
+- [x] The deployed alpha frontend now points at the real HTTPS backend URL rather than local development defaults.
+- [x] The live alpha Studio route has been browser-reviewed for mixed-content safety, export reachability, Korean text wrapping, and mobile horizontal-overflow regressions.

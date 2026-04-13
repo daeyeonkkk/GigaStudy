@@ -1,6 +1,6 @@
 # Foundation Status
 
-Date: 2026-04-09
+Date: 2026-04-14
 
 ## Sources Checked
 
@@ -16,6 +16,7 @@ Date: 2026-04-09
 - `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
 - `BACKLOGS/PHASE1_BACKLOG.md`
 - `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+- `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
 - `GigaStudy_check_list.md`
 
 ## Checklist Discipline
@@ -74,6 +75,10 @@ Date: 2026-04-09
 - The arrangement preview engine now also checks the legacy `webkitAudioContext` constructor so Safari-family browsers can use the same playback path when that legacy bridge exists.
 - The browser audio stack is now complete in product code across `AudioWorklet`, `Web Worker`, `OfflineAudioContext`, and `WASM`:
   live recording uses an `AudioWorklet` input meter, waveform and contour preview generation runs through a `Web Worker`, that worker uses a small `WASM` math helper for peak processing, and local mixdown still renders through `OfflineAudioContext`.
+- One real HTTPS alpha staging environment is now verified on the chosen stack instead of existing only as repo-side deployment scaffolding:
+  `uv run pytest tests/test_config.py` passed, the remote Neon migration completed through the Cloud Run Job fallback, the backend is deployed on Cloud Run, and the frontend is deployed on Cloudflare Pages.
+- The deployed alpha frontend now resolves to the live Cloud Run backend instead of the old localhost fallback, and live browser/API smoke has already passed for frontend load, backend health, project creation, guide and take upload, and one analysis run without CORS errors on the alpha origin.
+- The deployed Studio route has now been browser-reviewed again on desktop and narrow mobile widths, closing the mixed-content export-link regression, replacing broken preview duration fallbacks with readable unknown-state copy, and keeping Korean inspector headings, status pills, and mini-card content from colliding or forcing horizontal overflow.
 
 ## Reinforcement Added In This Pass
 
@@ -368,19 +373,20 @@ Date: 2026-04-09
 - The new browser compatibility release-note draft makes publishing caveats easier, but it still depends on honest underlying validation evidence rather than creating that evidence itself.
 - The new browser environment claim gate removes another subjective review bottleneck, but it still evaluates stored evidence rather than creating native Safari or broad real-hardware coverage by itself.
 - The new environment-validation importer removes another manual bottleneck, but it still does not count as native Safari or real-hardware evidence until those runs are actually collected.
-- The alpha deployment track now has repo-side container verification plus direct object-storage uploads for S3-compatible storage backends, and the remaining infrastructure blocker is one verified HTTPS staging environment on the chosen stack.
-- The Cloudflare Pages side of that staging path is now live on `gigastudy-alpha.pages.dev`, so the remaining work is backend cloud deploy plus end-to-end HTTPS verification rather than frontend host setup.
+- The alpha deployment track now has one real verified HTTPS staging environment on the chosen stack rather than only repo-side container and script readiness.
+- `https://gigastudy-alpha.pages.dev` now runs against the deployed Cloud Run backend `https://gigastudy-api-alpha-ajpmdzbrga-du.a.run.app` instead of local development defaults, and the live alpha path has already passed a frontend load, backend health, project creation, guide/take upload, and analysis smoke run.
 - The operator path has now also confirmed the real GCP alpha project id as `gigastudy-alpha-493208`, and Cloud Run / Cloud Build / Artifact Registry are enabled for that project.
 - The repo now also has alpha-specific env templates plus deploy scripts for the chosen stack: `apps/api/.env.alpha.example`, `apps/web/.env.alpha.example`, `scripts/deploy_alpha_backend.ps1`, `scripts/migrate_alpha_database.ps1`, and `scripts/deploy_alpha_frontend.ps1`.
 - The alpha path now also has a remote Cloud Run Job fallback for Neon migration, because the current operator machine times out on outbound PostgreSQL traffic to Neon even though the GCP-side stack is otherwise ready.
 - The alpha path now also has a repo-owned Cloud Build config for the monorepo backend image, so Cloud Build no longer assumes a root-level Dockerfile when building `apps/api/Dockerfile`.
 - The alpha deployment scripts now also convert the local dotenv-style alpha env into a temporary Cloud Run YAML env file automatically, so staging operators do not have to keep one secret file for local tools and a second one for Cloud Run.
-- Those staging helpers are now verified at the repo level through dry-run command generation for backend deploy and Neon migration plus a real `npm run build:web` pass for the Pages deploy path.
+- Those staging helpers are now verified not only through repo-level dry-run command generation, but also through a real alpha migration, backend deploy, frontend redeploy, and browser smoke pass on the chosen stack.
 - The web build now also ships a top-level `_redirects` file, so Cloudflare Pages can serve client-side routes through the SPA entry instead of breaking deep links.
 - The foundation now also has a dedicated operator handoff document at `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`, so the remaining real-cloud steps are explicit instead of living only in chat.
 - The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
 - The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, and the implemented UI now has a concrete target for every first-wave route instead of leaving `Ops` as the remaining visual outlier.
 - The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is now upgrading the repo-local editable source into a shared Figma workflow rather than creating the first editable source from scratch.
+- The deployed Studio route is more trustworthy than it was at the start of the alpha pass, but one narrower playback edge case still remains for follow-up: a duplicated lower take-player instance can still miss metadata in this Windows automation environment even though the main Studio players, export links, and route-level analysis flow are healthy.
 
 ## Recommended Next Work
 
@@ -390,4 +396,4 @@ Date: 2026-04-09
 4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
 6. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
-7. Use `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md` plus the repo-owned alpha env templates and deploy scripts as the current staging setup path, then close the remaining deployment blocker: one verified HTTPS staging environment.
+7. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior, broader microphone variability, and the remaining duplicated-player playback edge case.

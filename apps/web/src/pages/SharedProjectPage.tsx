@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
-import { buildApiUrl } from '../lib/api'
+import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import type { AudioPreviewData } from '../lib/audioPreview'
 import {
   getArrangementStyleLabel,
@@ -458,7 +458,7 @@ export function SharedProjectPage() {
                 </div>
 
                 <ArrangementScore
-                  musicXmlUrl={selectedArrangement.musicxml_artifact_url}
+                  musicXmlUrl={normalizeAssetUrl(selectedArrangement.musicxml_artifact_url)}
                   playheadRatio={0}
                   renderKey={`${selectedArrangement.arrangement_id}:${selectedArrangement.updated_at}`}
                 />
@@ -472,23 +472,35 @@ export function SharedProjectPage() {
             )}
 
             <div className="button-row shared-review-export-row">
-              {selectedTake?.source_artifact_url ? (
-                <a className="button-secondary" href={selectedTake.source_artifact_url}>
+              {normalizeAssetUrl(selectedTake?.source_artifact_url) ? (
+                <a
+                  className="button-secondary"
+                  href={normalizeAssetUrl(selectedTake?.source_artifact_url) ?? undefined}
+                >
                   선택한 테이크 오디오 열기
                 </a>
               ) : null}
-              {payload.guide?.guide_wav_artifact_url ? (
-                <a className="button-secondary" href={payload.guide.guide_wav_artifact_url}>
+              {normalizeAssetUrl(payload.guide?.guide_wav_artifact_url) ? (
+                <a
+                  className="button-secondary"
+                  href={normalizeAssetUrl(payload.guide?.guide_wav_artifact_url) ?? undefined}
+                >
                   가이드 WAV 열기
                 </a>
               ) : null}
-              {selectedArrangement?.midi_artifact_url ? (
-                <a className="button-secondary" href={selectedArrangement.midi_artifact_url}>
+              {normalizeAssetUrl(selectedArrangement?.midi_artifact_url) ? (
+                <a
+                  className="button-secondary"
+                  href={normalizeAssetUrl(selectedArrangement?.midi_artifact_url) ?? undefined}
+                >
                   편곡 MIDI 열기
                 </a>
               ) : null}
-              {selectedArrangement?.musicxml_artifact_url ? (
-                <a className="button-secondary" href={selectedArrangement.musicxml_artifact_url}>
+              {normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url) ? (
+                <a
+                  className="button-secondary"
+                  href={normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url) ?? undefined}
+                >
                   MusicXML 열기
                 </a>
               ) : null}

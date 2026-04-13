@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ArrangementScore } from '../components/ArrangementScore'
-import { buildApiUrl } from '../lib/api'
+import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import { getArrangementPartRoleLabel, getTrackStatusLabel } from '../lib/localizedLabels'
 import {
   startArrangementPlayback,
@@ -678,7 +678,7 @@ export function ArrangementPage() {
             </div>
 
             <ArrangementScore
-              musicXmlUrl={selectedArrangement?.musicxml_artifact_url ?? null}
+                  musicXmlUrl={normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url)}
               playheadRatio={arrangementPlaybackRatio}
               renderKey={
                 selectedArrangement
@@ -714,18 +714,27 @@ export function ArrangementPage() {
             </div>
 
             <div className="button-row">
-              {selectedArrangement?.musicxml_artifact_url ? (
-                <a className="button-primary" href={selectedArrangement.musicxml_artifact_url}>
+              {normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url) ? (
+                <a
+                  className="button-primary"
+                  href={normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url) ?? undefined}
+                >
                   MusicXML 내보내기
                 </a>
               ) : null}
-              {selectedArrangement?.midi_artifact_url ? (
-                <a className="button-secondary" href={selectedArrangement.midi_artifact_url}>
+              {normalizeAssetUrl(selectedArrangement?.midi_artifact_url) ? (
+                <a
+                  className="button-secondary"
+                  href={normalizeAssetUrl(selectedArrangement?.midi_artifact_url) ?? undefined}
+                >
                   편곡 MIDI 내보내기
                 </a>
               ) : null}
-              {guide?.guide_wav_artifact_url ? (
-                <a className="button-secondary" href={guide.guide_wav_artifact_url}>
+              {normalizeAssetUrl(guide?.guide_wav_artifact_url) ? (
+                <a
+                  className="button-secondary"
+                  href={normalizeAssetUrl(guide?.guide_wav_artifact_url) ?? undefined}
+                >
                   가이드 WAV 내보내기
                 </a>
               ) : null}

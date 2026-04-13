@@ -46,6 +46,10 @@ Prepare these:
        `dist`
    - Preferred means:
      the repo-root setup matches the current workspace scripts and root lockfile best.
+   - Important pitfall:
+     if the Cloudflare settings page shows `Deploy command` and `Version command`, you created a `Worker Builds` project, not a `Pages` project.
+   - In that case, do not keep debugging the build there.
+     Delete that Worker project and create a real Pages project instead.
 2. One R2 bucket
    - Recommended click path:
      `Storage & databases -> R2 -> Create bucket`
@@ -189,6 +193,9 @@ This script:
 
 If the Git-integrated Pages build fails before install or build starts and mentions `root directory not found`,
 go back to the Pages project build settings and reset them to the preferred repo-root values above.
+
+If the project settings page shows Worker-only fields like `Deploy command: npx wrangler deploy` or `Version command: npx wrangler versions upload`,
+stop there and recreate the project as Pages before continuing.
 
 ## 5. What We Must Verify Before Closing The Checklist
 

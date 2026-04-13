@@ -213,7 +213,8 @@ Console path for that step:
 After that, rerun:
 
 ```powershell
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project gigastudy-alpha
+gcloud config set project <real-gcp-project-id>
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project <real-gcp-project-id>
 ```
 
 ## 3. Local Files The User Must Fill

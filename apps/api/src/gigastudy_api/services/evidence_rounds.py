@@ -145,6 +145,7 @@ def render_evidence_round_readme(
             "- Keep neutral note-reference exports under `human-rating/references/` so raters can align note indices without reading system verdict text.",
             "- When available, note-level guide/take clip WAVs should live under `human-rating/references/clips/<case-id>/` for faster rater review.",
             "- Review-ready HTML packets should live under `human-rating/review-packets/` so raters can open one file and listen through the case.",
+            "- The rating sheet may use Korean labels such as `높음 / 정확 / 낮음 / 판단 어려움` and `양호 / 검토 / 교정 필요`; the builder normalizes those to canonical calibration values.",
             "- Prefer exporting a real GigaStudy guide/take pair into the round before editing metadata by hand.",
             "- Update `human-rating/human_rating_cases.json` so each case points to the real WAV paths.",
             "- Fill `human-rating/human_rating_sheet.csv` with per-rater note labels.",

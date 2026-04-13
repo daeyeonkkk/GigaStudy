@@ -124,6 +124,7 @@ Date: 2026-04-09
 - The round audit now also counts note-level clip WAV files, so the collection loop can tell whether a round has only metadata or also the faster per-note listening assets.
 - The export path now also writes a self-contained review packet HTML for analyzed cases, so raters can open one page that includes the full guide/take plus the per-note clip table instead of assembling those files manually.
 - The round audit now also counts review packet HTML files, so a round can distinguish between having raw assets and having a ready-to-open rater handoff package.
+- Human-rating collection materials are now Korean-first as well: the review packet copy is localized for local raters, and the rating-sheet builder now normalizes Korean labels back into canonical calibration values.
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
@@ -149,7 +150,7 @@ Date: 2026-04-09
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `96 passed`
+- Result: `97 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Scope now also includes environment-validation intake parsing and request-shape generation from CSV evidence sheets.
 - Scope now also includes an object-storage regression path that runs the guide upload and processing lifecycle against a fake S3-compatible backend.
@@ -169,7 +170,7 @@ Date: 2026-04-09
 - Human-rating builder regression:
   `uv run pytest apps/api/tests/test_human_rating_builder.py`
 - Result:
-  passed with coverage for consensus aggregation, CSV loading, and unknown-case validation.
+  passed with coverage for consensus aggregation, CSV loading, Korean label normalization, and unknown-case validation.
 - Human-rating builder CLI:
   `uv run python scripts/build_human_rating_corpus.py`
 - Result:
@@ -266,7 +267,7 @@ Date: 2026-04-09
 - Project-to-round export regression:
   `uv run pytest apps/api/tests/test_evidence_round_project_export.py`
 - Result:
-  passed with coverage for canonical guide/take WAV export, seeded template replacement, expectation seeding from latest score metadata, neutral note-reference export, note-level clip export, review packet HTML export, and duplicate-case protection.
+  passed with coverage for canonical guide/take WAV export, seeded template replacement, expectation seeding from latest score metadata, neutral note-reference export, note-level clip export, Korean review packet HTML export, and duplicate-case protection.
 - Project-to-round export CLI:
   `uv run python scripts/export_project_case_to_evidence_round.py --round-root <round> --project-id <project-id> --take-track-id <take-track-id>`
 - Result:

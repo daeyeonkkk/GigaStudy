@@ -96,6 +96,7 @@ On first use in a fresh scaffold, it also removes the seeded placeholder case an
 If note-event artifacts already exist for that take, the same export also writes neutral note-reference CSV / JSON files under `human-rating/references/` so raters can align note indices and target pitches without seeing the scorer's own verdict text first.
 For analyzed takes, that export also writes note-level guide/take clip WAVs under `human-rating/references/clips/<case-id>/` so raters can review one note at a time instead of scrubbing the full recordings.
 It also writes a self-contained review packet HTML under `human-rating/review-packets/` so one rater can open a single page and work through the case.
+The round rating sheet and review packet are now Korean-first for local collection, while the builder still normalizes those labels into canonical calibration values.
 
 ### Human Rating Corpus Builder
 
@@ -214,6 +215,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - That export path now also writes neutral note-reference files for analyzed takes, which makes human-rater collection less error-prone without leaking scorer verdict text into the rating prompt.
 - That export path now also writes note-level clip WAVs for analyzed takes, which reduces manual scrubbing during human note-rating rounds.
 - That export path now also writes a review packet HTML for analyzed takes, which reduces folder-hopping during real rater collection.
+- Human-rating collection materials now also support Korean-first local review wording and label intake without changing the downstream calibration schema.
 - The repo now also includes a real-vocal corpus inventory tool, so collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before calibration and threshold fitting.
 - The repo now also includes a threshold-fit report path for candidate difficulty bands, so future human-rated corpora can yield repeatable `strict / basic / beginner` recommendations instead of ad hoc threshold notes.
 - The repo now also includes a claim-gate evaluator, so the team can repeatably decide whether current human-rating evidence is strong enough to even begin threshold-closure review.

@@ -135,6 +135,29 @@ def test_load_human_rating_sheet_reads_template_csv(tmp_path: Path) -> None:
     assert rows[1].sustain_direction == "flat"
 
 
+def test_load_human_rating_sheet_normalizes_korean_labels(tmp_path: Path) -> None:
+    csv_path = tmp_path / "ratings-ko.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "case_id,note_index,rater_id,attack_direction,sustain_direction,acceptability_label,notes",
+                "case-a,0,평가자-a,높음,정확,양호,시작은 높지만 유지음은 안정적",
+                "case-a,1,평가자-b,판단 어려움,낮음,교정 필요,모음 구간이 짧음",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rows = load_human_rating_sheet(csv_path)
+
+    assert rows[0].attack_direction == "sharp"
+    assert rows[0].sustain_direction == "centered"
+    assert rows[0].acceptability_label == "in_tune"
+    assert rows[1].attack_direction == "unclear"
+    assert rows[1].sustain_direction == "flat"
+    assert rows[1].acceptability_label == "corrective"
+
+
 def test_load_human_rating_metadata_reads_utf8_bom_json(tmp_path: Path) -> None:
     metadata_path = tmp_path / "metadata.json"
     metadata_path.write_text(

@@ -28,6 +28,7 @@ The repo now supports:
 - neutral note-reference CSV / JSON exports inside the round when note-event artifacts are already available for the exported take
 - note-level guide/take clip WAV exports for analyzed cases so raters can review one note at a time without manual scrubbing
 - self-contained review packet HTML exports for analyzed cases so raters can open one page for full-take and per-note listening
+- Korean-first review packet copy plus Korean rating-label normalization (`높음 / 정확 / 낮음 / 판단 어려움`, `양호 / 검토 / 교정 필요`) for local rater collection
 - template inputs for the collection round:
   `apps/api/calibration/human_rating_cases.template.json`
   `apps/api/calibration/human_rating_sheet.template.csv`
@@ -140,6 +141,9 @@ It also writes a review packet HTML under `human-rating/review-packets/`, so one
 3. If export is not possible yet, place the real guide/take WAV files into `human-rating/audio/guides/` and `human-rating/audio/takes/` manually.
 4. Update the generated `human-rating/human_rating_cases.json` metadata file so each case points to the real WAV paths for that round.
 5. Fill the generated `human-rating/human_rating_sheet.csv` file with per-rater note labels.
+   English canonical labels still work, but Korean labels are now preferred for local rater collection:
+   - attack / sustain: `높음`, `정확`, `낮음`, `판단 어려움`
+   - acceptability: `양호`, `검토`, `교정 필요`, `판단 어려움`
 6. Inspect the metadata file or generated corpus before calibration:
 
 ```bash
@@ -206,6 +210,7 @@ This workflow alone closes only the support-path gap:
 - the repo can now seed neutral note-reference files for exported real project cases, which reduces note-index ambiguity during rater collection
 - the repo can now seed note-level guide/take clip WAVs for analyzed cases, which reduces rater friction during note-by-note review
 - the repo can now seed self-contained review packet HTML files for analyzed cases, which reduces the manual setup burden on raters
+- the repo can now hand over Korean-first review packets and Korean rating labels for local rater collection without losing canonical calibration values
 - the repo can now compare scorer output against human note labels
 - the repo can now inspect whether real-vocal source files and rating coverage are actually ready before calibration
 - the repo can now evaluate whether the current corpus is even strong enough to start a threshold-closure review

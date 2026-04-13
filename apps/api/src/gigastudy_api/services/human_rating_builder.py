@@ -17,13 +17,96 @@ from gigastudy_api.services.calibration import (
 )
 
 
-def _normalize_optional_label(value: str | None) -> str | None:
+_DIRECTION_LABEL_ALIASES = {
+    "sharp": "sharp",
+    "high": "sharp",
+    "up": "sharp",
+    "높음": "sharp",
+    "높다": "sharp",
+    "높아요": "sharp",
+    "샤프": "sharp",
+    "centered": "centered",
+    "center": "centered",
+    "in tune": "centered",
+    "intune": "centered",
+    "정확": "centered",
+    "맞음": "centered",
+    "중심": "centered",
+    "가운데": "centered",
+    "flat": "flat",
+    "low": "flat",
+    "down": "flat",
+    "낮음": "flat",
+    "낮다": "flat",
+    "낮아요": "flat",
+    "플랫": "flat",
+    "unclear": "unclear",
+    "unknown": "unclear",
+    "unsure": "unclear",
+    "판단 어려움": "unclear",
+    "판단어려움": "unclear",
+    "어려움": "unclear",
+    "불명확": "unclear",
+    "모름": "unclear",
+    "애매": "unclear",
+}
+
+_ACCEPTABILITY_LABEL_ALIASES = {
+    "in tune": "in_tune",
+    "intune": "in_tune",
+    "in_tune": "in_tune",
+    "good": "in_tune",
+    "ok": "in_tune",
+    "양호": "in_tune",
+    "좋음": "in_tune",
+    "좋다": "in_tune",
+    "문제없음": "in_tune",
+    "review": "review",
+    "check": "review",
+    "검토": "review",
+    "확인": "review",
+    "확인 필요": "review",
+    "재확인": "review",
+    "corrective": "corrective",
+    "fix": "corrective",
+    "교정": "corrective",
+    "교정 필요": "corrective",
+    "수정 필요": "corrective",
+    "보정 필요": "corrective",
+    "unclear": "unclear",
+    "unknown": "unclear",
+    "unsure": "unclear",
+    "판단 어려움": "unclear",
+    "판단어려움": "unclear",
+    "불명확": "unclear",
+    "모름": "unclear",
+    "애매": "unclear",
+}
+
+
+def _normalize_label_token(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower()
     if not normalized:
         return None
+    normalized = normalized.replace("_", " ").replace("-", " ")
+    normalized = " ".join(normalized.split())
     return normalized
+
+
+def _normalize_direction_label(value: str | None) -> str | None:
+    normalized = _normalize_label_token(value)
+    if normalized is None:
+        return None
+    return _DIRECTION_LABEL_ALIASES.get(normalized, normalized)
+
+
+def _normalize_acceptability_label(value: str | None) -> str | None:
+    normalized = _normalize_label_token(value)
+    if normalized is None:
+        return None
+    return _ACCEPTABILITY_LABEL_ALIASES.get(normalized, normalized)
 
 
 class HumanRatingCaseMetadata(BaseModel):
@@ -57,9 +140,9 @@ class HumanRatingSheetRow(BaseModel):
 
     @model_validator(mode="after")
     def normalize_labels(self) -> "HumanRatingSheetRow":
-        self.attack_direction = _normalize_optional_label(self.attack_direction)
-        self.sustain_direction = _normalize_optional_label(self.sustain_direction)
-        self.acceptability_label = _normalize_optional_label(self.acceptability_label)
+        self.attack_direction = _normalize_direction_label(self.attack_direction)
+        self.sustain_direction = _normalize_direction_label(self.sustain_direction)
+        self.acceptability_label = _normalize_acceptability_label(self.acceptability_label)
         self.notes = self.notes.strip() if self.notes else None
         return self
 

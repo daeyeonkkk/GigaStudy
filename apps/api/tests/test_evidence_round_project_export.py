@@ -171,7 +171,9 @@ def test_export_project_take_to_evidence_round_replaces_seeded_template_and_writ
     assert len(note_reference_csv_lines) >= 2
     review_packet_html = result.review_packet_html_path.read_text(encoding="utf-8")
     assert "<audio controls" in review_packet_html
-    assert "Human Rating Review Packet" in review_packet_html
+    assert "사람 평가 리뷰 패킷" in review_packet_html
+    assert "권장 입력값" in review_packet_html
+    assert "높음 / 정확 / 낮음 / 판단 어려움" in review_packet_html
     assert note_reference_json["notes"][0]["guide_clip_wav_path"] in review_packet_html
     assert "attack_signed_cents" not in review_packet_html
     first_guide_clip = round_paths.human_rating_dir / note_reference_json["notes"][0]["guide_clip_wav_path"]

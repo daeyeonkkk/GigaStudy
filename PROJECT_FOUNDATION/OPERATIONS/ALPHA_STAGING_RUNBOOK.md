@@ -28,6 +28,9 @@ Prepare these:
 1. One Pages project
    - From the current Cloudflare dashboard, the recommended click path is:
      `Workers & Pages -> Create application -> Pages -> Connect to Git`
+   - If the current Cloudflare UI opens a `Create a Worker` screen first and does not show a Pages tab, use the link at the bottom:
+     `Looking to deploy Pages? Get started`
+   - That bottom `Get started` link is the correct handoff into the Pages flow.
    - Prefer a Git-integrated Pages project because Cloudflare still allows Wrangler-based manual deployments later if automatic builds are disabled.
    - If you create a brand-new Direct Upload project, Cloudflare does not let that same project switch to Git integration later.
    - For this repo, the preferred Git build configuration is:

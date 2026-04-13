@@ -183,6 +183,7 @@ Prepare these:
    - Cloud Build
    - Artifact Registry
 3. Install and log in with `gcloud`
+   - On Windows, if `gcloud` is not already available in the terminal, install Google Cloud CLI before the deploy step.
 4. Pick one region
    - recommended starting point:
      `asia-northeast3`

@@ -226,7 +226,7 @@ But the first real deployment slice should be:
 Current state after this review:
 
 - document the target: done
-- containerize the backend: implementation added, verification still open
+- containerize the backend: done, including local Docker build plus runtime smoke with Node, Python, Basic Pitch assets, and `/api/health`
 - switch uploads to direct object storage: done for S3-compatible storage backends, while local development keeps the API upload fallback
 - verify one staging environment: open
 

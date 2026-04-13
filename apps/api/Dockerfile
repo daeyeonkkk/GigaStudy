@@ -1,3 +1,5 @@
+FROM node:20-bookworm-slim AS node_runtime
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,9 +17,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
         libsndfile1 \
-        nodejs \
-        npm \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=node_runtime /usr/local /usr/local
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

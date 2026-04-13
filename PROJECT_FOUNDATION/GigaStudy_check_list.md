@@ -212,6 +212,6 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 ## 19. Alpha Deployment Track
 
 - [x] A low-cost alpha deployment target is documented against current official platform limits and the current repo shape.
-- [ ] A Cloud Run-ready backend container exists and includes both Python and Node for the Basic Pitch runtime.
+- [x] A Cloud Run-ready backend container exists and includes both Python and Node for the Basic Pitch runtime.
 - [x] Browser audio uploads can bypass the API service through direct object-storage upload URLs.
 - [ ] One real HTTPS staging environment has been verified end to end on the chosen alpha stack.

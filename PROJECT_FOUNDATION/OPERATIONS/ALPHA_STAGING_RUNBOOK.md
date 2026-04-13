@@ -129,7 +129,8 @@ Recommended click path in the current Neon console:
      the main alpha database
    - role:
      a role with password
-5. copy the generated connection string
+5. turn `Connection pooling` off if you want the direct URL
+6. copy the generated connection string
 
 If the dashboard already shows a `Connection string` card, that is also a valid entry point.
 
@@ -140,6 +141,15 @@ Recommended alpha choice:
 - if Neon also shows a pooled connection string, keep that as a later fallback only if Cloud Run connection pressure appears
 - if the region list includes Singapore, prefer that for a Korea-based alpha because it is the closest currently documented Neon AWS region in Asia
 - keep Neon Auth disabled for this alpha path
+
+Current UI note:
+
+- Neon may display the raw URL as `postgresql://...`
+- that is normal
+- for this repo, convert it manually to the SQLAlchemy + psycopg form by replacing the prefix with:
+  `postgresql+psycopg://...`
+- if the hostname includes `-pooler`, you are looking at the pooled connection string
+- if the `Connection pooling` toggle is off and the hostname does not include `-pooler`, you are looking at the direct connection string
 
 Security rule:
 

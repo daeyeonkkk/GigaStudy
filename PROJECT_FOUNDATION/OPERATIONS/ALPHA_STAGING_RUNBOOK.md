@@ -141,6 +141,10 @@ Recommended alpha choice:
 - if the region list includes Singapore, prefer that for a Korea-based alpha because it is the closest currently documented Neon AWS region in Asia
 - keep Neon Auth disabled for this alpha path
 
+Security rule:
+
+- if a full connection string or database password is pasted into chat, logs, screenshots, or any other shared surface, rotate it immediately and do not reuse it as the alpha credential
+
 Why this is the current recommendation:
 
 - the alpha deployment is still small

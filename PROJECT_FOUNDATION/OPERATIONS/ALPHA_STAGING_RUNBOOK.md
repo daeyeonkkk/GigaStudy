@@ -61,6 +61,9 @@ Prepare these:
 3. One R2 S3 API token
    - Scope:
      object read and write for the alpha bucket
+   - In the current R2 dashboard, use:
+     `R2 Object Storage -> Account Details -> API Tokens -> Manage`
+   - Then create an API token or access key pair for the bucket.
 4. Your Cloudflare account id
    - On the current `Workers & Pages` screen, the Account ID is already visible near the lower right of the page.
 
@@ -72,6 +75,16 @@ You will need these values:
 - R2 bucket name
 - R2 access key id
 - R2 secret access key
+
+Meaning of those last two values:
+
+- `R2 access key id`
+  the public identifier for the S3-compatible credential pair
+- `R2 secret access key`
+  the private secret paired with that access key id
+
+The backend uses them the same way an S3 client would use AWS-style credentials.
+They are not the same thing as the bucket name or the S3 endpoint URL.
 
 ### 2.2 Neon
 

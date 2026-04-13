@@ -26,15 +26,20 @@ Those are the only parts the repo cannot invent safely.
 Prepare these:
 
 1. One Pages project
-   - Prefer an existing Git-integrated Pages project if you want to preserve Git-based deploy options later.
+   - From the current Cloudflare dashboard, the recommended click path is:
+     `Workers & Pages -> Create application -> Pages -> Connect to Git`
+   - Prefer a Git-integrated Pages project because Cloudflare still allows Wrangler-based manual deployments later if automatic builds are disabled.
    - If you create a brand-new Direct Upload project, Cloudflare does not let that same project switch to Git integration later.
 2. One R2 bucket
+   - Recommended click path:
+     `Storage & databases -> R2 -> Create bucket`
    - Recommended alpha name:
      `gigastudy-alpha`
 3. One R2 S3 API token
    - Scope:
      object read and write for the alpha bucket
 4. Your Cloudflare account id
+   - On the current `Workers & Pages` screen, the Account ID is already visible near the lower right of the page.
 
 You will need these values:
 

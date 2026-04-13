@@ -22,7 +22,7 @@ type AudioPreviewWorkerResponse =
 async function decodeAudioBuffer(encoded: ArrayBuffer): Promise<AudioBuffer> {
   const AudioContextCtor = getAudioContextConstructor()
   if (typeof AudioContextCtor === 'undefined') {
-    throw new Error('Audio preview decoding is not available in this browser.')
+    throw new Error('현재 브라우저에서는 오디오 미리보기를 해석할 수 없습니다.')
   }
 
   const audioContext = new AudioContextCtor()
@@ -39,7 +39,7 @@ async function buildPreviewInWorker(
   sampleRate: number,
 ): Promise<Pick<AudioPreviewData, 'contour' | 'pipeline' | 'waveform'>> {
   if (typeof Worker === 'undefined') {
-    throw new Error('Web Worker is unavailable.')
+    throw new Error('Web Worker를 사용할 수 없습니다.')
   }
 
   return new Promise((resolve, reject) => {
@@ -59,7 +59,7 @@ async function buildPreviewInWorker(
 
     worker.onerror = () => {
       worker.terminate()
-      reject(new Error('Worker preview generation failed.'))
+      reject(new Error('워커에서 미리보기를 만들지 못했습니다.'))
     }
 
     worker.postMessage(
@@ -114,7 +114,7 @@ export async function buildAudioPreviewFromBlob(blob: Blob): Promise<AudioPrevie
 export async function buildAudioPreviewFromUrl(url: string): Promise<AudioPreviewData> {
   const response = await fetch(url)
   if (!response.ok) {
-    throw new Error(`Audio preview fetch failed with status ${response.status}`)
+    throw new Error(`오디오 미리보기를 불러오지 못했습니다. 상태 코드: ${response.status}`)
   }
 
   const encoded = await response.arrayBuffer()

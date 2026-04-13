@@ -20,7 +20,7 @@ export function ArrangementScore({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [renderState, setRenderState] = useState<RenderState>({
     phase: 'idle',
-    message: 'Generate or select an arrangement to render the score.',
+    message: '편곡 후보를 만들거나 선택하면 악보를 표시합니다.',
   })
 
   useEffect(() => {
@@ -35,20 +35,20 @@ export function ArrangementScore({
         }
         setRenderState({
           phase: 'idle',
-          message: 'Generate or select an arrangement to render the score.',
+          message: '편곡 후보를 만들거나 선택하면 악보를 표시합니다.',
         })
         return
       }
 
       setRenderState({
         phase: 'loading',
-        message: 'Loading MusicXML into the score view...',
+        message: 'MusicXML을 악보 화면에 불러오는 중입니다...',
       })
 
       try {
         const response = await fetch(musicXmlUrl, { signal: controller.signal })
         if (!response.ok) {
-          throw new Error('MusicXML download failed.')
+          throw new Error('MusicXML을 내려받지 못했습니다.')
         }
 
         const xmlText = await response.text()
@@ -70,7 +70,7 @@ export function ArrangementScore({
         if (!cancelled) {
           setRenderState({
             phase: 'ready',
-            message: 'Score rendered from the latest MusicXML artifact.',
+            message: '최신 MusicXML 산출물로 악보를 표시했습니다.',
           })
         }
       } catch (error) {
@@ -80,7 +80,7 @@ export function ArrangementScore({
 
         setRenderState({
           phase: 'error',
-          message: error instanceof Error ? error.message : 'Score rendering failed.',
+          message: error instanceof Error ? error.message : '악보를 표시하지 못했습니다.',
         })
       }
     }

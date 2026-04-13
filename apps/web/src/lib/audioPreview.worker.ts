@@ -35,7 +35,7 @@ workerScope.onmessage = async (event: MessageEvent<AudioPreviewWorkerRequest>) =
     } satisfies AudioPreviewWorkerResponse)
   } catch (error) {
     workerScope.postMessage({
-      error: error instanceof Error ? error.message : 'Worker preview generation failed.',
+      error: error instanceof Error ? error.message : '워커에서 미리보기를 만들지 못했습니다.',
     } satisfies AudioPreviewWorkerResponse)
   }
 }

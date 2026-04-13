@@ -6,6 +6,13 @@ import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
 import { buildApiUrl } from '../lib/api'
 import type { AudioPreviewData } from '../lib/audioPreview'
+import {
+  getArrangementStyleLabel,
+  getDifficultyLabel,
+  getShareAccessScopeLabel,
+  getShareErrorLabel,
+  getTrackStatusLabel,
+} from '../lib/localizedLabels'
 import type { Project } from '../types/project'
 
 type AnalysisFeedbackItem = {
@@ -115,15 +122,15 @@ function formatDate(value: string): string {
 
 function formatDuration(durationMs: number | null): string {
   if (durationMs === null) {
-    return 'Unknown'
+    return '알 수 없음'
   }
 
-  return `${(durationMs / 1000).toFixed(2)} sec`
+  return `${(durationMs / 1000).toFixed(2)}초`
 }
 
 function formatScore(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return 'Pending'
+    return '대기 중'
   }
 
   return value.toFixed(1)
@@ -131,7 +138,7 @@ function formatScore(value: number | null | undefined): string {
 
 function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return 'n/a'
+    return '없음'
   }
 
   return `${Math.round(value * 100)}%`
@@ -139,7 +146,7 @@ function formatPercent(value: number | null | undefined): string {
 
 function formatSignedCents(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return 'n/a'
+    return '없음'
   }
 
   const rounded = Math.round(value)
@@ -175,7 +182,7 @@ export function SharedProjectPage() {
 
   useEffect(() => {
     if (!shareToken) {
-      setPageState({ phase: 'error', message: 'Share token is missing.' })
+      setPageState({ phase: 'error', message: '공유 토큰이 없습니다.' })
       return
     }
 
@@ -187,7 +194,7 @@ export function SharedProjectPage() {
           signal: controller.signal,
         })
         if (!response.ok) {
-          throw new Error(await readErrorMessage(response, 'Unable to load shared project.'))
+          throw new Error(await readErrorMessage(response, '공유 프로젝트를 불러오지 못했습니다.'))
         }
 
         const payload = (await response.json()) as SharedProjectPayload
@@ -201,7 +208,10 @@ export function SharedProjectPage() {
 
         setPageState({
           phase: 'error',
-          message: error instanceof Error ? error.message : 'Unable to load shared project.',
+          message:
+            error instanceof Error
+              ? getShareErrorLabel(error.message)
+              : '공유 프로젝트를 불러오지 못했습니다.',
         })
       }
     }
@@ -215,8 +225,8 @@ export function SharedProjectPage() {
     return (
       <div className="page-shell">
         <section className="panel">
-          <p className="eyebrow">Read-Only Share</p>
-          <h1>Loading shared project...</h1>
+          <p className="eyebrow">읽기 전용 공유</p>
+          <h1>공유 프로젝트를 불러오는 중입니다...</h1>
         </section>
       </div>
     )
@@ -226,11 +236,11 @@ export function SharedProjectPage() {
     return (
       <div className="page-shell">
         <section className="panel">
-          <p className="eyebrow">Read-Only Share</p>
-          <h1>Shared project unavailable</h1>
+          <p className="eyebrow">읽기 전용 공유</p>
+          <h1>공유 프로젝트를 열 수 없습니다</h1>
           <p className="form-error">{pageState.message}</p>
           <Link className="button-secondary" to="/">
-            Return home
+            홈으로 돌아가기
           </Link>
         </section>
       </div>
@@ -251,54 +261,54 @@ export function SharedProjectPage() {
       <section className="shared-review-shell">
         <header className="shared-review-header">
           <div className="shared-review-header__copy">
-            <p className="eyebrow">Read-Only Share</p>
+            <p className="eyebrow">읽기 전용 공유</p>
             <h1>{payload.project.title}</h1>
             <p className="panel__summary">
-              Shared studio snapshot from "{payload.version_label}". Review the selected take,
-              score, and arrangement without editing controls.
+              "{payload.version_label}" 시점의 스튜디오 스냅샷입니다. 선택한 테이크, 점수,
+              편곡 결과를 수정 없이 검토할 수 있습니다.
             </p>
           </div>
 
           <div className="shared-review-header__meta">
             <div className="mini-card">
-              <span>Share label</span>
+              <span>공유 이름</span>
               <strong>{payload.label}</strong>
             </div>
             <div className="mini-card">
-              <span>Snapshot date</span>
+              <span>스냅샷 날짜</span>
               <strong>{formatDate(payload.version_created_at)}</strong>
             </div>
             <div className="mini-card">
-              <span>Status</span>
-              <strong>{payload.access_scope}</strong>
+              <span>상태</span>
+              <strong>{getShareAccessScopeLabel(payload.access_scope)}</strong>
             </div>
             <div className="mini-card">
-              <span>Expires</span>
-              <strong>{payload.expires_at ? formatDate(payload.expires_at) : 'Never'}</strong>
+              <span>만료</span>
+              <strong>{payload.expires_at ? formatDate(payload.expires_at) : '없음'}</strong>
             </div>
           </div>
         </header>
 
-        <section className="shared-review-strip" aria-label="snapshot summary">
+        <section className="shared-review-strip" aria-label="스냅샷 요약">
           <div className="shared-review-strip__item">
-            <span>Guide</span>
-            <strong>{payload.snapshot_summary.has_guide ? 'Yes' : 'No'}</strong>
+            <span>가이드</span>
+            <strong>{payload.snapshot_summary.has_guide ? '있음' : '없음'}</strong>
           </div>
           <div className="shared-review-strip__item">
-            <span>Takes</span>
+            <span>테이크 수</span>
             <strong>{payload.snapshot_summary.take_count}</strong>
           </div>
           <div className="shared-review-strip__item">
-            <span>Ready takes</span>
+            <span>준비 완료 테이크</span>
             <strong>{payload.snapshot_summary.ready_take_count}</strong>
           </div>
           <div className="shared-review-strip__item">
-            <span>Arrangements</span>
+            <span>편곡 수</span>
             <strong>{payload.snapshot_summary.arrangement_count}</strong>
           </div>
           <div className="shared-review-strip__item">
-            <span>Mixdown</span>
-            <strong>{payload.snapshot_summary.has_mixdown ? 'Yes' : 'No'}</strong>
+            <span>믹스다운</span>
+            <strong>{payload.snapshot_summary.has_mixdown ? '있음' : '없음'}</strong>
           </div>
         </section>
 
@@ -306,17 +316,17 @@ export function SharedProjectPage() {
           <aside className="panel shared-review-rail shared-review-rail--left">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">Left Rail</p>
-                <h2>Selected source take</h2>
+                <p className="eyebrow">왼쪽 레일</p>
+                <h2>선택한 원본 테이크</h2>
               </div>
             </div>
 
             <p className="panel__summary">
-              Switch between frozen takes, then inspect the guide, take audio, and waveform without
-              reopening the studio editor.
+              스냅샷에 포함된 테이크를 바꿔 보면서, 스튜디오 편집 화면으로 돌아가지 않고도
+              가이드, 테이크 오디오, 파형을 확인할 수 있습니다.
             </p>
 
-            <div className="shared-review-pill-row" role="tablist" aria-label="shared takes">
+            <div className="shared-review-pill-row" role="tablist" aria-label="공유 테이크">
               {payload.takes.map((take) => (
                 <button
                   key={take.track_id}
@@ -327,7 +337,7 @@ export function SharedProjectPage() {
                   type="button"
                   onClick={() => setSelectedTakeId(take.track_id)}
                 >
-                  {`Take ${take.take_no ?? '?'}`}
+                  {`${take.take_no ?? '?'}번 테이크`}
                 </button>
               ))}
             </div>
@@ -336,30 +346,30 @@ export function SharedProjectPage() {
               <>
                 <div className="mini-grid">
                   <div className="mini-card">
-                    <span>Status</span>
-                    <strong>{selectedTake.track_status}</strong>
+                    <span>상태</span>
+                    <strong>{getTrackStatusLabel(selectedTake.track_status)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Duration</span>
+                    <span>길이</span>
                     <strong>{formatDuration(selectedTake.duration_ms)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Alignment confidence</span>
+                    <span>정렬 신뢰도</span>
                     <strong>{formatPercent(selectedTake.alignment_confidence)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Melody draft</span>
+                    <span>멜로디 초안</span>
                     <strong>
                       {selectedTake.latest_melody
-                        ? `${selectedTake.latest_melody.note_count} notes`
-                        : 'Pending'}
+                        ? `노트 ${selectedTake.latest_melody.note_count}개`
+                        : '대기 중'}
                     </strong>
                   </div>
                 </div>
 
                 {selectedTake.source_artifact_url ? (
                   <div className="shared-review-audio">
-                    <span className="shared-review-label">Selected take audio</span>
+                    <span className="shared-review-label">선택한 테이크 오디오</span>
                     <ManagedAudioPlayer muted={false} src={selectedTake.source_artifact_url} volume={1} />
                   </div>
                 ) : null}
@@ -368,27 +378,27 @@ export function SharedProjectPage() {
                   <WaveformPreview preview={selectedTake.preview_data} />
                 ) : (
                   <div className="empty-card">
-                    <p>No waveform preview was frozen for this take.</p>
+                    <p>이 테이크에는 저장된 파형 미리보기가 없습니다.</p>
                   </div>
                 )}
 
                 {payload.guide?.source_artifact_url ? (
                   <div className="shared-review-audio shared-review-audio--subtle">
-                    <span className="shared-review-label">Guide reference</span>
+                    <span className="shared-review-label">가이드 참고 오디오</span>
                     <ManagedAudioPlayer muted={false} src={payload.guide.source_artifact_url} volume={0.8} />
                   </div>
                 ) : null}
 
                 {payload.mixdown?.source_artifact_url ? (
                   <div className="shared-review-audio shared-review-audio--subtle">
-                    <span className="shared-review-label">Frozen mixdown</span>
+                    <span className="shared-review-label">스냅샷 믹스다운</span>
                     <ManagedAudioPlayer muted={false} src={payload.mixdown.source_artifact_url} volume={0.9} />
                   </div>
                 ) : null}
               </>
             ) : (
               <div className="empty-card">
-                <p>No takes were captured in this version.</p>
+                <p>이 버전에는 저장된 테이크가 없습니다.</p>
               </div>
             )}
           </aside>
@@ -396,18 +406,18 @@ export function SharedProjectPage() {
           <section className="panel shared-review-canvas">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">Center Canvas</p>
-                <h2>Frozen review snapshot</h2>
+                <p className="eyebrow">중앙 캔버스</p>
+                <h2>고정된 리뷰 스냅샷</h2>
               </div>
             </div>
 
             <p className="panel__summary">
-              This page stays read-only on purpose. You can compare the frozen arrangement and
-              export artifacts, but editing happens back in the studio.
+              이 화면은 의도적으로 읽기 전용입니다. 고정된 편곡 결과와 내보내기 산출물은 비교할 수
+              있지만, 수정은 스튜디오에서 진행합니다.
             </p>
 
             {payload.arrangements.length > 0 ? (
-              <div className="shared-review-pill-row" role="tablist" aria-label="shared arrangements">
+              <div className="shared-review-pill-row" role="tablist" aria-label="공유 편곡">
                 {payload.arrangements.map((arrangement) => (
                   <button
                     key={arrangement.arrangement_id}
@@ -430,19 +440,19 @@ export function SharedProjectPage() {
               <>
                 <div className="shared-review-canvas__meta">
                   <div className="mini-card">
-                    <span>Arrangement</span>
+                    <span>편곡</span>
                     <strong>{selectedArrangement.title}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Style</span>
-                    <strong>{selectedArrangement.style}</strong>
+                    <span>스타일</span>
+                    <strong>{getArrangementStyleLabel(selectedArrangement.style)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Difficulty</span>
-                    <strong>{selectedArrangement.difficulty}</strong>
+                    <span>난이도</span>
+                    <strong>{getDifficultyLabel(selectedArrangement.difficulty)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Parts</span>
+                    <span>성부 수</span>
                     <strong>{selectedArrangement.part_count}</strong>
                   </div>
                 </div>
@@ -457,29 +467,29 @@ export function SharedProjectPage() {
               <WaveformPreview preview={selectedTake.preview_data} />
             ) : (
               <div className="empty-card">
-                <p>No arrangement score or waveform preview was frozen for this snapshot.</p>
+                <p>이 스냅샷에는 저장된 편곡 악보나 파형 미리보기가 없습니다.</p>
               </div>
             )}
 
             <div className="button-row shared-review-export-row">
               {selectedTake?.source_artifact_url ? (
                 <a className="button-secondary" href={selectedTake.source_artifact_url}>
-                  Open selected take audio
+                  선택한 테이크 오디오 열기
                 </a>
               ) : null}
               {payload.guide?.guide_wav_artifact_url ? (
                 <a className="button-secondary" href={payload.guide.guide_wav_artifact_url}>
-                  Open guide WAV
+                  가이드 WAV 열기
                 </a>
               ) : null}
               {selectedArrangement?.midi_artifact_url ? (
                 <a className="button-secondary" href={selectedArrangement.midi_artifact_url}>
-                  Open arrangement MIDI
+                  편곡 MIDI 열기
                 </a>
               ) : null}
               {selectedArrangement?.musicxml_artifact_url ? (
                 <a className="button-secondary" href={selectedArrangement.musicxml_artifact_url}>
-                  Open MusicXML
+                  MusicXML 열기
                 </a>
               ) : null}
             </div>
@@ -488,8 +498,8 @@ export function SharedProjectPage() {
           <aside className="panel shared-review-rail shared-review-rail--right">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">Right Rail</p>
-                <h2>Recorded take results</h2>
+                <p className="eyebrow">오른쪽 레일</p>
+                <h2>녹음 결과 요약</h2>
               </div>
             </div>
 
@@ -497,39 +507,39 @@ export function SharedProjectPage() {
               <>
                 <div className="shared-review-score-grid">
                   <div className="mini-card">
-                    <span>Total</span>
+                    <span>총점</span>
                     <strong>{formatScore(selectedTake.latest_score.total_score)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Pitch</span>
+                    <span>음정</span>
                     <strong>{formatScore(selectedTake.latest_score.pitch_score)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Rhythm</span>
+                    <span>리듬</span>
                     <strong>{formatScore(selectedTake.latest_score.rhythm_score)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Harmony</span>
+                    <span>화성</span>
                     <strong>{formatScore(selectedTake.latest_score.harmony_fit_score)}</strong>
                   </div>
                 </div>
 
                 {noteHighlight ? (
                   <div className="shared-review-highlight">
-                    <span className="shared-review-label">Note highlight</span>
-                    <strong>{`Note ${noteHighlight.note_index + 1}`}</strong>
+                    <span className="shared-review-label">주목할 노트</span>
+                    <strong>{`${noteHighlight.note_index + 1}번 노트`}</strong>
                     <p>{noteHighlight.message}</p>
                     <div className="mini-grid">
                       <div className="mini-card">
-                        <span>Attack</span>
+                        <span>시작음</span>
                         <strong>{formatSignedCents(noteHighlight.attack_signed_cents)}</strong>
                       </div>
                       <div className="mini-card">
-                        <span>Sustain</span>
+                        <span>유지음</span>
                         <strong>{formatSignedCents(noteHighlight.sustain_median_cents)}</strong>
                       </div>
                       <div className="mini-card">
-                        <span>Confidence</span>
+                        <span>신뢰도</span>
                         <strong>{formatPercent(noteHighlight.confidence)}</strong>
                       </div>
                     </div>
@@ -537,7 +547,7 @@ export function SharedProjectPage() {
                 ) : null}
 
                 <div className="shared-review-message-list">
-                  <span className="shared-review-label">Frozen feedback</span>
+                  <span className="shared-review-label">저장된 피드백</span>
                   {selectedMessages.length > 0 ? (
                     <ul>
                       {selectedMessages.map((item, index) => (
@@ -546,19 +556,19 @@ export function SharedProjectPage() {
                     </ul>
                   ) : (
                     <div className="empty-card">
-                      <p>No feedback messages were frozen for this take.</p>
+                      <p>이 테이크에는 저장된 피드백 문구가 없습니다.</p>
                     </div>
                   )}
                 </div>
               </>
             ) : (
               <div className="empty-card">
-                <p>No scored take is selected in this frozen snapshot.</p>
+                <p>이 스냅샷에는 점수가 기록된 테이크가 선택되어 있지 않습니다.</p>
               </div>
             )}
 
             <div className="empty-card empty-card--warn">
-              <p>This is a frozen review artifact. Editing, rescoring, and share creation stay in the studio.</p>
+              <p>이 화면은 고정된 리뷰 결과입니다. 수정, 재채점, 새 공유 링크 생성은 스튜디오에서 진행합니다.</p>
             </div>
           </aside>
         </div>

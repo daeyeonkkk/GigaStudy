@@ -74,13 +74,13 @@ export async function startArrangementPlayback(
 ): Promise<ArrangementPlaybackController> {
   const AudioContextCtor = getAudioContextConstructor()
   if (typeof AudioContextCtor === 'undefined') {
-    throw new Error('Web Audio is not available in this browser.')
+    throw new Error('현재 브라우저에서는 Web Audio를 사용할 수 없습니다.')
   }
 
   const anySolo = Object.values(options.mixerState).some((entry) => entry.solo)
   const durationMs = getArrangementDurationMs(options.parts)
   if (durationMs <= 0) {
-    throw new Error('This arrangement does not contain playable notes yet.')
+    throw new Error('이 편곡에는 아직 재생할 수 있는 음표가 없습니다.')
   }
 
   const audioContext = new AudioContextCtor()
@@ -170,7 +170,7 @@ export async function startArrangementPlayback(
 
   if (activeNodes.length === 0) {
     await audioContext.close().catch(() => undefined)
-    throw new Error('No arrangement parts are active. Turn on a part or clear solo mode first.')
+    throw new Error('활성화된 파트가 없습니다. 파트를 켜거나 solo 상태를 먼저 해제해 주세요.')
   }
 
   rafId = window.requestAnimationFrame(updatePosition)

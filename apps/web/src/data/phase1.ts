@@ -1,43 +1,43 @@
 export const priorityCards = [
   {
-    title: 'Environment diagnostics',
+    title: '환경 진단',
     items: [
-      'Turn saved DeviceProfiles into an ops-visible browser and hardware diagnostics baseline.',
-      'Keep warning flags, permissions, codec support, and audio-context mode visible by environment.',
-      'Make real hardware validation easier instead of leaving support to guesswork.',
+      '저장된 DeviceProfile을 운영 화면에서 바로 읽히는 브라우저·하드웨어 기준선으로 정리합니다.',
+      '경고 플래그, 권한 상태, 코덱 지원, 오디오 컨텍스트 모드를 환경별로 계속 보이게 유지합니다.',
+      '지원 여부를 추정으로 두지 않고, 실제 장비 검증을 더 쉽게 이어갈 수 있게 만듭니다.',
     ],
   },
   {
-    title: 'Native browser validation',
+    title: '실브라우저 검증',
     items: [
-      'Use Chromium, Firefox, and WebKit automation as the seeded baseline, not the final proof.',
-      'Add native Safari and real-hardware checks on top of the new diagnostics report and manual validation log.',
-      'Keep unsupported paths explicit in release notes and ops summaries.',
+      'Chromium, Firefox, WebKit 자동화는 시작 기준선으로만 보고 최종 증거로 과장하지 않습니다.',
+      '새 진단 리포트와 수동 검증 로그 위에 실기기 Safari와 하드웨어 검증을 쌓아갑니다.',
+      '지원하지 않는 경로는 릴리즈 노트와 운영 요약에서 계속 명시합니다.',
     ],
   },
   {
-    title: 'Calibration gate',
+    title: '보정 게이트',
     items: [
-      'Build on the new synthetic-vocal checkpoint with real singer recordings or a cents-shifted corpus.',
-      'Tune thresholds so note score explanations match what good ears would say.',
-      'Keep release claims aligned with the analysis mode that is actually implemented.',
+      '현재 합성 보컬 체크포인트 위에 실제 가창 녹음이나 cents-shifted corpus를 더합니다.',
+      '좋은 귀를 가진 사용자가 납득할 수 있도록 note 점수 설명과 threshold를 계속 보정합니다.',
+      '실제로 구현된 분석 모드와 릴리즈 문구가 어긋나지 않게 맞춥니다.',
     ],
   },
   {
-    title: 'Next closeout',
+    title: '다음 마감선',
     items: [
-      'Finish the environment-validation leg without disturbing the seeded release gate.',
-      'Leave room for deeper native Safari and long-session hardware runs in the next slice.',
-      'Keep the MVP scorer and browser-support claims honest while coverage deepens.',
+      '기존 release gate를 깨뜨리지 않으면서 환경 검증 레인을 계속 닫아갑니다.',
+      '다음 작업에서 실기기 Safari와 장시간 하드웨어 검증을 더 깊게 이어갈 여지를 남깁니다.',
+      '커버리지를 넓히는 동안에도 MVP 채점기와 브라우저 지원 범위는 정직하게 유지합니다.',
     ],
   },
 ] as const
 
 export const currentLaneTickets = [
-  'Environment validation',
-  'Ops diagnostics export',
-  'Validation run logging',
-  'Native Safari checklist',
-  'Hardware variability tracking',
-  'Human-rating calibration next',
+  '환경 검증',
+  '운영 진단 내보내기',
+  '검증 실행 기록',
+  '실기기 Safari 체크리스트',
+  '하드웨어 편차 추적',
+  '사람 평가 보정 다음 단계',
 ] as const

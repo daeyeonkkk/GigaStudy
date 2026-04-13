@@ -53,13 +53,13 @@ function getPreviewPipelineLabel(preview: AudioPreviewData): string {
     case 'worker-wasm':
       return 'Worker + WASM'
     case 'worker-js-fallback':
-      return 'Worker fallback'
+      return '워커 대체 경로'
     case 'main-thread-fallback':
-      return 'Main thread fallback'
+      return '메인 스레드 대체 경로'
     case 'server-artifact':
-      return 'Server artifact'
+      return '서버 산출물'
     default:
-      return preview.source === 'remote' ? 'Server artifact' : 'Browser preview'
+      return preview.source === 'remote' ? '서버 산출물' : '브라우저 미리보기'
   }
 }
 
@@ -75,22 +75,22 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
     <div className="waveform-preview">
       <div className="waveform-preview__meta">
         <div className="mini-card">
-          <span>Source</span>
-          <strong>{preview.source === 'local' ? 'Local preview' : 'Reloaded from server audio'}</strong>
+          <span>출처</span>
+          <strong>{preview.source === 'local' ? '로컬 미리보기' : '저장된 오디오에서 다시 불러옴'}</strong>
         </div>
         <div className="mini-card">
-          <span>Duration</span>
+          <span>길이</span>
           <strong>
-            {preview.durationMs === null ? 'Unknown' : `${(preview.durationMs / 1000).toFixed(2)} sec`}
+            {preview.durationMs === null ? '알 수 없음' : `${(preview.durationMs / 1000).toFixed(2)}초`}
           </strong>
         </div>
         <div className="mini-card">
-          <span>Contour points</span>
+          <span>컨투어 포인트</span>
           <strong>{contourPointCount}</strong>
         </div>
         <div className="mini-card">
-          <span>Preview pipeline</span>
-          <strong>{pipelineLabel}</strong>
+          <span>미리보기 처리 경로</span>
+          <strong data-testid="waveform-preview-pipeline">{pipelineLabel}</strong>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
         className="waveform-preview__chart"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Waveform and pitch contour preview"
+        aria-label="파형과 피치 컨투어 미리보기"
       >
         <rect x="0" y="0" width={width} height={height} rx="18" />
         <line x1="0" y1={height / 2} x2={width} y2={height / 2} />
@@ -107,8 +107,8 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
       </svg>
 
       <p className="status-card__hint">
-        Waveform is a fast practice preview, not the final scorer input. Contour gives quick
-        take-shape feedback while server-side note analysis stays authoritative.
+        파형은 빠르게 확인하는 연습용 미리보기이며 최종 채점 입력은 아닙니다. 컨투어는 테이크의
+        큰 흐름을 빠르게 보여주고, 최종 note 분석은 서버 결과를 기준으로 합니다.
       </p>
     </div>
   )

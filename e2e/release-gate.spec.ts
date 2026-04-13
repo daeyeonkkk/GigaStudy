@@ -199,8 +199,8 @@ async function saveDeviceProfileFixture(
 async function saveValidationRunFixture(request: APIRequestContext): Promise<void> {
   const response = await request.post(`${apiBaseUrl}/api/admin/environment-validations`, {
     data: {
-      label: 'Native Safari fixture run',
-      tester: 'Playwright QA',
+      label: '실기기 Safari 기준 실행',
+      tester: 'Playwright 점검',
       device_name: 'MacBook Pro 14',
       os: 'macOS 15.4',
       browser: 'Safari 18',
@@ -220,8 +220,8 @@ async function saveValidationRunFixture(request: APIRequestContext): Promise<voi
       take_recording_succeeded: true,
       analysis_succeeded: true,
       playback_succeeded: false,
-      follow_up: 'Playback fallback still needs native Safari confirmation.',
-      notes: 'Recording path passed, playback remained environment-limited.',
+      follow_up: 'Safari 재생 대체 경로를 실기기에서 다시 확인합니다.',
+      notes: '녹음 경로는 통과했지만 재생은 이 환경에서 제한되었습니다.',
       validated_at: new Date().toISOString(),
     },
   })
@@ -230,9 +230,9 @@ async function saveValidationRunFixture(request: APIRequestContext): Promise<voi
 
 async function createStudioProject(page: Page, title: string): Promise<string> {
   await page.goto('/')
-  await page.getByLabel('Project title').fill(title)
-  await page.getByLabel('Base key').fill('A')
-  await page.getByRole('button', { name: 'Open studio' }).click()
+  await page.getByTestId('project-title-input').fill(title)
+  await page.getByTestId('base-key-input').fill('A')
+  await page.getByTestId('open-studio-button').click()
   await expect(page).toHaveURL(/\/projects\/[^/]+\/studio$/)
 
   const projectIdMatch = page.url().match(/\/projects\/([^/]+)\/studio$/)
@@ -257,7 +257,7 @@ async function seedGuideAndTake(
   await uploadTake(request, projectId, takeBuffer)
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Take 1' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '1번 테이크' })).toBeVisible()
 }
 
 async function seedGuideOnly(
@@ -271,102 +271,86 @@ async function seedGuideOnly(
 }
 
 async function prepareBrowserRecording(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Request microphone access' }).click()
-  await expect(page.getByText(/Microphone access granted\./)).toBeVisible()
+  await page.getByTestId('request-microphone-button').click()
+  await expect(page.getByText(/마이크 권한을 허용했습니다\./)).toBeVisible()
 
-  await page.getByRole('button', { name: 'Save DeviceProfile' }).click()
-  await expect(page.getByText(/DeviceProfile saved with requested constraints and applied settings\./)).toBeVisible()
+  await page.getByTestId('save-device-profile-button').click()
+  await expect(
+    page.getByText(/DeviceProfile을 저장했고, 요청한 constraints와 실제 적용 설정도 함께 기록했습니다\./),
+  ).toBeVisible()
 
-  await page.getByLabel('Count-in length').selectOption('0')
-  await page.getByLabel('Metronome during recording').uncheck()
+  await page.getByTestId('count-in-select').selectOption('0')
+  await page.getByTestId('metronome-recording-checkbox').uncheck()
 }
 
 async function recordBrowserTake(page: Page, takeNumber: number): Promise<void> {
-  await page.getByRole('button', { name: 'Start take' }).click()
-  await expect(page.getByText('Recording in progress. Stop when the take is done.', { exact: true })).toBeVisible()
-  await expect(page.getByText('AudioWorklet meter active', { exact: true })).toBeVisible()
+  await page.getByTestId('start-take-button').click()
+  await expect(page.getByText('녹음 중입니다. 테이크가 끝나면 중지해 주세요.', { exact: true })).toBeVisible()
+  await expect(page.getByText('AudioWorklet 미터가 활성화되었습니다.', { exact: true })).toBeVisible()
   await page.waitForTimeout(1400)
-  await page.getByRole('button', { name: 'Stop take' }).click()
-  await expect(page.getByText(new RegExp(`Take ${takeNumber} uploaded and ready\\.`))).toBeVisible({
+  await page.getByTestId('stop-take-button').click()
+  await expect(page.getByText(new RegExp(`${takeNumber}번 테이크 업로드가 완료되었습니다\\.`))).toBeVisible({
     timeout: 20000,
   })
-  await expect(page.getByRole('heading', { name: `Take ${takeNumber}` })).toBeVisible()
+  await expect(page.getByRole('heading', { name: `${takeNumber}번 테이크` })).toBeVisible()
 }
 
 async function runChordAwareAnalysis(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Seed from current key' }).click()
-  await page.getByRole('button', { name: 'Save chord timeline' }).click()
-  await expect(page.getByText(/Saved 1 chord marker/)).toBeVisible()
+  await page.getByTestId('seed-chord-from-key-button').click()
+  await page.getByTestId('save-chord-timeline-button').click()
+  await expect(page.getByText(/코드 마커 1개를 저장했습니다\./)).toBeVisible()
 
-  await page.getByRole('button', { name: 'Run post-recording analysis' }).click()
-  await expect(page.getByText(/Analysis saved\./)).toBeVisible()
+  await page.getByTestId('run-post-analysis-button').click()
+  await expect(page.getByText(/분석을 저장했습니다\./)).toBeVisible()
 }
 
 async function extractMelodyDraft(page: Page): Promise<void> {
   const melodyPanel = getMelodyExtractionPanel(page)
-  await melodyPanel.getByRole('button', { name: 'Extract melody draft' }).click()
-  await expect(melodyPanel.getByText(/Melody draft saved with/i)).toBeVisible({
+  await melodyPanel.getByTestId('extract-melody-button').click()
+  await expect(melodyPanel.getByText(/멜로디 초안을 저장했습니다\./)).toBeVisible({
     timeout: 20000,
   })
 }
 
 async function generateArrangementCandidates(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Generate arrangement candidates' }).click()
-  await expect(page.getByText(/arrangement candidates are ready for comparison\./i)).toBeVisible({
+  await page.getByTestId('generate-arrangements-button').click()
+  await expect(page.getByText(/비교할 편곡 후보 \d+개를 준비했습니다\./)).toBeVisible({
     timeout: 20000,
   })
 }
 
 function getNoteFeedbackPanel(page: Page) {
-  return page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'See which note was sharp, flat, late, or unstable' }) })
+  return page.getByTestId('note-feedback-panel')
 }
 
 function getShareLinksPanel(page: Page) {
-  return page
-    .locator('article')
-    .filter({
-      has: page.getByRole('heading', {
-        name: 'Create read-only share URLs tied to a frozen snapshot',
-      }),
-    })
+  return page.getByTestId('share-links-panel')
 }
 
 function getArrangementEnginePanel(page: Page) {
-  return page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'Generate candidate A/B/C from the latest melody draft' }) })
+  return page.getByTestId('arrangement-engine-panel')
 }
 
 function getMelodyExtractionPanel(page: Page) {
-  return page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'Turn the selected take into a quantized melody draft' }) })
+  return page.getByTestId('melody-panel')
 }
 
 function getScoreViewPanel(page: Page) {
-  return page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'Render the selected candidate as MusicXML' }) })
+  return page.getByTestId('score-view-panel')
 }
 
 function getRecorderPanel(page: Page) {
-  return page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'Capture repeated takes and upload them with status' }) })
+  return page.getByTestId('recorder-panel')
 }
 
 function getPlaybackPanel(page: Page) {
-  return page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'Preview parts with guide mode and synchronized transport' }) })
+  return page.getByTestId('playback-panel')
 }
 
 function getTakeCard(page: Page, takeNumber: number) {
   return page
     .locator('article.take-card')
-    .filter({ has: page.getByRole('heading', { name: `Take ${takeNumber}` }) })
+    .filter({ has: page.getByRole('heading', { name: `${takeNumber}번 테이크` }) })
     .first()
 }
 
@@ -379,10 +363,10 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
   await runChordAwareAnalysis(page)
 
   const noteFeedbackPanel = getNoteFeedbackPanel(page)
-  await expect(noteFeedbackPanel.getByText('Chord-aware harmony', { exact: true })).toBeVisible()
-  await expect(noteFeedbackPanel.getByText('Pitch mode', { exact: true })).toBeVisible()
+  await expect(noteFeedbackPanel.getByText('코드 인식 화성', { exact: true })).toBeVisible()
+  await expect(noteFeedbackPanel.getByText('음정 모드', { exact: true })).toBeVisible()
   await expect(noteFeedbackPanel.getByRole('button', { name: 'N1' })).toBeVisible()
-  await expect(noteFeedbackPanel.getByRole('heading', { name: /Note 1/i })).toBeVisible()
+  await expect(noteFeedbackPanel.getByRole('heading', { name: /1번 노트/i })).toBeVisible()
 })
 
 test('release gate share flow opens a frozen snapshot and loses access after deactivation', async ({
@@ -394,38 +378,38 @@ test('release gate share flow opens a frozen snapshot and loses access after dea
   await runChordAwareAnalysis(page)
 
   const shareLinksPanel = getShareLinksPanel(page)
-  await shareLinksPanel.getByLabel('Share label').fill('Coach review')
-  await page.getByRole('button', { name: 'Create read-only share link' }).click()
-  await expect(page.getByText(/Created read-only share link "Coach review"/)).toBeVisible()
+  await shareLinksPanel.getByLabel('공유 이름').fill('Coach review')
+  await page.getByRole('button', { name: '읽기 전용 공유 링크 만들기' }).click()
+  await expect(page.getByText(/"Coach review" 읽기 전용 공유 링크를 만들었고/)).toBeVisible()
 
   const shareCard = shareLinksPanel.locator('article.history-card').filter({ hasText: 'Coach review' }).first()
   await expect(shareCard).toBeVisible()
 
   const popupPromise = page.waitForEvent('popup')
-  await shareCard.getByRole('link', { name: 'Open share view' }).click()
+  await shareCard.getByRole('link', { name: '공유 화면 열기' }).click()
   const sharePage = await popupPromise
   await sharePage.waitForLoadState('domcontentloaded')
 
   await expect(sharePage).toHaveURL(/\/shared\//)
   await expect(sharePage.getByRole('heading', { name: 'Playwright share gate session' })).toBeVisible()
-  await expect(sharePage.getByText('Read-Only Share', { exact: true })).toBeVisible()
-  await expect(sharePage.getByRole('heading', { name: 'Selected source take' })).toBeVisible()
-  await expect(sharePage.getByRole('heading', { name: 'Frozen review snapshot' })).toBeVisible()
-  await expect(sharePage.getByRole('heading', { name: 'Recorded take results' })).toBeVisible()
+  await expect(sharePage.getByText('읽기 전용 공유', { exact: true })).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: '선택한 원본 테이크' })).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: '고정된 리뷰 스냅샷' })).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: '녹음 결과 요약' })).toBeVisible()
   await expect(sharePage.getByText('Coach review', { exact: true })).toBeVisible()
-  await expect(sharePage.getByText('Take 1', { exact: false })).toBeVisible()
+  await expect(sharePage.getByText('1번 테이크', { exact: false })).toBeVisible()
   await expect(
-    sharePage.getByText('This is a frozen review artifact. Editing, rescoring, and share creation stay in the studio.'),
+    sharePage.getByText('이 화면은 고정된 리뷰 결과입니다. 수정, 재채점, 새 공유 링크 생성은 스튜디오에서 진행합니다.'),
   ).toBeVisible()
-  await expect(sharePage.getByRole('button', { name: 'Run post-recording analysis' })).toHaveCount(0)
-  await expect(sharePage.getByRole('button', { name: 'Create read-only share link' })).toHaveCount(0)
+  await expect(sharePage.getByTestId('run-post-analysis-button')).toHaveCount(0)
+  await expect(sharePage.getByRole('button', { name: '읽기 전용 공유 링크 만들기' })).toHaveCount(0)
 
-  await shareCard.getByRole('button', { name: 'Deactivate' }).click()
-  await expect(page.getByText(/Deactivated "Coach review"/)).toBeVisible()
+  await shareCard.getByRole('button', { name: '비활성화' }).click()
+  await expect(page.getByText(/"Coach review" 링크를 비활성화했습니다\./)).toBeVisible()
 
   await sharePage.reload()
-  await expect(sharePage.getByRole('heading', { name: 'Shared project unavailable' })).toBeVisible()
-  await expect(sharePage.getByText('Share link is inactive')).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: '공유 프로젝트를 열 수 없습니다' })).toBeVisible()
+  await expect(sharePage.getByText('공유 링크가 비활성화되었습니다.')).toBeVisible()
 })
 
 test('release gate arrangement flow reaches export-ready score artifacts', async ({
@@ -439,17 +423,17 @@ test('release gate arrangement flow reaches export-ready score artifacts', async
   await generateArrangementCandidates(page)
 
   const arrangementEnginePanel = getArrangementEnginePanel(page)
-  await expect(arrangementEnginePanel.getByText(/3 candidates/i)).toBeVisible()
-  await expect(arrangementEnginePanel.getByText(/A \/ B \/ C compare/i)).toBeVisible()
+  await expect(arrangementEnginePanel.getByText('후보 3개', { exact: true })).toBeVisible()
+  await expect(arrangementEnginePanel.getByText('A / B / C 비교', { exact: true })).toBeVisible()
   await expect(arrangementEnginePanel.locator('article.candidate-card')).toHaveCount(3)
-  await expect(arrangementEnginePanel.getByRole('link', { name: 'Download arrangement MIDI' }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: '편곡 MIDI 내보내기' }).first()).toBeVisible()
 
   const scoreViewPanel = getScoreViewPanel(page)
-  await expect(scoreViewPanel.getByText('MusicXML ready', { exact: true })).toBeVisible()
+  await expect(scoreViewPanel.getByText('MusicXML 준비됨', { exact: true })).toBeVisible()
 
-  const musicXmlLink = scoreViewPanel.getByRole('link', { name: 'Export MusicXML' })
-  const arrangementMidiLink = scoreViewPanel.getByRole('link', { name: 'Export arrangement MIDI' })
-  const guideWavLink = scoreViewPanel.getByRole('link', { name: 'Export guide WAV' })
+  const musicXmlLink = scoreViewPanel.getByRole('link', { name: 'MusicXML 내보내기' })
+  const arrangementMidiLink = scoreViewPanel.getByRole('link', { name: '편곡 MIDI 내보내기' })
+  const guideWavLink = scoreViewPanel.getByRole('link', { name: '가이드 WAV 내보내기' })
 
   await expect(musicXmlLink).toBeVisible()
   await expect(arrangementMidiLink).toBeVisible()
@@ -490,13 +474,13 @@ test('release gate arrangement workspace presents a score-first compare and expo
 
   await page.goto(`/projects/${projectId}/arrangement`)
 
-  await expect(page.getByRole('heading', { name: 'Choose the harmony stack that fits the take' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Preview the arrangement, then export the score package' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Part focus and export' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '테이크에 맞는 화음 구성을 고르세요' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '편곡을 미리 듣고 악보 패키지로 내보내세요' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '파트 집중과 내보내기' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'A', exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Export MusicXML' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Export arrangement MIDI' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Open deep edit tools in studio' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'MusicXML 내보내기' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '편곡 MIDI 내보내기' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '스튜디오에서 자세히 수정하기' })).toBeVisible()
 })
 
 test('release gate recording flow captures a take through browser microphone transport', async ({
@@ -511,13 +495,13 @@ test('release gate recording flow captures a take through browser microphone tra
   await prepareBrowserRecording(page)
 
   const recorderPanel = getRecorderPanel(page)
-  await expect(recorderPanel.getByText('Take count', { exact: true })).toBeVisible()
-  await expect(recorderPanel.getByText('No takes yet.', { exact: true })).toBeVisible()
+  await expect(recorderPanel.getByText('테이크 수', { exact: true })).toBeVisible()
+  await expect(recorderPanel.getByText('아직 테이크가 없습니다.', { exact: true })).toBeVisible()
 
   await recordBrowserTake(page, 1)
-  await expect(recorderPanel.getByText('Latest ready take', { exact: true })).toBeVisible()
+  await expect(recorderPanel.getByText('가장 최근 준비 완료 테이크', { exact: true })).toBeVisible()
   const waveformPreview = page.locator('.waveform-preview').first()
-  await expect(waveformPreview.getByText('Preview pipeline', { exact: true })).toBeVisible()
+  await expect(waveformPreview.getByTestId('waveform-preview-pipeline')).toBeVisible()
   await expect(waveformPreview.getByText('Worker + WASM', { exact: true })).toBeVisible()
 })
 
@@ -536,16 +520,16 @@ test('release gate arrangement playback shows transport progress and can be stop
 
   const playbackPanel = getPlaybackPanel(page)
   const progressFill = playbackPanel.locator('.transport-progress__fill')
-  const stopButton = playbackPanel.getByRole('button', { name: 'Stop playback' })
-  const guideModeCheckbox = playbackPanel.getByLabel('Guide mode')
+  const stopButton = playbackPanel.getByRole('button', { name: '재생 중지' })
+  const guideModeCheckbox = playbackPanel.getByLabel('가이드 모드')
 
-  await expect(playbackPanel.getByText('Playback ready', { exact: true })).toBeVisible()
+  await expect(playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true })).toBeVisible()
   await expect(stopButton).toBeDisabled()
 
   await guideModeCheckbox.check()
   await expect(guideModeCheckbox).toBeChecked()
 
-  await playbackPanel.getByRole('button', { name: 'Play arrangement preview' }).click()
+  await playbackPanel.getByRole('button', { name: '편곡 미리듣기 재생' }).click()
   await expect(stopButton).toBeEnabled()
 
   await expect
@@ -559,9 +543,9 @@ test('release gate arrangement playback shows transport progress and can be stop
     .not.toContain('width: 0%')
 
   await stopButton.click()
-  await expect(playbackPanel.getByText('Playback ready', { exact: true })).toBeVisible()
+  await expect(playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true })).toBeVisible()
   await expect(
-    playbackPanel.getByText('Arrangement playback is ready.', { exact: true }),
+    playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true }),
   ).toBeVisible()
 })
 
@@ -573,14 +557,14 @@ test('release gate ops overview can export the environment diagnostics report', 
   await saveDeviceProfileFixture(request, `diagnostics-${browserName}`)
 
   await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Track browser audio variability before it becomes a support mystery' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '브라우저 오디오 편차를 지원 이슈가 되기 전에 추적합니다' })).toBeVisible()
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Download environment report' }).click()
+  await page.getByRole('button', { name: '환경 리포트 내려받기' }).click()
   await expect(
     page.getByText(
-      'Environment diagnostics report downloaded. Use it as the baseline for native hardware validation.',
+      '환경 진단 리포트를 내려받았습니다. 실기기 하드웨어 검증의 기준선으로 사용하세요.',
       { exact: true },
     ),
   ).toBeVisible()
@@ -628,13 +612,13 @@ test('release gate ops overview can export the environment validation packet', a
   await saveValidationRunFixture(request)
 
   await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Download validation packet' }).click()
+  await page.getByRole('button', { name: '검증 패킷 내려받기' }).click()
   await expect(
     page.getByText(
-      'Environment validation packet downloaded. Use it for release notes, compatibility notes, and native-browser evidence review.',
+      '환경 검증 패킷을 내려받았습니다. 릴리즈 노트, 호환성 메모, 실기기 브라우저 증거 검토에 사용하세요.',
       { exact: true },
     ),
   ).toBeVisible()
@@ -680,13 +664,13 @@ test('release gate ops overview can export browser compatibility release notes',
   await saveValidationRunFixture(request)
 
   await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Download compatibility notes' }).click()
+  await page.getByRole('button', { name: '호환성 노트 내려받기' }).click()
   await expect(
     page.getByText(
-      'Browser compatibility release-note draft downloaded. Review unsupported paths before publishing support claims.',
+      '브라우저 호환성 릴리즈 노트 초안을 내려받았습니다. 지원 문구를 공개하기 전에 미검증 경로를 먼저 확인하세요.',
       { exact: true },
     ),
   ).toBeVisible()
@@ -701,7 +685,7 @@ test('release gate ops overview can export browser compatibility release notes',
   expect(markdown).toContain('# Browser Environment Release Notes Draft')
   expect(markdown).toContain('## Compatibility Notes')
   expect(markdown).toContain('## Unsupported Or Not Yet Validated Paths')
-  expect(markdown).toContain('Native Safari fixture run')
+  expect(markdown).toContain('실기기 Safari 기준 실행')
 })
 
 test('release gate ops overview can export the browser environment claim gate', async ({
@@ -713,19 +697,19 @@ test('release gate ops overview can export the browser environment claim gate', 
   await saveValidationRunFixture(request)
 
   await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: 'Operations overview and release gate' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Claim gate' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '클레임 게이트' })).toBeVisible()
   await expect(
     page.getByText(
-      'See whether native-browser and real-hardware evidence is strong enough to begin checklist-closure review.',
+      '실기기 브라우저와 하드웨어 증거가 체크리스트 종료 검토를 시작할 만큼 충분한지 확인합니다.',
       { exact: true },
     ),
   ).toBeVisible()
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Download claim gate' }).click()
+  await page.getByTestId('download-claim-gate-button').click()
   await expect(
-    page.getByText(/Browser environment claim gate downloaded\./),
+    page.getByText(/브라우저 환경 클레임 게이트를 내려받았습니다\./),
   ).toBeVisible()
 
   const download = await downloadPromise
@@ -745,36 +729,36 @@ test('release gate ops overview can store a manual environment validation run', 
   request,
 }) => {
   await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: 'Record a native browser or real-hardware validation run' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '실기기 브라우저 또는 하드웨어 검증 실행을 기록합니다' })).toBeVisible()
 
-  await page.getByLabel('Run label').fill('Native Safari manual run')
-  await page.getByLabel('Tester').fill('Browser QA')
-  await page.getByLabel('Device name').fill('MacBook Pro 14')
-  await page.getByLabel('OS').fill('macOS 15.4')
-  await page.getByLabel('Browser').fill('Safari 18')
-  await page.getByLabel('Input device').fill('Built-in Microphone')
-  await page.getByLabel('Output route').fill('Built-in Speakers')
-  await page.getByLabel('Warning flags').fill(
+  await page.getByLabel('실행 이름').fill('실기기 Safari 수동 점검')
+  await page.getByLabel('테스터').fill('브라우저 QA')
+  await page.getByLabel('기기 이름').fill('MacBook Pro 14')
+  await page.getByLabel('운영체제').fill('macOS 15.4')
+  await page.getByLabel('브라우저').fill('Safari 18')
+  await page.getByLabel('입력 장치').fill('Built-in Microphone')
+  await page.getByLabel('출력 경로').fill('Built-in Speakers')
+  await page.getByLabel('경고 플래그').fill(
     'legacy_webkit_audio_context_only, missing_offline_audio_context',
   )
-  await page.getByLabel('Recorder MIME').fill('audio/mp4')
-  await page.getByLabel('Primary AudioContext mode').fill('webkit')
-  await page.getByLabel('Offline render mode').fill('unavailable')
-  await page.getByLabel('Sample rate (Hz)').fill('48000')
-  await page.getByLabel('Base latency (ms)').fill('17')
-  await page.getByLabel('Output latency (ms)').fill('39')
-  await page.getByLabel('Playback succeeded').uncheck()
-  await page.getByLabel('Follow-up').fill(
-    'Retry after native Safari playback fallback verification.',
+  await page.getByLabel('레코더 MIME').fill('audio/mp4')
+  await page.getByLabel('기본 AudioContext 모드').fill('webkit')
+  await page.getByLabel('오프라인 렌더 모드').fill('unavailable')
+  await page.getByLabel('샘플레이트 (Hz)').fill('48000')
+  await page.getByLabel('기본 지연 (ms)').fill('17')
+  await page.getByLabel('출력 지연 (ms)').fill('39')
+  await page.getByLabel('재생 성공').uncheck()
+  await page.getByLabel('후속 작업').fill(
+    'Safari 재생 대체 경로를 실기기에서 다시 확인합니다.',
   )
-  await page.getByLabel('Notes').fill(
-    'Recording path passed, playback remains degraded on this environment.',
+  await page.getByLabel('메모').fill(
+    '녹음 경로는 통과했지만 재생은 이 환경에서 제한되었습니다.',
   )
 
-  await page.getByRole('button', { name: 'Save validation run' }).click()
+  await page.getByRole('button', { name: '검증 실행 저장' }).click()
   await expect(
     page.getByText(
-      'Environment validation run saved. The ops overview now includes the latest manual browser check.',
+      '환경 검증 실행 기록을 저장했습니다. 운영 개요에 최신 수동 브라우저 점검이 반영되었습니다.',
       { exact: true },
     ),
   ).toBeVisible()
@@ -793,10 +777,10 @@ test('release gate ops overview can store a manual environment validation run', 
   expect(
     validationRunsPayload.items.some(
       (item) =>
-        item.label === 'Native Safari manual run' &&
-        item.tester === 'Browser QA' &&
+        item.label === '실기기 Safari 수동 점검' &&
+        item.tester === '브라우저 QA' &&
         item.outcome === 'WARN' &&
-        item.follow_up === 'Retry after native Safari playback fallback verification.',
+        item.follow_up === 'Safari 재생 대체 경로를 실기기에서 다시 확인합니다.',
     ),
   ).toBeTruthy()
 })
@@ -807,30 +791,30 @@ test('release gate ops overview can preview and import validation CSV intake', a
 }) => {
   const csvText = [
     'label,tester,device_name,os,browser,input_device,output_route,outcome,secure_context,microphone_permission_before,microphone_permission_after,recording_mime_type,audio_context_mode,offline_audio_context_mode,actual_sample_rate,base_latency_ms,output_latency_ms,warning_flags,take_recording_succeeded,analysis_succeeded,playback_succeeded,audible_issues,permission_issues,unexpected_warnings,follow_up,notes,validated_at',
-    'Imported Safari CSV run,QA lead,MacBook Pro 14,macOS 15.4,Safari 18,Built-in Microphone,AirPods Bluetooth,WARN,TRUE,prompt,granted,,webkit,unavailable,48000,18,41,"legacy_webkit_audio_context_only, missing_offline_audio_context",TRUE,TRUE,FALSE,Playback degraded,Prompt recovery required,missing_offline_audio_context,Retry native Safari playback,Imported from spreadsheet,2026-04-09T12:10:00Z',
-    'Imported Chrome CSV run,QA lead,USB rig,Windows 11,Chrome 136,USB microphone,Wired headphones,PASS,TRUE,prompt,granted,audio/webm,standard,standard,48000,12,21,,TRUE,TRUE,TRUE,,,,,2026-04-09T12:20:00Z',
+    '가져온 Safari CSV 실행,QA 리드,MacBook Pro 14,macOS 15.4,Safari 18,Built-in Microphone,AirPods Bluetooth,WARN,TRUE,prompt,granted,,webkit,unavailable,48000,18,41,"legacy_webkit_audio_context_only, missing_offline_audio_context",TRUE,TRUE,FALSE,재생 저하,권한 재확인 필요,missing_offline_audio_context,Safari 재생 재확인,시트에서 가져온 기록,2026-04-09T12:10:00Z',
+    '가져온 Chrome CSV 실행,QA 리드,USB rig,Windows 11,Chrome 136,USB microphone,Wired headphones,PASS,TRUE,prompt,granted,audio/webm,standard,standard,48000,12,21,,TRUE,TRUE,TRUE,,,,,2026-04-09T12:20:00Z',
   ].join('\n')
 
   await page.goto('/ops')
   const importPanel = page
     .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'Preview and import external validation sheets' }) })
+    .filter({ has: page.getByRole('heading', { name: '외부 검증 시트를 미리 보고 가져옵니다' }) })
     .first()
   await expect(importPanel).toBeVisible()
 
-  await importPanel.getByLabel('Environment validation CSV').fill(csvText)
-  await importPanel.getByRole('button', { name: 'Preview import' }).click()
+  await importPanel.getByRole('textbox', { name: '환경 검증 CSV' }).fill(csvText)
+  await importPanel.getByRole('button', { name: '가져오기 미리보기' }).click()
   await expect(
-    page.getByText('Preview ready for 2 validation run(s). Review the rows before importing them.', {
+    page.getByText('검증 실행 2건의 미리보기를 준비했습니다. 가져오기 전에 행을 확인해 주세요.', {
       exact: true,
     }),
   ).toBeVisible()
-  await expect(importPanel.getByText('Imported Safari CSV run', { exact: true }).first()).toBeVisible()
-  await expect(importPanel.getByText('Imported Chrome CSV run', { exact: true }).first()).toBeVisible()
+  await expect(importPanel.getByText('가져온 Safari CSV 실행', { exact: true }).first()).toBeVisible()
+  await expect(importPanel.getByText('가져온 Chrome CSV 실행', { exact: true }).first()).toBeVisible()
 
-  await importPanel.getByRole('button', { name: 'Import previewed runs' }).click()
+  await importPanel.getByRole('button', { name: '미리 본 실행 가져오기' }).click()
   await expect(
-    page.getByText('Imported 2 validation run(s) from the external CSV into ops.', {
+    page.getByText('외부 CSV에서 검증 실행 2건을 ops로 가져왔습니다.', {
       exact: true,
     }),
   ).toBeVisible()
@@ -841,8 +825,8 @@ test('release gate ops overview can preview and import validation CSV intake', a
     items: Array<{ label: string }>
   }
 
-  expect(validationRunsPayload.items.some((item) => item.label === 'Imported Safari CSV run')).toBeTruthy()
-  expect(validationRunsPayload.items.some((item) => item.label === 'Imported Chrome CSV run')).toBeTruthy()
+  expect(validationRunsPayload.items.some((item) => item.label === '가져온 Safari CSV 실행')).toBeTruthy()
+  expect(validationRunsPayload.items.some((item) => item.label === '가져온 Chrome CSV 실행')).toBeTruthy()
 })
 
 test('release gate long-session stability survives repeated take and analysis cycles', async ({
@@ -867,24 +851,24 @@ test('release gate long-session stability survives repeated take and analysis cy
 
   await expect(getTakeCard(page, 1)).toBeVisible()
   await expect(getTakeCard(page, 2)).toBeVisible()
-  await expect(recorderPanel.getByRole('heading', { name: 'Take 1' })).toBeVisible()
-  await expect(recorderPanel.getByRole('heading', { name: 'Take 2' })).toBeVisible()
+  await expect(recorderPanel.getByRole('heading', { name: '1번 테이크' })).toBeVisible()
+  await expect(recorderPanel.getByRole('heading', { name: '2번 테이크' })).toBeVisible()
 
-  await getTakeCard(page, 1).getByRole('button', { name: 'Select' }).click()
-  await page.getByRole('button', { name: 'Run post-recording analysis' }).click()
-  await expect(page.getByText(/Analysis saved\./)).toBeVisible()
+  await getTakeCard(page, 1).getByRole('button', { name: '선택' }).click()
+  await page.getByTestId('run-post-analysis-button').click()
+  await expect(page.getByText(/분석을 저장했습니다\./)).toBeVisible()
 
-  await getTakeCard(page, 2).getByRole('button', { name: 'Select' }).click()
-  await page.getByRole('button', { name: 'Run post-recording analysis' }).click()
-  await expect(page.getByText(/Analysis saved\./)).toBeVisible()
+  await getTakeCard(page, 2).getByRole('button', { name: '선택' }).click()
+  await page.getByTestId('run-post-analysis-button').click()
+  await expect(page.getByText(/분석을 저장했습니다\./)).toBeVisible()
 
   await extractMelodyDraft(page)
   await generateArrangementCandidates(page)
 
   const playbackPanel = getPlaybackPanel(page)
   const progressFill = playbackPanel.locator('.transport-progress__fill')
-  const stopButton = playbackPanel.getByRole('button', { name: 'Stop playback' })
-  await playbackPanel.getByRole('button', { name: 'Play arrangement preview' }).click()
+  const stopButton = playbackPanel.getByRole('button', { name: '재생 중지' })
+  await playbackPanel.getByRole('button', { name: '편곡 미리듣기 재생' }).click()
   await expect
     .poll(
       async () => {
@@ -898,12 +882,12 @@ test('release gate long-session stability survives repeated take and analysis cy
   if (await stopButton.isEnabled()) {
     await stopButton.click()
   }
-  await expect(playbackPanel.getByText('Playback ready', { exact: true })).toBeVisible()
+  await expect(playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true })).toBeVisible()
 
   const shareLinksPanel = getShareLinksPanel(page)
-  await shareLinksPanel.getByLabel('Share label').fill('Session endurance review')
-  await page.getByRole('button', { name: 'Create read-only share link' }).click()
-  await expect(page.getByText(/Created read-only share link "Session endurance review"/)).toBeVisible()
+  await shareLinksPanel.getByLabel('공유 이름').fill('Session endurance review')
+  await page.getByRole('button', { name: '읽기 전용 공유 링크 만들기' }).click()
+  await expect(page.getByText(/"Session endurance review" 읽기 전용 공유 링크를 만들었고/)).toBeVisible()
   await expect(
     shareLinksPanel.locator('article.history-card').filter({ hasText: 'Session endurance review' }).first(),
   ).toBeVisible()

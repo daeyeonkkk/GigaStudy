@@ -159,11 +159,11 @@ export function uploadBlobWithProgress({
         return
       }
 
-      reject(new Error(`Upload failed with status ${request.status}`))
+      reject(new Error(`업로드에 실패했습니다. 상태 코드: ${request.status}`))
     }
 
-    request.onerror = () => reject(new Error('Network error while uploading audio.'))
-    request.onabort = () => reject(new Error('Audio upload was aborted.'))
+    request.onerror = () => reject(new Error('오디오를 올리는 중 네트워크 오류가 발생했습니다.'))
+    request.onabort = () => reject(new Error('오디오 업로드가 중단되었습니다.'))
     request.send(blob)
   })
 }

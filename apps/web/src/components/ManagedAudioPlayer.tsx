@@ -24,7 +24,7 @@ export function ManagedAudioPlayer({
 
   return (
     <audio ref={audioRef} controls preload="metadata" src={src}>
-      Your browser does not support audio playback.
+      현재 브라우저에서는 오디오 재생을 지원하지 않습니다.
     </audio>
   )
 }

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { ArrangementScore } from '../components/ArrangementScore'
 import { buildApiUrl } from '../lib/api'
+import { getArrangementPartRoleLabel, getTrackStatusLabel } from '../lib/localizedLabels'
 import {
   startArrangementPlayback,
   type ArrangementPlaybackController,
@@ -85,25 +86,25 @@ const defaultArrangementConfig: ArrangementConfig = {
 }
 
 const difficultyOptions = [
-  { value: 'beginner', label: 'Beginner', description: 'Shorter leaps and safer support motion.' },
-  { value: 'basic', label: 'Basic', description: 'Balanced default preset with moderate movement.' },
-  { value: 'strict', label: 'Strict', description: 'Tighter leap control and stronger avoidance.' },
+  { value: 'beginner', label: '입문', description: '도약을 짧게 유지하고 받쳐주는 성부를 더 안전하게 만듭니다.' },
+  { value: 'basic', label: '기본', description: '움직임과 안정감이 균형 잡힌 기본 프리셋입니다.' },
+  { value: 'strict', label: '엄격', description: '도약을 더 강하게 제한하고 위험한 진행을 더 많이 피합니다.' },
 ] as const
 
 const voiceRangeOptions = [
-  { value: 'soprano', label: 'S (Soprano)', description: 'Higher lead preset.' },
-  { value: 'alto', label: 'A (Alto)', description: 'Balanced default preset.' },
-  { value: 'tenor', label: 'T (Tenor)', description: 'Lower lead preset.' },
-  { value: 'bass', label: 'B (Bass)', description: 'Lowest lead preset.' },
-  { value: 'baritone', label: 'Baritone', description: 'Middle-low lead preset.' },
+  { value: 'soprano', label: '소프라노(S)', description: '높은 리드 라인을 기준으로 편곡합니다.' },
+  { value: 'alto', label: '알토(A)', description: '가장 무난한 기본 리드 음역입니다.' },
+  { value: 'tenor', label: '테너(T)', description: '낮은 리드 라인을 중심으로 편곡합니다.' },
+  { value: 'bass', label: '베이스(B)', description: '가장 낮은 리드 음역을 기준으로 잡습니다.' },
+  { value: 'baritone', label: '바리톤', description: '중저역 리드에 맞춘 절충형 프리셋입니다.' },
 ] as const
 
 const beatboxOptions = [
-  { value: 'off', label: 'Off', description: 'No beatbox layer.' },
-  { value: 'pulse', label: 'Pulse', description: 'Simple kick and snare pulse.' },
-  { value: 'drive', label: 'Drive', description: 'Busier groove with extra kick support.' },
-  { value: 'halftime', label: 'Half-Time', description: 'Slower backbeat with more phrase space.' },
-  { value: 'syncopated', label: 'Syncopated', description: 'Off-beat accents for livelier motion.' },
+  { value: 'off', label: '사용 안 함', description: '비트박스 레이어를 추가하지 않습니다.' },
+  { value: 'pulse', label: '펄스', description: '킥과 스네어가 단순하게 반복되는 기본 패턴입니다.' },
+  { value: 'drive', label: '드라이브', description: '킥이 조금 더 촘촘하게 들어가는 추진형 패턴입니다.' },
+  { value: 'halftime', label: '하프타임', description: '여백이 넓은 느린 백비트 패턴입니다.' },
+  { value: 'syncopated', label: '싱코페이션', description: '엇박 강조가 들어간 더 생동감 있는 패턴입니다.' },
 ] as const
 
 function getOptionMeta<T extends { value: string }>(options: readonly T[], value: string | null | undefined): T {
@@ -112,7 +113,7 @@ function getOptionMeta<T extends { value: string }>(options: readonly T[], value
 
 function formatCompactPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return 'n/a'
+    return '없음'
   }
   return `${Math.round(value)}%`
 }
@@ -160,7 +161,7 @@ export function ArrangementPage() {
   const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null)
   const [selectedArrangementId, setSelectedArrangementId] = useState<string | null>(null)
   const [loadingState, setLoadingState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [errorMessage, setErrorMessage] = useState('Unable to load arrangement workspace.')
+  const [errorMessage, setErrorMessage] = useState('편곡 작업 화면을 불러오지 못했습니다.')
   const [arrangementConfig, setArrangementConfig] = useState(defaultArrangementConfig)
   const [melodyState, setMelodyState] = useState<ActionState>({ phase: 'idle' })
   const [arrangementState, setArrangementState] = useState<ActionState>({ phase: 'idle' })
@@ -173,7 +174,7 @@ export function ArrangementPage() {
     message: string
   }>({
     phase: 'ready',
-    message: 'Arrangement playback is ready.',
+    message: '편곡 미리듣기를 시작할 수 있습니다.',
   })
   const arrangementPlaybackRef = useRef<ArrangementPlaybackController | null>(null)
 
@@ -191,13 +192,13 @@ export function ArrangementPage() {
   const refreshSnapshot = useCallback(async (): Promise<void> => {
     if (!projectId) {
       setLoadingState('error')
-      setErrorMessage('Project id is missing.')
+      setErrorMessage('프로젝트 ID가 없습니다.')
       return
     }
 
     const response = await fetch(buildApiUrl(`/api/projects/${projectId}/studio`))
     if (!response.ok) {
-      throw new Error(await readErrorMessage(response, 'Unable to load arrangement workspace.'))
+      throw new Error(await readErrorMessage(response, '편곡 작업 화면을 불러오지 못했습니다.'))
     }
 
     const payload = (await response.json()) as SnapshotPayload
@@ -218,7 +219,7 @@ export function ArrangementPage() {
     if (resetPosition) {
       setArrangementPlaybackPositionMs(0)
     }
-      setArrangementTransportState({ phase: 'ready', message: 'Arrangement playback is ready.' })
+    setArrangementTransportState({ phase: 'ready', message: '편곡 미리듣기를 시작할 수 있습니다.' })
   }
 
   useEffect(() => {
@@ -229,7 +230,7 @@ export function ArrangementPage() {
         return
       }
       setLoadingState('error')
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to load arrangement workspace.')
+      setErrorMessage(error instanceof Error ? error.message : '편곡 작업 화면을 불러오지 못했습니다.')
     })
     return () => {
       cancelled = true
@@ -275,14 +276,14 @@ export function ArrangementPage() {
     if (!projectId || !selectedTake) {
       setMelodyState({
         phase: 'error',
-        message: 'Select a take before extracting a melody draft.',
+        message: '멜로디 초안을 추출하기 전에 테이크를 먼저 선택해 주세요.',
       })
       return
     }
 
     setMelodyState({
       phase: 'submitting',
-      message: 'Extracting a quantized melody draft from the selected take...',
+      message: '선택한 테이크에서 양자화된 멜로디 초안을 추출하는 중입니다...',
     })
 
     try {
@@ -291,19 +292,19 @@ export function ArrangementPage() {
         { method: 'POST' },
       )
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Unable to extract melody draft.'))
+        throw new Error(await readErrorMessage(response, '멜로디 초안을 추출하지 못했습니다.'))
       }
 
       const melodyDraft = (await response.json()) as MelodyDraftSummary
       await refreshSnapshot()
       setMelodyState({
         phase: 'success',
-        message: `Melody draft saved with ${melodyDraft.note_count} notes and key ${melodyDraft.key_estimate ?? 'estimate pending'}.`,
+        message: `멜로디 초안을 저장했습니다. 노트 ${melodyDraft.note_count}개, 키는 ${melodyDraft.key_estimate ?? '추정 중'}입니다.`,
       })
     } catch (error) {
       setMelodyState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Unable to extract melody draft.',
+        message: error instanceof Error ? error.message : '멜로디 초안을 추출하지 못했습니다.',
       })
     }
   }
@@ -312,14 +313,14 @@ export function ArrangementPage() {
     if (!projectId || !selectedTakeMelody) {
       setArrangementState({
         phase: 'error',
-        message: 'Extract a melody draft before generating arrangement candidates.',
+        message: '편곡 후보를 만들기 전에 멜로디 초안을 먼저 추출해 주세요.',
       })
       return
     }
 
     setArrangementState({
       phase: 'submitting',
-      message: 'Generating arrangement candidates from the latest melody draft...',
+      message: '최신 멜로디 초안으로 편곡 후보를 생성하는 중입니다...',
     })
 
     try {
@@ -336,7 +337,7 @@ export function ArrangementPage() {
         }),
       })
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Unable to generate arrangements.'))
+        throw new Error(await readErrorMessage(response, '편곡 후보를 생성하지 못했습니다.'))
       }
 
       const payload = (await response.json()) as {
@@ -349,12 +350,12 @@ export function ArrangementPage() {
       await refreshSnapshot()
       setArrangementState({
         phase: 'success',
-        message: `${payload.items.length} arrangement candidates are ready for comparison.`,
+        message: `비교할 수 있는 편곡 후보 ${payload.items.length}개를 준비했습니다.`,
       })
     } catch (error) {
       setArrangementState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Unable to generate arrangements.',
+        message: error instanceof Error ? error.message : '편곡 후보를 생성하지 못했습니다.',
       })
     }
   }
@@ -375,7 +376,7 @@ export function ArrangementPage() {
     if (!selectedArrangement) {
       setArrangementTransportState({
         phase: 'error',
-        message: 'Select an arrangement candidate before starting playback.',
+        message: '재생을 시작하기 전에 편곡 후보를 먼저 선택해 주세요.',
       })
       return
     }
@@ -384,7 +385,7 @@ export function ArrangementPage() {
     if (playableParts.length === 0) {
       setArrangementTransportState({
         phase: 'error',
-        message: 'This arrangement does not contain playable notes yet.',
+        message: '이 편곡에는 아직 재생할 수 있는 노트가 없습니다.',
       })
       return
     }
@@ -402,25 +403,25 @@ export function ArrangementPage() {
           arrangementPlaybackRef.current = null
           setArrangementTransportState({
             phase: 'ready',
-            message: 'Arrangement playback finished. Compare another candidate or export from here.',
+            message: '편곡 미리듣기가 끝났습니다. 다른 후보를 비교하거나 여기서 내보낼 수 있습니다.',
           })
         },
       })
       arrangementPlaybackRef.current = controller
       setArrangementTransportState({
         phase: 'playing',
-        message: 'Playback is running through the separate arrangement preview engine.',
+        message: '분리된 편곡 미리듣기 엔진으로 재생 중입니다.',
       })
     } catch (error) {
       setArrangementTransportState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Arrangement playback failed.',
+        message: error instanceof Error ? error.message : '편곡 미리듣기에 실패했습니다.',
       })
     }
   }
 
   if (loadingState === 'loading') {
-    return <div className="page-shell"><section className="panel"><p>Loading the arrangement workspace...</p></section></div>
+    return <div className="page-shell"><section className="panel"><p>편곡 작업 화면을 불러오는 중입니다...</p></section></div>
   }
 
   if (loadingState === 'error' || !project) {
@@ -428,7 +429,7 @@ export function ArrangementPage() {
       <div className="page-shell">
         <section className="panel">
           <p className="form-error">{errorMessage}</p>
-          <Link className="back-link" to="/">Return Home</Link>
+          <Link className="back-link" to="/">홈으로 돌아가기</Link>
         </section>
       </div>
     )
@@ -438,9 +439,9 @@ export function ArrangementPage() {
     <div className="page-shell arrangement-page">
       <section className="arrangement-shell">
         <div className="arrangement-topbar">
-          <div className="arrangement-tabs" role="tablist" aria-label="arrangement candidates">
+          <div className="arrangement-tabs" role="tablist" aria-label="편곡 후보">
             {arrangements.length === 0 ? (
-              <span className="arrangement-tab arrangement-tab--empty">No candidate yet</span>
+              <span className="arrangement-tab arrangement-tab--empty">아직 후보가 없습니다</span>
             ) : (
               arrangements.map((arrangement) => (
                 <button
@@ -462,7 +463,7 @@ export function ArrangementPage() {
 
           <div className="arrangement-topbar__meta">
             <strong>{project.title}</strong>
-            <span>Preview {formatPlaybackClock(arrangementPlaybackPositionMs, arrangementDurationMs)}</span>
+            <span>미리듣기 {formatPlaybackClock(arrangementPlaybackPositionMs, arrangementDurationMs)}</span>
           </div>
 
           <div className="arrangement-topbar__actions">
@@ -472,7 +473,7 @@ export function ArrangementPage() {
               type="button"
               onClick={() => void handlePlayArrangement()}
             >
-              Play preview
+              미리듣기 재생
             </button>
             <button
               className="button-secondary"
@@ -480,10 +481,10 @@ export function ArrangementPage() {
               type="button"
               onClick={() => void stopArrangementPlayback()}
             >
-              Stop
+              정지
             </button>
             <Link className="back-link" to={`/projects/${projectId}/studio#arrangement`}>
-              Return to studio
+              스튜디오로 돌아가기
             </Link>
           </div>
         </div>
@@ -491,16 +492,16 @@ export function ArrangementPage() {
         <div className="arrangement-grid">
           <aside className="panel arrangement-rail arrangement-rail--left">
             <div>
-              <p className="eyebrow">Left Rail</p>
-              <h1>Choose the harmony stack that fits the take</h1>
+              <p className="eyebrow">왼쪽 레일</p>
+              <h1>테이크에 맞는 화음 구성을 고르세요</h1>
               <p className="panel__summary">
-                Compare candidate voicing, preview the arrangement, then export the score package.
+                후보 성부를 비교하고, 미리듣기로 확인한 뒤, 악보 패키지로 내보낼 수 있습니다.
               </p>
             </div>
 
             <div className="field-grid arrangement-field-grid">
               <label className="field">
-                <span>Source take</span>
+                <span>기준 테이크</span>
                 <select
                   className="text-input"
                   value={selectedTake?.track_id ?? ''}
@@ -508,14 +509,14 @@ export function ArrangementPage() {
                 >
                   {takes.map((take) => (
                     <option key={take.track_id} value={take.track_id}>
-                      {`Take ${take.take_no ?? '?'} · ${take.track_status}`}
+                      {`${take.take_no ?? '?'}번 테이크 · ${getTrackStatusLabel(take.track_status)}`}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label className="field">
-                <span>Style</span>
+                <span>스타일</span>
                 <select
                   className="text-input"
                   value={arrangementConfig.style}
@@ -523,14 +524,14 @@ export function ArrangementPage() {
                     setArrangementConfig((current) => ({ ...current, style: event.target.value }))
                   }
                 >
-                  <option value="contemporary">Contemporary</option>
-                  <option value="ballad">Ballad</option>
-                  <option value="anthem">Anthem</option>
+                  <option value="contemporary">컨템퍼러리</option>
+                  <option value="ballad">발라드</option>
+                  <option value="anthem">앤섬</option>
                 </select>
               </label>
 
               <label className="field">
-                <span>Difficulty</span>
+                <span>난이도</span>
                 <select
                   className="text-input"
                   value={arrangementConfig.difficulty}
@@ -547,7 +548,7 @@ export function ArrangementPage() {
               </label>
 
               <label className="field">
-                <span>Lead range</span>
+                <span>리드 음역</span>
                 <select
                   className="text-input"
                   value={arrangementConfig.voiceRangePreset}
@@ -564,7 +565,7 @@ export function ArrangementPage() {
               </label>
 
               <label className="field">
-                <span>Beatbox</span>
+                <span>비트박스</span>
                 <select
                   className="text-input"
                   value={arrangementConfig.beatboxTemplate}
@@ -588,7 +589,7 @@ export function ArrangementPage() {
                 type="button"
                 onClick={() => void handleExtractMelody()}
               >
-                {melodyState.phase === 'submitting' ? 'Extracting melody...' : 'Extract melody draft'}
+                {melodyState.phase === 'submitting' ? '멜로디 추출 중...' : '멜로디 초안 추출'}
               </button>
               <button
                 className="button-primary"
@@ -597,33 +598,33 @@ export function ArrangementPage() {
                 onClick={() => void handleGenerateArrangements()}
               >
                 {arrangementState.phase === 'submitting'
-                  ? 'Generating candidates...'
-                  : 'Generate arrangement candidates'}
+                  ? '후보 생성 중...'
+                  : '편곡 후보 생성'}
               </button>
             </div>
 
             <div className="arrangement-summary-block">
               <div className="mini-card mini-card--stack">
-                <span>Melody draft</span>
-                <strong>{selectedTakeMelody ? `${selectedTakeMelody.note_count} notes` : 'Not ready'}</strong>
+                <span>멜로디 초안</span>
+                <strong>{selectedTakeMelody ? `노트 ${selectedTakeMelody.note_count}개` : '아직 없음'}</strong>
                 <small>
                   {selectedTakeMelody
-                    ? `${selectedTakeMelody.key_estimate ?? 'Pending key'} · ${selectedTakeMelody.grid_division}`
-                    : 'Extract the latest melody draft from the selected take first.'}
+                    ? `${selectedTakeMelody.key_estimate ?? '키 추정 중'} · ${selectedTakeMelody.grid_division}`
+                    : '선택한 테이크에서 최신 멜로디 초안을 먼저 추출해 주세요.'}
                 </small>
               </div>
               <div className="mini-card mini-card--stack">
-                <span>Difficulty preset</span>
+                <span>난이도 프리셋</span>
                 <strong>{selectedDifficultyMeta.label}</strong>
                 <small>{selectedDifficultyMeta.description}</small>
               </div>
               <div className="mini-card mini-card--stack">
-                <span>Lead range</span>
+                <span>리드 음역</span>
                 <strong>{selectedVoiceRangeMeta.label}</strong>
                 <small>{selectedVoiceRangeMeta.description}</small>
               </div>
               <div className="mini-card mini-card--stack">
-                <span>Beatbox</span>
+                <span>비트박스</span>
                 <strong>{selectedBeatboxMeta.label}</strong>
                 <small>{selectedBeatboxMeta.description}</small>
               </div>
@@ -631,19 +632,19 @@ export function ArrangementPage() {
 
             {selectedArrangement ? (
               <div className="arrangement-compare-card">
-                <p className="eyebrow">Candidate compare</p>
+                <p className="eyebrow">후보 비교</p>
                 <strong>{`${selectedArrangement.candidate_code} · ${selectedArrangement.title}`}</strong>
                 <div className="arrangement-compare-list">
-                  <span>Lead fit: {formatCompactPercent(selectedArrangement.comparison_summary?.lead_range_fit_percent)}</span>
-                  <span>Max leap: {selectedArrangement.comparison_summary?.support_max_leap ?? 'n/a'} semitones</span>
-                  <span>Parallel alerts: {selectedArrangement.comparison_summary?.parallel_motion_alerts ?? 0}</span>
-                  <span>Beatbox hits: {selectedArrangement.comparison_summary?.beatbox_note_count ?? 0}</span>
+                  <span>리드 적합도: {formatCompactPercent(selectedArrangement.comparison_summary?.lead_range_fit_percent)}</span>
+                  <span>최대 도약: {selectedArrangement.comparison_summary?.support_max_leap ?? '없음'} 반음</span>
+                  <span>병행 경고: {selectedArrangement.comparison_summary?.parallel_motion_alerts ?? 0}</span>
+                  <span>비트박스 타격 수: {selectedArrangement.comparison_summary?.beatbox_note_count ?? 0}</span>
                 </div>
               </div>
             ) : (
               <div className="empty-card">
-                <p>No arrangement candidates yet.</p>
-                <p>Extract melody, then generate candidate A/B/C to open the score-first workspace.</p>
+                <p>아직 편곡 후보가 없습니다.</p>
+                <p>멜로디를 추출한 뒤 A/B/C 후보를 생성하면 악보 중심 작업 화면을 열 수 있습니다.</p>
               </div>
             )}
 
@@ -663,15 +664,15 @@ export function ArrangementPage() {
           <section className="panel arrangement-center">
             <div className="arrangement-center__header">
               <div>
-                <p className="eyebrow">Score Canvas</p>
-                <h2>Preview the arrangement, then export the score package</h2>
+                <p className="eyebrow">악보 캔버스</p>
+                <h2>편곡을 미리 듣고 악보 패키지로 내보내세요</h2>
               </div>
               <div className="candidate-chip-row">
                 <span className="candidate-chip">
-                  {arrangementGenerationId ? arrangementGenerationId.slice(0, 8) : 'No batch'}
+                  {arrangementGenerationId ? arrangementGenerationId.slice(0, 8) : '배치 없음'}
                 </span>
                 {selectedArrangement ? (
-                  <span className="candidate-chip">{selectedArrangement.part_count} parts</span>
+                  <span className="candidate-chip">{selectedArrangement.part_count}성부</span>
                 ) : null}
               </div>
             </div>
@@ -690,7 +691,7 @@ export function ArrangementPage() {
               <div className="transport-card">
                 <div className="transport-card__row">
                   <strong>{formatPlaybackClock(arrangementPlaybackPositionMs, arrangementDurationMs)}</strong>
-                  <span>{selectedArrangement ? `${selectedArrangement.part_count} parts` : 'No arrangement selected'}</span>
+                  <span>{selectedArrangement ? `${selectedArrangement.part_count}성부` : '선택한 편곡이 없습니다'}</span>
                 </div>
                 <div className="transport-progress" aria-hidden="true">
                   <div
@@ -701,31 +702,31 @@ export function ArrangementPage() {
               </div>
 
               <Link className="button-secondary" to={`/projects/${projectId}/studio#score-playback`}>
-                Open deep edit tools in studio
+                스튜디오에서 자세히 수정하기
               </Link>
             </div>
           </section>
 
           <aside className="panel arrangement-rail arrangement-rail--right">
             <div>
-              <p className="eyebrow">Right Rail</p>
-              <h2>Part focus and export</h2>
+              <p className="eyebrow">오른쪽 레일</p>
+              <h2>파트 집중과 내보내기</h2>
             </div>
 
             <div className="button-row">
               {selectedArrangement?.musicxml_artifact_url ? (
                 <a className="button-primary" href={selectedArrangement.musicxml_artifact_url}>
-                  Export MusicXML
+                  MusicXML 내보내기
                 </a>
               ) : null}
               {selectedArrangement?.midi_artifact_url ? (
                 <a className="button-secondary" href={selectedArrangement.midi_artifact_url}>
-                  Export arrangement MIDI
+                  편곡 MIDI 내보내기
                 </a>
               ) : null}
               {guide?.guide_wav_artifact_url ? (
                 <a className="button-secondary" href={guide.guide_wav_artifact_url}>
-                  Export guide WAV
+                  가이드 WAV 내보내기
                 </a>
               ) : null}
             </div>
@@ -737,8 +738,8 @@ export function ArrangementPage() {
                 onChange={(event) => setGuideModeEnabled(event.target.checked)}
               />
               <div>
-                <strong>Guide mode</strong>
-                <span>Keep the guide-focus part louder while the rest of the stack drops back.</span>
+                <strong>가이드 모드</strong>
+                <span>선택한 기준 파트를 더 또렷하게 두고 나머지 성부는 한걸음 뒤로 물립니다.</span>
               </div>
             </label>
 
@@ -767,7 +768,7 @@ export function ArrangementPage() {
                         />
                         <div>
                           <strong>{part.part_name}</strong>
-                          <span>{`${part.role} | ${part.notes.length} notes`}</span>
+                          <span>{`${getArrangementPartRoleLabel(part.role)} | 노트 ${part.notes.length}개`}</span>
                         </div>
                       </div>
 
@@ -781,7 +782,7 @@ export function ArrangementPage() {
                             })
                           }
                         />
-                        <span>Active</span>
+                        <span>사용</span>
                       </label>
 
                       <button
@@ -791,7 +792,7 @@ export function ArrangementPage() {
                           updateArrangementPartMixer(part.part_name, { solo: !partMixer.solo })
                         }
                       >
-                        {partMixer.solo ? 'Solo on' : 'Solo'}
+                        {partMixer.solo ? '솔로 켜짐' : '솔로'}
                       </button>
 
                       <button
@@ -803,11 +804,11 @@ export function ArrangementPage() {
                           )
                         }
                       >
-                        {isGuideFocus ? 'Guide focus' : 'Focus'}
+                        {isGuideFocus ? '가이드 기준' : '기준으로 지정'}
                       </button>
 
                       <label className="arrangement-part-volume">
-                        <span>Vol</span>
+                        <span>음량</span>
                         <input
                           max={1}
                           min={0}
@@ -827,8 +828,8 @@ export function ArrangementPage() {
               </div>
             ) : (
               <div className="empty-card">
-                <p>No part focus controls yet.</p>
-                <p>Select or generate a candidate before opening solo, focus, and export tools.</p>
+                <p>아직 파트 제어를 열 수 없습니다.</p>
+                <p>후보를 선택하거나 생성하면 솔로, 기준 지정, 내보내기 도구를 사용할 수 있습니다.</p>
               </div>
             )}
           </aside>

@@ -21,6 +21,7 @@
 ### 2.1 제품 / UX 축
 
 - 한국어 중심 용어 체계 정리
+- 사용자에게 노출되는 기본 UI 문구는 한국어를 우선하고, 영어는 관용적인 기술 용어만 제한적으로 남긴다.
 - canonical UI direction을 `DESIGN/UI_DESIGN_DIRECTION.md`의 `Quiet Studio Console`로 고정
 - 오디오 설정, 정렬 상태, 저신뢰도 상태를 설명 가능한 UI로 노출
 - 재녹음과 후보 비교 흐름을 최소 클릭으로 유지

@@ -3,6 +3,12 @@ import { Link } from 'react-router-dom'
 
 import { buildApiUrl } from '../lib/api'
 import { getBrowserAudioWarningLabel } from '../lib/browserAudioDiagnostics'
+import {
+  getAnalysisJobStatusLabel,
+  getTrackRoleLabel,
+  getTrackStatusLabel,
+  getValidationOutcomeLabel,
+} from '../lib/localizedLabels'
 
 type OpsSummary = {
   project_count: number
@@ -321,7 +327,7 @@ const initialValidationFormState = (): ValidationFormState => ({
 
 function formatDate(value: string | null): string {
   if (!value) {
-    return 'Not finished'
+    return '아직 완료되지 않음'
   }
 
   return new Date(value).toLocaleString()
@@ -329,7 +335,7 @@ function formatDate(value: string | null): string {
 
 function formatLatency(value: number | null): string {
   if (value === null || Number.isNaN(value)) {
-    return 'Unavailable'
+    return '사용 불가'
   }
 
   return `${Math.round(value * 1000)} ms`
@@ -397,7 +403,7 @@ export function OpsPage() {
     try {
       const response = await fetch(buildApiUrl('/api/admin/ops'), { signal })
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Unable to load ops overview.'))
+        throw new Error(await readErrorMessage(response, '운영 개요를 불러오지 못했습니다.'))
       }
 
       const payload = (await response.json()) as OpsOverview
@@ -409,7 +415,7 @@ export function OpsPage() {
 
       setPageState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Unable to load ops overview.',
+        message: error instanceof Error ? error.message : '운영 개요를 불러오지 못했습니다.',
       })
     }
   }
@@ -423,7 +429,7 @@ export function OpsPage() {
   async function handleRetryProcessing(trackId: string): Promise<void> {
     setActionState({
       phase: 'submitting',
-      message: 'Retrying track processing and refreshing the overview...',
+      message: '트랙 처리를 다시 실행하고 운영 개요를 새로고침하는 중입니다...',
     })
 
     try {
@@ -431,18 +437,18 @@ export function OpsPage() {
         method: 'POST',
       })
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Track processing retry failed.'))
+        throw new Error(await readErrorMessage(response, '트랙 처리를 다시 실행하지 못했습니다.'))
       }
 
       await loadOverview()
       setActionState({
         phase: 'success',
-        message: 'Track processing retry finished. The overview has been refreshed.',
+        message: '트랙 재처리를 마쳤고 운영 개요를 새로고침했습니다.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Track processing retry failed.',
+        message: error instanceof Error ? error.message : '트랙 처리를 다시 실행하지 못했습니다.',
       })
     }
   }
@@ -450,7 +456,7 @@ export function OpsPage() {
   async function handleRetryAnalysis(jobId: string): Promise<void> {
     setActionState({
       phase: 'submitting',
-      message: 'Retrying the failed analysis job...',
+      message: '실패한 분석 작업을 다시 실행하는 중입니다...',
     })
 
     try {
@@ -458,18 +464,18 @@ export function OpsPage() {
         method: 'POST',
       })
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Analysis job retry failed.'))
+        throw new Error(await readErrorMessage(response, '분석 작업 재실행에 실패했습니다.'))
       }
 
       await loadOverview()
       setActionState({
         phase: 'success',
-        message: 'Analysis job retried successfully and the overview was refreshed.',
+        message: '분석 작업을 다시 실행했고 운영 개요를 새로고침했습니다.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Analysis job retry failed.',
+        message: error instanceof Error ? error.message : '분석 작업 재실행에 실패했습니다.',
       })
     }
   }
@@ -485,21 +491,20 @@ export function OpsPage() {
     downloadJsonReport(`gigastudy-environment-diagnostics-${dateToken}.json`, report)
     setActionState({
       phase: 'success',
-      message:
-        'Environment diagnostics report downloaded. Use it as the baseline for native hardware validation.',
+      message: '환경 진단 리포트를 내려받았습니다. 실기기 하드웨어 검증의 기준선으로 사용하세요.',
     })
   }
 
   async function handleDownloadValidationPacket(): Promise<void> {
     setActionState({
       phase: 'submitting',
-      message: 'Building the environment validation packet from saved diagnostics and manual runs...',
+      message: '저장된 진단 정보와 수동 검증 실행 기록으로 환경 검증 패킷을 만드는 중입니다...',
     })
 
     try {
       const response = await fetch(buildApiUrl('/api/admin/environment-validation-packet'))
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Unable to build the environment validation packet.'))
+        throw new Error(await readErrorMessage(response, '환경 검증 패킷을 만들지 못했습니다.'))
       }
 
       const payload = (await response.json()) as EnvironmentValidationPacket
@@ -507,14 +512,12 @@ export function OpsPage() {
       downloadJsonReport(`gigastudy-environment-validation-packet-${dateToken}.json`, payload)
       setActionState({
         phase: 'success',
-        message:
-          'Environment validation packet downloaded. Use it for release notes, compatibility notes, and native-browser evidence review.',
+        message: '환경 검증 패킷을 내려받았습니다. 릴리즈 노트, 호환성 메모, 실기기 브라우저 증거 검토에 사용하세요.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message:
-          error instanceof Error ? error.message : 'Unable to build the environment validation packet.',
+        message: error instanceof Error ? error.message : '환경 검증 패킷을 만들지 못했습니다.',
       })
     }
   }
@@ -522,14 +525,14 @@ export function OpsPage() {
   async function handleDownloadValidationReleaseNotes(): Promise<void> {
     setActionState({
       phase: 'submitting',
-      message: 'Building the browser compatibility release-note draft from saved validation evidence...',
+      message: '저장된 검증 증거로 브라우저 호환성 릴리즈 노트 초안을 만드는 중입니다...',
     })
 
     try {
       const response = await fetch(buildApiUrl('/api/admin/environment-validation-release-notes'))
       if (!response.ok) {
         throw new Error(
-          await readErrorMessage(response, 'Unable to build the environment validation release notes.'),
+          await readErrorMessage(response, '환경 검증 릴리즈 노트를 만들지 못했습니다.'),
         )
       }
 
@@ -542,16 +545,12 @@ export function OpsPage() {
       )
       setActionState({
         phase: 'success',
-        message:
-          'Browser compatibility release-note draft downloaded. Review unsupported paths before publishing support claims.',
+        message: '브라우저 호환성 릴리즈 노트 초안을 내려받았습니다. 지원 문구를 공개하기 전에 미검증 경로를 먼저 확인하세요.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to build the environment validation release notes.',
+        message: error instanceof Error ? error.message : '환경 검증 릴리즈 노트를 만들지 못했습니다.',
       })
     }
   }
@@ -559,21 +558,21 @@ export function OpsPage() {
   async function handleDownloadValidationClaimGate(): Promise<void> {
     setActionState({
       phase: 'submitting',
-      message: 'Evaluating whether browser and hardware evidence is strong enough for a release-claim review...',
+      message: '브라우저와 하드웨어 증거가 릴리즈 클레임 검토를 시작할 만큼 충분한지 평가하는 중입니다...',
     })
 
     try {
       const markdownResponse = await fetch(buildApiUrl('/api/admin/environment-validation-claim-gate.md'))
       if (!markdownResponse.ok) {
         throw new Error(
-          await readErrorMessage(markdownResponse, 'Unable to build the browser environment claim gate.'),
+          await readErrorMessage(markdownResponse, '브라우저 환경 클레임 게이트를 만들지 못했습니다.'),
         )
       }
 
       const jsonResponse = await fetch(buildApiUrl('/api/admin/environment-validation-claim-gate'))
       if (!jsonResponse.ok) {
         throw new Error(
-          await readErrorMessage(jsonResponse, 'Unable to load the browser environment claim gate summary.'),
+          await readErrorMessage(jsonResponse, '브라우저 환경 클레임 게이트 요약을 불러오지 못했습니다.'),
         )
       }
 
@@ -588,16 +587,13 @@ export function OpsPage() {
       setActionState({
         phase: 'success',
         message: summary.release_claim_ready
-          ? 'Browser environment claim gate downloaded. Evidence is strong enough to begin a release-claim review.'
-          : 'Browser environment claim gate downloaded. The checklist should stay open until the missing evidence is collected.',
+          ? '브라우저 환경 클레임 게이트를 내려받았습니다. 릴리즈 클레임 검토를 시작할 만큼 증거가 충분합니다.'
+          : '브라우저 환경 클레임 게이트를 내려받았습니다. 부족한 증거가 채워질 때까지 체크리스트를 열어 두세요.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to build the browser environment claim gate.',
+        message: error instanceof Error ? error.message : '브라우저 환경 클레임 게이트를 만들지 못했습니다.',
       })
     }
   }
@@ -606,7 +602,7 @@ export function OpsPage() {
     event.preventDefault()
     setActionState({
       phase: 'submitting',
-      message: 'Saving the environment validation run and refreshing the overview...',
+      message: '환경 검증 실행 기록을 저장하고 운영 개요를 새로고침하는 중입니다...',
     })
 
     try {
@@ -653,20 +649,19 @@ export function OpsPage() {
       })
 
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Unable to save the validation run.'))
+        throw new Error(await readErrorMessage(response, '검증 실행 기록을 저장하지 못했습니다.'))
       }
 
       await loadOverview()
       setValidationFormState(initialValidationFormState())
       setActionState({
         phase: 'success',
-        message:
-          'Environment validation run saved. The ops overview now includes the latest manual browser check.',
+        message: '환경 검증 실행 기록을 저장했습니다. 운영 개요에 최신 수동 브라우저 점검이 반영되었습니다.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Unable to save the validation run.',
+        message: error instanceof Error ? error.message : '검증 실행 기록을 저장하지 못했습니다.',
       })
     }
   }
@@ -684,7 +679,7 @@ export function OpsPage() {
     setValidationImportPreview(null)
     setActionState({
       phase: 'success',
-      message: `Loaded ${file.name}. Preview the CSV before importing the runs into ops.`,
+      message: `${file.name} 파일을 불러왔습니다. ops에 가져오기 전에 CSV를 먼저 미리 확인하세요.`,
     })
     event.target.value = ''
   }
@@ -693,14 +688,14 @@ export function OpsPage() {
     if (!validationImportText.trim()) {
       setActionState({
         phase: 'error',
-        message: 'Paste CSV intake text or load a CSV file before previewing the import.',
+        message: '가져오기 미리보기를 실행하기 전에 CSV 내용을 붙여넣거나 파일을 불러와 주세요.',
       })
       return
     }
 
     setActionState({
       phase: 'submitting',
-      message: 'Previewing external validation rows before they touch the ops log...',
+      message: '운영 로그에 반영하기 전에 외부 검증 행을 미리 확인하는 중입니다...',
     })
 
     try {
@@ -713,7 +708,7 @@ export function OpsPage() {
       })
 
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Unable to preview the validation CSV import.'))
+        throw new Error(await readErrorMessage(response, '검증 CSV 가져오기 미리보기에 실패했습니다.'))
       }
 
       const payload = (await response.json()) as EnvironmentValidationImportPreview
@@ -722,16 +717,13 @@ export function OpsPage() {
         phase: 'success',
         message:
           payload.item_count > 0
-            ? `Preview ready for ${payload.item_count} validation run(s). Review the rows before importing them.`
-            : 'The CSV parsed successfully, but it did not contain any non-empty validation rows.',
+            ? `검증 실행 ${payload.item_count}건의 미리보기를 준비했습니다. 가져오기 전에 행을 확인해 주세요.`
+            : 'CSV는 정상적으로 읽었지만 비어 있지 않은 검증 행이 없었습니다.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to preview the validation CSV import.',
+        message: error instanceof Error ? error.message : '검증 CSV 가져오기 미리보기에 실패했습니다.',
       })
     }
   }
@@ -740,14 +732,14 @@ export function OpsPage() {
     if (!validationImportText.trim()) {
       setActionState({
         phase: 'error',
-        message: 'Paste CSV intake text or load a CSV file before importing runs into ops.',
+        message: '운영 로그로 가져오기 전에 CSV 내용을 붙여넣거나 파일을 불러와 주세요.',
       })
       return
     }
 
     setActionState({
       phase: 'submitting',
-      message: 'Importing external validation rows into the ops log and refreshing the overview...',
+      message: '외부 검증 행을 운영 로그로 가져오고 운영 개요를 새로고침하는 중입니다...',
     })
 
     try {
@@ -760,7 +752,7 @@ export function OpsPage() {
       })
 
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Unable to import the validation CSV rows.'))
+        throw new Error(await readErrorMessage(response, '검증 CSV 행을 가져오지 못했습니다.'))
       }
 
       const payload = (await response.json()) as EnvironmentValidationImportResult
@@ -771,14 +763,13 @@ export function OpsPage() {
         phase: 'success',
         message:
           payload.imported_count > 0
-            ? `Imported ${payload.imported_count} validation run(s) from the external CSV into ops.`
-            : 'The CSV import completed, but no validation rows were created.',
+            ? `외부 CSV에서 검증 실행 ${payload.imported_count}건을 ops로 가져왔습니다.`
+            : 'CSV 가져오기를 마쳤지만 생성된 검증 행은 없었습니다.',
       })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message:
-          error instanceof Error ? error.message : 'Unable to import the validation CSV rows.',
+        message: error instanceof Error ? error.message : '검증 CSV 행을 가져오지 못했습니다.',
       })
     }
   }
@@ -787,10 +778,10 @@ export function OpsPage() {
     return (
       <div className="page-shell ops-page">
         <section className="panel studio-panel">
-          <p className="eyebrow">Phase 7</p>
-          <h1>Loading operations overview</h1>
+          <p className="eyebrow">운영</p>
+          <h1>운영 개요를 불러오는 중입니다</h1>
           <p className="panel__summary">
-            Pulling the failure, retry, policy, and model-version state from the API.
+            API에서 실패 상태, 재시도 경로, 운영 정책, 모델 버전 정보를 불러오고 있습니다.
           </p>
         </section>
       </div>
@@ -801,11 +792,11 @@ export function OpsPage() {
     return (
       <div className="page-shell ops-page">
         <section className="panel studio-panel">
-          <p className="eyebrow">Phase 7</p>
-          <h1>Operations overview unavailable</h1>
+          <p className="eyebrow">운영</p>
+          <h1>운영 개요를 열 수 없습니다</h1>
           <p className="form-error">{pageState.message}</p>
           <Link className="back-link" to="/">
-            Back to home
+            홈으로 돌아가기
           </Link>
         </section>
       </div>
@@ -823,11 +814,11 @@ export function OpsPage() {
       <section className="panel studio-panel ops-shell">
         <div className="studio-header ops-shell__header">
           <div className="ops-shell__copy">
-            <p className="eyebrow">Phase 7</p>
-            <h1>Operations overview and release gate</h1>
+            <p className="eyebrow">운영</p>
+            <h1>운영 개요와 릴리즈 게이트</h1>
             <p className="panel__summary">
-              PROJECT_FOUNDATION closes with failure visibility, retry paths, model-version
-              traceability, and a basic admin monitoring view. This page keeps those checks in one place.
+              실패 가시성, 재시도 경로, 모델 버전 추적, 운영 모니터링을 이 화면에서 한 번에
+              점검합니다.
             </p>
           </div>
 
@@ -837,7 +828,7 @@ export function OpsPage() {
               type="button"
               onClick={() => void loadOverview()}
             >
-              Refresh overview
+              개요 새로고침
             </button>
 
             <button
@@ -845,7 +836,7 @@ export function OpsPage() {
               type="button"
               onClick={() => handleDownloadEnvironmentReport(environmentDiagnostics)}
             >
-              Download environment report
+              환경 리포트 내려받기
             </button>
 
             <button
@@ -853,7 +844,7 @@ export function OpsPage() {
               type="button"
               onClick={() => void handleDownloadValidationPacket()}
             >
-              Download validation packet
+              검증 패킷 내려받기
             </button>
 
             <button
@@ -861,19 +852,20 @@ export function OpsPage() {
               type="button"
               onClick={() => void handleDownloadValidationReleaseNotes()}
             >
-              Download compatibility notes
+              호환성 노트 내려받기
             </button>
 
             <button
+              data-testid="download-claim-gate-button"
               className="button-secondary"
               type="button"
               onClick={() => void handleDownloadValidationClaimGate()}
             >
-              Download claim gate
+              클레임 게이트 내려받기
             </button>
 
             <Link className="back-link" to="/">
-              Back to home
+              홈으로 돌아가기
             </Link>
           </div>
         </div>
@@ -886,44 +878,44 @@ export function OpsPage() {
 
         <div className="card-grid ops-kpi-strip">
           <article className="info-card ops-kpi-card">
-            <h3>Release summary</h3>
+            <h3>릴리즈 요약</h3>
             <div className="mini-grid">
               <div className="mini-card">
-                <span>Projects</span>
+                <span>프로젝트</span>
                 <strong>{payload.summary.project_count}</strong>
               </div>
               <div className="mini-card">
-                <span>Ready takes</span>
+                <span>준비 완료 테이크</span>
                 <strong>{payload.summary.ready_take_count}</strong>
               </div>
               <div className="mini-card">
-                <span>Failed tracks</span>
+                <span>실패한 트랙</span>
                 <strong>{payload.summary.failed_track_count}</strong>
               </div>
               <div className="mini-card">
-                <span>Failed analysis jobs</span>
+                <span>실패한 분석 작업</span>
                 <strong>{payload.summary.failed_analysis_job_count}</strong>
               </div>
             </div>
           </article>
 
           <article className="info-card ops-kpi-card">
-            <h3>Policies</h3>
+            <h3>운영 정책</h3>
             <div className="mini-grid">
               <div className="mini-card">
-                <span>Analysis timeout</span>
-                <strong>{payload.policies.analysis_timeout_seconds} sec</strong>
+                <span>분석 타임아웃</span>
+                <strong>{payload.policies.analysis_timeout_seconds}초</strong>
               </div>
               <div className="mini-card">
-                <span>Upload expiry</span>
-                <strong>{payload.policies.upload_session_expiry_minutes} min</strong>
+                <span>업로드 만료</span>
+                <strong>{payload.policies.upload_session_expiry_minutes}분</strong>
               </div>
               <div className="mini-card">
-                <span>Recent window</span>
-                <strong>{payload.policies.recent_limit} items</strong>
+                <span>최근 조회 범위</span>
+                <strong>{payload.policies.recent_limit}개</strong>
               </div>
               <div className="mini-card">
-                <span>Analysis jobs</span>
+                <span>분석 작업</span>
                 <strong>{payload.summary.analysis_job_count}</strong>
               </div>
             </div>
@@ -932,10 +924,10 @@ export function OpsPage() {
           <article className="info-card ops-kpi-card ops-claim-gate-card">
             <div className="ops-claim-gate-card__header">
               <div>
-                <h3>Claim gate</h3>
+                <h3>클레임 게이트</h3>
                 <p className="panel__summary">
-                  See whether native-browser and real-hardware evidence is strong enough to begin
-                  checklist-closure review.
+                  실기기 브라우저와 하드웨어 증거가 체크리스트 종료 검토를 시작할 만큼 충분한지
+                  확인합니다.
                 </p>
               </div>
               <span
@@ -943,7 +935,7 @@ export function OpsPage() {
                   environmentClaimGate.release_claim_ready ? 'status-pill--success' : 'status-pill--warning'
                 }`}
               >
-                {environmentClaimGate.release_claim_ready ? 'Review ready' : 'Keep checklist open'}
+                {environmentClaimGate.release_claim_ready ? '검토 시작 가능' : '체크리스트 유지'}
               </span>
             </div>
 
@@ -951,28 +943,28 @@ export function OpsPage() {
 
             <div className="mini-grid">
               <div className="mini-card">
-                <span>Validation runs</span>
+                <span>검증 실행 수</span>
                 <strong>
                   {environmentClaimGate.packet_summary.total_validation_runs}/
                   {environmentClaimGate.policy.minimum_total_validation_runs}
                 </strong>
               </div>
               <div className="mini-card">
-                <span>Native Safari</span>
+                <span>실기기 Safari</span>
                 <strong>
                   {environmentClaimGate.packet_summary.native_safari_run_count}/
                   {environmentClaimGate.policy.minimum_native_safari_run_count}
                 </strong>
               </div>
               <div className="mini-card">
-                <span>Real hardware rec</span>
+                <span>실기기 녹음</span>
                 <strong>
                   {environmentClaimGate.packet_summary.real_hardware_recording_success_count}/
                   {environmentClaimGate.policy.minimum_real_hardware_recording_success_count}
                 </strong>
               </div>
               <div className="mini-card">
-                <span>Matrix coverage</span>
+                <span>매트릭스 커버리지</span>
                 <strong>
                   {environmentClaimGate.covered_matrix_count}/
                   {environmentClaimGate.policy.minimum_covered_matrix_cells}
@@ -982,9 +974,9 @@ export function OpsPage() {
 
             <div className="ops-claim-gate-card__detail">
               <div>
-                <h4>Blocking checks</h4>
+                <h4>막는 항목</h4>
                 {failedClaimChecks.length === 0 ? (
-                  <p>All current policy checks passed. Review notes and compatibility copy before widening support claims.</p>
+                  <p>현재 정책 검사를 모두 통과했습니다. 지원 범위를 넓히기 전에 검토 메모와 호환성 문구를 다시 확인해 주세요.</p>
                 ) : (
                   <ul className="ticket-list ops-claim-gate-list">
                     {failedClaimChecks.map((check) => (
@@ -1001,7 +993,7 @@ export function OpsPage() {
               </div>
 
               <div>
-                <h4>Next actions</h4>
+                <h4>다음 작업</h4>
                 <ul className="ticket-list ops-claim-gate-list">
                   {environmentClaimGate.next_actions.map((action) => (
                     <li key={action}>
@@ -1017,13 +1009,13 @@ export function OpsPage() {
 
       <section className="section ops-section ops-section--versions">
         <div className="section__header ops-section__header">
-          <p className="eyebrow">Model Trace</p>
-          <h2>Track which engine versions are active</h2>
+          <p className="eyebrow">모델 추적</p>
+          <h2>현재 어떤 엔진 버전이 동작 중인지 확인합니다</h2>
         </div>
 
         <div className="card-grid">
           <article className="info-card ops-info-card">
-            <h3>Analysis versions</h3>
+            <h3>분석 버전</h3>
             <ul>
               {payload.model_versions.analysis.map((version) => (
                 <li key={version}>{version}</li>
@@ -1032,7 +1024,7 @@ export function OpsPage() {
           </article>
 
           <article className="info-card ops-info-card">
-            <h3>Melody versions</h3>
+            <h3>멜로디 버전</h3>
             <ul>
               {payload.model_versions.melody.map((version) => (
                 <li key={version}>{version}</li>
@@ -1041,7 +1033,7 @@ export function OpsPage() {
           </article>
 
           <article className="info-card ops-info-card">
-            <h3>Arrangement engine</h3>
+            <h3>편곡 엔진</h3>
             <ul>
               {payload.model_versions.arrangement_engine.map((version) => (
                 <li key={version}>{version}</li>
@@ -1053,46 +1045,46 @@ export function OpsPage() {
 
       <section className="section ops-section ops-section--diagnostics">
         <div className="section__header ops-section__header">
-          <p className="eyebrow">Environment Diagnostics</p>
-          <h2>Track browser audio variability before it becomes a support mystery</h2>
+          <p className="eyebrow">환경 진단</p>
+          <h2>브라우저 오디오 편차를 지원 이슈가 되기 전에 추적합니다</h2>
         </div>
 
         <div className="card-grid">
           <article className="info-card ops-info-card">
-            <h3>DeviceProfile coverage</h3>
+            <h3>DeviceProfile 커버리지</h3>
             <div className="mini-grid">
               <div className="mini-card">
-                <span>Profiles captured</span>
+                <span>수집된 프로필</span>
                 <strong>{environmentDiagnostics.summary.total_device_profiles}</strong>
               </div>
               <div className="mini-card">
-                <span>Profiles with warnings</span>
+                <span>경고가 있는 프로필</span>
                 <strong>{environmentDiagnostics.summary.profiles_with_warnings}</strong>
               </div>
               <div className="mini-card">
-                <span>Browser families</span>
+                <span>브라우저 계열</span>
                 <strong>{environmentDiagnostics.summary.browser_family_count}</strong>
               </div>
               <div className="mini-card">
-                <span>Warning types</span>
+                <span>경고 종류</span>
                 <strong>{environmentDiagnostics.summary.warning_flag_count}</strong>
               </div>
             </div>
           </article>
 
           <article className="info-card ops-info-card">
-            <h3>Warning distribution</h3>
+            <h3>경고 분포</h3>
             {environmentDiagnostics.warning_flags.length === 0 ? (
               <div className="empty-card">
-                <p>No warning flags have been captured yet.</p>
-                <p>Save DeviceProfiles from different browsers to build this baseline.</p>
+                <p>아직 수집된 경고 플래그가 없습니다.</p>
+                <p>여러 브라우저에서 DeviceProfile을 저장해 이 기준선을 쌓아 주세요.</p>
               </div>
             ) : (
               <ul className="ticket-list">
                 {environmentDiagnostics.warning_flags.map((warning) => (
                   <li key={warning.flag}>
                     <strong>{getBrowserAudioWarningLabel(warning.flag)}</strong>
-                    <span>{warning.profile_count} profiles</span>
+                    <span>{warning.profile_count}개 프로필</span>
                   </li>
                 ))}
               </ul>
@@ -1100,11 +1092,11 @@ export function OpsPage() {
           </article>
 
           <article className="info-card ops-info-card">
-            <h3>Browser matrix</h3>
+            <h3>브라우저 매트릭스</h3>
             {environmentDiagnostics.browser_matrix.length === 0 ? (
               <div className="empty-card">
-                <p>No browser environments have been captured yet.</p>
-                <p>The matrix fills in as soon as DeviceProfiles are saved from the studio.</p>
+                <p>아직 수집된 브라우저 환경이 없습니다.</p>
+                <p>스튜디오에서 DeviceProfile을 저장하면 매트릭스가 채워집니다.</p>
               </div>
             ) : (
               <ul className="ticket-list">
@@ -1114,10 +1106,9 @@ export function OpsPage() {
                       {browserEntry.browser} / {browserEntry.os}
                     </strong>
                     <span>
-                      {browserEntry.profile_count} profiles, {browserEntry.warning_profile_count}{' '}
-                      with warnings
+                      프로필 {browserEntry.profile_count}개, 경고 포함 {browserEntry.warning_profile_count}개
                       <br />
-                      Last seen {formatDate(browserEntry.latest_seen_at)}
+                      최근 확인 {formatDate(browserEntry.latest_seen_at)}
                     </span>
                   </li>
                 ))}
@@ -1128,17 +1119,17 @@ export function OpsPage() {
       </section>
 
       <section className="section section--split ops-section ops-section--validation">
-        <article className="panel studio-block ops-panel">
-          <p className="eyebrow">Import Intake</p>
-          <h2>Preview and import external validation sheets</h2>
+        <article className="panel studio-block ops-panel" data-testid="validation-import-panel">
+          <p className="eyebrow">가져오기 입력</p>
+          <h2>외부 검증 시트를 미리 보고 가져옵니다</h2>
           <p className="panel__summary">
-            If QA or real-hardware rounds were captured outside ops, paste the CSV here or load the
-            spreadsheet export first. Review the parsed runs before importing them into the release log.
+            QA나 실기기 검증 라운드를 ops 밖에서 기록했다면, 여기서 CSV를 붙여 넣거나 파일로 불러온 뒤
+            파싱 결과를 확인하고 릴리즈 로그로 가져오세요.
           </p>
 
           <div className="project-form ops-import-form">
             <label className="field">
-              <span>Environment validation CSV</span>
+              <span>환경 검증 CSV</span>
               <textarea
                 className="text-input text-area"
                 name="validationImportText"
@@ -1147,19 +1138,19 @@ export function OpsPage() {
                   setValidationImportText(event.target.value)
                   setValidationImportPreview(null)
                 }}
-                placeholder="Paste the environment_validation_runs CSV here."
+                placeholder="환경 검증 CSV 내용을 여기에 붙여 넣으세요."
                 rows={10}
               />
             </label>
 
             <div className="button-row">
               <label className="button-secondary button-secondary--small ops-file-button">
-                Load CSV file
+                CSV 파일 불러오기
                 <input
                   className="ops-file-input"
                   type="file"
                   accept=".csv,text/csv"
-                  aria-label="Validation CSV file"
+                  aria-label="환경 검증 CSV 파일"
                   onChange={(event) => void handleValidationImportFile(event)}
                 />
               </label>
@@ -1169,7 +1160,7 @@ export function OpsPage() {
                 type="button"
                 onClick={() => void handlePreviewValidationImport()}
               >
-                Preview import
+                가져오기 미리보기
               </button>
 
               <button
@@ -1178,7 +1169,7 @@ export function OpsPage() {
                 onClick={() => void handleSubmitValidationImport()}
                 disabled={!validationImportPreview || validationImportPreview.item_count === 0}
               >
-                Import previewed runs
+                미리 본 실행 가져오기
               </button>
             </div>
 
@@ -1186,11 +1177,11 @@ export function OpsPage() {
               <div className="ops-import-preview">
                 <div className="mini-grid">
                   <div className="mini-card">
-                    <span>Preview rows</span>
+                    <span>미리보기 행 수</span>
                     <strong>{validationImportPreview.item_count}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>PASS / WARN / FAIL</span>
+                    <span>통과 / 주의 / 실패</span>
                     <strong>
                       {
                         validationImportPreview.items.filter((item) => item.outcome === 'PASS').length
@@ -1209,8 +1200,8 @@ export function OpsPage() {
 
                 {validationImportPreview.item_count === 0 ? (
                   <div className="empty-card">
-                    <p>No importable rows were found in the CSV input.</p>
-                    <p>Check that the sheet still includes headers and at least one non-empty row.</p>
+                    <p>CSV 입력에서 가져올 수 있는 행을 찾지 못했습니다.</p>
+                    <p>시트에 헤더와 비어 있지 않은 행이 남아 있는지 확인해 주세요.</p>
                   </div>
                 ) : (
                   <div className="ops-list">
@@ -1233,25 +1224,25 @@ export function OpsPage() {
                                   : 'status-pill--warning'
                             }`}
                           >
-                            {item.outcome}
+                            {getValidationOutcomeLabel(item.outcome)}
                           </span>
                         </div>
 
                         <div className="mini-grid">
                           <div className="mini-card">
-                            <span>Output route</span>
-                            <strong>{item.output_route ?? 'Not captured'}</strong>
+                            <span>출력 경로</span>
+                            <strong>{item.output_route ?? '기록되지 않음'}</strong>
                           </div>
                           <div className="mini-card">
-                            <span>Recorder MIME</span>
-                            <strong>{item.recording_mime_type ?? 'Unavailable'}</strong>
+                            <span>레코더 MIME</span>
+                            <strong>{item.recording_mime_type ?? '사용 불가'}</strong>
                           </div>
                           <div className="mini-card">
-                            <span>Validated</span>
+                            <span>검증 시각</span>
                             <strong>{formatDate(item.validated_at)}</strong>
                           </div>
                           <div className="mini-card">
-                            <span>Warnings</span>
+                            <span>경고 수</span>
                             <strong>{item.warning_flags.length}</strong>
                           </div>
                         </div>
@@ -1264,18 +1255,18 @@ export function OpsPage() {
           </div>
         </article>
 
-        <article className="panel studio-block ops-panel">
-          <p className="eyebrow">Validation Log</p>
-          <h2>Record a native browser or real-hardware validation run</h2>
+        <article className="panel studio-block ops-panel" data-testid="validation-log-panel">
+          <p className="eyebrow">검증 로그</p>
+          <h2>실기기 브라우저 또는 하드웨어 검증 실행을 기록합니다</h2>
           <p className="panel__summary">
-            Use the PROJECT_FOUNDATION environment protocol, then leave the result here so ops,
-            release notes, and browser support claims all point at the same evidence.
+            환경 검증 프로토콜을 따라 점검한 뒤, 결과를 여기에 남겨 운영 화면, 릴리즈 노트, 브라우저
+            지원 문구가 같은 증거를 보도록 만듭니다.
           </p>
 
           <form className="project-form" onSubmit={(event) => void handleCreateValidationRun(event)}>
             <div className="field-grid">
               <label className="field">
-                <span>Run label</span>
+                <span>실행 이름</span>
                 <input
                   className="text-input"
                   name="validationLabel"
@@ -1286,13 +1277,13 @@ export function OpsPage() {
                       label: event.target.value,
                     }))
                   }
-                  placeholder="Native Safari built-in speaker run"
+                  placeholder="실기기 Safari 내장 스피커 점검"
                   required
                 />
               </label>
 
               <label className="field">
-                <span>Tester</span>
+                <span>테스터</span>
                 <input
                   className="text-input"
                   name="tester"
@@ -1303,14 +1294,14 @@ export function OpsPage() {
                       tester: event.target.value,
                     }))
                   }
-                  placeholder="QA lead"
+                  placeholder="QA 담당"
                 />
               </label>
             </div>
 
             <div className="field-grid">
               <label className="field">
-                <span>Device name</span>
+                <span>기기 이름</span>
                 <input
                   className="text-input"
                   name="deviceName"
@@ -1327,7 +1318,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>Validated at</span>
+                <span>검증 시각</span>
                 <input
                   className="text-input"
                   type="datetime-local"
@@ -1346,7 +1337,7 @@ export function OpsPage() {
 
             <div className="field-grid">
               <label className="field">
-                <span>OS</span>
+                <span>운영체제</span>
                 <input
                   className="text-input"
                   name="validationOs"
@@ -1363,7 +1354,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>Browser</span>
+                <span>브라우저</span>
                 <input
                   className="text-input"
                   name="validationBrowser"
@@ -1382,7 +1373,7 @@ export function OpsPage() {
 
             <div className="field-grid">
               <label className="field">
-                <span>Input device</span>
+                <span>입력 장치</span>
                 <input
                   className="text-input"
                   name="inputDevice"
@@ -1393,12 +1384,12 @@ export function OpsPage() {
                       inputDevice: event.target.value,
                     }))
                   }
-                  placeholder="Built-in Microphone"
+                  placeholder="내장 마이크"
                 />
               </label>
 
               <label className="field">
-                <span>Output route</span>
+                <span>출력 경로</span>
                 <input
                   className="text-input"
                   name="outputRoute"
@@ -1409,14 +1400,14 @@ export function OpsPage() {
                       outputRoute: event.target.value,
                     }))
                   }
-                  placeholder="Built-in Speakers"
+                  placeholder="내장 스피커"
                 />
               </label>
             </div>
 
             <div className="field-grid">
               <label className="field">
-                <span>Outcome</span>
+                <span>결과</span>
                 <select
                   className="text-input"
                   name="outcome"
@@ -1428,14 +1419,14 @@ export function OpsPage() {
                     }))
                   }
                 >
-                  <option value="PASS">PASS</option>
-                  <option value="WARN">WARN</option>
-                  <option value="FAIL">FAIL</option>
+                  <option value="PASS">통과</option>
+                  <option value="WARN">주의</option>
+                  <option value="FAIL">실패</option>
                 </select>
               </label>
 
               <label className="field">
-                <span>Warning flags</span>
+                <span>경고 플래그</span>
                 <input
                   className="text-input"
                   name="warningFlags"
@@ -1453,7 +1444,7 @@ export function OpsPage() {
 
             <div className="field-grid">
               <label className="field">
-                <span>Mic permission before</span>
+                <span>권한 요청 전 마이크 상태</span>
                 <input
                   className="text-input"
                   name="permissionBefore"
@@ -1468,7 +1459,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>Mic permission after</span>
+                <span>권한 요청 후 마이크 상태</span>
                 <input
                   className="text-input"
                   name="permissionAfter"
@@ -1485,7 +1476,7 @@ export function OpsPage() {
 
             <div className="field-grid">
               <label className="field">
-                <span>Recorder MIME</span>
+                <span>레코더 MIME</span>
                 <input
                   className="text-input"
                   name="recordingMimeType"
@@ -1501,7 +1492,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>Primary AudioContext mode</span>
+                <span>기본 AudioContext 모드</span>
                 <input
                   className="text-input"
                   name="audioContextMode"
@@ -1512,14 +1503,14 @@ export function OpsPage() {
                       audioContextMode: event.target.value,
                     }))
                   }
-                  placeholder="standard or webkit"
+                  placeholder="standard 또는 webkit"
                 />
               </label>
             </div>
 
             <div className="field-grid">
               <label className="field">
-                <span>Offline render mode</span>
+                <span>오프라인 렌더 모드</span>
                 <input
                   className="text-input"
                   name="offlineAudioContextMode"
@@ -1535,7 +1526,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>Sample rate (Hz)</span>
+                <span>샘플레이트 (Hz)</span>
                 <input
                   className="text-input"
                   name="actualSampleRate"
@@ -1554,7 +1545,7 @@ export function OpsPage() {
 
             <div className="field-grid">
               <label className="field">
-                <span>Base latency (ms)</span>
+                <span>기본 지연 (ms)</span>
                 <input
                   className="text-input"
                   name="baseLatency"
@@ -1571,7 +1562,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>Output latency (ms)</span>
+                <span>출력 지연 (ms)</span>
                 <input
                   className="text-input"
                   name="outputLatency"
@@ -1600,7 +1591,7 @@ export function OpsPage() {
                     }))
                   }
                 />
-                <span>Secure context</span>
+                <span>보안 컨텍스트</span>
               </label>
               <label className="ops-toggle">
                 <input
@@ -1613,7 +1604,7 @@ export function OpsPage() {
                     }))
                   }
                 />
-                <span>Take recording succeeded</span>
+                <span>테이크 녹음 성공</span>
               </label>
               <label className="ops-toggle">
                 <input
@@ -1626,7 +1617,7 @@ export function OpsPage() {
                     }))
                   }
                 />
-                <span>Analysis succeeded</span>
+                <span>분석 성공</span>
               </label>
               <label className="ops-toggle">
                 <input
@@ -1639,12 +1630,12 @@ export function OpsPage() {
                     }))
                   }
                 />
-                <span>Playback succeeded</span>
+                <span>재생 성공</span>
               </label>
             </div>
 
             <label className="field">
-              <span>Audible issues</span>
+              <span>청감상 이슈</span>
               <textarea
                 className="text-input text-input--textarea"
                 name="audibleIssues"
@@ -1655,12 +1646,12 @@ export function OpsPage() {
                     audibleIssues: event.target.value,
                   }))
                 }
-                placeholder="Playback preview stayed disabled on this environment."
+                placeholder="이 환경에서는 재생 미리듣기가 비활성 상태로 남았습니다."
               />
             </label>
 
             <label className="field">
-              <span>Permission issues</span>
+              <span>권한 이슈</span>
               <textarea
                 className="text-input text-input--textarea"
                 name="permissionIssues"
@@ -1671,13 +1662,13 @@ export function OpsPage() {
                     permissionIssues: event.target.value,
                   }))
                 }
-                placeholder="The first prompt required a reload after denial recovery."
+                placeholder="첫 권한 프롬프트 거절 후 새로고침이 필요했습니다."
               />
             </label>
 
             <div className="field-grid">
               <label className="field">
-                <span>Unexpected warnings</span>
+                <span>예상 밖 경고</span>
                 <textarea
                   className="text-input text-input--textarea"
                   name="unexpectedWarnings"
@@ -1692,7 +1683,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>Follow-up</span>
+                <span>후속 작업</span>
                 <textarea
                   className="text-input text-input--textarea"
                   name="followUp"
@@ -1708,7 +1699,7 @@ export function OpsPage() {
             </div>
 
             <label className="field">
-              <span>Notes</span>
+              <span>메모</span>
               <textarea
                 className="text-input text-input--textarea"
                 name="validationNotes"
@@ -1719,7 +1710,7 @@ export function OpsPage() {
                     notes: event.target.value,
                   }))
                 }
-                placeholder="Recording worked, but playback stayed environment-limited."
+                placeholder="녹음은 가능했지만 재생은 환경 제약을 받았습니다."
               />
             </label>
 
@@ -1728,20 +1719,20 @@ export function OpsPage() {
               type="submit"
               disabled={actionState.phase === 'submitting'}
             >
-              {actionState.phase === 'submitting' ? 'Saving validation run...' : 'Save validation run'}
+              {actionState.phase === 'submitting' ? '검증 실행 저장 중...' : '검증 실행 저장'}
             </button>
           </form>
         </article>
 
         <article className="panel studio-block ops-panel">
-          <p className="eyebrow">Recent Validation Runs</p>
-          <h2>Keep native browser checks visible next to the diagnostics baseline</h2>
+          <p className="eyebrow">최근 검증 실행</p>
+          <h2>실기기 브라우저 점검을 진단 기준선 옆에서 바로 확인합니다</h2>
 
           <div className="ops-list">
             {validationRuns.length === 0 ? (
               <div className="empty-card empty-card--warn">
-                <p>No manual validation runs have been logged yet.</p>
-                <p>Use the form to capture a native Safari or real-hardware run after testing.</p>
+                <p>아직 수동 검증 실행 기록이 없습니다.</p>
+                <p>테스트 후 이 폼으로 실기기 Safari 또는 하드웨어 실행 결과를 남겨 주세요.</p>
               </div>
             ) : (
               validationRuns.map((run) => (
@@ -1750,7 +1741,7 @@ export function OpsPage() {
                     <div>
                       <strong>{run.label}</strong>
                       <span>
-                        {run.browser} / {run.os} | {run.device_name} | validated{' '}
+                        {run.browser} / {run.os} | {run.device_name} | 검증{' '}
                         {formatDate(run.validated_at)}
                       </span>
                     </div>
@@ -1764,33 +1755,33 @@ export function OpsPage() {
                             : 'status-pill--ready'
                       }`}
                     >
-                      {run.outcome}
+                      {getValidationOutcomeLabel(run.outcome)}
                     </div>
                   </div>
 
                   <div className="mini-grid">
                     <div className="mini-card">
-                      <span>Tester</span>
-                      <strong>{run.tester ?? 'Unspecified'}</strong>
+                      <span>테스터</span>
+                      <strong>{run.tester ?? '미지정'}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>Input / output</span>
+                      <span>입력 / 출력</span>
                       <strong>
-                        {run.input_device ?? 'Unknown'} / {run.output_route ?? 'Unknown'}
+                        {run.input_device ?? '알 수 없음'} / {run.output_route ?? '알 수 없음'}
                       </strong>
                     </div>
                     <div className="mini-card">
-                      <span>Recorder / audio</span>
+                      <span>레코더 / 오디오</span>
                       <strong>
-                        {run.recording_mime_type ?? 'Unavailable'} / {run.audio_context_mode ?? 'Unavailable'}
+                        {run.recording_mime_type ?? '사용 불가'} / {run.audio_context_mode ?? '사용 불가'}
                       </strong>
                     </div>
                     <div className="mini-card">
-                      <span>Flow checks</span>
+                      <span>흐름 점검</span>
                       <strong>
-                        Rec {run.take_recording_succeeded ? 'yes' : 'no'} / Ana{' '}
-                        {run.analysis_succeeded ? 'yes' : 'no'} / Play{' '}
-                        {run.playback_succeeded ? 'yes' : 'no'}
+                        녹음 {run.take_recording_succeeded ? '성공' : '실패'} / 분석{' '}
+                        {run.analysis_succeeded ? '성공' : '실패'} / 재생{' '}
+                        {run.playback_succeeded ? '성공' : '실패'}
                       </strong>
                     </div>
                   </div>
@@ -1805,7 +1796,7 @@ export function OpsPage() {
                     </div>
                   ) : null}
 
-                  {run.follow_up ? <p className="status-card__hint">Follow-up: {run.follow_up}</p> : null}
+                  {run.follow_up ? <p className="status-card__hint">후속 작업: {run.follow_up}</p> : null}
                   {run.notes ? <p className="status-card__hint">{run.notes}</p> : null}
                 </article>
               ))
@@ -1816,14 +1807,14 @@ export function OpsPage() {
 
       <section className="section section--split ops-section ops-section--recovery">
         <article className="panel studio-block ops-panel">
-          <p className="eyebrow">Failed Tracks</p>
-          <h2>Inspect failed uploads and processing state</h2>
+          <p className="eyebrow">실패한 트랙</p>
+          <h2>실패한 업로드와 처리 상태를 점검합니다</h2>
 
           <div className="ops-list">
             {payload.failed_tracks.length === 0 ? (
               <div className="empty-card">
-                <p>No failed tracks are waiting right now.</p>
-                <p>When uploads or processing fail, they will land here with a retry path.</p>
+                <p>현재 대기 중인 실패 트랙이 없습니다.</p>
+                <p>업로드나 처리가 실패하면 이곳에 재시도 경로와 함께 표시됩니다.</p>
               </div>
             ) : (
               payload.failed_tracks.map((track) => (
@@ -1832,8 +1823,8 @@ export function OpsPage() {
                     <div>
                       <strong>{track.project_title}</strong>
                       <span>
-                        {track.track_role}
-                        {track.take_no ? ` | Take ${track.take_no}` : ''}
+                        {getTrackRoleLabel(track.track_role)}
+                        {track.take_no ? ` | ${track.take_no}번 테이크` : ''}
                       </span>
                     </div>
 
@@ -1842,31 +1833,31 @@ export function OpsPage() {
                       type="button"
                       onClick={() => void handleRetryProcessing(track.track_id)}
                     >
-                      Retry processing
+                      처리 재실행
                     </button>
                   </div>
 
                   <div className="mini-grid">
                     <div className="mini-card">
-                      <span>Status</span>
-                      <strong>{track.track_status}</strong>
+                      <span>상태</span>
+                      <strong>{getTrackStatusLabel(track.track_status)}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>Format</span>
-                      <strong>{track.source_format ?? 'Unknown'}</strong>
+                      <span>형식</span>
+                      <strong>{track.source_format ?? '알 수 없음'}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>Updated</span>
+                      <span>업데이트</span>
                       <strong>{formatDate(track.updated_at)}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>Track id</span>
+                      <span>트랙 ID</span>
                       <strong>{track.track_id.slice(0, 8)}</strong>
                     </div>
                   </div>
 
                   <p className="form-error">
-                    {track.failure_message ?? 'This track failed without a stored message.'}
+                    {track.failure_message ?? '저장된 오류 메시지 없이 실패한 트랙입니다.'}
                   </p>
                 </article>
               ))
@@ -1875,14 +1866,14 @@ export function OpsPage() {
         </article>
 
         <article className="panel studio-block ops-panel">
-          <p className="eyebrow">Analysis Jobs</p>
-          <h2>Retry failed jobs and inspect model usage</h2>
+          <p className="eyebrow">분석 작업</p>
+          <h2>실패한 작업을 다시 실행하고 모델 사용 이력을 확인합니다</h2>
 
           <div className="ops-list">
             {payload.recent_analysis_jobs.length === 0 ? (
               <div className="empty-card">
-                <p>No analysis jobs have run yet.</p>
-                <p>Run post-recording analysis from the studio to populate this feed.</p>
+                <p>아직 실행된 분석 작업이 없습니다.</p>
+                <p>스튜디오에서 녹음 후 분석을 실행하면 이 목록이 채워집니다.</p>
               </div>
             ) : (
               payload.recent_analysis_jobs.map((job) => (
@@ -1891,8 +1882,8 @@ export function OpsPage() {
                     <div>
                       <strong>{job.project_title}</strong>
                       <span>
-                        {job.track_role}
-                        {job.take_no ? ` | Take ${job.take_no}` : ''} | {job.model_version}
+                        {getTrackRoleLabel(job.track_role)}
+                        {job.take_no ? ` | ${job.take_no}번 테이크` : ''} | {job.model_version}
                       </span>
                     </div>
 
@@ -1902,28 +1893,30 @@ export function OpsPage() {
                         type="button"
                         onClick={() => void handleRetryAnalysis(job.job_id)}
                       >
-                        Retry job
+                        작업 재실행
                       </button>
                     ) : (
-                      <span className="status-card__hint">{job.status}</span>
+                      <span className="status-card__hint">
+                        {getAnalysisJobStatusLabel(job.status)}
+                      </span>
                     )}
                   </div>
 
                   <div className="mini-grid">
                     <div className="mini-card">
-                      <span>Requested</span>
+                      <span>요청 시각</span>
                       <strong>{formatDate(job.requested_at)}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>Finished</span>
+                      <span>완료 시각</span>
                       <strong>{formatDate(job.finished_at)}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>Status</span>
-                      <strong>{job.status}</strong>
+                      <span>상태</span>
+                      <strong>{getAnalysisJobStatusLabel(job.status)}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>Job id</span>
+                      <span>작업 ID</span>
                       <strong>{job.job_id.slice(0, 8)}</strong>
                     </div>
                   </div>
@@ -1932,7 +1925,7 @@ export function OpsPage() {
                     <p className="form-error">{job.error_message}</p>
                   ) : (
                     <p className="status-card__hint">
-                      This job completed without a stored error message.
+                      이 작업은 저장된 오류 메시지 없이 완료되었습니다.
                     </p>
                   )}
                 </article>
@@ -1944,15 +1937,15 @@ export function OpsPage() {
 
       <section className="section ops-section ops-section--profiles">
         <div className="section__header ops-section__header">
-          <p className="eyebrow">Recent Profiles</p>
-          <h2>Inspect the latest captured audio environments</h2>
+          <p className="eyebrow">최근 프로필</p>
+          <h2>가장 최근에 기록된 오디오 환경을 점검합니다</h2>
         </div>
 
         <div className="ops-list">
           {environmentDiagnostics.recent_profiles.length === 0 ? (
             <div className="empty-card empty-card--warn">
-              <p>No recent DeviceProfiles are available yet.</p>
-              <p>Open the studio, save a DeviceProfile, and come back here to compare environments.</p>
+              <p>아직 최근 DeviceProfile이 없습니다.</p>
+              <p>스튜디오에서 DeviceProfile을 저장한 뒤 여기로 돌아와 환경을 비교해 주세요.</p>
             </div>
           ) : (
             environmentDiagnostics.recent_profiles.map((profile) => (
@@ -1963,7 +1956,7 @@ export function OpsPage() {
                       {profile.browser} / {profile.os}
                     </strong>
                     <span>
-                      {profile.output_route} | saved {formatDate(profile.updated_at)}
+                      {profile.output_route} | 저장 {formatDate(profile.updated_at)}
                     </span>
                   </div>
 
@@ -1973,38 +1966,38 @@ export function OpsPage() {
                     }`}
                   >
                     {profile.warning_flags.length > 0
-                      ? `${profile.warning_flags.length} warnings`
-                      : 'No warnings'}
+                      ? `경고 ${profile.warning_flags.length}개`
+                      : '경고 없음'}
                   </div>
                 </div>
 
                 <div className="mini-grid">
                   <div className="mini-card">
-                    <span>Mic permission</span>
-                    <strong>{profile.microphone_permission ?? 'Unknown'}</strong>
+                    <span>마이크 권한</span>
+                    <strong>{profile.microphone_permission ?? '알 수 없음'}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Recorder MIME</span>
-                    <strong>{profile.recording_mime_type ?? 'Unavailable'}</strong>
+                    <span>레코더 MIME</span>
+                    <strong>{profile.recording_mime_type ?? '사용 불가'}</strong>
                   </div>
                   <div className="mini-card">
                     <span>AudioContext</span>
-                    <strong>{profile.audio_context_mode ?? 'Unavailable'}</strong>
+                    <strong>{profile.audio_context_mode ?? '사용 불가'}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Offline render</span>
-                    <strong>{profile.offline_audio_context_mode ?? 'Unavailable'}</strong>
+                    <span>오프라인 렌더</span>
+                    <strong>{profile.offline_audio_context_mode ?? '사용 불가'}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>Sample rate</span>
+                    <span>샘플레이트</span>
                     <strong>
-                      {profile.actual_sample_rate ? `${profile.actual_sample_rate} Hz` : 'Unavailable'}
+                      {profile.actual_sample_rate ? `${profile.actual_sample_rate} Hz` : '사용 불가'}
                     </strong>
                   </div>
                   <div className="mini-card">
-                    <span>Latency</span>
+                    <span>지연</span>
                     <strong>
-                      Base {formatLatency(profile.base_latency)} / Out{' '}
+                      입력 {formatLatency(profile.base_latency)} / 출력{' '}
                       {formatLatency(profile.output_latency)}
                     </strong>
                   </div>
@@ -2024,7 +2017,7 @@ export function OpsPage() {
                   </div>
                 ) : (
                   <p className="status-card__hint">
-                    This environment currently reports no stored browser-audio warnings.
+                    이 환경에는 현재 저장된 브라우저 오디오 경고가 없습니다.
                   </p>
                 )}
               </article>

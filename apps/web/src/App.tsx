@@ -29,7 +29,7 @@ function RouteFallback() {
   return (
     <div className="page-shell">
       <section className="panel">
-        <p>Loading the workspace...</p>
+        <p>작업 공간을 불러오는 중입니다...</p>
       </section>
     </div>
   )

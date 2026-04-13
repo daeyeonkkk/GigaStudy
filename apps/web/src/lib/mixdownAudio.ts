@@ -20,12 +20,12 @@ async function decodeAudioFromUrl(url: string): Promise<AudioBuffer> {
   const AudioContextCtor =
     typeof window === 'undefined' ? undefined : getAudioContextConstructor(window)
   if (typeof window === 'undefined' || typeof AudioContextCtor === 'undefined') {
-    throw new Error('Audio decoding is not available in this browser.')
+    throw new Error('현재 브라우저에서는 오디오를 해석할 수 없습니다.')
   }
 
   const response = await fetch(url)
   if (!response.ok) {
-    throw new Error(`Audio fetch failed with status ${response.status}.`)
+    throw new Error(`오디오를 불러오지 못했습니다. 상태 코드: ${response.status}`)
   }
 
   const encodedAudio = await response.arrayBuffer()
@@ -94,12 +94,12 @@ export async function renderOfflineMixdown(
     typeof AudioContextCtor === 'undefined' ||
     typeof OfflineAudioContextCtor === 'undefined'
   ) {
-    throw new Error('Offline mixdown rendering is not available in this browser.')
+    throw new Error('현재 브라우저에서는 오프라인 믹스다운 렌더링을 사용할 수 없습니다.')
   }
 
   const audibleSources = sources.filter((source) => source.gain > 0)
   if (audibleSources.length === 0) {
-    throw new Error('No audible guide or take is available for mixdown.')
+    throw new Error('믹스다운에 사용할 수 있는 가이드나 테이크 오디오가 없습니다.')
   }
 
   const decodedSources = await Promise.all(

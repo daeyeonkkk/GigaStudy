@@ -211,37 +211,37 @@ export function deriveBrowserAudioWarningFlags(
 export function getBrowserAudioWarningLabel(flag: string): string {
   switch (flag) {
     case 'insecure_context':
-      return 'Secure context is missing, so some capture APIs may be blocked.'
+      return '보안 컨텍스트가 아니어서 일부 입력 API가 차단될 수 있습니다.'
     case 'missing_get_user_media':
-      return 'getUserMedia is unavailable in this browser.'
+      return '현재 브라우저에서는 getUserMedia를 사용할 수 없습니다.'
     case 'missing_enumerate_devices':
-      return 'Audio device enumeration is unavailable.'
+      return '오디오 장치 목록을 읽을 수 없습니다.'
     case 'missing_supported_constraints':
-      return 'The browser cannot report supported media constraints.'
+      return '브라우저가 지원하는 미디어 제약 조건을 확인할 수 없습니다.'
     case 'permissions_api_unavailable':
-      return 'The Permissions API cannot report microphone state here.'
+      return '이 환경에서는 Permissions API로 마이크 상태를 확인할 수 없습니다.'
     case 'microphone_permission_denied':
-      return 'Microphone permission is denied right now.'
+      return '현재 마이크 권한이 거부되어 있습니다.'
     case 'missing_audio_context':
-      return 'Web Audio playback is unavailable.'
+      return 'Web Audio 재생을 사용할 수 없습니다.'
     case 'legacy_webkit_audio_context_only':
-      return 'Playback depends on the legacy webkitAudioContext bridge.'
+      return '재생이 legacy webkitAudioContext 브리지에 의존합니다.'
     case 'missing_audio_worklet':
-      return 'AudioWorklet is unavailable, so live input metering falls back or stays disabled.'
+      return 'AudioWorklet을 사용할 수 없어 입력 미터가 대체 경로나 비활성 상태로 동작합니다.'
     case 'missing_offline_audio_context':
-      return 'OfflineAudioContext is unavailable, so local mixdown may fail.'
+      return 'OfflineAudioContext를 사용할 수 없어 로컬 믹스다운이 실패할 수 있습니다.'
     case 'output_latency_unavailable':
-      return 'The browser does not expose output latency on this path.'
+      return '이 경로에서는 출력 지연 시간을 확인할 수 없습니다.'
     case 'missing_web_worker':
-      return 'Web Worker is unavailable, so audio preview work cannot leave the main thread.'
+      return 'Web Worker를 사용할 수 없어 미리보기 계산이 메인 스레드에 남습니다.'
     case 'missing_web_assembly':
-      return 'WebAssembly is unavailable, so browser-side audio math cannot use the WASM path.'
+      return 'WebAssembly를 사용할 수 없어 브라우저 오디오 계산에서 WASM 경로를 쓰지 못합니다.'
     case 'missing_media_recorder':
-      return 'MediaRecorder is unavailable, so browser take capture cannot start.'
+      return 'MediaRecorder를 사용할 수 없어 브라우저 녹음을 시작할 수 없습니다.'
     case 'no_supported_recording_mime_type':
-      return 'MediaRecorder exists, but no supported audio MIME type was found.'
+      return 'MediaRecorder는 있지만 지원되는 오디오 MIME 형식을 찾지 못했습니다.'
     case 'wav_playback_unavailable':
-      return 'The browser cannot confirm WAV playback support.'
+      return 'WAV 재생 지원 여부를 확인하지 못했습니다.'
     default:
       return flag
   }

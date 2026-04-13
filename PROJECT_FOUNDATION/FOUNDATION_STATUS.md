@@ -76,6 +76,8 @@ Date: 2026-04-09
 
 ## Reinforcement Added In This Pass
 
+- 사용자에게 노출되는 핵심 화면의 기본 문구는 이제 한국어를 우선하도록 정리되었고, Home, Studio, Arrangement, Shared Review, Ops에서 내부 개발 단계명이나 백로그 번호 노출을 걷어냈다.
+- 영어는 `MusicXML`, `MIDI`, `WAV`, `DeviceProfile`, `AudioWorklet`, `AudioContext`처럼 실제로 관용적으로 쓰이는 기술 용어에만 제한적으로 남기고, `note-level`, `signed cents`, `guide WAV`, `Phase`, `FE/BE` 같은 사용자 문구는 자연스러운 한국어 표현으로 바꿨다.
 - Post-recording analysis now uses `librosa.pyin` contour support plus onset-envelope alignment.
 - Melody draft extraction now uses `librosa.pyin` pitch frames instead of the earlier heuristic frame estimator.
 - Upload processing now stores a dedicated `FRAME_PITCH` artifact with frame-level `f0`, `voiced_prob`, and RMS data instead of relying only on the 64-point preview contour.
@@ -205,6 +207,9 @@ Date: 2026-04-09
 - Web lint: `npm run lint:web`
 - Web build: `npm run build:web`
 - Result: passed, with the remaining chunk-size warning isolated to the lazy-loaded `osmd-vendor` notation chunk during `vite build`.
+- Browser release-gate smoke path: `npm run test:e2e`
+- Result: `34 passed`, `5 skipped`
+- Scope now also verifies that the Korean-first product copy still holds through the main user-facing routes, including Home, Studio, Arrangement workspace, Shared Review, Ops validation forms, and environment-validation CSV import flows.
 - Web route-split hardening:
   non-home routes now load through `React.lazy` + `Suspense`, and Vite manually splits `opensheetmusicdisplay`, `vexflow`, and router vendor chunks.
 - The Studio integrated-console refactor now also keeps the browser release gate green after the shell and workbench split, so the visual restructuring did not break the seeded product paths.
@@ -226,8 +231,6 @@ Date: 2026-04-09
   `npx playwright screenshot --device="Desktop Chrome" --full-page file:///.../UI_EDITABLE_SOURCE/quiet-studio-console-v1.html output/playwright/ui-editable-source.png`
 - Result:
   the repo-local editable source renders all five canonical artboards in one browser-visible file and is now a valid equivalent editable source for the mockup track.
-- Browser release-gate smoke path: `npm run test:e2e`
-- Result: `34 passed`, `5 skipped`
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
 - The same browser release gate now also proves the Home entry still works after adding the curated ambient photo layer, because project creation still starts from the Home surface in every browser run.
 - Scope now also includes the dedicated Arrangement workspace route across Chromium, Firefox, and WebKit, verifying that the score-first compare surface, export actions, and studio deep-edit handoff are reachable as their own product workspace.

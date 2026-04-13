@@ -30,6 +30,22 @@ Prepare these:
      `Workers & Pages -> Create application -> Pages -> Connect to Git`
    - Prefer a Git-integrated Pages project because Cloudflare still allows Wrangler-based manual deployments later if automatic builds are disabled.
    - If you create a brand-new Direct Upload project, Cloudflare does not let that same project switch to Git integration later.
+   - For this repo, the preferred Git build configuration is:
+     - Root directory:
+       leave blank so Pages builds from the repository root
+     - Build command:
+       `npm run build:web`
+     - Build output directory:
+       `apps/web/dist`
+   - Alternative valid setup:
+     - Root directory:
+       `apps/web`
+     - Build command:
+       `npm run build`
+     - Build output directory:
+       `dist`
+   - Preferred means:
+     the repo-root setup matches the current workspace scripts and root lockfile best.
 2. One R2 bucket
    - Recommended click path:
      `Storage & databases -> R2 -> Create bucket`
@@ -170,6 +186,9 @@ This script:
 - runs `npm run build:web`
 - confirms the SPA `_redirects` file exists in the build output
 - deploys the built app through Wrangler
+
+If the Git-integrated Pages build fails before install or build starts and mentions `root directory not found`,
+go back to the Pages project build settings and reset them to the preferred repo-root values above.
 
 ## 5. What We Must Verify Before Closing The Checklist
 

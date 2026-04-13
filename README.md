@@ -93,6 +93,7 @@ uv run python scripts/export_project_case_to_evidence_round.py --round-root <rou
 
 This copies a real processed guide/take pair from GigaStudy into one evidence round as canonical WAV files and updates that round's human-rating metadata automatically.
 On first use in a fresh scaffold, it also removes the seeded placeholder case and placeholder sheet rows so the round is ready for real rater labels instead of template data.
+If note-event artifacts already exist for that take, the same export also writes neutral note-reference CSV / JSON files under `human-rating/references/` so raters can align note indices and target pitches without seeing the scorer's own verdict text first.
 
 ### Human Rating Corpus Builder
 
@@ -208,6 +209,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The repo now also includes a human-rating intake builder plus metadata and sheet templates, so raw rater labels can be turned into a calibration corpus without hand-authoring the final manifest JSON.
 - The repo now also includes a repeatable evidence-round scaffold, so real-vocal and browser-hardware collection can start in one named folder outside `PROJECT_FOUNDATION`.
 - The repo now also includes a project-to-round export path, so real studio guide/take data can seed one human-rating evidence round directly instead of being recopied by hand.
+- That export path now also writes neutral note-reference files for analyzed takes, which makes human-rater collection less error-prone without leaking scorer verdict text into the rating prompt.
 - The repo now also includes a real-vocal corpus inventory tool, so collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before calibration and threshold fitting.
 - The repo now also includes a threshold-fit report path for candidate difficulty bands, so future human-rated corpora can yield repeatable `strict / basic / beginner` recommendations instead of ad hoc threshold notes.
 - The repo now also includes a claim-gate evaluator, so the team can repeatably decide whether current human-rating evidence is strong enough to even begin threshold-closure review.

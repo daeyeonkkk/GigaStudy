@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from io import BytesIO
+import json
 from pathlib import Path
 import wave
 from uuid import UUID
@@ -145,11 +146,25 @@ def test_export_project_take_to_evidence_round_replaces_seeded_template_and_writ
     assert result.template_case_removed is True
     assert result.template_sheet_rows_removed == 3
     assert result.expectation_seeded is True
+    assert result.note_reference_written is True
+    assert result.note_reference_json_path is not None
+    assert result.note_reference_csv_path is not None
 
     rating_sheet_lines = round_paths.human_rating_sheet_path.read_text(encoding="utf-8").splitlines()
     assert rating_sheet_lines == [
         "case_id,note_index,rater_id,attack_direction,sustain_direction,acceptability_label,notes"
     ]
+
+    note_reference_json = json.loads(result.note_reference_json_path.read_text(encoding="utf-8"))
+    assert note_reference_json["case_id"] == result.case_id
+    assert note_reference_json["note_count"] >= 1
+    assert note_reference_json["notes"][0]["case_id"] == result.case_id
+    assert note_reference_json["notes"][0]["target_note_label"]
+    assert "attack_signed_cents" not in note_reference_json["notes"][0]
+
+    note_reference_csv_lines = result.note_reference_csv_path.read_text(encoding="utf-8").splitlines()
+    assert note_reference_csv_lines[0].startswith("case_id,note_index,start_ms,end_ms")
+    assert len(note_reference_csv_lines) >= 2
 
     for exported_audio_path in (result.guide_output_path, result.take_output_path):
         assert exported_audio_path.exists()
@@ -192,6 +207,10 @@ def test_export_project_take_to_evidence_round_rejects_duplicate_case_without_ov
             project_id=UUID(project_id),
             take_track_id=UUID(take_track_id),
         )
+
+    assert first.note_reference_written is False
+    assert first.note_reference_json_path is None
+    assert first.note_reference_csv_path is None
 
     with session_factory() as session:
         with pytest.raises(FileExistsError, match=first.case_id):

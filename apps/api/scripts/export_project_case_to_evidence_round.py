@@ -72,9 +72,16 @@ def main() -> None:
                 "take_output_path": str(result.take_output_path),
                 "metadata_path": str(result.metadata_path),
                 "rating_sheet_path": str(result.rating_sheet_path),
+                "note_reference_json_path": (
+                    str(result.note_reference_json_path) if result.note_reference_json_path is not None else None
+                ),
+                "note_reference_csv_path": (
+                    str(result.note_reference_csv_path) if result.note_reference_csv_path is not None else None
+                ),
                 "template_case_removed": result.template_case_removed,
                 "template_sheet_rows_removed": result.template_sheet_rows_removed,
                 "expectation_seeded": result.expectation_seeded,
+                "note_reference_written": result.note_reference_written,
             },
             indent=2,
         )

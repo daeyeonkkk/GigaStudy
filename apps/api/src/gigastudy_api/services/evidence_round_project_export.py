@@ -10,6 +10,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from gigastudy_api.api.schemas.pitch_analysis import NoteEventArtifactPayload
+from gigastudy_api.services.analysis import get_track_note_events_data
 from gigastudy_api.db.models import Project, Track, TrackRole, TrackStatus
 from gigastudy_api.services.analysis import get_latest_score
 from gigastudy_api.services.calibration import AudioSourceSpec, CalibrationExpectation
@@ -35,6 +37,21 @@ HUMAN_RATING_SHEET_FIELDNAMES = [
     "acceptability_label",
     "notes",
 ]
+NOTE_REFERENCE_FIELDNAMES = [
+    "case_id",
+    "note_index",
+    "start_ms",
+    "end_ms",
+    "attack_start_ms",
+    "attack_end_ms",
+    "sustain_start_ms",
+    "sustain_end_ms",
+    "release_start_ms",
+    "release_end_ms",
+    "target_midi",
+    "target_note_label",
+    "target_frequency_hz",
+]
 
 
 @dataclass(frozen=True)
@@ -48,9 +65,12 @@ class ExportedEvidenceRoundCase:
     take_output_path: Path
     metadata_path: Path
     rating_sheet_path: Path
+    note_reference_json_path: Path | None
+    note_reference_csv_path: Path | None
     template_case_removed: bool
     template_sheet_rows_removed: int
     expectation_seeded: bool
+    note_reference_written: bool
 
 
 def _slugify_case_id(value: str) -> str:
@@ -157,6 +177,64 @@ def _build_expectation_from_score(track: Track) -> CalibrationExpectation | None
     )
 
 
+def _midi_to_note_label(midi_value: int) -> str:
+    note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    octave = (midi_value // 12) - 1
+    return f"{note_names[midi_value % 12]}{octave}"
+
+
+def _write_note_reference_files(
+    paths: EvidenceRoundPaths,
+    *,
+    case_id: str,
+    note_payload: NoteEventArtifactPayload,
+) -> tuple[Path, Path]:
+    reference_json_path = paths.human_rating_references_dir / f"{case_id}-note-reference.json"
+    reference_csv_path = paths.human_rating_references_dir / f"{case_id}-note-reference.csv"
+
+    neutral_reference = {
+        "case_id": case_id,
+        "quality_mode": note_payload.quality_mode,
+        "alignment_offset_ms": note_payload.alignment_offset_ms,
+        "note_count": note_payload.note_count,
+        "notes": [
+            {
+                "case_id": case_id,
+                "note_index": note.note_index,
+                "start_ms": note.start_ms,
+                "end_ms": note.end_ms,
+                "attack_start_ms": note.attack_start_ms,
+                "attack_end_ms": note.attack_end_ms,
+                "sustain_start_ms": note.sustain_start_ms,
+                "sustain_end_ms": note.sustain_end_ms,
+                "release_start_ms": note.release_start_ms,
+                "release_end_ms": note.release_end_ms,
+                "target_midi": note.target_midi,
+                "target_note_label": _midi_to_note_label(note.target_midi),
+                "target_frequency_hz": note.target_frequency_hz,
+            }
+            for note in note_payload.notes
+        ],
+    }
+
+    reference_json_path.parent.mkdir(parents=True, exist_ok=True)
+    reference_json_path.write_text(json.dumps(neutral_reference, indent=2), encoding="utf-8")
+    with reference_csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=NOTE_REFERENCE_FIELDNAMES)
+        writer.writeheader()
+        for note in neutral_reference["notes"]:
+            writer.writerow(note)
+
+    return reference_json_path, reference_csv_path
+
+
+def _clear_note_reference_files(paths: EvidenceRoundPaths, *, case_id: str) -> None:
+    for suffix in ("json", "csv"):
+        candidate = paths.human_rating_references_dir / f"{case_id}-note-reference.{suffix}"
+        if candidate.exists():
+            candidate.unlink()
+
+
 def _copy_canonical_wav(track: Track, output_path: Path, *, overwrite: bool) -> None:
     canonical_artifact = get_track_canonical_artifact(track)
     if canonical_artifact is None:
@@ -224,6 +302,7 @@ def export_project_take_to_evidence_round(
     relative_guide_path = guide_output_path.relative_to(paths.human_rating_dir).as_posix()
     relative_take_path = take_output_path.relative_to(paths.human_rating_dir).as_posix()
     expectation = _build_expectation_from_score(take_track)
+    note_payload = get_track_note_events_data(take_track)
 
     exported_case = HumanRatingCaseMetadata(
         case_id=normalized_case_id,
@@ -258,6 +337,15 @@ def export_project_take_to_evidence_round(
     )
     _write_metadata_corpus(paths.human_rating_cases_path, updated_metadata)
     removed_template_rows = _strip_template_sheet_rows(paths.human_rating_sheet_path)
+    note_reference_json_path: Path | None = None
+    note_reference_csv_path: Path | None = None
+    _clear_note_reference_files(paths, case_id=normalized_case_id)
+    if note_payload is not None:
+        note_reference_json_path, note_reference_csv_path = _write_note_reference_files(
+            paths,
+            case_id=normalized_case_id,
+            note_payload=note_payload,
+        )
 
     return ExportedEvidenceRoundCase(
         round_root=paths.root,
@@ -269,7 +357,10 @@ def export_project_take_to_evidence_round(
         take_output_path=take_output_path,
         metadata_path=paths.human_rating_cases_path,
         rating_sheet_path=paths.human_rating_sheet_path,
+        note_reference_json_path=note_reference_json_path,
+        note_reference_csv_path=note_reference_csv_path,
         template_case_removed=template_case_removed,
         template_sheet_rows_removed=removed_template_rows,
         expectation_seeded=expectation is not None,
+        note_reference_written=note_reference_json_path is not None and note_reference_csv_path is not None,
     )

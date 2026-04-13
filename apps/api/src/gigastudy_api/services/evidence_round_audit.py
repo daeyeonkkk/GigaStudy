@@ -32,6 +32,8 @@ class HumanRatingRoundAudit(BaseModel):
     rating_sheet_present: bool
     generated_corpus_present: bool
     rating_sheet_row_count: int = Field(ge=0)
+    note_reference_csv_count: int = Field(ge=0)
+    note_reference_json_count: int = Field(ge=0)
     metadata_inventory: CorpusInventoryReport | None = None
     generated_corpus_inventory: CorpusInventoryReport | None = None
     artifacts: list[EvidenceRoundArtifactStatus]
@@ -71,7 +73,10 @@ def _artifact_status(label: str, path: Path) -> EvidenceRoundArtifactStatus:
 
 def _inspect_human_rating_round(round_root: Path) -> HumanRatingRoundAudit:
     paths = resolve_evidence_round_paths(round_root)
+    note_reference_csv_count = len(list(paths.human_rating_references_dir.glob("*.csv")))
+    note_reference_json_count = len(list(paths.human_rating_references_dir.glob("*.json")))
     artifacts = [
+        _artifact_status("note_references_dir", paths.human_rating_references_dir),
         _artifact_status("calibration_json", paths.human_rating_calibration_json_path),
         _artifact_status("calibration_markdown", paths.human_rating_calibration_markdown_path),
         _artifact_status("threshold_json", paths.human_rating_threshold_json_path),
@@ -118,6 +123,8 @@ def _inspect_human_rating_round(round_root: Path) -> HumanRatingRoundAudit:
         rating_sheet_present=paths.human_rating_sheet_path.exists(),
         generated_corpus_present=paths.human_rating_generated_corpus_path.exists(),
         rating_sheet_row_count=rating_sheet_row_count,
+        note_reference_csv_count=note_reference_csv_count,
+        note_reference_json_count=note_reference_json_count,
         metadata_inventory=metadata_inventory,
         generated_corpus_inventory=generated_corpus_inventory,
         artifacts=artifacts,
@@ -197,6 +204,10 @@ def inspect_evidence_round(round_root: Path) -> EvidenceRoundAuditReport:
         next_actions.append("Replace placeholder guide/take WAV paths or copy the real singer audio into this round.")
 
     if human_rating.rating_sheet_present and human_rating.rating_sheet_row_count == 0:
+        if human_rating.note_reference_csv_count == 0:
+            next_actions.append(
+                "Export or create neutral note-reference files for this round before asking raters to label note indices."
+            )
         next_actions.append("Collect per-rater note labels in the human-rating sheet before rebuilding the corpus.")
 
     if human_rating.rating_sheet_row_count > 0 and not human_rating.generated_corpus_present:
@@ -251,6 +262,8 @@ def render_evidence_round_audit_markdown(report: EvidenceRoundAuditReport) -> st
         f"- Metadata present: {'yes' if report.human_rating.metadata_present else 'no'}",
         f"- Rating sheet present: {'yes' if report.human_rating.rating_sheet_present else 'no'}",
         f"- Rating sheet rows: {report.human_rating.rating_sheet_row_count}",
+        f"- Note-reference CSV files: {report.human_rating.note_reference_csv_count}",
+        f"- Note-reference JSON files: {report.human_rating.note_reference_json_count}",
         f"- Generated corpus present: {'yes' if report.human_rating.generated_corpus_present else 'no'}",
     ]
 

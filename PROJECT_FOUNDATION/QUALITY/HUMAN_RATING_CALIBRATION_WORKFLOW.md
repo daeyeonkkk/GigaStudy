@@ -25,6 +25,7 @@ The repo now supports:
   `apps/api/scripts/inspect_evidence_round.py`
 - a project-export CLI for seeding one round from real studio data:
   `apps/api/scripts/export_project_case_to_evidence_round.py`
+- neutral note-reference CSV / JSON exports inside the round when note-event artifacts are already available for the exported take
 - template inputs for the collection round:
   `apps/api/calibration/human_rating_cases.template.json`
   `apps/api/calibration/human_rating_sheet.template.csv`
@@ -130,6 +131,7 @@ uv run python scripts/export_project_case_to_evidence_round.py --round-root <rou
 ```
 
 This copies the project's canonical guide/take WAV files into the round and replaces the seeded template case plus template rating rows when the round is still untouched.
+When note-event artifacts already exist for that take, the export also writes neutral reference files under `human-rating/references/` with `note_index`, time windows, and target pitch labels, without copying the scorer's sharp / flat verdict text into the rater view.
 
 3. If export is not possible yet, place the real guide/take WAV files into `human-rating/audio/guides/` and `human-rating/audio/takes/` manually.
 4. Update the generated `human-rating/human_rating_cases.json` metadata file so each case points to the real WAV paths for that round.
@@ -145,38 +147,39 @@ uv run python scripts/inspect_human_rating_corpus.py --round-root <round>
 Use `--require-real-audio --fail-on-missing` once the collection round has switched from fixtures to actual wav files.
 For workflow smoke only, `apps/api/calibration/human_rating_seeded_fixture.json` is available as a seeded non-release manifest.
 
-7. Confirm the note indexing that the scorer returns for that case.
-8. Build the consensus corpus:
+7. Hand the neutral note-reference CSV or JSON from `human-rating/references/` to raters so they can align note indices and target pitches without reading scorer verdict text first.
+8. Confirm the note indexing that the scorer returns for that case.
+9. Build the consensus corpus:
 
 ```bash
 uv run python scripts/build_human_rating_corpus.py --round-root <round>
 ```
 
-9. Inspect the generated corpus inventory:
+10. Inspect the generated corpus inventory:
 
 ```bash
 uv run python scripts/inspect_human_rating_corpus.py --round-root <round> --source-kind manifest
 ```
 
-10. Run the calibration CLI:
+11. Run the calibration CLI:
 
 ```bash
 uv run python scripts/run_intonation_calibration.py --round-root <round>
 ```
 
-11. Fit candidate difficulty thresholds:
+12. Fit candidate difficulty thresholds:
 
 ```bash
 uv run python scripts/fit_human_rating_thresholds.py --round-root <round>
 ```
 
-12. Evaluate whether the current corpus is even strong enough to begin a closure discussion:
+13. Evaluate whether the current corpus is even strong enough to begin a closure discussion:
 
 ```bash
 uv run python scripts/evaluate_human_rating_claim_gate.py --round-root <round>
 ```
 
-13. Build the release-review evidence bundle:
+14. Build the release-review evidence bundle:
 
 ```bash
 uv run python scripts/build_human_rating_evidence_bundle.py --round-root <round>
@@ -184,8 +187,8 @@ uv run python scripts/build_human_rating_evidence_bundle.py --round-root <round>
 
 This writes the calibration summary, threshold-fit report, claim gate, and combined evidence bundle back into the same round folder under `human-rating/reports/` and `human-rating/evidence-bundle/`.
 
-14. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
-15. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
+15. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
+16. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
 
 ## 5. What Closes The Checklist
 
@@ -194,6 +197,7 @@ This workflow alone closes only the support-path gap:
 - the repo can now rebuild one round's generated corpus, calibration reports, claim gate, evidence bundle, environment preview JSON, and round audit in place
 - the repo can now audit one evidence round and say what is present, missing, and next across human-rating and browser-validation collection
 - the repo can now seed a round directly from real guide/take data that already exists inside the product workflow
+- the repo can now seed neutral note-reference files for exported real project cases, which reduces note-index ambiguity during rater collection
 - the repo can now compare scorer output against human note labels
 - the repo can now inspect whether real-vocal source files and rating coverage are actually ready before calibration
 - the repo can now evaluate whether the current corpus is even strong enough to start a threshold-closure review

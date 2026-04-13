@@ -86,6 +86,13 @@ Meaning of those last two values:
 The backend uses them the same way an S3 client would use AWS-style credentials.
 They are not the same thing as the bucket name or the S3 endpoint URL.
 
+Important handling rule:
+
+- the `Secret Access Key` is only shown at token creation time
+- if you did not save it then, you should create a new R2 API token instead of trying to recover it later
+- for a personal alpha, a `User API token` is acceptable
+- for a longer-lived shared system, an `Account API token` is the stronger default if your role allows it
+
 ### 2.2 Neon
 
 Prepare these:

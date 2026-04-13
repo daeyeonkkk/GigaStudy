@@ -133,6 +133,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A repeatable external evidence-round scaffold exists so real-vocal and rater assets can be collected outside `PROJECT_FOUNDATION`.
 - [x] A real project guide/take pair can be exported into an evidence round to seed human-rating collection from actual studio data.
 - [x] An exported real project case can also seed neutral note-reference files so raters can align note indices without reading the scorer's verdict text.
+- [x] An exported analyzed case can also seed note-level guide/take clip WAVs so raters do not have to scrub the full take for every note judgment.
 - [x] Human-rating CLIs can target one named evidence round directly instead of repeating per-file paths for corpus build, calibration, threshold fit, claim gate, and evidence bundle generation.
 - [x] One evidence-round audit can summarize human-rating and browser-validation collection completeness before release-review prep.
 - [x] One evidence-round refresh workflow can rebuild the current support artifacts in place before review.

@@ -3,10 +3,14 @@ from __future__ import annotations
 import csv
 import json
 import re
+import shutil
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
+import wave
 from uuid import UUID
 
+import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
@@ -51,7 +55,15 @@ NOTE_REFERENCE_FIELDNAMES = [
     "target_midi",
     "target_note_label",
     "target_frequency_hz",
+    "guide_clip_wav_path",
+    "take_clip_wav_path",
+    "guide_clip_start_ms",
+    "guide_clip_end_ms",
+    "take_clip_start_ms",
+    "take_clip_end_ms",
 ]
+NOTE_CLIP_PAD_BEFORE_MS = 120
+NOTE_CLIP_PAD_AFTER_MS = 160
 
 
 @dataclass(frozen=True)
@@ -71,6 +83,7 @@ class ExportedEvidenceRoundCase:
     template_sheet_rows_removed: int
     expectation_seeded: bool
     note_reference_written: bool
+    note_clip_count: int
 
 
 def _slugify_case_id(value: str) -> str:
@@ -183,14 +196,61 @@ def _midi_to_note_label(midi_value: int) -> str:
     return f"{note_names[midi_value % 12]}{octave}"
 
 
+def _read_canonical_wav_samples(track: Track) -> tuple[np.ndarray, int]:
+    canonical_artifact = get_track_canonical_artifact(track)
+    if canonical_artifact is None:
+        raise ValueError(f"Track {track.track_id} does not have canonical audio yet.")
+
+    payload = get_storage_backend().read_bytes(canonical_artifact.storage_key)
+    with wave.open(BytesIO(payload), "rb") as wav_file:
+        frames = wav_file.readframes(wav_file.getnframes())
+        sample_rate = wav_file.getframerate()
+    samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32767.0
+    return samples, sample_rate
+
+
+def _build_wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
+    pcm = np.clip(samples, -1.0, 1.0)
+    pcm = np.round(pcm * np.int16(32767)).astype(np.int16)
+
+    buffer = BytesIO()
+    with wave.open(buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm.tobytes())
+    return buffer.getvalue()
+
+
+def _extract_clip(
+    samples: np.ndarray,
+    sample_rate: int,
+    *,
+    start_ms: int,
+    end_ms: int,
+) -> np.ndarray:
+    start_index = max(0, round((start_ms / 1000) * sample_rate))
+    end_index = min(samples.shape[0], round((end_ms / 1000) * sample_rate))
+    if end_index <= start_index:
+        return np.zeros(0, dtype=np.float32)
+    return samples[start_index:end_index]
+
+
 def _write_note_reference_files(
     paths: EvidenceRoundPaths,
     *,
     case_id: str,
     note_payload: NoteEventArtifactPayload,
-) -> tuple[Path, Path]:
+    guide_track: Track,
+    take_track: Track,
+) -> tuple[Path, Path, int]:
     reference_json_path = paths.human_rating_references_dir / f"{case_id}-note-reference.json"
     reference_csv_path = paths.human_rating_references_dir / f"{case_id}-note-reference.csv"
+    reference_clips_root = paths.human_rating_references_dir / "clips" / case_id
+    reference_clips_root.mkdir(parents=True, exist_ok=True)
+    guide_samples, guide_sample_rate = _read_canonical_wav_samples(guide_track)
+    take_samples, take_sample_rate = _read_canonical_wav_samples(take_track)
+    take_alignment_offset_ms = int(take_track.alignment_offset_ms or note_payload.alignment_offset_ms or 0)
 
     neutral_reference = {
         "case_id": case_id,
@@ -212,10 +272,56 @@ def _write_note_reference_files(
                 "target_midi": note.target_midi,
                 "target_note_label": _midi_to_note_label(note.target_midi),
                 "target_frequency_hz": note.target_frequency_hz,
+                "guide_clip_wav_path": None,
+                "take_clip_wav_path": None,
+                "guide_clip_start_ms": None,
+                "guide_clip_end_ms": None,
+                "take_clip_start_ms": None,
+                "take_clip_end_ms": None,
             }
             for note in note_payload.notes
         ],
     }
+
+    clip_count = 0
+    for note in neutral_reference["notes"]:
+        guide_clip_start_ms = max(0, int(note["start_ms"]) - NOTE_CLIP_PAD_BEFORE_MS)
+        guide_clip_end_ms = max(guide_clip_start_ms + 1, int(note["end_ms"]) + NOTE_CLIP_PAD_AFTER_MS)
+        take_clip_start_ms = max(
+            0,
+            int(note["start_ms"]) - take_alignment_offset_ms - NOTE_CLIP_PAD_BEFORE_MS,
+        )
+        take_clip_end_ms = max(
+            take_clip_start_ms + 1,
+            int(note["end_ms"]) - take_alignment_offset_ms + NOTE_CLIP_PAD_AFTER_MS,
+        )
+
+        guide_clip = _extract_clip(
+            guide_samples,
+            guide_sample_rate,
+            start_ms=guide_clip_start_ms,
+            end_ms=guide_clip_end_ms,
+        )
+        take_clip = _extract_clip(
+            take_samples,
+            take_sample_rate,
+            start_ms=take_clip_start_ms,
+            end_ms=take_clip_end_ms,
+        )
+        if guide_clip.size == 0 or take_clip.size == 0:
+            continue
+
+        guide_clip_path = reference_clips_root / f"note-{int(note['note_index']):03d}-guide.wav"
+        take_clip_path = reference_clips_root / f"note-{int(note['note_index']):03d}-take.wav"
+        guide_clip_path.write_bytes(_build_wav_bytes(guide_clip, guide_sample_rate))
+        take_clip_path.write_bytes(_build_wav_bytes(take_clip, take_sample_rate))
+        note["guide_clip_wav_path"] = guide_clip_path.relative_to(paths.human_rating_dir).as_posix()
+        note["take_clip_wav_path"] = take_clip_path.relative_to(paths.human_rating_dir).as_posix()
+        note["guide_clip_start_ms"] = guide_clip_start_ms
+        note["guide_clip_end_ms"] = guide_clip_end_ms
+        note["take_clip_start_ms"] = take_clip_start_ms
+        note["take_clip_end_ms"] = take_clip_end_ms
+        clip_count += 2
 
     reference_json_path.parent.mkdir(parents=True, exist_ok=True)
     reference_json_path.write_text(json.dumps(neutral_reference, indent=2), encoding="utf-8")
@@ -225,7 +331,7 @@ def _write_note_reference_files(
         for note in neutral_reference["notes"]:
             writer.writerow(note)
 
-    return reference_json_path, reference_csv_path
+    return reference_json_path, reference_csv_path, clip_count
 
 
 def _clear_note_reference_files(paths: EvidenceRoundPaths, *, case_id: str) -> None:
@@ -233,6 +339,9 @@ def _clear_note_reference_files(paths: EvidenceRoundPaths, *, case_id: str) -> N
         candidate = paths.human_rating_references_dir / f"{case_id}-note-reference.{suffix}"
         if candidate.exists():
             candidate.unlink()
+    clips_root = paths.human_rating_references_dir / "clips" / case_id
+    if clips_root.exists():
+        shutil.rmtree(clips_root)
 
 
 def _copy_canonical_wav(track: Track, output_path: Path, *, overwrite: bool) -> None:
@@ -339,12 +448,15 @@ def export_project_take_to_evidence_round(
     removed_template_rows = _strip_template_sheet_rows(paths.human_rating_sheet_path)
     note_reference_json_path: Path | None = None
     note_reference_csv_path: Path | None = None
+    note_clip_count = 0
     _clear_note_reference_files(paths, case_id=normalized_case_id)
     if note_payload is not None:
-        note_reference_json_path, note_reference_csv_path = _write_note_reference_files(
+        note_reference_json_path, note_reference_csv_path, note_clip_count = _write_note_reference_files(
             paths,
             case_id=normalized_case_id,
             note_payload=note_payload,
+            guide_track=guide_track,
+            take_track=take_track,
         )
 
     return ExportedEvidenceRoundCase(
@@ -363,4 +475,5 @@ def export_project_take_to_evidence_round(
         template_sheet_rows_removed=removed_template_rows,
         expectation_seeded=expectation is not None,
         note_reference_written=note_reference_json_path is not None and note_reference_csv_path is not None,
+        note_clip_count=note_clip_count,
     )

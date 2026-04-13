@@ -149,6 +149,7 @@ def test_export_project_take_to_evidence_round_replaces_seeded_template_and_writ
     assert result.note_reference_written is True
     assert result.note_reference_json_path is not None
     assert result.note_reference_csv_path is not None
+    assert result.note_clip_count >= 2
 
     rating_sheet_lines = round_paths.human_rating_sheet_path.read_text(encoding="utf-8").splitlines()
     assert rating_sheet_lines == [
@@ -161,10 +162,21 @@ def test_export_project_take_to_evidence_round_replaces_seeded_template_and_writ
     assert note_reference_json["notes"][0]["case_id"] == result.case_id
     assert note_reference_json["notes"][0]["target_note_label"]
     assert "attack_signed_cents" not in note_reference_json["notes"][0]
+    assert note_reference_json["notes"][0]["guide_clip_wav_path"]
+    assert note_reference_json["notes"][0]["take_clip_wav_path"]
 
     note_reference_csv_lines = result.note_reference_csv_path.read_text(encoding="utf-8").splitlines()
     assert note_reference_csv_lines[0].startswith("case_id,note_index,start_ms,end_ms")
     assert len(note_reference_csv_lines) >= 2
+    first_guide_clip = round_paths.human_rating_dir / note_reference_json["notes"][0]["guide_clip_wav_path"]
+    first_take_clip = round_paths.human_rating_dir / note_reference_json["notes"][0]["take_clip_wav_path"]
+    assert first_guide_clip.exists()
+    assert first_take_clip.exists()
+    for clip_path in (first_guide_clip, first_take_clip):
+        with wave.open(BytesIO(clip_path.read_bytes()), "rb") as handle:
+            assert handle.getframerate() == 16000
+            assert handle.getnchannels() == 1
+            assert handle.getnframes() > 0
 
     for exported_audio_path in (result.guide_output_path, result.take_output_path):
         assert exported_audio_path.exists()
@@ -211,6 +223,7 @@ def test_export_project_take_to_evidence_round_rejects_duplicate_case_without_ov
     assert first.note_reference_written is False
     assert first.note_reference_json_path is None
     assert first.note_reference_csv_path is None
+    assert first.note_clip_count == 0
 
     with session_factory() as session:
         with pytest.raises(FileExistsError, match=first.case_id):

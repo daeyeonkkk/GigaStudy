@@ -82,6 +82,7 @@ def main() -> None:
                 "template_sheet_rows_removed": result.template_sheet_rows_removed,
                 "expectation_seeded": result.expectation_seeded,
                 "note_reference_written": result.note_reference_written,
+                "note_clip_count": result.note_clip_count,
             },
             indent=2,
         )

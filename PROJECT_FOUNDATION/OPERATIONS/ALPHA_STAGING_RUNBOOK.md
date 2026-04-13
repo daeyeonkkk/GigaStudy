@@ -131,6 +131,8 @@ Recommended click path in the current Neon console:
      a role with password
 5. copy the generated connection string
 
+If the dashboard already shows a `Connection string` card, that is also a valid entry point.
+
 Recommended alpha choice:
 
 - prefer a fresh Neon project for GigaStudy alpha instead of reusing an unrelated older project

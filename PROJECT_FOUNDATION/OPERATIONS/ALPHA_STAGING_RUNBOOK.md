@@ -133,8 +133,11 @@ Recommended click path in the current Neon console:
 
 Recommended alpha choice:
 
+- prefer a fresh Neon project for GigaStudy alpha instead of reusing an unrelated older project
 - start with the direct Postgres connection string first
 - if Neon also shows a pooled connection string, keep that as a later fallback only if Cloud Run connection pressure appears
+- if the region list includes Singapore, prefer that for a Korea-based alpha because it is the closest currently documented Neon AWS region in Asia
+- keep Neon Auth disabled for this alpha path
 
 Why this is the current recommendation:
 

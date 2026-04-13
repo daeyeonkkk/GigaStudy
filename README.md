@@ -84,6 +84,16 @@ It is a regression path for the current note-event scorer, not a substitute for 
 When you are ready to compare against human raters, use `apps/api/calibration/human_rating_corpus.template.json` plus `PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the starting workflow.
 For new collection rounds, prefer the structured intake path: `apps/api/calibration/human_rating_cases.template.json`, `apps/api/calibration/human_rating_sheet.template.csv`, and `uv run python scripts/build_human_rating_corpus.py`.
 
+### Project-To-Round Export
+
+```bash
+cd apps/api
+uv run python scripts/export_project_case_to_evidence_round.py --round-root <round> --project-id <project-id> --take-track-id <take-track-id>
+```
+
+This copies a real processed guide/take pair from GigaStudy into one evidence round as canonical WAV files and updates that round's human-rating metadata automatically.
+On first use in a fresh scaffold, it also removes the seeded placeholder case and placeholder sheet rows so the round is ready for real rater labels instead of template data.
+
 ### Human Rating Corpus Builder
 
 ```bash
@@ -197,6 +207,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The calibration runner now also supports note-level human-rating comparison summaries and optional agreement thresholds, so future real-rater evidence can be attached without inventing a second evaluation path.
 - The repo now also includes a human-rating intake builder plus metadata and sheet templates, so raw rater labels can be turned into a calibration corpus without hand-authoring the final manifest JSON.
 - The repo now also includes a repeatable evidence-round scaffold, so real-vocal and browser-hardware collection can start in one named folder outside `PROJECT_FOUNDATION`.
+- The repo now also includes a project-to-round export path, so real studio guide/take data can seed one human-rating evidence round directly instead of being recopied by hand.
 - The repo now also includes a real-vocal corpus inventory tool, so collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before calibration and threshold fitting.
 - The repo now also includes a threshold-fit report path for candidate difficulty bands, so future human-rated corpora can yield repeatable `strict / basic / beginner` recommendations instead of ad hoc threshold notes.
 - The repo now also includes a claim-gate evaluator, so the team can repeatably decide whether current human-rating evidence is strong enough to even begin threshold-closure review.

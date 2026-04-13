@@ -131,6 +131,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A human-rating corpus comparison workflow exists, even though the real evidence corpus is not populated yet.
 - [x] A human-rating intake template and consensus builder exist for preparing real-vocal evidence.
 - [x] A repeatable external evidence-round scaffold exists so real-vocal and rater assets can be collected outside `PROJECT_FOUNDATION`.
+- [x] A real project guide/take pair can be exported into an evidence round to seed human-rating collection from actual studio data.
 - [x] Human-rating CLIs can target one named evidence round directly instead of repeating per-file paths for corpus build, calibration, threshold fit, claim gate, and evidence bundle generation.
 - [x] One evidence-round audit can summarize human-rating and browser-validation collection completeness before release-review prep.
 - [x] One evidence-round refresh workflow can rebuild the current support artifacts in place before review.

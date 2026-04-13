@@ -61,6 +61,7 @@ def test_create_evidence_round_scaffold_copies_templates_and_writes_readme(tmp_p
     assert "Human Rating" in readme
     assert "Browser And Hardware Validation" in readme
     assert "--round-root <round>" in readme
+    assert "export_project_case_to_evidence_round.py" in readme
 
 
 def test_resolve_evidence_round_paths_exposes_generated_output_locations(tmp_path: Path) -> None:

@@ -23,6 +23,8 @@ The repo now supports:
   `apps/api/scripts/refresh_evidence_round.py`
 - an evidence-round audit CLI:
   `apps/api/scripts/inspect_evidence_round.py`
+- a project-export CLI for seeding one round from real studio data:
+  `apps/api/scripts/export_project_case_to_evidence_round.py`
 - template inputs for the collection round:
   `apps/api/calibration/human_rating_cases.template.json`
   `apps/api/calibration/human_rating_sheet.template.csv`
@@ -120,10 +122,19 @@ If these bands change after real-rater analysis, the runner and report should be
 
 ## 4. Recommended Collection Flow
 
-1. Create the round scaffold and place the real guide/take WAV files into the generated `human-rating/audio/guides/` and `human-rating/audio/takes/` folders.
-2. Update the generated `human-rating/human_rating_cases.json` metadata file so each case points to the real WAV paths for that round.
-3. Fill the generated `human-rating/human_rating_sheet.csv` file with per-rater note labels.
-4. Inspect the metadata file or generated corpus before calibration:
+1. Create the round scaffold.
+2. Prefer exporting a real project take into that round:
+
+```bash
+uv run python scripts/export_project_case_to_evidence_round.py --round-root <round> --project-id <project-id> --take-track-id <take-track-id>
+```
+
+This copies the project's canonical guide/take WAV files into the round and replaces the seeded template case plus template rating rows when the round is still untouched.
+
+3. If export is not possible yet, place the real guide/take WAV files into `human-rating/audio/guides/` and `human-rating/audio/takes/` manually.
+4. Update the generated `human-rating/human_rating_cases.json` metadata file so each case points to the real WAV paths for that round.
+5. Fill the generated `human-rating/human_rating_sheet.csv` file with per-rater note labels.
+6. Inspect the metadata file or generated corpus before calibration:
 
 ```bash
 uv run python scripts/refresh_evidence_round.py --round-root <round>
@@ -134,38 +145,38 @@ uv run python scripts/inspect_human_rating_corpus.py --round-root <round>
 Use `--require-real-audio --fail-on-missing` once the collection round has switched from fixtures to actual wav files.
 For workflow smoke only, `apps/api/calibration/human_rating_seeded_fixture.json` is available as a seeded non-release manifest.
 
-5. Confirm the note indexing that the scorer returns for that case.
-6. Build the consensus corpus:
+7. Confirm the note indexing that the scorer returns for that case.
+8. Build the consensus corpus:
 
 ```bash
 uv run python scripts/build_human_rating_corpus.py --round-root <round>
 ```
 
-7. Inspect the generated corpus inventory:
+9. Inspect the generated corpus inventory:
 
 ```bash
 uv run python scripts/inspect_human_rating_corpus.py --round-root <round> --source-kind manifest
 ```
 
-8. Run the calibration CLI:
+10. Run the calibration CLI:
 
 ```bash
 uv run python scripts/run_intonation_calibration.py --round-root <round>
 ```
 
-9. Fit candidate difficulty thresholds:
+11. Fit candidate difficulty thresholds:
 
 ```bash
 uv run python scripts/fit_human_rating_thresholds.py --round-root <round>
 ```
 
-10. Evaluate whether the current corpus is even strong enough to begin a closure discussion:
+12. Evaluate whether the current corpus is even strong enough to begin a closure discussion:
 
 ```bash
 uv run python scripts/evaluate_human_rating_claim_gate.py --round-root <round>
 ```
 
-11. Build the release-review evidence bundle:
+13. Build the release-review evidence bundle:
 
 ```bash
 uv run python scripts/build_human_rating_evidence_bundle.py --round-root <round>
@@ -173,8 +184,8 @@ uv run python scripts/build_human_rating_evidence_bundle.py --round-root <round>
 
 This writes the calibration summary, threshold-fit report, claim gate, and combined evidence bundle back into the same round folder under `human-rating/reports/` and `human-rating/evidence-bundle/`.
 
-12. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
-13. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
+14. Save those generated outputs as release evidence outside `PROJECT_FOUNDATION`.
+15. Only after multiple real cases agree well should the team consider closing the human-trust checklist items.
 
 ## 5. What Closes The Checklist
 
@@ -182,6 +193,7 @@ This workflow alone closes only the support-path gap:
 
 - the repo can now rebuild one round's generated corpus, calibration reports, claim gate, evidence bundle, environment preview JSON, and round audit in place
 - the repo can now audit one evidence round and say what is present, missing, and next across human-rating and browser-validation collection
+- the repo can now seed a round directly from real guide/take data that already exists inside the product workflow
 - the repo can now compare scorer output against human note labels
 - the repo can now inspect whether real-vocal source files and rating coverage are actually ready before calibration
 - the repo can now evaluate whether the current corpus is even strong enough to start a threshold-closure review

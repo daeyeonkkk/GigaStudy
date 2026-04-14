@@ -70,6 +70,64 @@ const studioWorkbenchLinks = [
   { id: 'sharing', label: '버전 / 공유' },
 ] as const
 
+type StudioSectionId = (typeof studioWorkbenchLinks)[number]['id']
+
+type StudioWorkspaceModeId = 'record' | 'review' | 'arrange'
+
+const studioRailLabels: Record<StudioSectionId, string> = {
+  'harmony-authoring': '화성 기준',
+  'audio-setup': '장치 준비',
+  recording: '녹음',
+  analysis: '리뷰',
+  melody: '멜로디',
+  arrangement: '편곡',
+  'score-playback': '악보',
+  mixdown: '믹스다운',
+  sharing: '버전·공유',
+}
+
+const studioSectionModeMap: Record<StudioSectionId, StudioWorkspaceModeId> = {
+  'harmony-authoring': 'review',
+  'audio-setup': 'record',
+  recording: 'record',
+  analysis: 'review',
+  melody: 'arrange',
+  arrangement: 'arrange',
+  'score-playback': 'arrange',
+  mixdown: 'arrange',
+  sharing: 'arrange',
+}
+
+const studioWorkspaceModes: ReadonlyArray<{
+  id: StudioWorkspaceModeId
+  label: string
+  eyebrow: string
+  summary: string
+  sectionIds: StudioSectionId[]
+}> = [
+  {
+    id: 'record',
+    label: '녹음',
+    eyebrow: '시작하기',
+    summary: '장치 확인, 가이드 맞추기, 새 테이크 녹음처럼 지금 바로 해야 할 준비만 앞으로 모읍니다.',
+    sectionIds: ['audio-setup', 'recording'],
+  },
+  {
+    id: 'review',
+    label: '리뷰',
+    eyebrow: '들어보고 판단하기',
+    summary: '선택한 테이크의 점수와 보정 표시, 화성 기준을 같은 흐름에서 차례대로 살펴봅니다.',
+    sectionIds: ['harmony-authoring', 'analysis'],
+  },
+  {
+    id: 'arrange',
+    label: '편곡',
+    eyebrow: '마무리 작업',
+    summary: '멜로디 초안, 편곡 비교, 악보와 미리듣기, 믹스다운과 공유까지 한 번에 이어갑니다.',
+    sectionIds: ['melody', 'arrangement', 'score-playback', 'mixdown', 'sharing'],
+  },
+]
+
 type DeviceProfile = {
   device_profile_id: string
   user_id: string
@@ -1179,6 +1237,7 @@ export function StudioPage() {
   const [countInBeats, setCountInBeats] = useState(4)
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null)
+  const [workspaceMode, setWorkspaceMode] = useState<StudioWorkspaceModeId>('record')
   const [takeUploadProgress, setTakeUploadProgress] = useState<Record<string, number>>({})
   const [failedTakeUploads, setFailedTakeUploads] = useState<
     Record<string, FailedTakeUpload>
@@ -3461,6 +3520,20 @@ export function StudioPage() {
     : '초안 없음'
   const arrangementSummaryLabel = arrangements.length > 0 ? `${arrangements.length}개 후보` : '후보 없음'
   const arrangementRoute = projectId ? `/projects/${projectId}/arrangement` : null
+  const activeWorkspaceMode =
+    studioWorkspaceModes.find((mode) => mode.id === workspaceMode) ?? studioWorkspaceModes[0]
+  const activeWorkbenchLinks = studioWorkbenchLinks
+    .filter((link) => activeWorkspaceMode.sectionIds.includes(link.id))
+    .map((link) => ({
+      ...link,
+      label: studioRailLabels[link.id],
+    }))
+  const getStudioSectionClassName = (sectionId: StudioSectionId) =>
+    `section studio-section ${
+      studioSectionModeMap[sectionId] === activeWorkspaceMode.id
+        ? 'studio-section--active'
+        : 'studio-section--muted'
+    }`
 
   return (
     <div className="page-shell">
@@ -4074,15 +4147,48 @@ export function StudioPage() {
         </div>
 
         <nav className="studio-workrail" aria-label="스튜디오 워크벤치">
-          {studioWorkbenchLinks.map((link) => (
-            <a className="studio-workrail__link" href={`#${link.id}`} key={link.id}>
+          <span className="studio-workrail__label">지금 필요한 바로가기</span>
+          {activeWorkbenchLinks.map((link) => (
+            <a
+              className="studio-workrail__link"
+              data-testid={`studio-workrail-link-${link.id}`}
+              href={`#${link.id}`}
+              key={link.id}
+            >
               {link.label}
             </a>
           ))}
         </nav>
+
+        <div className="studio-workspace-switch" data-testid="studio-workspace-modes">
+          <div className="studio-workspace-switch__copy">
+            <p className="eyebrow">작업 모드</p>
+            <h2>지금은 {activeWorkspaceMode.label}에 집중하면 됩니다</h2>
+            <p className="panel__summary">{activeWorkspaceMode.summary}</p>
+          </div>
+
+          <div className="studio-workspace-switch__actions">
+            {studioWorkspaceModes.map((mode) => (
+              <button
+                key={mode.id}
+                className={`studio-workspace-switch__button ${
+                  activeWorkspaceMode.id === mode.id ? 'studio-workspace-switch__button--active' : ''
+                }`}
+                data-testid={`studio-workspace-mode-${mode.id}`}
+                type="button"
+                aria-pressed={activeWorkspaceMode.id === mode.id}
+                onClick={() => setWorkspaceMode(mode.id)}
+              >
+                <span>{mode.eyebrow}</span>
+                <strong>{mode.label}</strong>
+                <small>{mode.summary}</small>
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
-      <section className="section" id="harmony-authoring">
+      <section className={getStudioSectionClassName('harmony-authoring')} id="harmony-authoring">
         <div className="section__header">
           <p className="eyebrow">화성 기준 연결</p>
           <h2>코드 타임라인을 연결해 화성 적합도를 키 기준 대체 경로에서 벗어나게 합니다</h2>
@@ -4323,7 +4429,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="audio-setup">
+      <section className={getStudioSectionClassName('audio-setup')} id="audio-setup">
         <div className="section__header">
           <p className="eyebrow">입력 준비</p>
           <h2>오디오 설정과 가이드 연결</h2>
@@ -4796,7 +4902,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="recording">
+      <section className={getStudioSectionClassName('recording')} id="recording">
         <div className="section__header">
           <p className="eyebrow">녹음 흐름</p>
           <h2>트랜스포트 준비와 테이크 녹음</h2>
@@ -5396,7 +5502,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="analysis">
+      <section className={getStudioSectionClassName('analysis')} id="analysis">
         <div className="section__header">
           <p className="eyebrow">사후 분석</p>
           <h2>녹음 후 정렬과 채점</h2>
@@ -5932,7 +6038,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="melody">
+      <section className={getStudioSectionClassName('melody')} id="melody">
         <div className="section__header">
           <p className="eyebrow">멜로디 초안</p>
           <h2>오디오→MIDI 멜로디 초안</h2>
@@ -6155,7 +6261,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="arrangement">
+      <section className={getStudioSectionClassName('arrangement')} id="arrangement">
         <div className="section__header">
           <p className="eyebrow">편곡 후보</p>
           <h2>룰 기반 편곡 후보</h2>
@@ -6556,7 +6662,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="score-playback">
+      <section className={getStudioSectionClassName('score-playback')} id="score-playback">
         <div className="section__header">
           <p className="eyebrow">악보/재생</p>
           <h2>악보 렌더링, 가이드 재생, 내보내기</h2>
@@ -6800,7 +6906,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="mixdown">
+      <section className={getStudioSectionClassName('mixdown')} id="mixdown">
         <div className="section__header">
           <p className="eyebrow">믹스다운</p>
           <h2>오프라인 믹스다운 미리듣기와 저장</h2>
@@ -7014,7 +7120,7 @@ export function StudioPage() {
         </div>
       </section>
 
-      <section className="section" id="sharing">
+      <section className={getStudioSectionClassName('sharing')} id="sharing">
         <div className="section__header">
           <p className="eyebrow">버전/공유</p>
           <h2>프로젝트 히스토리와 읽기 전용 공유</h2>

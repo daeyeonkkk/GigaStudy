@@ -360,6 +360,27 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
 }) => {
   const projectId = await createStudioProject(page, 'Playwright release gate session')
   await seedGuideAndTake(page, request, projectId)
+
+  const workspaceModes = page.getByTestId('studio-workspace-modes')
+  await expect(workspaceModes).toBeVisible()
+  await expect(page.getByTestId('studio-workspace-mode-record')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByTestId('studio-workspace-mode-review').click()
+  await expect(page.getByTestId('studio-workspace-mode-review')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.getByTestId('studio-workrail-link-analysis')).toBeVisible()
+  await page.getByTestId('studio-workspace-mode-arrange').click()
+  await expect(page.getByTestId('studio-workspace-mode-arrange')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.getByTestId('studio-workrail-link-arrangement')).toBeVisible()
+  await page.getByTestId('studio-workspace-mode-review').click()
+
   await runChordAwareAnalysis(page)
 
   const noteFeedbackPanel = getNoteFeedbackPanel(page)

@@ -437,3 +437,4 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
   the route now leans into a candidate rack, score/player stage, and export-focused inspector, and the dedicated arrangement release gate passes in Chromium, Firefox, and WebKit.
 - The second browser-reviewed implementation half is now also complete on the live Studio workspace:
   the route now follows the same v2 workspace discipline, and guide / take listening is consolidated into one obvious playback surface in the lower time rail.
+- The Studio workspace now also uses a lightweight task-mode switch (`녹음`, `리뷰`, `편곡`) so the live screen emphasizes only the sections and shortcuts that match the user’s current task.

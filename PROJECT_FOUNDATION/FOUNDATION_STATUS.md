@@ -250,9 +250,9 @@ Date: 2026-04-14
 - Scope for the current pass:
   the dedicated Arrangement route now keeps the Filmora-informed v2 workspace structure reachable in Chromium, Firefox, and WebKit, and the e2e API harness now accepts both comma-separated and JSON-list CORS origin input.
 - Browser release-gate smoke path: `npm run test:e2e`
-- Result: `34 passed`, `5 skipped`
+- Result: `37 passed`, `5 skipped`
 - Scope now also verifies that the Korean-first product copy still holds through the main user-facing routes, including Home, Studio, Arrangement workspace, Shared Review, Ops validation forms, and environment-validation CSV import flows.
-- Scope now also includes the Filmora-informed Studio v2 workspace pass across Chromium, Firefox, and WebKit, verifying that the source rack, preview canvas, lower time rail, and right-side inspector remain reachable without breaking the seeded studio journey.
+- Scope now also includes the Filmora-informed Studio v2 workspace pass across Chromium, Firefox, and WebKit, verifying that the source rack, preview canvas, lower time rail, right-side inspector, and the new `녹음 / 리뷰 / 편곡` workspace switch remain reachable without breaking the seeded studio journey.
 - Web route-split hardening:
   non-home routes now load through `React.lazy` + `Suspense`, and Vite manually splits `opensheetmusicdisplay`, `vexflow`, and router vendor chunks.
 - The Studio integrated-console refactor now also keeps the browser release gate green after the shell and workbench split, so the visual restructuring did not break the seeded product paths.
@@ -423,6 +423,8 @@ Date: 2026-04-14
   the page now exposes a dedicated source rack, a clearer preview canvas, a stronger lower time rail, and a right-side inspector without bringing developer-facing copy back onto the default surface.
 - The deployed Studio route now also keeps one obvious playback surface for guide / take listening:
   the preview canvas stays focused on waveform review, while actual listening is centralized in the lower time rail so the same selected-take player does not appear twice.
+- The deployed Studio route now also behaves more like a task-led rehearsal workspace instead of one long stacked board:
+  `녹음`, `리뷰`, and `편곡` modes now change the visible shortcut rail and de-emphasize unrelated sections, so the user sees one focused slice of work at a time.
 
 ## Recommended Next Work
 

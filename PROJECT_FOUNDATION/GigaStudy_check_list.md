@@ -201,6 +201,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
   Arrangement now passes a dedicated cross-browser release-gate check against the v2 workspace structure.
 - [x] The Studio route has received the same browser-reviewed v2 implementation pass that Arrangement now has.
 - [x] The Studio route keeps one obvious playback surface for guide / take listening instead of duplicating the same take player across multiple panels.
+- [x] The Studio route now also exposes a lightweight workspace-mode switch (`녹음`, `리뷰`, `편곡`) so the live product behaves more like one task-focused rehearsal desk than one long stacked dashboard.
 
 ## 17. Mockup Track
 

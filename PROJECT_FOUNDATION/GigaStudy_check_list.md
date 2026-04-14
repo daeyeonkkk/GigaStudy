@@ -185,6 +185,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 ## 16. Visual Refactor Track
 
 - [x] One canonical visual direction is locked in `DESIGN/UI_DESIGN_DIRECTION.md`.
+- [x] A Filmora reference review is documented for Studio and Arrangement workspace improvement, and it is scoped as a secondary structural reference rather than a whole-product style replacement.
 - [x] A reference-led wireframe pack exists in `DESIGN/UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
 - [x] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
 - [x] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
@@ -192,6 +193,8 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
 - [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
 - [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
+- [ ] A Studio v2 and Arrangement v2 mockup pass has absorbed the accepted Filmora patterns:
+  source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
 
 ## 17. Mockup Track
 

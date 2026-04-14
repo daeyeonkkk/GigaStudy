@@ -34,19 +34,20 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 1. `GigaStudy_master_plan.md`
 2. `ROADMAP.md`
 3. `DESIGN/UI_DESIGN_DIRECTION.md`
-4. `DESIGN/UI_WIREFRAMES_V1.md`
-5. `DESIGN/UI_MOCKUP_TRACK.md`
-6. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
-7. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
-8. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-9. `BACKLOGS/PHASE1_BACKLOG.md`
-10. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
-11. `GigaStudy_check_list.md`
-12. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-13. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
-14. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
-15. `FOUNDATION_STATUS.md`
-16. `OPERATIONS/WORKING_PRINCIPLES.md`
+4. `DESIGN/FILMORA_REFERENCE_REVIEW.md`
+5. `DESIGN/UI_WIREFRAMES_V1.md`
+6. `DESIGN/UI_MOCKUP_TRACK.md`
+7. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
+8. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
+9. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+10. `BACKLOGS/PHASE1_BACKLOG.md`
+11. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
+12. `GigaStudy_check_list.md`
+13. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
+14. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+15. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
+16. `FOUNDATION_STATUS.md`
+17. `OPERATIONS/WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -60,6 +61,8 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
   Current implementation audit against the foundation docs, including verified coverage and remaining gaps.
 - `DESIGN/UI_DESIGN_DIRECTION.md`
   Canonical visual direction for the product.
+- `DESIGN/FILMORA_REFERENCE_REVIEW.md`
+  Accepted reference review describing what Filmora contributes to the Studio and Arrangement workspace structure, what should be rejected, and what the next mockup pass still needs to absorb.
 - `DESIGN/UI_WIREFRAMES_V1.md`
   Reference-led low-fidelity wireframe pack for the canonical screens.
 - `DESIGN/UI_MOCKUP_TRACK.md`

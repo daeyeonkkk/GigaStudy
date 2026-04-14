@@ -142,6 +142,38 @@ What we should not borrow literally:
 - productivity-calendar metaphors
 - generic monochrome productivity UI without musical identity
 
+### Reference E. Wondershare Filmora
+
+Sources:
+
+- [Filmora official homepage](https://filmora.wondershare.com/)
+- [Filmora Panel Layout](https://filmora.wondershare.com/guide/panel-layout.html)
+- [Navigating Filmora](https://filmora.wondershare.com/guide/filmora-navigating-filmora.html)
+- [Color Comparison View](https://filmora.wondershare.com/guide/color-comparison-view.html)
+
+Useful takeaways:
+
+- Filmora is structured around a stable editing split:
+  media panel, preview player, timeline, and property panel
+- the workspace stays approachable even while exposing advanced actions
+- multiple layout modes let the interface adapt to task focus without rebuilding the whole product
+- comparison views help users reason about changes instead of only applying actions blindly
+
+What we should borrow:
+
+- panel logic for Studio and Arrangement
+- selection-driven property inspection
+- clearer preview hierarchy
+- stronger timeline-centered task flow
+- a limited set of workspace-focus modes
+
+What we should not borrow literally:
+
+- template and effects marketplace density
+- generic video-editor jargon
+- tab-heavy browsing chrome
+- a video-first personality that would weaken GigaStudy's musical identity
+
 ## 3. Final Art Direction
 
 ### Mood
@@ -269,6 +301,7 @@ Canonical layout:
 Design rule:
 
 - the studio should stop reading as stacked panels and start reading as one integrated control surface
+- the next Studio pass should absorb Filmora's clearer split between source rack, preview canvas, timeline lane, and contextual property inspector without inheriting its video-editor clutter
 
 ### Screen 3. Arrangement
 
@@ -286,6 +319,7 @@ Design rule:
 
 - the score must visually feel like the hero artifact
 - export and compare UI must support the score, not compete with it
+- the next Arrangement pass should borrow Filmora's panel discipline for candidate browsing, preview control, and contextual properties while keeping the score paper as the dominant artifact
 
 ### Screen 4. Ops
 
@@ -373,6 +407,10 @@ Promote arrangement score view visually so it feels like a destination, not a su
 ### Priority 4
 
 Keep ops dense and useful, but visually separate it from the product-facing personality.
+
+### Priority 5
+
+Run one Filmora-informed mockup pass for `Studio` and `Arrangement` that strengthens source rack, preview hierarchy, timeline rail, and inspector behavior without replacing the `Quiet Studio Console` identity.
 
 ## 9. Foundation Decision
 

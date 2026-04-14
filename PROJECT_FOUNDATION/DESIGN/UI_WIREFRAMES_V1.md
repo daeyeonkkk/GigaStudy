@@ -96,6 +96,7 @@ Reference lean:
 - Ableton Arrangement View for timeline and transport hierarchy
 - Descript for center workspace plus right inspector
 - Linear for calm density
+- Filmora for clearer separation between source rack, preview player, timeline, and property inspector
 
 Primary message:
 
@@ -104,6 +105,7 @@ Primary message:
 Key rule:
 
 - this screen should stop reading as stacked panels
+- the next mockup pass may move more guide and take context into a Filmora-like left source rack, as long as the musical language stays primary
 
 ```mermaid
 flowchart TB
@@ -151,6 +153,7 @@ Reference lean:
 - score-first artifact view from notation tools
 - Ableton-like transport awareness
 - Notion-like calm polish for secondary rails
+- Filmora for a stronger candidate-source rail plus contextual right-side property discipline
 
 Primary message:
 

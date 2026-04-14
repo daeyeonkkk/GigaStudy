@@ -10,6 +10,7 @@ Date: 2026-04-14
 - `QUALITY/INTONATION_CALIBRATION_REPORT.md`
 - `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
 - `DESIGN/UI_DESIGN_DIRECTION.md`
+- `DESIGN/FILMORA_REFERENCE_REVIEW.md`
 - `DESIGN/UI_WIREFRAMES_V1.md`
 - `DESIGN/UI_MOCKUP_TRACK.md`
 - `DESIGN/UI_EDITABLE_SOURCE/README.md`
@@ -387,6 +388,9 @@ Date: 2026-04-14
 - The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
 - The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, and the implemented UI now has a concrete target for every first-wave route instead of leaving `Ops` as the remaining visual outlier.
 - The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is now upgrading the repo-local editable source into a shared Figma workflow rather than creating the first editable source from scratch.
+- Filmora is now documented as an accepted secondary reference for `Studio` and `Arrangement`, specifically for panel logic:
+  source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
+  It is explicitly not accepted as a full-product style replacement for `Quiet Studio Console`.
 - The deployed Studio route is more trustworthy than it was at the start of the alpha pass, but one narrower playback edge case still remains for follow-up: a duplicated lower take-player instance can still miss metadata in this Windows automation environment even though the main Studio players, export links, and route-level analysis flow are healthy.
 
 ## Recommended Next Work
@@ -398,3 +402,5 @@ Date: 2026-04-14
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
 6. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
 7. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior, broader microphone variability, and the remaining duplicated-player playback edge case.
+8. Run a Filmora-informed mockup pass for `Studio` and `Arrangement`, but keep the scope narrow:
+   absorb the panel split and comparison discipline without importing template-marketplace clutter or weakening the product's musical identity.

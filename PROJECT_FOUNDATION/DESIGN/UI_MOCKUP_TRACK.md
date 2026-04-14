@@ -98,6 +98,16 @@ Preferred future upgrade:
 4. Verify in browser.
 5. Only then mark the screen complete.
 
+For the next Studio and Arrangement mockup iteration, the accepted secondary reference is now Wondershare Filmora.
+That means the mockup pass should explicitly test:
+
+- a clearer source rack
+- a more obvious preview/player hierarchy
+- a stronger timeline or take rail
+- a contextual property inspector
+
+It does not mean importing Filmora's template-marketplace density or generic video-editor chrome.
+
 ## 7. Current Seeded Assets
 
 The repo now carries seeded exports for:

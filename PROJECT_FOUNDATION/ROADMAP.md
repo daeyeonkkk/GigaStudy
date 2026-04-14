@@ -416,3 +416,13 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
   one verified HTTPS staging environment.
 - The detailed assessment for that path now lives in:
   `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+
+## 8. Filmora-Informed Workspace Pass
+
+- The next UX/UI improvement pass should treat Wondershare Filmora as an accepted secondary reference for `Studio` and `Arrangement`.
+- Scope is limited to workspace structure:
+  source rack, preview/player hierarchy, timeline rail, contextual property inspector, and comparison-oriented review patterns.
+- Scope explicitly excludes:
+  template-marketplace density, generic video-editor jargon, effects-shopping chrome, and any visual move that weakens the `Quiet Studio Console` identity.
+- Completion for this pass means:
+  one updated Studio mockup, one updated Arrangement mockup, and one browser-reviewed implementation change that clearly reflects the accepted Filmora patterns.

@@ -1,7 +1,7 @@
 from uuid import UUID
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.tracks import (
@@ -14,6 +14,7 @@ from gigastudy_api.api.schemas.tracks import (
 )
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.takes import (
+    build_project_real_evidence_batch_download,
     build_take_real_evidence_batch_download,
     build_take_human_rating_packet_download,
     build_take_response,
@@ -120,6 +121,28 @@ def download_take_real_evidence_batch_endpoint(
     session: Session = Depends(get_db_session),
 ) -> Response:
     filename, payload = build_take_real_evidence_batch_download(session, project_id, track_id)
+    content_disposition = f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quote(filename)}'
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": content_disposition},
+    )
+
+
+@router.get(
+    "/projects/{project_id}/real-evidence-batch",
+    name="download_project_real_evidence_batch",
+)
+def download_project_real_evidence_batch_endpoint(
+    project_id: UUID,
+    track_ids: list[UUID] | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> Response:
+    filename, payload = build_project_real_evidence_batch_download(
+        session,
+        project_id,
+        track_ids=track_ids,
+    )
     content_disposition = f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quote(filename)}'
     return Response(
         content=payload,

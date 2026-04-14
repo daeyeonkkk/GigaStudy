@@ -148,6 +148,7 @@ Date: 2026-04-14
 - Human-rating collection materials are now Korean-first as well: the review packet copy is localized for local raters, and the rating-sheet builder now normalizes Korean labels back into canonical calibration values.
 - The Studio route now also exposes a Korean-first human-rating packet download for the selected take, so guide / take audio, note clips, the review packet HTML, and the seeded rating sheet can be handed to raters without falling back to a CLI-only export step first.
 - The Studio route now also exposes a one-shot real-evidence batch download for the selected take, so the same handoff can include human-rating assets plus the browser / hardware validation starter materials when the later real-data sprint begins.
+- The Studio route now also exposes a project-level real-evidence batch download, so every ready take in the current project can be handed to a later human-rating and browser / hardware collection round as one zip instead of one selected-take export at a time.
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
@@ -174,12 +175,12 @@ Date: 2026-04-14
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `102 passed`
+- Result: `104 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Targeted take-download regression:
   `uv run python -m pytest tests/test_tracks_api.py`
 - Result:
-  passed with `4 passed`, including the existing human-rating packet download and the new one-shot real-evidence batch zip download for a processed take.
+  passed with `5 passed`, including the existing human-rating packet download, the selected-take real-evidence batch zip, and the new multi-take project-level real-evidence batch zip.
 - Web verification for this pass:
   `npm run lint:web`,
   `npm run build:web`,

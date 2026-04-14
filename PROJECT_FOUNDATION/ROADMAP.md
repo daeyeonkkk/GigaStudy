@@ -309,6 +309,7 @@
 - human-rating review packet과 rating-sheet 입력값을 한국어 우선 기준으로 정리하고, builder가 이를 canonical calibration label로 정규화하게 함
 - studio에서 선택한 테이크를 사람 평가 패킷 zip으로 바로 내려받아, guide / take / 노트 클립 / 리뷰 HTML / 평가 시트를 한 번에 전달할 수 있게 함
 - studio에서 선택한 테이크를 사람 평가 자료와 환경 검증 시작 자료가 함께 들어 있는 one-shot real-evidence batch zip으로도 내려받아, 나중에 실데이터 수집을 한 번에 시작할 수 있게 함
+- studio에서 현재 프로젝트의 준비된 모든 READY 테이크를 project-level real-evidence batch zip으로도 내려받아, 나중에 여러 take를 한 번에 사람 평가 / 환경 검증 round로 넘길 수 있게 함
 - real-vocal corpus inventory / validation report for audio-path and rating coverage sanity checks
 - human-rating corpus manifest와 agreement report workflow
 - threshold-fit report generator for difficulty tiers

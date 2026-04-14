@@ -135,10 +135,12 @@ uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
     The pack now includes a CSV template plus a short Korean README so collection can begin without searching repo paths first.
 11. If the same round should begin with one selected real take as well, download `검증 준비 묶음 받기` from Studio first.
     That one zip now carries the selected take's human-rating assets together with the round-local browser / hardware starter files.
-12. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
+12. If the same round should begin from one project that already has multiple usable takes, Studio can instead download `준비된 테이크 묶음`.
+    That project-level zip now carries every READY take from the current project together with the same round-local starter material.
+13. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
     Prefer `uv run python scripts/import_environment_validation_runs.py --round-root <round>` so the round CSV and generated preview JSON stay together.
-13. Review the preview rows before importing them into the ops log
-14. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
+14. Review the preview rows before importing them into the ops log
+15. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
 
 After a manual validation round:
 

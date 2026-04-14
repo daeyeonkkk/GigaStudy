@@ -152,6 +152,23 @@ def list_take_tracks(session: Session, project_id: UUID) -> list[Track]:
     return list(session.execute(query).unique().scalars().all())
 
 
+def list_ready_take_tracks(session: Session, project_id: UUID) -> list[Track]:
+    _get_project_or_404(session, project_id)
+
+    query = (
+        select(Track)
+        .options(joinedload(Track.artifacts), joinedload(Track.scores))
+        .where(
+            Track.project_id == project_id,
+            Track.track_role == TrackRole.VOCAL_TAKE,
+            Track.track_status == TrackStatus.READY,
+        )
+        .order_by(Track.take_no.asc(), Track.created_at.asc())
+    )
+
+    return list(session.execute(query).unique().scalars().all())
+
+
 def _build_round_archive(round_root: Path, *, relative_root: Path | None = None) -> bytes:
     archive_root = relative_root or round_root
     archive_buffer = BytesIO()
@@ -263,6 +280,46 @@ def build_take_real_evidence_batch_download(
         archive_bytes = _build_round_archive(round_paths.root)
 
     filename = f"gigastudy-{exported_case.case_id}-real-evidence-batch.zip"
+    return filename, archive_bytes
+
+
+def build_project_real_evidence_batch_download(
+    session: Session,
+    project_id: UUID,
+    *,
+    track_ids: list[UUID] | None = None,
+) -> tuple[str, bytes]:
+    project = _get_project_or_404(session, project_id)
+    ready_takes = list_ready_take_tracks(session, project_id)
+
+    if track_ids:
+        allowed_ids = set(track_ids)
+        ready_takes = [track for track in ready_takes if track.track_id in allowed_ids]
+
+    if not ready_takes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No ready takes are available for project-level real-evidence export",
+        )
+
+    with TemporaryDirectory(prefix="gigastudy-project-real-evidence-batch-") as temp_dir:
+        round_paths = create_evidence_round_scaffold(
+            round_id="project-real-evidence-batch",
+            output_root=Path(temp_dir),
+            overwrite=True,
+        )
+        for track in ready_takes:
+            export_project_take_to_evidence_round(
+                session,
+                round_root=round_paths.root,
+                project_id=project.project_id,
+                take_track_id=track.track_id,
+                overwrite=True,
+            )
+        archive_bytes = _build_round_archive(round_paths.root)
+
+    project_label = _sanitize_filename(project.title, f"project-{project.project_id.hex[:8]}")
+    filename = f"gigastudy-{project_label}-real-evidence-batch.zip"
     return filename, archive_bytes
 
 

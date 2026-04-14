@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
+import json
 
 from fastapi.testclient import TestClient
 import pytest
@@ -262,3 +263,59 @@ def test_take_real_evidence_batch_download_returns_full_round_zip(client: TestCl
         checklist_text = archive.read("REAL_EVIDENCE_CHECKLIST.md").decode("utf-8")
         assert "one coordinated batch" in plan_text
         assert "Human-rating claim gate reviewed" in checklist_text
+
+
+def test_project_real_evidence_batch_download_returns_multi_take_round_zip(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=440.0, sample_rate=32000)
+    first_take_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=466.16, sample_rate=32000)
+    second_take_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=493.88, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Project Real Evidence Batch Session", "base_key": "C", "bpm": 96},
+    ).json()["project_id"]
+
+    _upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    first_take_id = _upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=first_take_bytes,
+        filename="take-one.wav",
+    )
+    second_take_id = _upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=second_take_bytes,
+        filename="take-two.wav",
+    )
+
+    assert client.post(f"/api/projects/{project_id}/tracks/{first_take_id}/analysis").status_code == 200
+    assert client.post(f"/api/projects/{project_id}/tracks/{second_take_id}/analysis").status_code == 200
+
+    batch_response = client.get(f"/api/projects/{project_id}/real-evidence-batch")
+    assert batch_response.status_code == 200
+    assert batch_response.headers["content-type"] == "application/zip"
+    assert "real-evidence-batch.zip" in batch_response.headers["content-disposition"]
+
+    with ZipFile(BytesIO(batch_response.content)) as archive:
+        names = archive.namelist()
+        assert "README.md" in names
+        assert "REAL_EVIDENCE_PLAN.md" in names
+        assert "REAL_EVIDENCE_CHECKLIST.md" in names
+        assert "human-rating/human_rating_cases.json" in names
+        assert "environment-validation/environment_validation_runs.csv" in names
+
+        take_audio_names = [
+            name for name in names if name.startswith("human-rating/audio/takes/") and name.endswith(".wav")
+        ]
+        review_packet_names = [
+            name
+            for name in names
+            if name.startswith("human-rating/review-packets/") and name.endswith(".html")
+        ]
+        assert len(take_audio_names) == 2
+        assert len(review_packet_names) == 2
+
+        cases_payload = json.loads(archive.read("human-rating/human_rating_cases.json").decode("utf-8"))
+        assert len(cases_payload["cases"]) == 2

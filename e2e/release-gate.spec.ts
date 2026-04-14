@@ -402,6 +402,13 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
   expect(batchDownload.suggestedFilename()).toMatch(/^gigastudy-.*-real-evidence-batch\.zip$/)
   const batchDownloadPath = await batchDownload.path()
   expect(batchDownloadPath).toBeTruthy()
+
+  const projectBatchDownloadPromise = page.waitForEvent('download')
+  await page.getByTestId('download-project-real-evidence-batch-button').click()
+  const projectBatchDownload = await projectBatchDownloadPromise
+  expect(projectBatchDownload.suggestedFilename()).toMatch(/^gigastudy-.*-real-evidence-batch\.zip$/)
+  const projectBatchDownloadPath = await projectBatchDownload.path()
+  expect(projectBatchDownloadPath).toBeTruthy()
 })
 
 test('release gate share flow opens a frozen snapshot and loses access after deactivation', async ({

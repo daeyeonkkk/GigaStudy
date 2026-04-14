@@ -33,6 +33,7 @@ The repo now supports:
 - Korean-first review packet copy plus Korean rating-label normalization (`높음 / 정확 / 낮음 / 판단 어려움`, `양호 / 검토 / 교정 필요`) for local rater collection
 - a product-facing packet download path in Studio for the selected take, so the first rater handoff no longer depends on CLI access alone
 - a product-facing one-shot real-evidence batch download path in Studio, so future human-rating collection can begin with the same zip that also carries browser / hardware validation starter material
+- a product-facing project-level real-evidence batch download path in Studio, so all READY takes in the current project can be handed off together when later collection should start from one project instead of one selected take
 - template inputs for the collection round:
   `apps/api/calibration/human_rating_cases.template.json`
   `apps/api/calibration/human_rating_sheet.template.csv`
@@ -143,6 +144,7 @@ That same export now also writes note-level guide/take clip WAV files under `hum
 It also writes a review packet HTML under `human-rating/review-packets/`, so one rater can open a single file and work through full-take listening plus per-note clip review from one place.
 When the take is already open in Studio, the same handoff bundle can also be downloaded directly from `평가 자료 받기`, which packages the `human-rating/` folder into one zip for raters.
 If the goal is to begin the later one-shot real-data sprint, Studio can also hand over `검증 준비 묶음 받기`, which packages the same selected case together with the round-local browser / hardware validation starter files.
+If several READY takes from the same project should travel together, Studio can also hand over `준비된 테이크 묶음`, which packages every ready take in the current project into one project-level real-evidence batch zip.
 
 3. If export is not possible yet, place the real guide/take WAV files into `human-rating/audio/guides/` and `human-rating/audio/takes/` manually.
 4. Update the generated `human-rating/human_rating_cases.json` metadata file so each case points to the real WAV paths for that round.

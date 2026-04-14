@@ -3422,6 +3422,7 @@ export function StudioPage() {
     takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
   const selectedTakePreview = selectedTake ? audioPreviews[selectedTake.track_id] ?? null : null
   const selectedTakePlaybackUrl = getSelectedTakePlaybackUrl(selectedTake)
+  const hasReadyEvidenceBatch = takesState.items.some((take) => take.track_status === 'READY')
   const humanRatingPacketUrl =
     projectId && selectedTake
       ? buildApiUrl(`/api/projects/${projectId}/tracks/${selectedTake.track_id}/human-rating-packet`)
@@ -3430,6 +3431,8 @@ export function StudioPage() {
     projectId && selectedTake
       ? buildApiUrl(`/api/projects/${projectId}/tracks/${selectedTake.track_id}/real-evidence-batch`)
       : null
+  const projectRealEvidenceBatchUrl =
+    projectId && hasReadyEvidenceBatch ? buildApiUrl(`/api/projects/${projectId}/real-evidence-batch`) : null
   const selectedTakeScore = selectedTake?.latest_score ?? null
   const selectedTakeNoteFeedback = selectedTakeScore?.note_feedback_json ?? []
   const selectedTakeAnalysisJob = selectedTake?.latest_analysis_job ?? null
@@ -4126,11 +4129,24 @@ export function StudioPage() {
                       className="button-secondary button-secondary--small"
                       href={realEvidenceBatchUrl}
                     >
-                      {"\uAC80\uC99D \uC900\uBE44 \uBB36\uC74C \uBC1B\uAE30"}
+                      {"\uC120\uD0DD \uD14C\uC774\uD06C \uBB36\uC74C"}
                     </a>
                   ) : (
                     <button className="button-secondary button-secondary--small" disabled type="button">
-                      {"\uAC80\uC99D \uC900\uBE44 \uBB36\uC74C \uBC1B\uAE30"}
+                      {"\uC120\uD0DD \uD14C\uC774\uD06C \uBB36\uC74C"}
+                    </button>
+                  )}
+                  {projectRealEvidenceBatchUrl ? (
+                    <a
+                      data-testid="download-project-real-evidence-batch-button"
+                      className="button-secondary button-secondary--small"
+                      href={projectRealEvidenceBatchUrl}
+                    >
+                      {"\uC900\uBE44\uB41C \uD14C\uC774\uD06C \uBB36\uC74C"}
+                    </a>
+                  ) : (
+                    <button className="button-secondary button-secondary--small" disabled type="button">
+                      {"\uC900\uBE44\uB41C \uD14C\uC774\uD06C \uBB36\uC74C"}
                     </button>
                   )}
                 </div>

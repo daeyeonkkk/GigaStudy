@@ -3439,13 +3439,24 @@ export function StudioPage() {
       : permissionState.phase === 'error'
         ? 'error'
         : 'loading'
-  const consoleChordLabel = chordMarkerCount > 0 ? '코드 준비됨' : '키 기준'
+  const consoleChordLabel = chordMarkerCount > 0 ? '화성 기준 있음' : '키 기준으로 비교'
   const consoleAlignmentLabel =
     selectedTake?.alignment_confidence === null || selectedTake?.alignment_confidence === undefined
       ? '없음'
       : formatConfidence(selectedTake.alignment_confidence)
   const inspectorDirectionValue =
     selectedNoteFeedback?.sustain_median_cents ?? selectedNoteFeedback?.attack_signed_cents ?? null
+  const selectedTakeLabel = selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '선택 없음'
+  const selectedTakeScoreLabel = selectedTakeScore
+    ? formatPercent(selectedTakeScore.total_score)
+    : selectedTake
+      ? getTrackStatusLabel(selectedTake.track_status)
+      : '대기 중'
+  const melodySummaryLabel = selectedTakeMelody
+    ? `${selectedTakeMelody.note_count}개 음표`
+    : '초안 없음'
+  const arrangementSummaryLabel = arrangements.length > 0 ? `${arrangements.length}개 후보` : '후보 없음'
+  const arrangementRoute = projectId ? `/projects/${projectId}/arrangement` : null
 
   return (
     <div className="page-shell">
@@ -3467,38 +3478,134 @@ export function StudioPage() {
             </span>
             <span className="studio-utility-chip">
               <strong>{project.base_key ?? '키 미설정'}</strong>
-              <small>{project.mode ?? 'practice'}</small>
+              <small>{project.base_key ? '기준 키' : '먼저 정해 주세요'}</small>
             </span>
             <span className="studio-utility-chip">
               <strong>{consoleChordLabel}</strong>
-              <small>{chordMarkerCount > 0 ? `${chordMarkerCount}개 마커` : '화성 대체 경로'}</small>
+              <small>{chordMarkerCount > 0 ? `${chordMarkerCount}개 마커` : '아직 마커 없음'}</small>
             </span>
             <span className={`studio-utility-chip studio-utility-chip--${consoleMicTone}`}>
               <strong>{consoleMicLabel}</strong>
-              <small>{latestProfile ? latestProfile.output_route : '아직 저장된 프로필이 없습니다'}</small>
+              <small>
+                {latestProfile ? `${latestProfile.output_route} · 장치 기록 있음` : '장치 기록 저장 전'}
+              </small>
             </span>
             <span className="studio-utility-chip">
               <strong>카운트인 {countInBeats}</strong>
-              <small>{metronomeEnabled ? '메트로놈 켜짐' : '메트로놈 꺼짐'}</small>
+              <small>{metronomeEnabled ? '박자 소리 켜짐' : '박자 소리 꺼짐'}</small>
             </span>
             <span className="studio-utility-chip">
               <strong>정렬 {consoleAlignmentLabel}</strong>
-              <small>{selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '선택된 테이크 없음'}</small>
+              <small>{selectedTake ? `${selectedTake.take_no ?? '?'}번 중심` : '테이크를 고르면 표시'}</small>
             </span>
           </div>
 
           <Link className="back-link" to="/">
-            새 프로젝트 만들기
+            홈으로
           </Link>
         </div>
 
         <div className="studio-console-grid">
+          <aside className="panel studio-console-rack">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">준비물 랙</p>
+                <h2>가이드와 테이크를 한쪽에서 고르고 바로 이어갑니다</h2>
+              </div>
+              <span className="status-pill status-pill--ready">{totalTrackCount}개 소스</span>
+            </div>
+
+            <div className="mini-grid studio-console-rack__summary">
+              <div className="mini-card">
+                <span>준비 완료</span>
+                <strong>{readyTakeCount}개 테이크</strong>
+              </div>
+              <div className="mini-card">
+                <span>선택한 테이크</span>
+                <strong>{selectedTakeLabel}</strong>
+              </div>
+              <div className="mini-card">
+                <span>멜로디</span>
+                <strong>{melodySummaryLabel}</strong>
+              </div>
+              <div className="mini-card">
+                <span>편곡</span>
+                <strong>{arrangementSummaryLabel}</strong>
+              </div>
+            </div>
+
+            <div className="studio-source-list">
+              {guide ? (
+                <div className="studio-source-card studio-source-card--guide">
+                  <div className="studio-source-card__body">
+                    <span className="studio-source-card__eyebrow">가이드</span>
+                    <strong>기준으로 들을 곡</strong>
+                    <small>
+                      {getTrackStatusLabel(guide.track_status)} · {formatDuration(guide.duration_ms)}
+                    </small>
+                  </div>
+                  <span className="candidate-chip candidate-chip--info">
+                    {guideSourceUrl ? '듣기 준비됨' : '대기 중'}
+                  </span>
+                </div>
+              ) : (
+                <div className="empty-card">
+                  <p>아직 가이드가 없습니다.</p>
+                  <p>먼저 가이드를 올리면 녹음 기준과 비교 기준이 함께 열립니다.</p>
+                </div>
+              )}
+
+              {takesState.items.length > 0 ? (
+                takesState.items.map((take) => (
+                  <button
+                    className={`studio-source-card ${
+                      selectedTake?.track_id === take.track_id ? 'studio-source-card--selected' : ''
+                    }`}
+                    key={`source-rack-${take.track_id}`}
+                    type="button"
+                    onClick={() => setSelectedTakeId(take.track_id)}
+                  >
+                    <div className="studio-source-card__body">
+                      <span className="studio-source-card__eyebrow">{take.take_no ?? '?'}번 테이크</span>
+                      <strong>{selectedTake?.track_id === take.track_id ? '지금 보고 있는 테이크' : '이 테이크로 보기'}</strong>
+                      <small>
+                        {getTrackStatusLabel(take.track_status)} ·{' '}
+                        {take.latest_score ? formatPercent(take.latest_score.total_score) : '채점 전'}
+                      </small>
+                    </div>
+                    <span
+                      className={`candidate-chip ${
+                        selectedTake?.track_id === take.track_id ? 'candidate-chip--selected' : ''
+                      }`}
+                    >
+                      {selectedTake?.track_id === take.track_id ? '집중 중' : '바꾸기'}
+                    </span>
+                  </button>
+                ))
+              ) : null}
+            </div>
+
+            <div className="studio-console-rack__footer">
+              <a className="button-secondary button-secondary--small" href="#recording">
+                녹음 구역
+              </a>
+              <a className="button-secondary button-secondary--small" href="#analysis">
+                피드백 보기
+              </a>
+              {arrangementRoute ? (
+                <Link className="button-secondary button-secondary--small" to={arrangementRoute}>
+                  편곡 화면
+                </Link>
+              ) : null}
+            </div>
+          </aside>
+
           <div className="studio-console-main">
             <article className="panel studio-console-canvas">
               <div className="panel-header">
                 <div>
-                  <p className="eyebrow">메인 캔버스</p>
-                  <h2>파형과 컨투어 캔버스</h2>
+                  <p className="eyebrow">듣고 보는 면</p>
+                  <h2>선택한 테이크를 파형과 음정 흐름으로 확인합니다</h2>
                 </div>
                 <span
                   className={`status-pill ${
@@ -3510,7 +3617,7 @@ export function StudioPage() {
                   }`}
                 >
                   {selectedTakePreview
-                    ? '캔버스 준비됨'
+                    ? '보기 준비됨'
                     : waveformState.phase === 'error'
                       ? '미리보기 오류'
                       : '테이크 대기 중'}
@@ -3519,29 +3626,17 @@ export function StudioPage() {
 
               {selectedTake ? (
                 <div className="support-stack">
-                  <div className="mini-grid">
-                    <div className="mini-card">
-                      <span>선택한 테이크</span>
-                      <strong>{selectedTake.take_no ?? '?'}번 테이크</strong>
-                    </div>
-                    <div className="mini-card">
-                      <span>상태</span>
-                      <strong>{getTrackStatusLabel(selectedTake.track_status)}</strong>
-                    </div>
-                    <div className="mini-card">
-                      <span>길이</span>
-                      <strong>{formatDuration(selectedTake.duration_ms)}</strong>
-                    </div>
-                    <div className="mini-card">
-                      <span>미리보기 출처</span>
-                      <strong>
-                        {selectedTakePreview
-                          ? selectedTakePreview.source === 'local'
-                            ? '로컬 blob'
-                            : '저장된 오디오'
-                          : '준비되지 않음'}
-                      </strong>
-                    </div>
+                  <div className="studio-console-canvas__meta">
+                    <span>{selectedTakeLabel}</span>
+                    <span>{getTrackStatusLabel(selectedTake.track_status)}</span>
+                    <span>{formatDuration(selectedTake.duration_ms)}</span>
+                    <span>
+                      {selectedTakePreview
+                        ? selectedTakePreview.source === 'local'
+                          ? '방금 녹음한 파일'
+                          : '저장된 파일'
+                        : '미리보기 준비 전'}
+                    </span>
                   </div>
 
                   {selectedTakePreview ? (
@@ -3575,8 +3670,8 @@ export function StudioPage() {
             <article className="panel studio-console-transport">
               <div className="panel-header">
                 <div>
-                  <p className="eyebrow">트랜스포트 + 트랙 레인</p>
-                  <h2>녹음, 선택, 빠른 재생을 하나의 하단 레일에서 이어갑니다</h2>
+                  <p className="eyebrow">시간선</p>
+                  <h2>녹음과 테이크 정리를 아래 레일에서 이어갑니다</h2>
                 </div>
                 <span className="status-pill status-pill--ready">{totalTrackCount}개 트랙</span>
               </div>
@@ -3814,8 +3909,8 @@ export function StudioPage() {
           <aside className="panel studio-console-inspector">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">인스펙터</p>
-                <h2>점수, 음정 방향, 환경 리스크를 한눈에 유지합니다</h2>
+                <p className="eyebrow">바로 확인할 내용</p>
+                <h2>점수와 보정 포인트를 오른쪽에 모아 둡니다</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -3835,11 +3930,11 @@ export function StudioPage() {
             <div className="mini-grid">
               <div className="mini-card">
                 <span>선택한 테이크</span>
-                <strong>{selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '없음'}</strong>
+                <strong>{selectedTakeLabel}</strong>
               </div>
               <div className="mini-card">
-                <span>준비 완료 테이크</span>
-                <strong>{readyTakeCount}</strong>
+                <span>현재 상태</span>
+                <strong>{selectedTakeScoreLabel}</strong>
               </div>
               <div className="mini-card">
                 <span>음정 기준</span>
@@ -3935,11 +4030,11 @@ export function StudioPage() {
               </div>
 
               <div className="mini-card mini-card--stack">
-                <span>상세 작업 구역</span>
-                <strong>깊은 편집 도구는 아래 워크벤치에 유지됩니다</strong>
+                <span>다음 작업</span>
+                <strong>아래 구역에서 세부 조정과 저장을 이어갑니다</strong>
                 <small>
-                  아래 섹션에서 장치 기록 확인, 코드 마커 정리, 고급 붙여넣기, 편곡 다듬기,
-                  믹스다운 저장, 버전 히스토리, 공유 관리를 이어서 진행할 수 있습니다.
+                  장치 기록, 코드 마커, 멜로디, 편곡, 믹스다운, 공유를 아래 워크벤치에서 차례대로
+                  이어갈 수 있습니다.
                 </small>
               </div>
             </div>

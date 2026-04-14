@@ -368,6 +368,13 @@ After backend deploy, copy the Cloud Run HTTPS URL into:
 pwsh -File scripts/deploy_alpha_frontend.ps1 -ProjectName <pages-project-name> -BranchName staging
 ```
 
+If the operator machine does not have PowerShell 7 (`pwsh`) installed and is already inside classic Windows PowerShell,
+run the same script with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy_alpha_frontend.ps1 -ProjectName <pages-project-name> -BranchName staging
+```
+
 This script:
 
 - runs `npm run build:web -- --mode alpha`

@@ -88,6 +88,9 @@ Date: 2026-04-14
 - Ops language now treats browser environment evidence as "장치 기록" and "브라우저 재생 경로" instead of exposing raw implementation labels in the default view.
 - 사용자에게 노출되는 핵심 화면의 기본 문구는 이제 한국어를 우선하도록 정리되었고, Home, Studio, Arrangement, Shared Review, Ops에서 내부 개발 단계명이나 백로그 번호 노출을 걷어냈다.
 - Studio와 Arrangement의 기본 작업면은 이제 `가이드 겹치기`, `다시 확인`, `악보와 미리듣기`처럼 단순한 한국어 작업명을 쓰고, 직접 붙여넣는 원시 데이터는 `고급` 펼침 안으로만 노출한다.
+- Studio의 상단 작업면은 이제 `준비물 랙 -> 듣고 보는 면 -> 시간선 -> 오른쪽 판단 패널` 구조로 더 분명하게 나뉘며, 가이드/테이크 선택과 현재 보고 있는 대상이 한 번에 읽히도록 정리되었다.
+- Studio의 핵심 작업면 문구도 더 생활 언어에 가깝게 다듬었다:
+  `메인 캔버스`, `트랜스포트 + 트랙 레인`, `인스펙터` 중심 설명 대신 `준비물 랙`, `듣고 보는 면`, `시간선`, `바로 확인할 내용`처럼 실제 한국 사용자가 바로 이해할 표현을 우선한다.
 - Verification for this copy-cleanup pass: `npm run lint:web`, `npm run build:web`, and `npm run test:e2e` all passed again (`34 passed / 5 skipped` in Playwright).
 - 영어는 `MusicXML`, `MIDI`, `WAV`, `DeviceProfile`, `AudioWorklet`, `AudioContext`처럼 실제로 관용적으로 쓰이는 기술 용어에만 제한적으로 남기고, `note-level`, `signed cents`, `guide WAV`, `Phase`, `FE/BE` 같은 사용자 문구는 자연스러운 한국어 표현으로 바꿨다.
 - Post-recording analysis now uses `librosa.pyin` contour support plus onset-envelope alignment.
@@ -247,6 +250,7 @@ Date: 2026-04-14
 - Browser release-gate smoke path: `npm run test:e2e`
 - Result: `34 passed`, `5 skipped`
 - Scope now also verifies that the Korean-first product copy still holds through the main user-facing routes, including Home, Studio, Arrangement workspace, Shared Review, Ops validation forms, and environment-validation CSV import flows.
+- Scope now also includes the Filmora-informed Studio v2 workspace pass across Chromium, Firefox, and WebKit, verifying that the source rack, preview canvas, lower time rail, and right-side inspector remain reachable without breaking the seeded studio journey.
 - Web route-split hardening:
   non-home routes now load through `React.lazy` + `Suspense`, and Vite manually splits `opensheetmusicdisplay`, `vexflow`, and router vendor chunks.
 - The Studio integrated-console refactor now also keeps the browser release gate green after the shell and workbench split, so the visual restructuring did not break the seeded product paths.
@@ -396,6 +400,7 @@ Date: 2026-04-14
 - The alpha deployment scripts now also convert the local dotenv-style alpha env into a temporary Cloud Run YAML env file automatically, so staging operators do not have to keep one secret file for local tools and a second one for Cloud Run.
 - The manual Pages staging script now also builds the web app in Vite `alpha` mode, so `apps/web/.env.alpha` is reflected in Wrangler-based redeploys instead of silently falling back to the local default API host.
 - Those staging helpers are now verified not only through repo-level dry-run command generation, but also through a real alpha migration, backend deploy, frontend redeploy, and browser smoke pass on the chosen stack.
+- The manual Wrangler fallback was also exercised again from a real Windows PowerShell shell without `pwsh`, and the resulting unique Pages deployment matched the current production `https://gigastudy-alpha.pages.dev` bundle after the redeploy completed.
 - The web build now also ships a top-level `_redirects` file, so Cloudflare Pages can serve client-side routes through the SPA entry instead of breaking deep links.
 - The foundation now also has a dedicated operator handoff document at `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`, so the remaining real-cloud steps are explicit instead of living only in chat.
 - The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
@@ -412,8 +417,8 @@ Date: 2026-04-14
   That closes the mockup-pass planning gap.
 - The first live implementation half of that pass is now complete on the dedicated Arrangement route:
   the page has been restructured around a candidate rack, central score/player stage, and export-first inspector, and the dedicated arrangement workspace release gate now passes again in Chromium, Firefox, and WebKit.
-- The remaining live UX/UI gap in this track is now narrower and more explicit:
-  Studio still needs the same browser-reviewed v2 implementation pass that Arrangement now has.
+- The second live implementation half of that pass is now complete on the Studio route as well:
+  the page now exposes a dedicated source rack, a clearer preview canvas, a stronger lower time rail, and a right-side inspector without bringing developer-facing copy back onto the default surface.
 - The deployed Studio route is more trustworthy than it was at the start of the alpha pass, but one narrower playback edge case still remains for follow-up: a duplicated lower take-player instance can still miss metadata in this Windows automation environment even though the main Studio players, export links, and route-level analysis flow are healthy.
 
 ## Recommended Next Work
@@ -425,6 +430,4 @@ Date: 2026-04-14
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
 6. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
 7. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior, broader microphone variability, and the remaining duplicated-player playback edge case.
-8. Carry the same Filmora-informed v2 implementation discipline from `Arrangement` into `Studio`, while keeping the scope narrow:
-   absorb the panel split and comparison discipline without importing template-marketplace clutter or weakening the product's musical identity.
-9. Re-review the dedicated Arrangement route after any further export, playback, or inspector changes so it stays aligned with `arrangement-v2` instead of drifting back toward a generic three-column tool page.
+8. Re-review the dedicated Studio and Arrangement routes after any further export, playback, or inspector changes so they stay aligned with `studio-v2` and `arrangement-v2` instead of drifting back toward generic tool surfaces.

@@ -197,7 +197,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
   source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
 - [x] A browser-reviewed Studio or Arrangement implementation pass has moved the live product noticeably closer to the Filmora-informed v2 mockups.
   Arrangement now passes a dedicated cross-browser release-gate check against the v2 workspace structure.
-- [ ] The Studio route has received the same browser-reviewed v2 implementation pass that Arrangement now has.
+- [x] The Studio route has received the same browser-reviewed v2 implementation pass that Arrangement now has.
 
 ## 17. Mockup Track
 

@@ -393,7 +393,7 @@ function summarizeRecorderSupport(snapshot: BrowserAudioCapabilitySnapshot | nul
   if (!snapshot.media_recorder.supported) {
     return '사용 불가'
   }
-  return snapshot.media_recorder.selected_mime_type ?? '오디오 MIME 없음'
+  return snapshot.media_recorder.selected_mime_type ? '지원 형식 있음' : '지원 형식 없음'
 }
 
 function summarizeWebAudioSupport(snapshot: BrowserAudioCapabilitySnapshot | null): string {
@@ -404,9 +404,9 @@ function summarizeWebAudioSupport(snapshot: BrowserAudioCapabilitySnapshot | nul
     return '사용 불가'
   }
   if (snapshot.web_audio.audio_context_mode === 'webkit') {
-    return '구형 webkit 브리지'
+    return '호환 경로'
   }
-  return '표준 AudioContext'
+  return '표준 경로'
 }
 
 function summarizeBrowserAudioStack(snapshot: BrowserAudioCapabilitySnapshot | null): string {
@@ -886,13 +886,13 @@ function getConfidenceTone(value: number | null): 'good' | 'warn' | 'alert' | 'n
 function getPitchQualityModeLabel(mode: string | null | undefined): string {
   switch (mode) {
     case 'NOTE_EVENT_V1':
-      return '노트 단위 채점'
+      return '노트별 확인'
     case 'FRAME_PITCH_V1':
-      return '프레임 피치 채점'
+      return '기본 음 높이 확인'
     case 'COARSE_CONTOUR_V1':
-      return '거친 컨투어 대체 경로'
+      return '간단 확인'
     default:
-      return mode ?? '알 수 없는 채점 모드'
+      return '확인 방식 정보 없음'
   }
 }
 
@@ -901,22 +901,22 @@ function getPitchQualityModeHint(mode: string | null | undefined): string {
     case 'NOTE_EVENT_V1':
       return '방향 음정 오차, 시작음/유지음 구간, 타이밍이 모두 노트 이벤트 기준으로 계산됩니다.'
     case 'FRAME_PITCH_V1':
-      return '프레임 단위 피치는 있지만 아직 노트 이벤트 채점까지는 연결되지 않았습니다.'
+      return '기본 음 높이 흐름을 먼저 확인한 결과입니다.'
     case 'COARSE_CONTOUR_V1':
-      return '대체 경로입니다. phrase 피드백은 정밀 음정 판정이 아니라 거친 가이드로 받아들여 주세요.'
+      return '간단 안내용 결과입니다. 세밀한 교정보다는 큰 흐름을 보는 데에 적합합니다.'
     default:
-      return '채점 모드 라벨이 아직 준비되지 않았습니다.'
+      return '확인 방식 설명을 아직 준비하지 못했습니다.'
   }
 }
 
 function getHarmonyReferenceLabel(mode: string | null | undefined): string {
   switch (mode) {
     case 'CHORD_AWARE':
-      return '코드 인식 화성'
+      return '저장한 코드 기준'
     case 'KEY_ONLY':
-      return '키 기준 대체 경로'
+      return '기준 키 중심'
     default:
-      return mode ?? '알 수 없는 화성 모드'
+      return '화음 기준 정보 없음'
   }
 }
 
@@ -934,7 +934,7 @@ function getHarmonyReferenceHint(
       : '코드 타임라인이 없어 화성 적합도를 코드 대신 프로젝트 키 기준으로 계산합니다.'
   }
 
-  return '화성 기준 모드 라벨이 아직 준비되지 않았습니다.'
+  return '화음 기준 설명을 아직 준비하지 못했습니다.'
 }
 
 function midiToPitchName(pitchMidi: number): string {
@@ -1006,10 +1006,6 @@ function serializeTrackSettings(settings: MediaTrackSettings): Record<string, un
 function getTrackLatency(settings: MediaTrackSettings): number | null {
   const withLatency = settings as MediaTrackSettings & { latency?: number }
   return pickNumber(withLatency.latency)
-}
-
-function toPrettyJson(value: unknown): string {
-  return JSON.stringify(value ?? {}, null, 2)
 }
 
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -1165,7 +1161,7 @@ export function StudioPage() {
     phase: 'idle',
     peak: 0,
     rms: 0,
-    message: '다음 테이크가 시작되면 AudioWorklet 미터가 자동으로 활성화됩니다.',
+    message: '다음 테이크가 시작되면 입력 표시가 자동으로 켜집니다.',
   })
   const [metronomePreviewState, setMetronomePreviewState] = useState<ActionState>({
     phase: 'idle',
@@ -1200,7 +1196,6 @@ export function StudioPage() {
   const [melodyNotesDraft, setMelodyNotesDraft] = useState<MelodyNote[]>([])
   const [arrangementState, setArrangementState] = useState<ActionState>({ phase: 'idle' })
   const [arrangementSaveState, setArrangementSaveState] = useState<ActionState>({ phase: 'idle' })
-  const [arrangementGenerationId, setArrangementGenerationId] = useState<string | null>(null)
   const [arrangements, setArrangements] = useState<ArrangementCandidate[]>([])
   const [selectedArrangementId, setSelectedArrangementId] = useState<string | null>(null)
   const [arrangementTitleDraft, setArrangementTitleDraft] = useState('')
@@ -1372,7 +1367,7 @@ export function StudioPage() {
         current.phase === 'unsupported'
           ? current.message
           : resetMessage
-            ? '다음 테이크가 시작되면 AudioWorklet 미터가 자동으로 활성화됩니다.'
+            ? '다음 테이크가 시작되면 입력 표시가 자동으로 켜집니다.'
             : current.message,
     }))
   }
@@ -1385,7 +1380,7 @@ export function StudioPage() {
         phase: 'active',
         peak: reading.peak,
         rms: reading.rms,
-        message: 'AudioWorklet 미터가 활성화되었습니다.',
+        message: '입력 표시가 켜졌습니다.',
       })
     })
 
@@ -1395,7 +1390,7 @@ export function StudioPage() {
         phase: 'unsupported',
         peak: 0,
         rms: 0,
-        message: '이 브라우저 경로에서는 AudioWorklet 미터를 사용할 수 없습니다.',
+        message: '이 브라우저에서는 실시간 입력 표시를 사용할 수 없습니다.',
       })
       return
     }
@@ -1404,7 +1399,7 @@ export function StudioPage() {
       phase: 'active',
       peak: 0,
       rms: 0,
-      message: 'AudioWorklet 미터가 활성화되었습니다.',
+      message: '입력 표시가 켜졌습니다.',
     })
   }
 
@@ -1454,7 +1449,6 @@ export function StudioPage() {
     setGuideState({ phase: 'ready', guide: snapshot.guide })
     setTakesState({ phase: 'ready', items: snapshot.takes })
     setMixdownSummary(snapshot.mixdown)
-    setArrangementGenerationId(snapshot.arrangement_generation_id)
     setArrangements(snapshot.arrangements)
     setAudioPreviews((current) => {
       const next = { ...current }
@@ -2051,7 +2045,7 @@ export function StudioPage() {
 
     setAnalysisState({
       phase: 'submitting',
-      message: '서버에서 coarse/fine 정렬과 점수 계산을 실행하는 중입니다...',
+      message: '서버에서 음정과 타이밍을 다시 확인하는 중입니다...',
     })
 
     try {
@@ -2069,7 +2063,7 @@ export function StudioPage() {
       await refreshStudioSnapshot().catch(() => null)
       setAnalysisState({
         phase: 'success',
-        message: `분석을 저장했습니다. 총점 ${analysis.latest_score.total_score.toFixed(1)}, 음정 모드 ${getPitchQualityModeLabel(analysis.latest_score.pitch_quality_mode)}, 화성 모드 ${getHarmonyReferenceLabel(analysis.latest_score.harmony_reference_mode)}입니다.`,
+        message: `분석을 저장했습니다. 총점 ${analysis.latest_score.total_score.toFixed(1)}점과 최신 피드백을 확인해 보세요.`,
       })
     } catch (error) {
       setAnalysisState({
@@ -2252,7 +2246,6 @@ export function StudioPage() {
         generation_id: string
         items: ArrangementCandidate[]
       }
-      setArrangementGenerationId(payload.generation_id)
       setArrangements(payload.items)
       setSelectedArrangementId(payload.items[0]?.arrangement_id ?? null)
       await refreshStudioSnapshot().catch(() => null)
@@ -2281,12 +2274,12 @@ export function StudioPage() {
     try {
       parsedParts = JSON.parse(arrangementJsonDraft) as ArrangementPart[]
       if (!Array.isArray(parsedParts) || parsedParts.length === 0) {
-        throw new Error('Arrangement JSON must contain at least one part.')
+        throw new Error('붙여넣은 편곡 데이터에는 최소 한 파트가 있어야 합니다.')
       }
     } catch (error) {
       setArrangementSaveState({
         phase: 'error',
-        message: error instanceof Error ? error.message : '편곡 JSON을 해석하지 못했습니다.',
+        message: error instanceof Error ? error.message : '고급 편집 내용을 읽지 못했습니다.',
       })
       return
     }
@@ -2359,11 +2352,11 @@ export function StudioPage() {
         throw new Error(await readErrorMessage(response, '분석 작업을 재실행하지 못했습니다.'))
       }
 
-      const analysis = (await response.json()) as TrackAnalysisResponse
+      await response.json()
       await refreshStudioSnapshot().catch(() => null)
       setAnalysisState({
         phase: 'success',
-        message: `모델 ${analysis.latest_job.model_version}로 분석을 다시 실행했습니다. ${getPitchQualityModeLabel(analysis.latest_score.pitch_quality_mode)} / ${getHarmonyReferenceLabel(analysis.latest_score.harmony_reference_mode)} 결과를 저장했습니다.`,
+        message: '분석을 다시 실행해 최신 결과를 저장했습니다.',
       })
     } catch (error) {
       setAnalysisState({
@@ -2433,7 +2426,7 @@ export function StudioPage() {
       arrangementPlaybackRef.current = controller
       setArrangementTransportState({
         phase: 'playing',
-        message: '분리된 편곡 미리듣기 엔진으로 재생 중입니다.',
+        message: '편곡 미리듣기를 재생 중입니다.',
       })
     } catch (error) {
       setArrangementTransportState({
@@ -3071,7 +3064,7 @@ export function StudioPage() {
       })
 
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'DeviceProfile 저장에 실패했습니다.'))
+        throw new Error(await readErrorMessage(response, '장치 기록 저장에 실패했습니다.'))
       }
 
       const savedProfile = (await response.json()) as DeviceProfile
@@ -3084,13 +3077,13 @@ export function StudioPage() {
       })
       setSaveDeviceState({
         phase: 'success',
-        message: 'DeviceProfile을 저장했고, 요청한 constraints와 실제 적용 설정도 함께 기록했습니다.',
+        message: '장치 기록을 저장했고, 요청한 입력 설정과 실제 적용 결과도 함께 남겼습니다.',
       })
     } catch (error) {
       await refreshCapabilityPreview().catch(() => undefined)
       setSaveDeviceState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'DeviceProfile 저장에 실패했습니다.',
+        message: error instanceof Error ? error.message : '장치 기록 저장에 실패했습니다.',
       })
     } finally {
       captureStream?.getTracks().forEach((streamTrack) => streamTrack.stop())
@@ -3246,12 +3239,12 @@ export function StudioPage() {
       setChordTimelineJsonDraft(serializeChordTimelineItems(payload))
       setProjectHarmonyState({
         phase: 'success',
-        message: '현재 코드 행을 JSON 편집기로 불러왔습니다.',
+        message: '현재 코드 행을 붙여넣기 칸으로 옮겼습니다.',
       })
     } catch (error) {
       setProjectHarmonyState({
         phase: 'error',
-        message: error instanceof Error ? error.message : '코드 행을 JSON으로 정리하지 못했습니다.',
+        message: error instanceof Error ? error.message : '코드 행을 붙여넣기 형식으로 정리하지 못했습니다.',
       })
     }
   }
@@ -3260,7 +3253,7 @@ export function StudioPage() {
     try {
       const parsed = JSON.parse(chordTimelineJsonDraft) as unknown
       if (!Array.isArray(parsed)) {
-        throw new Error('코드 타임라인 가져오기는 JSON 배열 형식이어야 합니다.')
+        throw new Error('붙여넣기 내용은 목록 형식이어야 합니다.')
       }
 
       const fallbackRoot =
@@ -3277,8 +3270,7 @@ export function StudioPage() {
     } catch (error) {
       setProjectHarmonyState({
         phase: 'error',
-        message:
-          error instanceof Error ? error.message : '코드 타임라인 JSON을 불러오지 못했습니다.',
+        message: error instanceof Error ? error.message : '붙여넣기 내용을 불러오지 못했습니다.',
       })
     }
   }
@@ -3850,11 +3842,11 @@ export function StudioPage() {
                 <strong>{readyTakeCount}</strong>
               </div>
               <div className="mini-card">
-                <span>음정 모드</span>
+                <span>음정 기준</span>
                 <strong>{getPitchQualityModeLabel(selectedTakeScore?.pitch_quality_mode)}</strong>
               </div>
               <div className="mini-card">
-                <span>화성 모드</span>
+                <span>화음 기준</span>
                 <strong>{getHarmonyReferenceLabel(selectedTakeScore?.harmony_reference_mode)}</strong>
               </div>
             </div>
@@ -3938,7 +3930,7 @@ export function StudioPage() {
                         .slice(0, 3)
                         .map((flag) => getBrowserAudioWarningLabel(flag))
                         .join(' · ')
-                    : '이 경로에서는 레코더, 권한, Web Audio 흐름이 모두 사용 가능한 상태로 보입니다.'}
+                    : '이 경로에서는 녹음, 권한, 재생 흐름이 모두 사용 가능한 상태로 보입니다.'}
                 </small>
               </div>
 
@@ -3946,8 +3938,8 @@ export function StudioPage() {
                 <span>상세 작업 구역</span>
                 <strong>깊은 편집 도구는 아래 워크벤치에 유지됩니다</strong>
                 <small>
-                  아래 섹션에서 DeviceProfile 확인, 코드 작성, JSON 편집, 편곡 수정, 믹스다운 저장,
-                  버전 히스토리, 공유 관리를 이어서 진행할 수 있습니다.
+                  아래 섹션에서 장치 기록 확인, 코드 마커 정리, 고급 붙여넣기, 편곡 다듬기,
+                  믹스다운 저장, 버전 히스토리, 공유 관리를 이어서 진행할 수 있습니다.
                 </small>
               </div>
             </div>
@@ -4036,14 +4028,14 @@ export function StudioPage() {
                 type="button"
                 onClick={handleLoadChordRowsIntoJson}
               >
-                행을 JSON으로 불러오기
+                붙여넣기 칸 채우기
               </button>
               <button
                 className="button-secondary"
                 type="button"
                 onClick={handleApplyChordImport}
               >
-                JSON 가져오기 적용
+                붙여넣기 반영
               </button>
               <button
                 data-testid="save-chord-timeline-button"
@@ -4068,8 +4060,8 @@ export function StudioPage() {
               </p>
             ) : (
               <p className="status-card__hint">
-                `start_ms`와 `end_ms`는 밀리초 기준으로 넣어 주세요. 대부분은 root와 quality만으로
-                충분하고, 코드톤을 이미 알고 있다면 pitch classes는 선택 사항입니다.
+                시작 시간과 끝 시간은 밀리초 기준으로 적어 주세요. 대부분은 코드 이름만 있어도
+                시작할 수 있고, 세부 음 정보는 필요할 때만 더하면 됩니다.
               </p>
             )}
 
@@ -4156,7 +4148,7 @@ export function StudioPage() {
             ) : (
               <div className="empty-card">
                 <p>편집기에 아직 코드 마커가 없습니다.</p>
-                <p>직접 추가하거나 프로젝트 키에서 하나를 만들고, JSON 타임라인을 붙여 시작할 수 있습니다.</p>
+                <p>직접 추가하거나 프로젝트 키에서 시작한 뒤, 준비된 목록을 붙여 넣어 이어갈 수 있습니다.</p>
               </div>
             )}
           </article>
@@ -4164,8 +4156,8 @@ export function StudioPage() {
           <article className="panel studio-block">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">JSON 가져오기 / 내보내기</p>
-                <h2>준비된 코드 마커를 붙여 넣거나 저장 형태를 확인합니다</h2>
+                <p className="eyebrow">고급 붙여넣기</p>
+                <h2>준비된 코드 목록을 붙여 넣어 편집기로 가져옵니다</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -4177,40 +4169,29 @@ export function StudioPage() {
             </div>
 
             <p className="panel__summary">
-              이 영역은 의도적으로 가볍게 유지합니다. 다른 도구에서 코드 마커를 이미 만들었다면
-              여기에 붙여 넣고 행 편집기에 적용한 뒤 프로젝트에 저장하세요.
+              다른 도구에서 이미 만든 코드 목록이 있다면 여기 붙여 넣어 편집기에 반영할 수 있습니다.
+              평소에는 위쪽 행 편집기만으로도 충분합니다.
             </p>
 
-            <label className="field">
-              <span>코드 타임라인 JSON</span>
-              <textarea
-                className="text-input json-card--editor"
-                value={chordTimelineJsonDraft}
-                onChange={(event) => setChordTimelineJsonDraft(event.target.value)}
-                spellCheck={false}
-              />
-            </label>
+            <details className="advanced-panel">
+              <summary className="advanced-panel__summary">고급 붙여넣기 열기</summary>
+              <div className="advanced-panel__body">
+                <label className="field">
+                  <span>코드 목록 붙여넣기</span>
+                  <textarea
+                    className="text-input json-card--editor"
+                    value={chordTimelineJsonDraft}
+                    onChange={(event) => setChordTimelineJsonDraft(event.target.value)}
+                    spellCheck={false}
+                  />
+                </label>
 
-            <div className="empty-card empty-card--warn">
-              <p>기대 형식</p>
-              <p>
-                `start_ms`, `end_ms`, `label`, `root`, `quality`, 선택적인 `pitch_classes`
-                를 가진 객체 배열을 사용합니다.
-              </p>
-            </div>
-
-            <div className="mini-card mini-card--stack">
-              <span>예시</span>
-              <pre className="json-card">{`[
-  {
-    "start_ms": 0,
-    "end_ms": 2000,
-    "label": "A",
-    "root": "A",
-    "quality": "major"
-  }
-]`}</pre>
-            </div>
+                <div className="empty-card empty-card--warn">
+                  <p>붙여 넣기 전에 확인하세요.</p>
+                  <p>각 구간의 시작 시간, 끝 시간, 코드 이름이 순서대로 들어 있으면 대부분 바로 가져올 수 있습니다.</p>
+                </div>
+              </div>
+            </details>
           </article>
         </div>
       </section>
@@ -4226,7 +4207,7 @@ export function StudioPage() {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">장치 패널</p>
-                <h2>마이크 권한을 요청하고 DeviceProfile을 저장합니다</h2>
+                <h2>마이크 권한을 열고 장치 기록을 저장합니다</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -4248,8 +4229,8 @@ export function StudioPage() {
             </div>
 
             <p className="panel__summary">
-              요청한 constraints와 실제 <code>getSettings()</code> 결과를 함께 저장해, 이후 채점에서
-              장치 동작을 추정이 아니라 기록으로 설명할 수 있게 합니다.
+              요청한 입력 설정과 실제 적용 결과를 함께 저장해, 이후 피드백에서 장치 차이를 추정이
+              아니라 기록으로 설명할 수 있게 합니다.
             </p>
 
             <div className="button-row">
@@ -4337,8 +4318,8 @@ export function StudioPage() {
                   }
                 />
                 <div>
-                  <strong>echoCancellation</strong>
-                  <span>브라우저 에코 제어를 요청하고 실제 적용 결과를 함께 저장합니다.</span>
+                  <strong>에코 줄이기</strong>
+                  <span>울림과 되먹임을 줄이도록 브라우저에 요청하고 결과도 함께 남깁니다.</span>
                 </div>
               </label>
 
@@ -4354,8 +4335,8 @@ export function StudioPage() {
                   }
                 />
                 <div>
-                  <strong>autoGainControl</strong>
-                  <span>이후 음정 채점에서 장치 동작을 설명할 수 있도록 AGC 상태를 함께 남깁니다.</span>
+                  <strong>자동 음량 보정</strong>
+                  <span>브라우저가 입력 음량을 자동으로 손봤는지 함께 기록합니다.</span>
                 </div>
               </label>
 
@@ -4371,8 +4352,8 @@ export function StudioPage() {
                   }
                 />
                 <div>
-                  <strong>noiseSuppression</strong>
-                  <span>브라우저 스택이 입력 보컬을 노이즈 억제하고 있는지 추적합니다.</span>
+                  <strong>잡음 줄이기</strong>
+                  <span>배경 잡음을 얼마나 줄였는지 확인할 수 있도록 기록합니다.</span>
                 </div>
               </label>
             </div>
@@ -4403,8 +4384,8 @@ export function StudioPage() {
                 onClick={() => void handleSaveDeviceProfile()}
               >
                 {saveDeviceState.phase === 'submitting'
-                  ? '프로필 저장 중...'
-                  : 'DeviceProfile 저장'}
+                  ? '장치 기록 저장 중...'
+                  : '장치 기록 저장'}
               </button>
             </div>
 
@@ -4418,31 +4399,33 @@ export function StudioPage() {
               </p>
             ) : null}
 
-            <div className="json-grid">
-              <div>
-                <p className="json-label">요청한 constraints</p>
-                <pre className="json-card">
-                  {toPrettyJson({
-                    audio: {
-                      echoCancellation: constraintDraft.echoCancellation,
-                      autoGainControl: constraintDraft.autoGainControl,
-                      noiseSuppression: constraintDraft.noiseSuppression,
-                      channelCount: constraintDraft.channelCount,
-                      ...(selectedInputId ? { deviceId: { exact: selectedInputId } } : {}),
-                    },
-                  })}
-                </pre>
+            <div className="mini-grid">
+              <div className="mini-card mini-card--stack">
+                <span>요청한 입력 설정</span>
+                <strong>
+                  {[
+                    constraintDraft.echoCancellation ? '에코 줄이기 켜짐' : '에코 줄이기 꺼짐',
+                    constraintDraft.autoGainControl ? '자동 음량 보정 켜짐' : '자동 음량 보정 꺼짐',
+                    constraintDraft.noiseSuppression ? '잡음 줄이기 켜짐' : '잡음 줄이기 꺼짐',
+                  ].join(' · ')}
+                </strong>
+                <small>요청 채널 수 {constraintDraft.channelCount}채널</small>
               </div>
 
-              <div>
-                <p className="json-label">최신 getSettings() 스냅샷</p>
-                <pre className="json-card">{toPrettyJson(appliedSettingsPreview)}</pre>
+              <div className="mini-card mini-card--stack">
+                <span>최근 적용 결과</span>
+                <strong>
+                  {appliedSettingsPreview
+                    ? `${String((appliedSettingsPreview as Record<string, unknown>).sampleRate ?? '알 수 없음')} Hz / ${String((appliedSettingsPreview as Record<string, unknown>).channelCount ?? '알 수 없음')}채널`
+                    : '권한 허용 후 채워집니다'}
+                </strong>
+                <small>브라우저가 실제로 적용한 입력 상태를 기준으로 저장합니다.</small>
               </div>
             </div>
 
             <div className="mini-grid">
               <div className="mini-card">
-                <span>최신 프로필</span>
+                <span>최근 저장</span>
                 <strong>
                   {deviceProfileState.phase === 'loading'
                     ? '불러오는 중...'
@@ -4477,17 +4460,17 @@ export function StudioPage() {
                 </small>
               </div>
               <div className="mini-card">
-                <span>레코더 코덱</span>
+                <span>녹음 형식</span>
                 <strong>{summarizeRecorderSupport(currentCapabilitySnapshot)}</strong>
               </div>
               <div className="mini-card">
-                <span>Web Audio 엔진</span>
+                <span>브라우저 재생 경로</span>
                 <strong>{summarizeWebAudioSupport(currentCapabilitySnapshot)}</strong>
               </div>
               <div className="mini-card">
-                <span>브라우저 오디오 스택</span>
+                <span>브라우저 오디오 준비</span>
                 <strong>{summarizeBrowserAudioStack(currentCapabilitySnapshot)}</strong>
-                <small>Worklet, Worker, WASM, 오프라인 렌더 준비 상태입니다.</small>
+                <small>입력 표시, 빠른 계산, 브라우저 안 미리듣기 준비 상태입니다.</small>
               </div>
               <div className="mini-card">
                 <span>마이크 권한</span>
@@ -4513,13 +4496,8 @@ export function StudioPage() {
 
             {latestProfile ? (
               <div className="support-stack">
-                <p className="json-label">저장된 적용 설정</p>
-                <pre className="json-card">
-                  {toPrettyJson(latestProfile.applied_settings_json)}
-                </pre>
-
                 <div>
-                  <p className="json-label">Capability 경고</p>
+                  <p className="json-label">저장된 환경 경고</p>
                   {currentCapabilityWarnings.length > 0 ? (
                     <ul className="ticket-list">
                       {currentCapabilityWarnings.map((flag) => (
@@ -4532,22 +4510,15 @@ export function StudioPage() {
                   ) : (
                     <div className="empty-card">
                       <p>저장된 프로필에는 활성 경고가 없습니다.</p>
-                      <p>이 경로에서는 레코더, Web Audio, 권한 흐름이 모두 사용 가능한 상태로 보입니다.</p>
+                      <p>이 경로에서는 녹음, 권한, 재생 흐름이 모두 사용 가능한 상태로 보입니다.</p>
                     </div>
                   )}
-                </div>
-
-                <div>
-                  <p className="json-label">
-                    {latestProfile ? '저장된 capability 스냅샷' : '현재 capability 스냅샷'}
-                  </p>
-                  <pre className="json-card">{toPrettyJson(currentCapabilitySnapshot)}</pre>
                 </div>
               </div>
             ) : currentCapabilitySnapshot ? (
               <div className="support-stack">
                 <div>
-                  <p className="json-label">현재 capability 경고</p>
+                  <p className="json-label">현재 환경 경고</p>
                   {currentCapabilityWarnings.length > 0 ? (
                     <ul className="ticket-list">
                       {currentCapabilityWarnings.map((flag) => (
@@ -4560,14 +4531,9 @@ export function StudioPage() {
                   ) : (
                     <div className="empty-card">
                       <p>현재 브라우저 미리보기에는 활성 경고가 없습니다.</p>
-                      <p>이 스냅샷을 프로젝트 작업 흐름에 남기려면 DeviceProfile을 저장해 주세요.</p>
+                      <p>이 상태를 프로젝트 작업 흐름에 남기려면 장치 기록을 저장해 주세요.</p>
                     </div>
                   )}
-                </div>
-
-                <div>
-                  <p className="json-label">현재 capability 스냅샷</p>
-                  <pre className="json-card">{toPrettyJson(currentCapabilitySnapshot)}</pre>
                 </div>
               </div>
             ) : null}
@@ -4921,10 +4887,10 @@ export function StudioPage() {
                 <span>Peak {Math.round(liveInputMeterPeakPercent)}%</span>
                 <span>
                   {liveInputMeterState.phase === 'active'
-                    ? 'AudioWorklet 미터 활성'
+                    ? '입력 표시 켜짐'
                     : liveInputMeterState.phase === 'unsupported'
-                      ? 'AudioWorklet 사용 불가'
-                      : '녹음 시 자동 활성'}
+                      ? '입력 표시 제한됨'
+                      : '녹음 시 자동 켜짐'}
                 </span>
               </div>
             </div>
@@ -5058,7 +5024,7 @@ export function StudioPage() {
       <section className="section" id="track-lane">
         <div className="section__header">
           <p className="eyebrow">트랙/미리보기</p>
-          <h2>스튜디오 스냅샷, 트랙 레인, 미리보기</h2>
+          <h2>트랙과 미리듣기</h2>
         </div>
 
         <div className="card-grid studio-work-grid">
@@ -5074,8 +5040,7 @@ export function StudioPage() {
             </div>
 
             <p className="panel__summary">
-              이 패널은 studio snapshot 엔드포인트를 기준으로 움직입니다. 가이드 상태, 테이크 상태,
-              최신 DeviceProfile, 믹스다운 존재 여부를 한 번에 다시 불러옵니다.
+              가이드 상태, 테이크 상태, 최근 장치 기록, 믹스다운 여부를 한 번에 다시 불러옵니다.
             </p>
 
             <div className="track-lane">
@@ -5205,7 +5170,7 @@ export function StudioPage() {
                 <strong>{takesState.items.length}</strong>
               </div>
               <div className="mini-card">
-                <span>최신 DeviceProfile</span>
+                <span>최근 장치 기록</span>
                 <strong>{latestProfile ? formatDate(latestProfile.updated_at) : '없음'}</strong>
               </div>
               <div className="mini-card">
@@ -5314,8 +5279,8 @@ export function StudioPage() {
           <article className="panel studio-block" data-testid="analysis-panel">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">정렬 엔진</p>
-                <h2>선택한 테이크에 coarse/fine 정렬과 채점을 실행합니다</h2>
+                <p className="eyebrow">다시 확인</p>
+                <h2>선택한 테이크의 음정과 타이밍을 다시 확인합니다</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -5481,8 +5446,7 @@ export function StudioPage() {
                           : 'status-card__hint'
                       }
                     >
-                      최신 작업은 {selectedTakeAnalysisJob.model_version} 모델을 사용했고{' '}
-                      {formatDate(selectedTakeAnalysisJob.requested_at)}에 요청되었습니다.
+                      최근 분석은 {formatDate(selectedTakeAnalysisJob.requested_at)}에 시작되었습니다.
                     </p>
                     {selectedTakeAnalysisJob.error_message ? (
                       <p className="form-error">{selectedTakeAnalysisJob.error_message}</p>
@@ -5535,12 +5499,12 @@ export function StudioPage() {
 
                 <div className="mini-grid">
                   <div className="mini-card">
-                    <span>음정 모드</span>
+                    <span>음정 기준</span>
                     <strong>{getPitchQualityModeLabel(selectedTakeScore.pitch_quality_mode)}</strong>
                     <small>{getPitchQualityModeHint(selectedTakeScore.pitch_quality_mode)}</small>
                   </div>
                   <div className="mini-card">
-                    <span>화성 모드</span>
+                    <span>화음 기준</span>
                     <strong>{getHarmonyReferenceLabel(selectedTakeScore.harmony_reference_mode)}</strong>
                     <small>
                       {getHarmonyReferenceHint(
@@ -6074,7 +6038,7 @@ export function StudioPage() {
           <article className="panel studio-block" data-testid="arrangement-engine-panel">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">편곡 엔진</p>
+                <p className="eyebrow">편곡 생성</p>
                 <h2>최신 멜로디 초안에서 A/B/C 후보를 생성합니다</h2>
               </div>
               <span
@@ -6250,7 +6214,7 @@ export function StudioPage() {
               </p>
             ) : (
               <p className="status-card__hint">
-                멜로디를 정리한 뒤 후보를 생성하면 룰 엔진이 다듬어진 초안 주변으로 화성 성부를
+                멜로디를 정리한 뒤 후보를 생성하면 편곡 생성기가 다듬어진 초안 주변으로 화성 성부를
                 더 안정적으로 쌓을 수 있습니다.
               </p>
             )}
@@ -6287,7 +6251,7 @@ export function StudioPage() {
                           {arrangement.candidate_code} - {arrangement.title}
                         </strong>
                         <span>
-                          {arrangement.voice_mode} | {getOptionMeta(arrangementDifficultyOptions, arrangement.difficulty).label}
+                          {arrangement.part_count}성부 | {getOptionMeta(arrangementDifficultyOptions, arrangement.difficulty).label}
                         </span>
                       </div>
 
@@ -6331,11 +6295,6 @@ export function StudioPage() {
                       <span className="candidate-chip">
                         {getArrangementStyleLabel(arrangement.style)}
                       </span>
-                      <span className="candidate-chip">
-                        {arrangementGenerationId
-                          ? arrangementGenerationId.slice(0, 8)
-                          : arrangement.generation_id.slice(0, 8)}
-                      </span>
                     </div>
 
                     <div className="mini-card mini-card--stack">
@@ -6367,8 +6326,8 @@ export function StudioPage() {
           <article className="panel studio-block">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">편곡 편집기</p>
-                <h2>선택한 후보의 JSON을 검토하고 편집합니다</h2>
+                <p className="eyebrow">후보 다듬기</p>
+                <h2>선택한 후보를 세부 조정합니다</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -6391,14 +6350,10 @@ export function StudioPage() {
                     />
                   </label>
 
-                  <label className="field">
-                    <span>원본 멜로디 초안</span>
-                    <input
-                      className="text-input"
-                      value={selectedArrangement.melody_draft_id}
-                      readOnly
-                    />
-                  </label>
+                  <div className="mini-card">
+                    <span>원본 멜로디</span>
+                    <strong>{selectedArrangement.parts_json[0]?.notes.length ?? 0}개 음표 기준</strong>
+                  </div>
                 </div>
 
                 <div className="mini-grid">
@@ -6450,19 +6405,24 @@ export function StudioPage() {
                   </small>
                 </div>
 
-                <div className="support-stack">
-                  <p className="json-label">편집 가능한 파트 JSON</p>
-                  <textarea
-                    className="json-card json-card--editor"
-                    value={arrangementJsonDraft}
-                    onChange={(event) => setArrangementJsonDraft(event.target.value)}
-                  />
-                </div>
+                <details className="advanced-panel">
+                  <summary className="advanced-panel__summary">고급 편집 열기</summary>
+                  <div className="advanced-panel__body">
+                    <p className="status-card__hint">
+                      파트 구성을 직접 다뤄야 할 때만 여세요. 기본 작업은 위 비교 카드와 악보 화면만으로도 충분합니다.
+                    </p>
+                    <textarea
+                      className="json-card json-card--editor"
+                      value={arrangementJsonDraft}
+                      onChange={(event) => setArrangementJsonDraft(event.target.value)}
+                    />
+                  </div>
+                </details>
               </div>
             ) : (
               <div className="empty-card">
                 <p>선택된 편곡 후보가 없습니다.</p>
-                <p>후보를 만든 뒤 하나를 선택하면 파트 JSON을 검토하고 조정할 수 있습니다.</p>
+                <p>후보를 만든 뒤 하나를 선택하면 세부 조정과 내보내기를 이어갈 수 있습니다.</p>
               </div>
             )}
           </article>
@@ -6494,7 +6454,7 @@ export function StudioPage() {
             </div>
 
             <p className="panel__summary">
-              악보 렌더링과 재생 엔진을 분리해 두고, 이 패널은 악보 산출물과 내보내기 작업에만
+              악보 보기와 미리듣기는 따로 움직이고, 이 패널은 악보 파일 확인과 내보내기에만
               집중합니다.
             </p>
 
@@ -6535,8 +6495,8 @@ export function StudioPage() {
           <article className="panel studio-block" data-testid="playback-panel">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">재생 엔진</p>
-                <h2>가이드 모드와 동기화된 트랜스포트로 파트를 미리듣습니다</h2>
+                <p className="eyebrow">미리듣기</p>
+                <h2>가이드 겹치기와 함께 파트를 미리듣습니다</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -6556,8 +6516,8 @@ export function StudioPage() {
             </div>
 
             <p className="panel__summary">
-              재생은 의도적으로 악보 렌더러 밖에서 처리합니다. 솔로, 가이드 집중, 파트 밸런스는
-              모두 별도의 Web Audio 미리듣기 엔진을 거칩니다.
+              재생은 악보 화면과 분리해 안정적으로 처리합니다. 솔로, 가이드 겹치기, 파트 밸런스는
+              이곳에서 바로 미리듣습니다.
             </p>
 
             <div className="transport-card">
@@ -6606,7 +6566,7 @@ export function StudioPage() {
                 onChange={(event) => setGuideModeEnabled(event.target.checked)}
               />
               <div>
-                <strong>가이드 모드</strong>
+                <strong>가이드 겹치기</strong>
                 <span>가이드 기준 파트를 더 또렷하게 두고 나머지 스택은 뒤로 물립니다.</span>
               </div>
             </label>
@@ -7030,7 +6990,7 @@ export function StudioPage() {
                           {formatDate(version.created_at)}
                         </span>
                       </div>
-                      <span className="candidate-chip">{version.version_id.slice(0, 8)}</span>
+                      <span className="candidate-chip">{version.snapshot_summary.take_count}개 테이크</span>
                     </div>
 
                     {version.note ? <p className="status-card__hint">{version.note}</p> : null}
@@ -7184,8 +7144,8 @@ export function StudioPage() {
 
                     <div className="mini-grid">
                       <div className="mini-card">
-                        <span>버전</span>
-                        <strong>{shareLink.version_id.slice(0, 8)}</strong>
+                        <span>사용 기한</span>
+                        <strong>{shareLink.expires_at ? formatDate(shareLink.expires_at) : '없음'}</strong>
                       </div>
                       <div className="mini-card">
                         <span>마지막 열람</span>

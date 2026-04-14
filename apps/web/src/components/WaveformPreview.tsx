@@ -51,15 +51,15 @@ function buildContourPath(
 function getPreviewPipelineLabel(preview: AudioPreviewData): string {
   switch (preview.pipeline) {
     case 'worker-wasm':
-      return 'Worker + WASM'
+      return '브라우저 빠른 계산'
     case 'worker-js-fallback':
-      return '워커 대체 경로'
+      return '브라우저 계산'
     case 'main-thread-fallback':
-      return '메인 스레드 대체 경로'
+      return '기본 계산'
     case 'server-artifact':
-      return '서버 산출물'
+      return '저장된 미리보기'
     default:
-      return preview.source === 'remote' ? '서버 산출물' : '브라우저 미리보기'
+      return preview.source === 'remote' ? '저장된 미리보기' : '브라우저 미리보기'
   }
 }
 
@@ -93,7 +93,7 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
           <strong>{contourPointCount}</strong>
         </div>
         <div className="mini-card">
-          <span>미리보기 처리 경로</span>
+          <span>미리보기 방식</span>
           <strong data-testid="waveform-preview-pipeline">{pipelineLabel}</strong>
         </div>
       </div>
@@ -111,8 +111,8 @@ export function WaveformPreview({ preview }: WaveformPreviewProps) {
       </svg>
 
       <p className="status-card__hint">
-        파형은 빠르게 확인하는 연습용 미리보기이며 최종 채점 입력은 아닙니다. 컨투어는 테이크의
-        큰 흐름을 빠르게 보여주고, 최종 note 분석은 서버 결과를 기준으로 합니다.
+        파형은 빠르게 확인하는 연습용 미리보기입니다. 큰 흐름은 바로 확인하고, 최종 음정 평가는
+        저장된 분석 결과를 기준으로 봐 주세요.
       </p>
     </div>
   )

@@ -83,7 +83,12 @@ Date: 2026-04-14
 
 ## Reinforcement Added In This Pass
 
+- User-facing copy on the default Home, Studio, Arrangement, and Ops surfaces has been tightened again so internal labels like `DeviceProfile`, `AudioWorklet`, raw environment names, generation ids, and JSON-first wording no longer lead the interface.
+- Home no longer leads with API address or environment-first diagnostics in the main entry card, and the default Arrangement workspace now prefers Korean task language such as `악보와 미리듣기` and `세부 조정`.
+- Ops language now treats browser environment evidence as "장치 기록" and "브라우저 재생 경로" instead of exposing raw implementation labels in the default view.
 - 사용자에게 노출되는 핵심 화면의 기본 문구는 이제 한국어를 우선하도록 정리되었고, Home, Studio, Arrangement, Shared Review, Ops에서 내부 개발 단계명이나 백로그 번호 노출을 걷어냈다.
+- Studio와 Arrangement의 기본 작업면은 이제 `가이드 겹치기`, `다시 확인`, `악보와 미리듣기`처럼 단순한 한국어 작업명을 쓰고, 직접 붙여넣는 원시 데이터는 `고급` 펼침 안으로만 노출한다.
+- Verification for this copy-cleanup pass: `npm run lint:web`, `npm run build:web`, and `npm run test:e2e` all passed again (`34 passed / 5 skipped` in Playwright).
 - 영어는 `MusicXML`, `MIDI`, `WAV`, `DeviceProfile`, `AudioWorklet`, `AudioContext`처럼 실제로 관용적으로 쓰이는 기술 용어에만 제한적으로 남기고, `note-level`, `signed cents`, `guide WAV`, `Phase`, `FE/BE` 같은 사용자 문구는 자연스러운 한국어 표현으로 바꿨다.
 - Post-recording analysis now uses `librosa.pyin` contour support plus onset-envelope alignment.
 - Melody draft extraction now uses `librosa.pyin` pitch frames instead of the earlier heuristic frame estimator.

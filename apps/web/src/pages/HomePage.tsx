@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { apiBaseUrl, buildApiUrl } from '../lib/api'
+import { buildApiUrl } from '../lib/api'
 import type { Project } from '../types/project'
 
 type HealthPayload = {
@@ -75,7 +75,7 @@ const proofHighlights = [
 ] as const
 
 const nextStudioOutputs = [
-  '브라우저 경고까지 포함한 DeviceProfile 저장',
+  '브라우저 경고까지 함께 남기는 장치 기록 저장',
   '가이드 업로드, 테이크 녹음, 파형 미리보기',
   '녹음 후 정렬과 노트 단위 피드백',
   '멜로디 초안 추출과 편곡 후보 생성',
@@ -232,7 +232,7 @@ export function HomePage() {
               <div className="home-visual__transport">
                 <span>가이드 준비 완료</span>
                 <span>테이크 2 선택됨</span>
-                <span>음정 모드: 노트 단위</span>
+                <span>노트별 피드백</span>
               </div>
 
               <div className="home-visual__waveform">
@@ -262,7 +262,7 @@ export function HomePage() {
                 <div>
                   <span>약한 음</span>
                   <strong>A4</strong>
-                  <small>시작음 +24c 높음</small>
+                  <small>시작이 약간 높음</small>
                 </div>
                 <div>
                   <span>편곡</span>
@@ -272,7 +272,7 @@ export function HomePage() {
                 <div>
                   <span>리뷰</span>
                   <strong>음정 86</strong>
-                  <small>리듬 91 · 화성 79</small>
+                  <small>리듬 91 · 화음 79</small>
                 </div>
               </div>
             </div>
@@ -350,7 +350,7 @@ export function HomePage() {
           <article className="home-proof__row">
             <span>교정 레인</span>
             <strong>방향 음정 오차 기반 피드백</strong>
-            <small>시작음, sustain, 타이밍, 신뢰도, chord-aware 화성 모드</small>
+            <small>시작음, 유지음, 타이밍, 신뢰도, 화음 기준 피드백</small>
           </article>
 
           <article className="home-proof__row">
@@ -443,7 +443,7 @@ export function HomePage() {
                 </label>
 
                 <label className="field">
-                  <span>모드</span>
+                  <span>작업 목적</span>
                   <select
                     className="text-input"
                     name="mode"
@@ -455,8 +455,8 @@ export function HomePage() {
                       }))
                     }
                   >
-                    <option value="practice">연습</option>
-                    <option value="arrangement">편곡</option>
+                    <option value="practice">기본 연습</option>
+                    <option value="arrangement">편곡 준비</option>
                   </select>
                 </label>
               </div>
@@ -508,39 +508,17 @@ export function HomePage() {
                 >
                   {healthLabel}
                 </span>
-                <p className="status-card__caption">로컬 API 확인</p>
+                <p className="status-card__caption">서비스 연결 상태</p>
               </div>
-
-              <dl className="status-grid">
-                <div>
-                  <dt>API 주소</dt>
-                  <dd>{apiBaseUrl}</dd>
-                </div>
-                <div>
-                  <dt>서비스</dt>
-                  <dd>
-                    {health.phase === 'ready' ? health.payload.service : 'gigastudy-api'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>환경</dt>
-                  <dd>{health.phase === 'ready' ? health.payload.env : 'development'}</dd>
-                </div>
-                <div>
-                  <dt>버전</dt>
-                  <dd>{health.phase === 'ready' ? health.payload.version : '0.1.0'}</dd>
-                </div>
-              </dl>
 
               {health.phase === 'error' ? (
                 <p className="status-card__error">
-                  API 상태 확인에 실패했습니다. FastAPI 서버를 올린 뒤 이 페이지를
-                  새로고침하세요. 메시지: {health.message}
+                  지금은 서비스 연결을 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요. 메시지:
+                  {' '}{health.message}
                 </p>
               ) : (
                 <p className="status-card__hint">
-                  API가 켜져 있으면 이 화면에서 추가 준비 없이 바로 스튜디오로
-                  들어갈 수 있습니다.
+                  연결만 확인되면 이 화면에서 추가 준비 없이 바로 스튜디오로 들어갈 수 있습니다.
                 </p>
               )}
             </article>

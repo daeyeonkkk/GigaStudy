@@ -1636,6 +1636,28 @@
   align-items: stretch;
 }
 
+.advanced-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.advanced-panel__summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px 18px;
+  font-weight: 600;
+}
+
+.advanced-panel__summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-panel__body {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 18px 18px;
+}
+
 .arrangement-topbar__copy {
   display: flex;
   flex-direction: column;

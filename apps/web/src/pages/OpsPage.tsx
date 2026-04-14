@@ -341,6 +341,20 @@ function formatLatency(value: number | null): string {
   return `${Math.round(value * 1000)} ms`
 }
 
+function formatAudioRouteLabel(value: string | null): string {
+  switch (value) {
+    case 'standard':
+      return '표준 경로'
+    case 'webkit':
+      return '호환 경로'
+    case 'unavailable':
+    case null:
+      return '사용 불가'
+    default:
+      return value
+  }
+}
+
 function downloadJsonReport(filename: string, payload: unknown): void {
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: 'application/json',
@@ -1010,7 +1024,7 @@ export function OpsPage() {
       <section className="section ops-section ops-section--versions">
         <div className="section__header ops-section__header">
           <p className="eyebrow">모델 추적</p>
-          <h2>현재 어떤 엔진 버전이 동작 중인지 확인합니다</h2>
+          <h2>현재 어떤 분석 버전이 동작 중인지 확인합니다</h2>
         </div>
 
         <div className="card-grid">
@@ -1033,7 +1047,7 @@ export function OpsPage() {
           </article>
 
           <article className="info-card ops-info-card">
-            <h3>편곡 엔진</h3>
+            <h3>편곡 버전</h3>
             <ul>
               {payload.model_versions.arrangement_engine.map((version) => (
                 <li key={version}>{version}</li>
@@ -1051,7 +1065,7 @@ export function OpsPage() {
 
         <div className="card-grid">
           <article className="info-card ops-info-card">
-            <h3>DeviceProfile 커버리지</h3>
+            <h3>장치 기록 커버리지</h3>
             <div className="mini-grid">
               <div className="mini-card">
                 <span>수집된 프로필</span>
@@ -1077,7 +1091,7 @@ export function OpsPage() {
             {environmentDiagnostics.warning_flags.length === 0 ? (
               <div className="empty-card">
                 <p>아직 수집된 경고 플래그가 없습니다.</p>
-                <p>여러 브라우저에서 DeviceProfile을 저장해 이 기준선을 쌓아 주세요.</p>
+                <p>여러 브라우저에서 장치 기록을 저장해 이 기준선을 쌓아 주세요.</p>
               </div>
             ) : (
               <ul className="ticket-list">
@@ -1096,7 +1110,7 @@ export function OpsPage() {
             {environmentDiagnostics.browser_matrix.length === 0 ? (
               <div className="empty-card">
                 <p>아직 수집된 브라우저 환경이 없습니다.</p>
-                <p>스튜디오에서 DeviceProfile을 저장하면 매트릭스가 채워집니다.</p>
+                <p>스튜디오에서 장치 기록을 저장하면 매트릭스가 채워집니다.</p>
               </div>
             ) : (
               <ul className="ticket-list">
@@ -1492,7 +1506,7 @@ export function OpsPage() {
               </label>
 
               <label className="field">
-                <span>기본 AudioContext 모드</span>
+                <span>기본 재생 경로</span>
                 <input
                   className="text-input"
                   name="audioContextMode"
@@ -1503,14 +1517,14 @@ export function OpsPage() {
                       audioContextMode: event.target.value,
                     }))
                   }
-                  placeholder="standard 또는 webkit"
+                  placeholder="표준 또는 호환"
                 />
               </label>
             </div>
 
             <div className="field-grid">
               <label className="field">
-                <span>오프라인 렌더 모드</span>
+                <span>합치기 미리듣기 경로</span>
                 <input
                   className="text-input"
                   name="offlineAudioContextMode"
@@ -1521,7 +1535,7 @@ export function OpsPage() {
                       offlineAudioContextMode: event.target.value,
                     }))
                   }
-                  placeholder="standard, webkit, unavailable"
+                  placeholder="표준, 호환, 사용 불가"
                 />
               </label>
 
@@ -1944,8 +1958,8 @@ export function OpsPage() {
         <div className="ops-list">
           {environmentDiagnostics.recent_profiles.length === 0 ? (
             <div className="empty-card empty-card--warn">
-              <p>아직 최근 DeviceProfile이 없습니다.</p>
-              <p>스튜디오에서 DeviceProfile을 저장한 뒤 여기로 돌아와 환경을 비교해 주세요.</p>
+              <p>아직 최근 장치 기록이 없습니다.</p>
+              <p>스튜디오에서 장치 기록을 저장한 뒤 여기로 돌아와 환경을 비교해 주세요.</p>
             </div>
           ) : (
             environmentDiagnostics.recent_profiles.map((profile) => (
@@ -1977,16 +1991,16 @@ export function OpsPage() {
                     <strong>{profile.microphone_permission ?? '알 수 없음'}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>레코더 MIME</span>
+                    <span>녹음 형식</span>
                     <strong>{profile.recording_mime_type ?? '사용 불가'}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>AudioContext</span>
-                    <strong>{profile.audio_context_mode ?? '사용 불가'}</strong>
+                    <span>브라우저 재생 경로</span>
+                    <strong>{formatAudioRouteLabel(profile.audio_context_mode)}</strong>
                   </div>
                   <div className="mini-card">
-                    <span>오프라인 렌더</span>
-                    <strong>{profile.offline_audio_context_mode ?? '사용 불가'}</strong>
+                    <span>브라우저 안 합치기</span>
+                    <strong>{formatAudioRouteLabel(profile.offline_audio_context_mode)}</strong>
                   </div>
                   <div className="mini-card">
                     <span>샘플레이트</span>

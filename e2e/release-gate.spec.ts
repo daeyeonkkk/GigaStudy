@@ -276,7 +276,7 @@ async function prepareBrowserRecording(page: Page): Promise<void> {
 
   await page.getByTestId('save-device-profile-button').click()
   await expect(
-    page.getByText(/DeviceProfile을 저장했고, 요청한 constraints와 실제 적용 설정도 함께 기록했습니다\./),
+    page.getByText(/장치 기록을 저장했고, 요청한 입력 설정과 실제 적용 결과도 함께 남겼습니다\./),
   ).toBeVisible()
 
   await page.getByTestId('count-in-select').selectOption('0')
@@ -286,7 +286,7 @@ async function prepareBrowserRecording(page: Page): Promise<void> {
 async function recordBrowserTake(page: Page, takeNumber: number): Promise<void> {
   await page.getByTestId('start-take-button').click()
   await expect(page.getByText('녹음 중입니다. 테이크가 끝나면 중지해 주세요.', { exact: true })).toBeVisible()
-  await expect(page.getByText('AudioWorklet 미터가 활성화되었습니다.', { exact: true })).toBeVisible()
+  await expect(page.getByText('입력 표시가 켜졌습니다.', { exact: true })).toBeVisible()
   await page.waitForTimeout(1400)
   await page.getByTestId('stop-take-button').click()
   await expect(page.getByText(new RegExp(`${takeNumber}번 테이크 업로드가 완료되었습니다\\.`))).toBeVisible({
@@ -363,8 +363,8 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
   await runChordAwareAnalysis(page)
 
   const noteFeedbackPanel = getNoteFeedbackPanel(page)
-  await expect(noteFeedbackPanel.getByText('코드 인식 화성', { exact: true })).toBeVisible()
-  await expect(noteFeedbackPanel.getByText('음정 모드', { exact: true })).toBeVisible()
+  await expect(noteFeedbackPanel.getByText('화음 기준', { exact: true })).toBeVisible()
+  await expect(noteFeedbackPanel.getByText('음정 기준', { exact: true })).toBeVisible()
   await expect(noteFeedbackPanel.getByRole('button', { name: 'N1' })).toBeVisible()
   await expect(noteFeedbackPanel.getByRole('heading', { name: /1번 노트/i })).toBeVisible()
 })
@@ -504,7 +504,7 @@ test('release gate recording flow captures a take through browser microphone tra
   await expect(recorderPanel.getByText('가장 최근 준비 완료 테이크', { exact: true })).toBeVisible()
   const waveformPreview = page.locator('.waveform-preview').first()
   await expect(waveformPreview.getByTestId('waveform-preview-pipeline')).toBeVisible()
-  await expect(waveformPreview.getByText('Worker + WASM', { exact: true })).toBeVisible()
+  await expect(waveformPreview.getByText('브라우저 빠른 계산', { exact: true })).toBeVisible()
 })
 
 test('release gate arrangement playback shows transport progress and can be stopped cleanly', async ({
@@ -523,7 +523,7 @@ test('release gate arrangement playback shows transport progress and can be stop
   const playbackPanel = getPlaybackPanel(page)
   const progressFill = playbackPanel.locator('.transport-progress__fill')
   const stopButton = playbackPanel.getByRole('button', { name: '재생 중지' })
-  const guideModeCheckbox = playbackPanel.getByLabel('가이드 모드')
+  const guideModeCheckbox = playbackPanel.getByLabel('가이드 겹치기')
 
   await expect(playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true })).toBeVisible()
   await expect(stopButton).toBeDisabled()
@@ -737,15 +737,15 @@ test('release gate ops overview can store a manual environment validation run', 
   await page.getByLabel('테스터').fill('브라우저 QA')
   await page.getByLabel('기기 이름').fill('MacBook Pro 14')
   await page.getByLabel('운영체제').fill('macOS 15.4')
-  await page.getByLabel('브라우저').fill('Safari 18')
+  await page.getByLabel('브라우저', { exact: true }).fill('Safari 18')
   await page.getByLabel('입력 장치').fill('Built-in Microphone')
   await page.getByLabel('출력 경로').fill('Built-in Speakers')
   await page.getByLabel('경고 플래그').fill(
     'legacy_webkit_audio_context_only, missing_offline_audio_context',
   )
   await page.getByLabel('레코더 MIME').fill('audio/mp4')
-  await page.getByLabel('기본 AudioContext 모드').fill('webkit')
-  await page.getByLabel('오프라인 렌더 모드').fill('unavailable')
+  await page.getByLabel('기본 재생 경로').fill('webkit')
+  await page.getByLabel('합치기 미리듣기 경로').fill('unavailable')
   await page.getByLabel('샘플레이트 (Hz)').fill('48000')
   await page.getByLabel('기본 지연 (ms)').fill('17')
   await page.getByLabel('출력 지연 (ms)').fill('39')

@@ -157,7 +157,6 @@ export function ArrangementPage() {
   const [guide, setGuide] = useState<GuideTrack | null>(null)
   const [takes, setTakes] = useState<TakeTrack[]>([])
   const [arrangements, setArrangements] = useState<ArrangementCandidate[]>([])
-  const [arrangementGenerationId, setArrangementGenerationId] = useState<string | null>(null)
   const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null)
   const [selectedArrangementId, setSelectedArrangementId] = useState<string | null>(null)
   const [loadingState, setLoadingState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -213,7 +212,6 @@ export function ArrangementPage() {
     setGuide(payload.guide)
     setTakes(payload.takes)
     setArrangements(payload.arrangements)
-    setArrangementGenerationId(payload.arrangement_generation_id)
     setLoadingState('ready')
   }, [projectId])
 
@@ -352,7 +350,6 @@ export function ArrangementPage() {
         items: ArrangementCandidate[]
       }
       setArrangements(payload.items)
-      setArrangementGenerationId(payload.generation_id)
       setSelectedArrangementId(payload.items[0]?.arrangement_id ?? null)
       await refreshSnapshot()
       setArrangementState({
@@ -417,7 +414,7 @@ export function ArrangementPage() {
       arrangementPlaybackRef.current = controller
       setArrangementTransportState({
         phase: 'playing',
-        message: '분리된 편곡 미리듣기 엔진으로 재생 중입니다.',
+        message: '편곡 미리듣기를 재생 중입니다.',
       })
     } catch (error) {
       setArrangementTransportState({
@@ -695,17 +692,14 @@ export function ArrangementPage() {
           <section className="panel arrangement-center">
             <div className="arrangement-center__header">
               <div>
-                <p className="eyebrow">Score + Player</p>
+                <p className="eyebrow">악보와 미리듣기</p>
                 <h2>{selectedArrangement ? `${selectedArrangement.candidate_code} 악보 미리듣기` : '후보를 선택해 악보를 검토하세요'}</h2>
                 <p className="panel__summary">
-                  재생, 정지, 가이드 겹치기를 같은 캔버스에서 다루고, 재생 위치와 score playhead를 같이
+                  재생, 정지, 가이드 겹치기를 같은 화면에서 다루고, 재생 위치와 악보 진행 위치를 같이
                   확인합니다.
                 </p>
               </div>
               <div className="candidate-chip-row">
-                <span className="candidate-chip">
-                  {arrangementGenerationId ? arrangementGenerationId.slice(0, 8) : '배치 없음'}
-                </span>
                 {selectedArrangement ? (
                   <span className="candidate-chip">{selectedArrangement.part_count}성부</span>
                 ) : null}
@@ -774,10 +768,10 @@ export function ArrangementPage() {
 
           <aside className="panel arrangement-rail arrangement-rail--right">
             <div>
-              <p className="eyebrow">Inspector</p>
+              <p className="eyebrow">세부 조정</p>
               <h2>파트 집중과 내보내기</h2>
               <p className="panel__summary">
-                선택한 후보를 기준으로 export, 가이드 focus, 파트 볼륨과 solo 상태를 한 곳에서 정리합니다.
+                선택한 후보를 기준으로 내보내기, 가이드 겹치기, 파트 음량과 집중 듣기를 한 곳에서 정리합니다.
               </p>
             </div>
 
@@ -826,7 +820,7 @@ export function ArrangementPage() {
                   onChange={(event) => setGuideModeEnabled(event.target.checked)}
                 />
                 <div>
-                  <strong>가이드 모드</strong>
+                  <strong>가이드 겹치기</strong>
                   <span>선택한 기준 파트를 더 또렷하게 두고 나머지 성부는 한걸음 뒤로 물립니다.</span>
                 </div>
               </label>

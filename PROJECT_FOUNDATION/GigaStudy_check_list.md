@@ -59,7 +59,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 
 ## 6. Learning UI
 
-- [x] User-facing default UI copy is written in natural Korean product language, leaving English only for conventional technical terms.
+- [x] User-facing default UI copy is written in natural Korean product language, leaving English only for conventional technical terms and avoiding developer-facing variable names or internal engine labels on the default surface.
 - [x] The studio shows waveform and contour feedback.
 - [x] The studio shows note-level correction cues with sharp/flat direction.
 - [x] Attack, sustain, timing, and confidence are exposed separately in the UI.

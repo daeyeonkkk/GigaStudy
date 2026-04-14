@@ -211,35 +211,35 @@ export function deriveBrowserAudioWarningFlags(
 export function getBrowserAudioWarningLabel(flag: string): string {
   switch (flag) {
     case 'insecure_context':
-      return '보안 컨텍스트가 아니어서 일부 입력 API가 차단될 수 있습니다.'
+      return '보안 연결이 아니어서 마이크나 재생 기능이 제한될 수 있습니다.'
     case 'missing_get_user_media':
-      return '현재 브라우저에서는 getUserMedia를 사용할 수 없습니다.'
+      return '현재 브라우저에서는 마이크 입력을 시작할 수 없습니다.'
     case 'missing_enumerate_devices':
       return '오디오 장치 목록을 읽을 수 없습니다.'
     case 'missing_supported_constraints':
-      return '브라우저가 지원하는 미디어 제약 조건을 확인할 수 없습니다.'
+      return '브라우저가 세부 입력 설정을 알려주지 않습니다.'
     case 'permissions_api_unavailable':
-      return '이 환경에서는 Permissions API로 마이크 상태를 확인할 수 없습니다.'
+      return '이 환경에서는 마이크 권한 상태를 미리 확인할 수 없습니다.'
     case 'microphone_permission_denied':
       return '현재 마이크 권한이 거부되어 있습니다.'
     case 'missing_audio_context':
-      return 'Web Audio 재생을 사용할 수 없습니다.'
+      return '브라우저 재생 기능을 사용할 수 없습니다.'
     case 'legacy_webkit_audio_context_only':
-      return '재생이 legacy webkitAudioContext 브리지에 의존합니다.'
+      return '이 브라우저는 구형 재생 경로에 의존합니다.'
     case 'missing_audio_worklet':
-      return 'AudioWorklet을 사용할 수 없어 입력 미터가 대체 경로나 비활성 상태로 동작합니다.'
+      return '실시간 입력 표시가 제한될 수 있습니다.'
     case 'missing_offline_audio_context':
-      return 'OfflineAudioContext를 사용할 수 없어 로컬 믹스다운이 실패할 수 있습니다.'
+      return '브라우저 안에서 합치기 미리듣기가 제한될 수 있습니다.'
     case 'output_latency_unavailable':
       return '이 경로에서는 출력 지연 시간을 확인할 수 없습니다.'
     case 'missing_web_worker':
-      return 'Web Worker를 사용할 수 없어 미리보기 계산이 메인 스레드에 남습니다.'
+      return '미리보기 계산이 느려질 수 있습니다.'
     case 'missing_web_assembly':
-      return 'WebAssembly를 사용할 수 없어 브라우저 오디오 계산에서 WASM 경로를 쓰지 못합니다.'
+      return '브라우저 계산 최적화가 제한됩니다.'
     case 'missing_media_recorder':
-      return 'MediaRecorder를 사용할 수 없어 브라우저 녹음을 시작할 수 없습니다.'
+      return '브라우저 녹음을 시작할 수 없습니다.'
     case 'no_supported_recording_mime_type':
-      return 'MediaRecorder는 있지만 지원되는 오디오 MIME 형식을 찾지 못했습니다.'
+      return '지원되는 녹음 형식을 찾지 못했습니다.'
     case 'wav_playback_unavailable':
       return 'WAV 재생 지원 여부를 확인하지 못했습니다.'
     default:

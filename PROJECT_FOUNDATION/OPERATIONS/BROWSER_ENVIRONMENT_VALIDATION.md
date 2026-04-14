@@ -13,6 +13,9 @@ It is not enough to answer the harder product question:
 
 This protocol closes that gap.
 
+If real-device time is scarce, do not treat this as a separate mini-project.
+Use `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md` and one named evidence round so browser / hardware validation is collected in the same later sprint as human-rating evidence.
+
 ## What We Already Trust
 
 - Chromium seeded smoke path

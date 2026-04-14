@@ -48,6 +48,8 @@ def main() -> None:
     payload = {
         "round_root": str(scaffold.root),
         "readme": str(scaffold.readme),
+        "real_evidence_plan": str(scaffold.real_evidence_plan_path),
+        "real_evidence_checklist": str(scaffold.real_evidence_checklist_path),
         "human_rating_cases": str(scaffold.human_rating_cases_path),
         "human_rating_sheet": str(scaffold.human_rating_sheet_path),
         "human_rating_reference_corpus": str(scaffold.human_rating_reference_corpus_path),

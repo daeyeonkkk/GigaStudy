@@ -15,6 +15,8 @@ This workflow turns the open Phase 9 checklist gap into an operational process:
 This workflow does **not** mean the gap is closed already.
 It only means the repo now has a repeatable path for attaching human-rating evidence when that data is available.
 
+If real data remains hard to gather continuously, use `REAL_EVIDENCE_BATCH_PLAN.md` plus one named evidence round to combine this workflow with browser / hardware validation in one later collection sprint.
+
 ## 1. Current Scope
 
 The repo now supports:

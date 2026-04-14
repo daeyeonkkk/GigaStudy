@@ -303,6 +303,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - Use the threshold-fit report as the default way to propose difficulty-tier cent bands once a real human-rated corpus exists.
 - Use the claim-gate CLI before any checklist-closure discussion so threshold claims are not approved by gut feel.
 - Use the evidence-bundle CLI as the default way to package human-rating release evidence once a corpus round has been run.
+- If real data collection has to wait, use `PROJECT_FOUNDATION/QUALITY/REAL_EVIDENCE_BATCH_PLAN.md` as the default way to combine the later human-rating and browser-hardware rounds into one evidence sprint.
 - Keep the synthetic-vocal baseline runner green while expanding from synthetic evidence to real singer recordings and human-rating comparison.
 - Deepen the harmony authoring flow only if real usage shows the lightweight marker editor is not enough.
 - Keep rehearsing the PostgreSQL + S3-compatible deployment profile beyond the local smoke path so operational assumptions stay current.
@@ -325,6 +326,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 - [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/BACKLOGS/PHASE9_INTONATION_BACKLOG.md)
 - [Intonation Calibration Report](./PROJECT_FOUNDATION/QUALITY/INTONATION_CALIBRATION_REPORT.md)
 - [Human Rating Calibration Workflow](./PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md)
+- [Real Evidence Batch Plan](./PROJECT_FOUNDATION/QUALITY/REAL_EVIDENCE_BATCH_PLAN.md)
 - [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
 - [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
 - [Intonation Assessment](./PROJECT_FOUNDATION/QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md)

@@ -151,6 +151,7 @@ Date: 2026-04-14
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.
 - The repo now also has a claim-gate evaluator for human-rated corpora, so the team can repeatably decide whether current evidence is strong enough to even begin threshold-closure review.
+- The evidence-round scaffold now also writes a `REAL_EVIDENCE_PLAN.md` plus `REAL_EVIDENCE_CHECKLIST.md`, so the later real-data sprint can combine singer/rater collection and native browser-hardware validation in one coordinated round instead of being rediscovered from chat history.
 - Calibration manifest loading is now also UTF-8 BOM-safe, so Windows-edited human-rating corpus files do not break the runner or evidence-bundle flow.
 - The foundation now also has a canonical UI design direction document, so future visual refactors can converge on one product identity instead of drifting between ops-heavy utility screens and ad hoc studio styling.
 - The foundation now also has a reference-led wireframe pack for Home, Studio, Arrangement, Shared Review, and Ops, so the next UI refactor has one canonical screen set instead of relying on scattered implementation screenshots.
@@ -172,7 +173,7 @@ Date: 2026-04-14
 ## Verified Today
 
 - Backend test suite: `uv run pytest`
-- Result: `97 passed`
+- Result: `102 passed`
 - Scope verified by tests includes analysis, melody, arrangements, processing, project history, studio snapshot, ops, and schema coverage.
 - Cloud Run backend container verification:
   `docker build -f apps/api/Dockerfile -t gigastudy-api-cloudrun:test .`
@@ -217,6 +218,10 @@ Date: 2026-04-14
   `uv run python scripts/fit_human_rating_thresholds.py --manifest ...`
 - Result:
   passed on a named-fixture generated corpus, producing candidate `strict / basic / beginner` cent bands from human-rating labels.
+- Evidence-round scaffold CLI:
+  `uv run python scripts/create_evidence_round.py --round-id smoke-batch --output-root output/tmp_evidence_rounds`
+- Result:
+  passed and wrote the round-local `REAL_EVIDENCE_PLAN.md` plus `REAL_EVIDENCE_CHECKLIST.md`, confirming that a later real-data sprint can start from one self-guided round root instead of rebuilding the plan from chat history.
 - Claim-gate regression:
   `uv run pytest apps/api/tests/test_calibration_claim_gate.py`
 - Result:
@@ -431,8 +436,9 @@ Date: 2026-04-14
 1. Upgrade the repo-local editable source into a shared Figma workflow when a write-capable design workflow is available, and record the frozen version id for each implemented screen.
 2. Keep the implemented `Ops` surface subordinate to the rehearsal product tone by reviewing future ops-only additions against `ops-v1` instead of letting utility styles leak back into core screens.
 3. Continue Phase 9 with real singer recordings or a cents-shifted vocal corpus, collect labels through the sheet/template builder workflow, then compare scorer output against human ratings.
-4. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
-5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
-6. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
-7. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior and broader microphone variability.
-8. Re-review the dedicated Studio and Arrangement routes after any further export, playback, or inspector changes so they stay aligned with `studio-v2` and `arrangement-v2` instead of drifting back toward generic tool surfaces.
+4. When real data becomes available again, use `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md` plus the round-local `REAL_EVIDENCE_PLAN.md` and `REAL_EVIDENCE_CHECKLIST.md` files as the default one-shot collection path instead of splitting human-rating and browser-hardware prep across separate ad hoc passes.
+5. Deepen the harmony authoring path only where it improves reachability further: bulk import, timeline snapping, or chord templates if real users need them.
+6. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
+7. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
+8. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior and broader microphone variability.
+9. Re-review the dedicated Studio and Arrangement routes after any further export, playback, or inspector changes so they stay aligned with `studio-v2` and `arrangement-v2` instead of drifting back toward generic tool surfaces.

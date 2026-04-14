@@ -29,7 +29,7 @@ def test_default_evidence_rounds_root_falls_back_to_repo_output(tmp_path: Path) 
     assert result == project_root / "apps" / "api" / "output" / "evidence_rounds"
 
 
-def test_create_evidence_round_scaffold_copies_templates_and_writes_readme(tmp_path: Path) -> None:
+def test_create_evidence_round_scaffold_copies_templates_and_writes_helper_docs(tmp_path: Path) -> None:
     project_root = tmp_path / "GigaStudy"
     api_root = project_root / "apps" / "api"
     calibration_root = api_root / "calibration"
@@ -59,7 +59,15 @@ def test_create_evidence_round_scaffold_copies_templates_and_writes_readme(tmp_p
     assert scaffold.human_rating_review_packets_dir.is_dir()
     assert scaffold.human_rating_cases_path.read_text(encoding="utf-8") == "{}"
     assert scaffold.environment_validation_sheet_path.read_text(encoding="utf-8") == "label\n"
+    assert scaffold.real_evidence_plan_path.exists()
+    assert scaffold.real_evidence_checklist_path.exists()
+
     readme = scaffold.readme.read_text(encoding="utf-8")
+    plan = scaffold.real_evidence_plan_path.read_text(encoding="utf-8")
+    checklist = scaffold.real_evidence_checklist_path.read_text(encoding="utf-8")
+
+    assert "REAL_EVIDENCE_PLAN.md" in readme
+    assert "REAL_EVIDENCE_CHECKLIST.md" in readme
     assert "Human Rating" in readme
     assert "Browser And Hardware Validation" in readme
     assert "--round-root <round>" in readme
@@ -67,7 +75,13 @@ def test_create_evidence_round_scaffold_copies_templates_and_writes_readme(tmp_p
     assert "human-rating/references/" in readme
     assert "human-rating/references/clips/" in readme
     assert "human-rating/review-packets/" in readme
-    assert "높음 / 정확 / 낮음 / 판단 어려움" in readme
+    assert "Real Evidence Batch Plan" in plan
+    assert "Windows + Chrome + USB microphone + wired headphones" in plan
+    assert "macOS + Safari + Bluetooth output" in plan
+    assert "Real Evidence Batch Checklist" in checklist
+    assert "- [ ] Round folder created" in checklist
+    assert "- [ ] Human-rating claim gate reviewed" in checklist
+    assert "- [ ] Ops browser / hardware claim gate reviewed" in checklist
 
 
 def test_resolve_evidence_round_paths_exposes_generated_output_locations(tmp_path: Path) -> None:
@@ -76,10 +90,24 @@ def test_resolve_evidence_round_paths_exposes_generated_output_locations(tmp_pat
     paths = resolve_evidence_round_paths(round_root)
 
     assert paths.root == round_root.resolve()
-    assert paths.human_rating_generated_corpus_path == round_root.resolve() / "human-rating" / "human_rating_corpus.generated.json"
-    assert paths.human_rating_calibration_json_path == round_root.resolve() / "human-rating" / "reports" / "calibration-summary.json"
-    assert paths.human_rating_threshold_markdown_path == round_root.resolve() / "human-rating" / "reports" / "threshold-report.md"
-    assert paths.human_rating_claim_gate_markdown_path == round_root.resolve() / "human-rating" / "reports" / "claim-gate.md"
+    assert paths.real_evidence_plan_path == round_root.resolve() / "REAL_EVIDENCE_PLAN.md"
+    assert paths.real_evidence_checklist_path == round_root.resolve() / "REAL_EVIDENCE_CHECKLIST.md"
+    assert (
+        paths.human_rating_generated_corpus_path
+        == round_root.resolve() / "human-rating" / "human_rating_corpus.generated.json"
+    )
+    assert (
+        paths.human_rating_calibration_json_path
+        == round_root.resolve() / "human-rating" / "reports" / "calibration-summary.json"
+    )
+    assert (
+        paths.human_rating_threshold_markdown_path
+        == round_root.resolve() / "human-rating" / "reports" / "threshold-report.md"
+    )
+    assert (
+        paths.human_rating_claim_gate_markdown_path
+        == round_root.resolve() / "human-rating" / "reports" / "claim-gate.md"
+    )
     assert paths.human_rating_evidence_output_dir == round_root.resolve() / "human-rating" / "evidence-bundle"
     assert (
         paths.environment_validation_generated_requests_path

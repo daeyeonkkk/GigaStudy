@@ -40,14 +40,15 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 7. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
 8. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
 9. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-10. `BACKLOGS/PHASE1_BACKLOG.md`
-11. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
-12. `GigaStudy_check_list.md`
-13. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-14. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
-15. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
-16. `FOUNDATION_STATUS.md`
-17. `OPERATIONS/WORKING_PRINCIPLES.md`
+10. `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
+11. `BACKLOGS/PHASE1_BACKLOG.md`
+12. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
+13. `GigaStudy_check_list.md`
+14. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
+15. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+16. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
+17. `FOUNDATION_STATUS.md`
+18. `OPERATIONS/WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -83,6 +84,8 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
   Current calibration evidence, provisional threshold bands, and claim gate.
 - `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
   Workflow for future real-vocal and human-rating evidence, including intake templates, corpus inventory, consensus building, threshold-fit reporting, claim-gate evaluation, and evidence-bundle packaging.
+- `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
+  One-shot collection plan for the later real-data sprint, combining human-rating and browser-hardware evidence under one evidence round.
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
   Native browser and hardware validation protocol built on top of the ops diagnostics baseline, including round-local packet and claim-gate preview, intake/import, ops-side CSV preview, environment validation packet, claim-gate, and release-note draft workflows.
   Both workflows now start from the shared external evidence-round scaffold so real-world artifacts stay out of `PROJECT_FOUNDATION`.

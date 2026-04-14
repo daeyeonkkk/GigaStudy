@@ -27,7 +27,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SkipBuild) {
     Push-Location $repoRoot
     try {
-        & npm run build:web
+        & npm run build --workspace @gigastudy/web -- --mode alpha
         if ($LASTEXITCODE -ne 0) {
             throw "Web build failed."
         }

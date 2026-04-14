@@ -380,6 +380,7 @@ Date: 2026-04-14
 - The alpha path now also has a remote Cloud Run Job fallback for Neon migration, because the current operator machine times out on outbound PostgreSQL traffic to Neon even though the GCP-side stack is otherwise ready.
 - The alpha path now also has a repo-owned Cloud Build config for the monorepo backend image, so Cloud Build no longer assumes a root-level Dockerfile when building `apps/api/Dockerfile`.
 - The alpha deployment scripts now also convert the local dotenv-style alpha env into a temporary Cloud Run YAML env file automatically, so staging operators do not have to keep one secret file for local tools and a second one for Cloud Run.
+- The manual Pages staging script now also builds the web app in Vite `alpha` mode, so `apps/web/.env.alpha` is reflected in Wrangler-based redeploys instead of silently falling back to the local default API host.
 - Those staging helpers are now verified not only through repo-level dry-run command generation, but also through a real alpha migration, backend deploy, frontend redeploy, and browser smoke pass on the chosen stack.
 - The web build now also ships a top-level `_redirects` file, so Cloudflare Pages can serve client-side routes through the SPA entry instead of breaking deep links.
 - The foundation now also has a dedicated operator handoff document at `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`, so the remaining real-cloud steps are explicit instead of living only in chat.

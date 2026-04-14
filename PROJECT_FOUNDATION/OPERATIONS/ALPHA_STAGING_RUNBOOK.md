@@ -33,6 +33,8 @@ Prepare these:
    - That bottom `Get started` link is the correct handoff into the Pages flow.
    - Prefer a Git-integrated Pages project because Cloudflare still allows Wrangler-based manual deployments later if automatic builds are disabled.
    - If you create a brand-new Direct Upload project, Cloudflare does not let that same project switch to Git integration later.
+   - Git-integrated Pages builds in the Cloudflare dashboard do not require you to put a Cloudflare deploy token into the repo or local app env files.
+   - A Cloudflare deploy token becomes relevant only when you manually deploy with Wrangler or use CI/CD for direct Pages deploys.
    - For this repo, the preferred Git build configuration is:
      - Root directory:
        leave blank so Pages builds from the repository root
@@ -75,6 +77,16 @@ You will need these values:
 - R2 bucket name
 - R2 access key id
 - R2 secret access key
+
+Wrangler authentication note:
+
+- if you only use Git-integrated Pages builds from the Cloudflare dashboard, no extra Pages deploy token is required for day-to-day pushes
+- if you use `wrangler pages deploy` locally or in CI, prefer a Cloudflare API token stored as a local shell secret or CI secret
+- do not put that token into repository files such as `.env.alpha`
+- for CI/non-interactive use, also keep the Cloudflare account id available alongside the token
+- the standard Wrangler environment-variable names are:
+  - `CLOUDFLARE_API_TOKEN`
+  - `CLOUDFLARE_ACCOUNT_ID`
 
 Meaning of those last two values:
 
@@ -358,9 +370,15 @@ pwsh -File scripts/deploy_alpha_frontend.ps1 -ProjectName <pages-project-name> -
 
 This script:
 
-- runs `npm run build:web`
+- runs `npm run build:web -- --mode alpha`
 - confirms the SPA `_redirects` file exists in the build output
 - deploys the built app through Wrangler
+
+Why `--mode alpha` matters:
+
+- the repo keeps the staging frontend API URL in `apps/web/.env.alpha`
+- a plain production Vite build would ignore that file and fall back to the local default API host
+- the manual alpha deploy path is therefore expected to build in Vite `alpha` mode
 
 If the Git-integrated Pages build fails before install or build starts and mentions `root directory not found`,
 go back to the Pages project build settings and reset them to the preferred repo-root values above.

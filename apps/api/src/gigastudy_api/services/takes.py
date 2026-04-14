@@ -152,14 +152,26 @@ def list_take_tracks(session: Session, project_id: UUID) -> list[Track]:
     return list(session.execute(query).unique().scalars().all())
 
 
+def _build_round_archive(round_root: Path, *, relative_root: Path | None = None) -> bytes:
+    archive_root = relative_root or round_root
+    archive_buffer = BytesIO()
+    with ZipFile(archive_buffer, "w", compression=ZIP_DEFLATED) as archive:
+        for file_path in sorted(round_root.rglob("*")):
+            if not file_path.is_file():
+                continue
+            archive.write(file_path, file_path.relative_to(archive_root).as_posix())
+
+    return archive_buffer.getvalue()
+
+
 def _build_take_human_rating_packet_archive(round_root: Path) -> bytes:
+    human_rating_root = round_root / "human-rating"
     archive_buffer = BytesIO()
     with ZipFile(archive_buffer, "w", compression=ZIP_DEFLATED) as archive:
         readme_path = round_root / "README.md"
         if readme_path.exists():
             archive.write(readme_path, readme_path.relative_to(round_root).as_posix())
 
-        human_rating_root = round_root / "human-rating"
         for file_path in sorted(human_rating_root.rglob("*")):
             if not file_path.is_file():
                 continue
@@ -208,6 +220,49 @@ def build_take_human_rating_packet_download(
         archive_bytes = _build_take_human_rating_packet_archive(round_paths.root)
 
     filename = f"gigastudy-{exported_case.case_id}-human-rating-packet.zip"
+    return filename, archive_bytes
+
+
+def build_take_real_evidence_batch_download(
+    session: Session,
+    project_id: UUID,
+    track_id: UUID,
+) -> tuple[str, bytes]:
+    project = _get_project_or_404(session, project_id)
+    track = _get_track_or_404(session, track_id)
+
+    if track.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Track does not belong to this project",
+        )
+    if track.track_role != TrackRole.VOCAL_TAKE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Track is not a vocal take",
+        )
+    if track.track_status != TrackStatus.READY:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Take is not ready for real-evidence export yet",
+        )
+
+    with TemporaryDirectory(prefix="gigastudy-real-evidence-batch-") as temp_dir:
+        round_paths = create_evidence_round_scaffold(
+            round_id="real-evidence-batch",
+            output_root=Path(temp_dir),
+            overwrite=True,
+        )
+        exported_case = export_project_take_to_evidence_round(
+            session,
+            round_root=round_paths.root,
+            project_id=project.project_id,
+            take_track_id=track.track_id,
+            overwrite=True,
+        )
+        archive_bytes = _build_round_archive(round_paths.root)
+
+    filename = f"gigastudy-{exported_case.case_id}-real-evidence-batch.zip"
     return filename, archive_bytes
 
 

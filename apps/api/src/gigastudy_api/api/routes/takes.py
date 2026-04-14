@@ -14,6 +14,7 @@ from gigastudy_api.api.schemas.tracks import (
 )
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.takes import (
+    build_take_real_evidence_batch_download,
     build_take_human_rating_packet_download,
     build_take_response,
     complete_take_upload,
@@ -101,6 +102,24 @@ def download_take_human_rating_packet_endpoint(
     session: Session = Depends(get_db_session),
 ) -> Response:
     filename, payload = build_take_human_rating_packet_download(session, project_id, track_id)
+    content_disposition = f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quote(filename)}'
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": content_disposition},
+    )
+
+
+@router.get(
+    "/projects/{project_id}/tracks/{track_id}/real-evidence-batch",
+    name="download_take_real_evidence_batch",
+)
+def download_take_real_evidence_batch_endpoint(
+    project_id: UUID,
+    track_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> Response:
+    filename, payload = build_take_real_evidence_batch_download(session, project_id, track_id)
     content_disposition = f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quote(filename)}'
     return Response(
         content=payload,

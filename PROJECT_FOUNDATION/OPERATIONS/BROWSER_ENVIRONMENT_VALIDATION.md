@@ -133,10 +133,12 @@ uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
 9. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
 10. If a tester needs a fresh starter sheet from the product UI, download the `환경 검증 시트 받기` starter pack from `/ops`
     The pack now includes a CSV template plus a short Korean README so collection can begin without searching repo paths first.
-11. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
-   Prefer `uv run python scripts/import_environment_validation_runs.py --round-root <round>` so the round CSV and generated preview JSON stay together.
-12. Review the preview rows before importing them into the ops log
-13. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
+11. If the same round should begin with one selected real take as well, download `검증 준비 묶음 받기` from Studio first.
+    That one zip now carries the selected take's human-rating assets together with the round-local browser / hardware starter files.
+12. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
+    Prefer `uv run python scripts/import_environment_validation_runs.py --round-root <round>` so the round CSV and generated preview JSON stay together.
+13. Review the preview rows before importing them into the ops log
+14. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
 
 After a manual validation round:
 

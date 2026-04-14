@@ -3426,6 +3426,10 @@ export function StudioPage() {
     projectId && selectedTake
       ? buildApiUrl(`/api/projects/${projectId}/tracks/${selectedTake.track_id}/human-rating-packet`)
       : null
+  const realEvidenceBatchUrl =
+    projectId && selectedTake
+      ? buildApiUrl(`/api/projects/${projectId}/tracks/${selectedTake.track_id}/real-evidence-batch`)
+      : null
   const selectedTakeScore = selectedTake?.latest_score ?? null
   const selectedTakeNoteFeedback = selectedTakeScore?.note_feedback_json ?? []
   const selectedTakeAnalysisJob = selectedTake?.latest_analysis_job ?? null
@@ -4102,7 +4106,8 @@ export function StudioPage() {
                       : '가이드와 테이크는 바로 담아 드리고, 분석을 마치면 노트별 클립과 리뷰 화면도 함께 들어갑니다.'
                     : '사람 평가를 시작하려면 먼저 평가할 테이크를 선택해 주세요.'}
                 </small>
-                {humanRatingPacketUrl ? (
+                <div className="support-stack">
+                  {humanRatingPacketUrl ? (
                   <a
                     data-testid="download-human-rating-packet-button"
                     className="button-secondary button-secondary--small"
@@ -4114,7 +4119,21 @@ export function StudioPage() {
                   <button className="button-secondary button-secondary--small" disabled type="button">
                     평가 자료 받기
                   </button>
-                )}
+                  )}
+                  {realEvidenceBatchUrl ? (
+                    <a
+                      data-testid="download-real-evidence-batch-button"
+                      className="button-secondary button-secondary--small"
+                      href={realEvidenceBatchUrl}
+                    >
+                      {"\uAC80\uC99D \uC900\uBE44 \uBB36\uC74C \uBC1B\uAE30"}
+                    </a>
+                  ) : (
+                    <button className="button-secondary button-secondary--small" disabled type="button">
+                      {"\uAC80\uC99D \uC900\uBE44 \uBB36\uC74C \uBC1B\uAE30"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="mini-card mini-card--stack">

@@ -216,5 +216,49 @@ def test_take_human_rating_packet_download_returns_zip_with_review_assets(client
             name for name in names if name.startswith("human-rating/review-packets/") and name.endswith(".html")
         )
         review_packet_html = archive.read(review_packet_name).decode("utf-8")
-        assert "사람 평가 리뷰 패킷" in review_packet_html
-        assert "높음 / 정확 / 낮음 / 판단 어려움" in review_packet_html
+        assert '<html lang="ko">' in review_packet_html
+        assert "시작음 / 지속음 / 허용도 / 메모" in review_packet_html
+
+
+def test_take_real_evidence_batch_download_returns_full_round_zip(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=440.0, sample_rate=32000)
+    take_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=466.16, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Real Evidence Batch Session", "base_key": "C", "bpm": 96},
+    ).json()["project_id"]
+
+    _upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = _upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=take_bytes,
+        filename="take.wav",
+    )
+
+    analysis_response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+    assert analysis_response.status_code == 200
+
+    batch_response = client.get(f"/api/projects/{project_id}/tracks/{take_id}/real-evidence-batch")
+    assert batch_response.status_code == 200
+    assert batch_response.headers["content-type"] == "application/zip"
+    assert "real-evidence-batch.zip" in batch_response.headers["content-disposition"]
+
+    with ZipFile(BytesIO(batch_response.content)) as archive:
+        names = archive.namelist()
+        assert "README.md" in names
+        assert "REAL_EVIDENCE_PLAN.md" in names
+        assert "REAL_EVIDENCE_CHECKLIST.md" in names
+        assert "environment-validation/environment_validation_runs.csv" in names
+        assert "human-rating/human_rating_cases.json" in names
+        assert "human-rating/human_rating_sheet.csv" in names
+        assert any(name.startswith("human-rating/audio/guides/") for name in names)
+        assert any(name.startswith("human-rating/audio/takes/") for name in names)
+        assert any(name.startswith("human-rating/references/") for name in names)
+        assert any(name.startswith("human-rating/review-packets/") for name in names)
+
+        plan_text = archive.read("REAL_EVIDENCE_PLAN.md").decode("utf-8")
+        checklist_text = archive.read("REAL_EVIDENCE_CHECKLIST.md").decode("utf-8")
+        assert "one coordinated batch" in plan_text
+        assert "Human-rating claim gate reviewed" in checklist_text

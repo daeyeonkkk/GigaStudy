@@ -232,6 +232,13 @@ Date: 2026-04-14
 - Web lint: `npm run lint:web`
 - Web build: `npm run build:web`
 - Result: passed, with the remaining chunk-size warning isolated to the lazy-loaded `osmd-vendor` notation chunk during `vite build`.
+- Current pass API config hardening: `uv run pytest tests/test_config.py`
+- Result: `2 passed`
+- Current pass targeted browser review:
+  `npx playwright test e2e/release-gate.spec.ts -g "release gate arrangement workspace presents a score-first compare and export screen"`
+- Result: `3 passed`
+- Scope for the current pass:
+  the dedicated Arrangement route now keeps the Filmora-informed v2 workspace structure reachable in Chromium, Firefox, and WebKit, and the e2e API harness now accepts both comma-separated and JSON-list CORS origin input.
 - Browser release-gate smoke path: `npm run test:e2e`
 - Result: `34 passed`, `5 skipped`
 - Scope now also verifies that the Korean-first product copy still holds through the main user-facing routes, including Home, Studio, Arrangement workspace, Shared Review, Ops validation forms, and environment-validation CSV import flows.
@@ -259,6 +266,7 @@ Date: 2026-04-14
 - Scope verified by the browser run includes cross-browser coverage for project creation, studio entry, seeded guide/take attachment, chord timeline save, post-recording analysis, note-level chord-aware feedback visibility, read-only share creation, shared viewer load, share deactivation behavior, melody draft extraction, arrangement candidate generation, and score-export artifact reachability in Chromium, Firefox, and WebKit.
 - The same browser release gate now also proves the Home entry still works after adding the curated ambient photo layer, because project creation still starts from the Home surface in every browser run.
 - Scope now also includes the dedicated Arrangement workspace route across Chromium, Firefox, and WebKit, verifying that the score-first compare surface, export actions, and studio deep-edit handoff are reachable as their own product workspace.
+- Scope now also includes the Filmora-informed Arrangement v2 workspace pass across Chromium, Firefox, and WebKit, verifying that the updated candidate rack, score/player stage, and inspector export flow remain reachable after the live implementation refactor.
 - Scope now also includes the refactored Shared Review layout across Chromium, Firefox, and WebKit, verifying the selected-take rail, frozen review canvas, and explicit read-only warning language on the shared viewer.
 - Arrangement playback progress plus stop/reset behavior is now verified in Chromium and Firefox.
 - Ops overview export is now verified in Chromium, Firefox, and WebKit.
@@ -391,6 +399,16 @@ Date: 2026-04-14
 - Filmora is now documented as an accepted secondary reference for `Studio` and `Arrangement`, specifically for panel logic:
   source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
   It is explicitly not accepted as a full-product style replacement for `Quiet Studio Console`.
+- The design source now also includes a dedicated Filmora-informed workspace pass:
+  `DESIGN/UI_EDITABLE_SOURCE/filmora-workspace-pass-v2.html`,
+  `DESIGN/UI_EDITABLE_SOURCE/filmora-workspace-pass-v2.css`,
+  `DESIGN/UI_MOCKUPS/studio-v2.svg`, and
+  `DESIGN/UI_MOCKUPS/arrangement-v2.svg`.
+  That closes the mockup-pass planning gap.
+- The first live implementation half of that pass is now complete on the dedicated Arrangement route:
+  the page has been restructured around a candidate rack, central score/player stage, and export-first inspector, and the dedicated arrangement workspace release gate now passes again in Chromium, Firefox, and WebKit.
+- The remaining live UX/UI gap in this track is now narrower and more explicit:
+  Studio still needs the same browser-reviewed v2 implementation pass that Arrangement now has.
 - The deployed Studio route is more trustworthy than it was at the start of the alpha pass, but one narrower playback edge case still remains for follow-up: a duplicated lower take-player instance can still miss metadata in this Windows automation environment even though the main Studio players, export links, and route-level analysis flow are healthy.
 
 ## Recommended Next Work
@@ -402,5 +420,6 @@ Date: 2026-04-14
 5. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
 6. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
 7. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior, broader microphone variability, and the remaining duplicated-player playback edge case.
-8. Run a Filmora-informed mockup pass for `Studio` and `Arrangement`, but keep the scope narrow:
+8. Carry the same Filmora-informed v2 implementation discipline from `Arrangement` into `Studio`, while keeping the scope narrow:
    absorb the panel split and comparison discipline without importing template-marketplace clutter or weakening the product's musical identity.
+9. Re-review the dedicated Arrangement route after any further export, playback, or inspector changes so it stays aligned with `arrangement-v2` instead of drifting back toward a generic three-column tool page.

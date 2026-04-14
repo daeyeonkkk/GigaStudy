@@ -14,11 +14,16 @@ Purpose:
 
 - `home-v1.svg`
 - `studio-v1.svg`
+- `studio-v2.svg`
 - `arrangement-v1.svg`
+- `arrangement-v2.svg`
 - `shared-review-v1.svg`
 - `ops-v1.svg`
 
 These are the seeded visual baseline exports for the canonical product screens.
+
+`studio-v2.svg` and `arrangement-v2.svg` are the first Filmora-informed workspace-pass exports.
+They define the next accepted visual target for those two workspaces and sit alongside the already-implemented `v1` route baselines.
 
 They do not replace a shared editable Figma source.
 They make the design target visible inside the repo until that editable source is fully established.

@@ -14,12 +14,16 @@ Current source:
 
 - `quiet-studio-console-v1.html`
 - `quiet-studio-console-v1.css`
+- `filmora-workspace-pass-v2.html`
+- `filmora-workspace-pass-v2.css`
 
 Screen mapping:
 
 - `Home` -> `home-v1`
 - `Studio` -> `studio-v1`
+- `Studio` next workspace pass -> `studio-v2`
 - `Arrangement` -> `arrangement-v1`
+- `Arrangement` next workspace pass -> `arrangement-v2`
 - `Shared Review` -> `shared-review-v1`
 - `Ops` -> `ops-v1`
 

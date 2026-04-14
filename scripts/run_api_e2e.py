@@ -33,7 +33,7 @@ def prepare_environment() -> None:
         _remove_tree_best_effort(STORAGE_ROOT)
     STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
-    os.environ.setdefault("GIGASTUDY_API_APP_ENV", "e2e")
+    os.environ.setdefault("GIGASTUDY_API_ENV", "e2e")
     os.environ.setdefault("GIGASTUDY_API_DATABASE_URL", f"sqlite:///{DB_PATH.as_posix()}")
     os.environ.setdefault("GIGASTUDY_API_STORAGE_ROOT", STORAGE_ROOT.as_posix())
     os.environ.setdefault("GIGASTUDY_API_PUBLIC_APP_URL", "http://127.0.0.1:5173")

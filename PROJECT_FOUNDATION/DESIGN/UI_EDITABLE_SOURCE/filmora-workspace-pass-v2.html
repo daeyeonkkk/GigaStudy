@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GigaStudy Filmora-Informed Workspace Pass v2</title>
+    <link rel="stylesheet" href="./filmora-workspace-pass-v2.css" />
+  </head>
+  <body>
+    <main class="workspace-source">
+      <header class="workspace-header">
+        <div>
+          <p class="eyebrow">Editable Source</p>
+          <h1>Filmora-Informed Workspace Pass v2</h1>
+          <p class="workspace-note">
+            Secondary mockup pass for Studio and Arrangement. These artboards test a clearer source rack,
+            preview hierarchy, timeline rail, and contextual inspector without replacing the Quiet Studio
+            Console identity.
+          </p>
+        </div>
+        <div class="workspace-chips">
+          <span class="chip">Targets: Studio / Arrangement</span>
+          <span class="chip">Reference: Filmora panel logic</span>
+          <span class="chip">Version: v2</span>
+        </div>
+      </header>
+
+      <section class="artboard-grid">
+        <article class="artboard">
+          <div class="artboard-meta">
+            <div>
+              <p class="eyebrow">studio-v2</p>
+              <h2>Studio</h2>
+              <p>
+                Reframed as a vocal review desk with a left source rack, central preview canvas,
+                bottom take timeline, and right note inspector.
+              </p>
+            </div>
+            <div class="artboard-tags">
+              <span class="tag">target: /projects/:id/studio</span>
+              <span class="tag">next pass: implementation</span>
+            </div>
+          </div>
+
+          <div class="screen studio-screen">
+            <div class="screen-topbar">
+              <div>
+                <p class="eyebrow">Studio Session</p>
+                <h3>아침 워밍업</h3>
+                <p class="screen-subcopy">
+                  가이드와 take를 한 흐름으로 보고, 들으면서, 고칠 수 있는 보컬 리뷰 작업면.
+                </p>
+              </div>
+              <div class="status-cluster">
+                <div class="status-chip"><span>템포</span><strong>92 BPM / 4/4</strong></div>
+                <div class="status-chip"><span>조성</span><strong>A major</strong></div>
+                <div class="status-chip"><span>분석</span><strong>노트 단위</strong></div>
+              </div>
+            </div>
+
+            <div class="workspace-grid workspace-grid--studio">
+              <aside class="source-rack">
+                <div class="panel-head">
+                  <p class="eyebrow">Source Rack</p>
+                  <h3>소스와 세션 상태</h3>
+                </div>
+                <div class="rack-group">
+                  <p class="rack-label">Guide</p>
+                  <div class="rack-card rack-card--guide">
+                    <strong>guide.wav</strong>
+                    <span>준비됨 · 01:24 · chord-aware</span>
+                  </div>
+                </div>
+                <div class="rack-group">
+                  <p class="rack-label">Takes</p>
+                  <div class="rack-card rack-card--active">
+                    <strong>Take 2</strong>
+                    <span>선택됨 · pitch 88 · rhythm 91</span>
+                  </div>
+                  <div class="rack-card">
+                    <strong>Take 1</strong>
+                    <span>비교용 보관</span>
+                  </div>
+                  <div class="rack-card">
+                    <strong>Take 3</strong>
+                    <span>미분석</span>
+                  </div>
+                </div>
+                <div class="rack-group">
+                  <p class="rack-label">장비</p>
+                  <div class="rack-card">
+                    <strong>USB Mic Profile</strong>
+                    <span>48 kHz · secure context OK</span>
+                  </div>
+                </div>
+              </aside>
+
+              <section class="main-canvas">
+                <div class="canvas-header">
+                  <div>
+                    <p class="eyebrow">Preview Canvas</p>
+                    <h3>파형 · 피치 윤곽 · 목표 음</h3>
+                  </div>
+                  <div class="canvas-badges">
+                    <span class="mini-chip">가이드 vs Take 2</span>
+                    <span class="mini-chip">정렬 신뢰도 0.93</span>
+                  </div>
+                </div>
+                <div class="preview-stage">
+                  <div class="preview-toolbar">
+                    <span class="toolbar-pill toolbar-pill--accent">재생</span>
+                    <span class="toolbar-pill">정지</span>
+                    <span class="toolbar-pill">가이드만</span>
+                    <span class="toolbar-pill">메트로놈</span>
+                    <span class="toolbar-pill">카운트인</span>
+                  </div>
+                  <div class="preview-plane">
+                    <div class="wave wave--guide"></div>
+                    <div class="wave wave--take"></div>
+                    <div class="playhead"></div>
+                    <div class="target-lane"></div>
+                  </div>
+                </div>
+                <div class="timeline-rail">
+                  <div class="timeline-row timeline-row--guide">
+                    <span class="lane-name">Guide</span>
+                    <span class="lane-state">준비됨</span>
+                    <div class="lane-track lane-track--guide"></div>
+                  </div>
+                  <div class="timeline-row timeline-row--active">
+                    <span class="lane-name">Take 2</span>
+                    <span class="lane-state">선택됨</span>
+                    <div class="lane-track lane-track--active"></div>
+                  </div>
+                  <div class="timeline-row">
+                    <span class="lane-name">Take 1</span>
+                    <span class="lane-state">비교</span>
+                    <div class="lane-track"></div>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="inspector">
+                <div class="panel-head">
+                  <p class="eyebrow">Inspector</p>
+                  <h3>선택 항목 기준 피드백</h3>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric-card"><span>Pitch</span><strong>88</strong></div>
+                  <div class="metric-card"><span>Rhythm</span><strong>91</strong></div>
+                  <div class="metric-card"><span>Harmony</span><strong>79</strong></div>
+                  <div class="metric-card"><span>Confidence</span><strong>93%</strong></div>
+                </div>
+                <div class="detail-card">
+                  <span>선택 노트</span>
+                  <strong>A4 · 12번째 노트</strong>
+                  <p>시작은 약간 높고, sustain는 안정적으로 중심에 수렴.</p>
+                </div>
+                <div class="detail-list">
+                  <div><span>Attack</span><strong>+24c 높음</strong></div>
+                  <div><span>Sustain</span><strong>+6c</strong></div>
+                  <div><span>Timing</span><strong>+18 ms 늦음</strong></div>
+                  <div><span>Mode</span><strong>Chord-aware</strong></div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </article>
+
+        <article class="artboard">
+          <div class="artboard-meta">
+            <div>
+              <p class="eyebrow">arrangement-v2</p>
+              <h2>Arrangement</h2>
+              <p>
+                Reframed as a score-first arrangement desk with a left candidate rack, central
+                player/score canvas, and right export plus part-property inspector.
+              </p>
+            </div>
+            <div class="artboard-tags">
+              <span class="tag">target: /projects/:id/arrangement</span>
+              <span class="tag">next pass: implementation</span>
+            </div>
+          </div>
+
+          <div class="screen arrangement-screen">
+            <div class="screen-topbar">
+              <div>
+                <p class="eyebrow">Arrangement Workspace</p>
+                <h3>하모니 후보 비교와 악보 검토</h3>
+                <p class="screen-subcopy">
+                  후보를 빠르게 바꿔 듣고, 악보를 중심으로 검토한 뒤, 바로 내보내는 편곡 작업면.
+                </p>
+              </div>
+              <div class="status-cluster">
+                <div class="status-chip"><span>초안</span><strong>Take 2 melody</strong></div>
+                <div class="status-chip"><span>난이도</span><strong>기본</strong></div>
+                <div class="status-chip"><span>리듬</span><strong>Beatbox drive</strong></div>
+              </div>
+            </div>
+
+            <div class="workspace-grid workspace-grid--arrangement">
+              <aside class="candidate-rack">
+                <div class="panel-head">
+                  <p class="eyebrow">Candidate Rack</p>
+                  <h3>후보와 제약</h3>
+                </div>
+                <div class="candidate-tile">
+                  <strong>Candidate A</strong>
+                  <span>안전한 보이싱 · 좁은 도약</span>
+                </div>
+                <div class="candidate-tile candidate-tile--selected">
+                  <strong>Candidate B</strong>
+                  <span>선택됨 · 균형형 · cadence 강조</span>
+                </div>
+                <div class="candidate-tile">
+                  <strong>Candidate C</strong>
+                  <span>넓은 대비 · 더 밝은 ending</span>
+                </div>
+                <div class="constraint-box">
+                  <div><span>음역</span><strong>Alto preset</strong></div>
+                  <div><span>도약</span><strong>완전4도 이하</strong></div>
+                  <div><span>병행</span><strong>1 low-risk</strong></div>
+                  <div><span>비트박스</span><strong>Drive</strong></div>
+                </div>
+              </aside>
+
+              <section class="score-canvas">
+                <div class="canvas-header">
+                  <div>
+                    <p class="eyebrow">Score + Player</p>
+                    <h3>Candidate B score</h3>
+                  </div>
+                  <div class="canvas-badges">
+                    <span class="mini-chip">Lead fit 94%</span>
+                    <span class="mini-chip">Preview 01:24</span>
+                  </div>
+                </div>
+                <div class="preview-stage preview-stage--score">
+                  <div class="preview-toolbar">
+                    <span class="toolbar-pill toolbar-pill--accent">재생</span>
+                    <span class="toolbar-pill">정지</span>
+                    <span class="toolbar-pill">A / B 비교</span>
+                    <span class="toolbar-pill">가이드 겹치기</span>
+                  </div>
+                  <div class="score-paper">
+                    <div class="staff-lines"></div>
+                    <div class="score-playhead"></div>
+                    <div class="notes-row notes-row--top"></div>
+                    <div class="notes-row notes-row--mid"></div>
+                    <div class="notes-row notes-row--low"></div>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="arrangement-inspector">
+                <div class="panel-head">
+                  <p class="eyebrow">Inspector</p>
+                  <h3>파트 집중과 내보내기</h3>
+                </div>
+                <div class="part-list">
+                  <div><span>Lead</span><strong>Solo / 0 dB</strong></div>
+                  <div><span>Alto</span><strong>Solo / -2 dB</strong></div>
+                  <div><span>Tenor</span><strong>Solo / -1 dB</strong></div>
+                  <div><span>Bass</span><strong>Solo / -3 dB</strong></div>
+                </div>
+                <div class="detail-card">
+                  <span>선택 후보</span>
+                  <strong>Candidate B</strong>
+                  <p>중간 음역 분배가 가장 고르고, 리드 음형과의 밀착도가 높음.</p>
+                </div>
+                <div class="export-stack">
+                  <span class="export-card">MusicXML 내보내기</span>
+                  <span class="export-card">Arrangement MIDI 내보내기</span>
+                  <span class="export-card">Guide WAV 내보내기</span>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

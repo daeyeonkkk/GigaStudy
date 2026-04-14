@@ -188,6 +188,13 @@ export function ArrangementPage() {
   const selectedDifficultyMeta = getOptionMeta(difficultyOptions, arrangementConfig.difficulty)
   const selectedVoiceRangeMeta = getOptionMeta(voiceRangeOptions, arrangementConfig.voiceRangePreset)
   const selectedBeatboxMeta = getOptionMeta(beatboxOptions, arrangementConfig.beatboxTemplate)
+  const selectedComparisonSummary = selectedArrangement?.comparison_summary ?? null
+  const selectedArrangementLabel = selectedArrangement
+    ? `${selectedArrangement.candidate_code} · ${selectedArrangement.title}`
+    : '아직 선택한 후보가 없습니다'
+  const selectedLeadFitLabel = selectedComparisonSummary
+    ? formatCompactPercent(selectedComparisonSummary.lead_range_fit_percent)
+    : '계산 전'
 
   const refreshSnapshot = useCallback(async (): Promise<void> => {
     if (!projectId) {
@@ -438,51 +445,40 @@ export function ArrangementPage() {
   return (
     <div className="page-shell arrangement-page">
       <section className="arrangement-shell">
-        <div className="arrangement-topbar">
-          <div className="arrangement-tabs" role="tablist" aria-label="편곡 후보">
-            {arrangements.length === 0 ? (
-              <span className="arrangement-tab arrangement-tab--empty">아직 후보가 없습니다</span>
-            ) : (
-              arrangements.map((arrangement) => (
-                <button
-                  key={arrangement.arrangement_id}
-                  aria-selected={selectedArrangement?.arrangement_id === arrangement.arrangement_id}
-                  className={`arrangement-tab ${
-                    selectedArrangement?.arrangement_id === arrangement.arrangement_id
-                      ? 'arrangement-tab--active'
-                      : ''
-                  }`}
-                  type="button"
-                  onClick={() => setSelectedArrangementId(arrangement.arrangement_id)}
-                >
-                  {arrangement.candidate_code}
-                </button>
-              ))
-            )}
+        <div className="arrangement-topbar arrangement-topbar--workspace">
+          <div className="arrangement-topbar__copy">
+            <p className="eyebrow">편곡 워크스페이스</p>
+            <h1>후보를 바꿔 듣고 악보 기준으로 바로 고르세요</h1>
+            <p className="arrangement-topbar__summary">
+              왼쪽에서 후보와 제약을 고르고, 가운데에서 미리듣기와 악보를 검토한 뒤, 오른쪽
+              inspector에서 파트 집중과 내보내기를 마무리합니다.
+            </p>
           </div>
 
-          <div className="arrangement-topbar__meta">
-            <strong>{project.title}</strong>
-            <span>미리듣기 {formatPlaybackClock(arrangementPlaybackPositionMs, arrangementDurationMs)}</span>
+          <div className="arrangement-status-cluster" aria-label="현재 편곡 상태">
+            <div className="arrangement-status-chip">
+              <span>프로젝트</span>
+              <strong>{project.title}</strong>
+            </div>
+            <div className="arrangement-status-chip">
+              <span>기준 테이크</span>
+              <strong>{selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '선택 전'}</strong>
+            </div>
+            <div className="arrangement-status-chip">
+              <span>선택 후보</span>
+              <strong>{selectedArrangement ? selectedArrangement.candidate_code : '없음'}</strong>
+            </div>
+            <div className="arrangement-status-chip">
+              <span>리드 적합도</span>
+              <strong>{selectedLeadFitLabel}</strong>
+            </div>
+            <div className="arrangement-status-chip">
+              <span>미리듣기</span>
+              <strong>{formatPlaybackClock(arrangementPlaybackPositionMs, arrangementDurationMs)}</strong>
+            </div>
           </div>
 
           <div className="arrangement-topbar__actions">
-            <button
-              className="button-primary"
-              disabled={selectedArrangement === null}
-              type="button"
-              onClick={() => void handlePlayArrangement()}
-            >
-              미리듣기 재생
-            </button>
-            <button
-              className="button-secondary"
-              disabled={arrangementPlaybackPositionMs === 0 && arrangementTransportState.phase !== 'playing'}
-              type="button"
-              onClick={() => void stopArrangementPlayback()}
-            >
-              정지
-            </button>
             <Link className="back-link" to={`/projects/${projectId}/studio#arrangement`}>
               스튜디오로 돌아가기
             </Link>
@@ -491,116 +487,151 @@ export function ArrangementPage() {
 
         <div className="arrangement-grid">
           <aside className="panel arrangement-rail arrangement-rail--left">
-            <div>
-              <p className="eyebrow">왼쪽 레일</p>
-              <h1>테이크에 맞는 화음 구성을 고르세요</h1>
-              <p className="panel__summary">
-                후보 성부를 비교하고, 미리듣기로 확인한 뒤, 악보 패키지로 내보낼 수 있습니다.
-              </p>
+            <div className="arrangement-rack__section">
+              <div className="arrangement-rack__head">
+                <p className="eyebrow">후보 랙</p>
+                <h2>후보와 제약</h2>
+                <p className="panel__summary">
+                  먼저 후보를 고른 뒤, 아래 제약과 기준 테이크를 조정하면서 악보 미리듣기를 바로
+                  비교합니다.
+                </p>
+              </div>
+
+              <div className="arrangement-candidate-list" role="tablist" aria-label="편곡 후보">
+                {arrangements.length === 0 ? (
+                  <span className="arrangement-tab arrangement-tab--empty">아직 후보가 없습니다</span>
+                ) : (
+                  arrangements.map((arrangement) => (
+                    <button
+                      key={arrangement.arrangement_id}
+                      aria-selected={selectedArrangement?.arrangement_id === arrangement.arrangement_id}
+                      className={`arrangement-tab arrangement-tab--rack ${
+                        selectedArrangement?.arrangement_id === arrangement.arrangement_id
+                          ? 'arrangement-tab--active'
+                          : ''
+                      }`}
+                      type="button"
+                      onClick={() => setSelectedArrangementId(arrangement.arrangement_id)}
+                    >
+                      <strong>{`${arrangement.candidate_code} · ${arrangement.title}`}</strong>
+                      <span>
+                        {`리드 적합도 ${formatCompactPercent(arrangement.comparison_summary?.lead_range_fit_percent)} · 병행 경고 ${arrangement.comparison_summary?.parallel_motion_alerts ?? 0}`}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
 
-            <div className="field-grid arrangement-field-grid">
-              <label className="field">
-                <span>기준 테이크</span>
-                <select
-                  className="text-input"
-                  value={selectedTake?.track_id ?? ''}
-                  onChange={(event) => setSelectedTakeId(event.target.value || null)}
-                >
-                  {takes.map((take) => (
-                    <option key={take.track_id} value={take.track_id}>
-                      {`${take.take_no ?? '?'}번 테이크 · ${getTrackStatusLabel(take.track_status)}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="arrangement-rack__section">
+              <div className="arrangement-rack__head">
+                <p className="eyebrow">소스와 제약</p>
+                <h2>기준 테이크와 편곡 조건</h2>
+              </div>
 
-              <label className="field">
-                <span>스타일</span>
-                <select
-                  className="text-input"
-                  value={arrangementConfig.style}
-                  onChange={(event) =>
-                    setArrangementConfig((current) => ({ ...current, style: event.target.value }))
-                  }
-                >
-                  <option value="contemporary">컨템퍼러리</option>
-                  <option value="ballad">발라드</option>
-                  <option value="anthem">앤섬</option>
-                </select>
-              </label>
+              <div className="field-grid arrangement-field-grid">
+                <label className="field">
+                  <span>기준 테이크</span>
+                  <select
+                    className="text-input"
+                    value={selectedTake?.track_id ?? ''}
+                    onChange={(event) => setSelectedTakeId(event.target.value || null)}
+                  >
+                    {takes.map((take) => (
+                      <option key={take.track_id} value={take.track_id}>
+                        {`${take.take_no ?? '?'}번 테이크 · ${getTrackStatusLabel(take.track_status)}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="field">
-                <span>난이도</span>
-                <select
-                  className="text-input"
-                  value={arrangementConfig.difficulty}
-                  onChange={(event) =>
-                    setArrangementConfig((current) => ({ ...current, difficulty: event.target.value }))
-                  }
-                >
-                  {difficultyOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <label className="field">
+                  <span>스타일</span>
+                  <select
+                    className="text-input"
+                    value={arrangementConfig.style}
+                    onChange={(event) =>
+                      setArrangementConfig((current) => ({ ...current, style: event.target.value }))
+                    }
+                  >
+                    <option value="contemporary">컨템퍼러리</option>
+                    <option value="ballad">발라드</option>
+                    <option value="anthem">앤섬</option>
+                  </select>
+                </label>
 
-              <label className="field">
-                <span>리드 음역</span>
-                <select
-                  className="text-input"
-                  value={arrangementConfig.voiceRangePreset}
-                  onChange={(event) =>
-                    setArrangementConfig((current) => ({ ...current, voiceRangePreset: event.target.value }))
-                  }
-                >
-                  {voiceRangeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <label className="field">
+                  <span>난이도</span>
+                  <select
+                    className="text-input"
+                    value={arrangementConfig.difficulty}
+                    onChange={(event) =>
+                      setArrangementConfig((current) => ({ ...current, difficulty: event.target.value }))
+                    }
+                  >
+                    {difficultyOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="field">
-                <span>비트박스</span>
-                <select
-                  className="text-input"
-                  value={arrangementConfig.beatboxTemplate}
-                  onChange={(event) =>
-                    setArrangementConfig((current) => ({ ...current, beatboxTemplate: event.target.value }))
-                  }
-                >
-                  {beatboxOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                <label className="field">
+                  <span>리드 음역</span>
+                  <select
+                    className="text-input"
+                    value={arrangementConfig.voiceRangePreset}
+                    onChange={(event) =>
+                      setArrangementConfig((current) => ({ ...current, voiceRangePreset: event.target.value }))
+                    }
+                  >
+                    {voiceRangeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <div className="arrangement-action-row">
-              <button
-                className="button-secondary"
-                disabled={melodyState.phase === 'submitting'}
-                type="button"
-                onClick={() => void handleExtractMelody()}
-              >
-                {melodyState.phase === 'submitting' ? '멜로디 추출 중...' : '멜로디 초안 추출'}
-              </button>
-              <button
-                className="button-primary"
-                disabled={arrangementState.phase === 'submitting'}
-                type="button"
-                onClick={() => void handleGenerateArrangements()}
-              >
-                {arrangementState.phase === 'submitting'
-                  ? '후보 생성 중...'
-                  : '편곡 후보 생성'}
-              </button>
+                <label className="field">
+                  <span>비트박스</span>
+                  <select
+                    className="text-input"
+                    value={arrangementConfig.beatboxTemplate}
+                    onChange={(event) =>
+                      setArrangementConfig((current) => ({ ...current, beatboxTemplate: event.target.value }))
+                    }
+                  >
+                    {beatboxOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="arrangement-action-row">
+                <button
+                  className="button-secondary"
+                  disabled={melodyState.phase === 'submitting'}
+                  type="button"
+                  onClick={() => void handleExtractMelody()}
+                >
+                  {melodyState.phase === 'submitting' ? '멜로디 추출 중...' : '멜로디 초안 추출'}
+                </button>
+                <button
+                  className="button-primary"
+                  disabled={arrangementState.phase === 'submitting'}
+                  type="button"
+                  onClick={() => void handleGenerateArrangements()}
+                >
+                  {arrangementState.phase === 'submitting'
+                    ? '후보 생성 중...'
+                    : '편곡 후보 생성'}
+                </button>
+              </div>
             </div>
 
             <div className="arrangement-summary-block">
@@ -632,13 +663,13 @@ export function ArrangementPage() {
 
             {selectedArrangement ? (
               <div className="arrangement-compare-card">
-                <p className="eyebrow">후보 비교</p>
-                <strong>{`${selectedArrangement.candidate_code} · ${selectedArrangement.title}`}</strong>
+                <p className="eyebrow">선택 후보</p>
+                <strong>{selectedArrangementLabel}</strong>
                 <div className="arrangement-compare-list">
-                  <span>리드 적합도: {formatCompactPercent(selectedArrangement.comparison_summary?.lead_range_fit_percent)}</span>
-                  <span>최대 도약: {selectedArrangement.comparison_summary?.support_max_leap ?? '없음'} 반음</span>
-                  <span>병행 경고: {selectedArrangement.comparison_summary?.parallel_motion_alerts ?? 0}</span>
-                  <span>비트박스 타격 수: {selectedArrangement.comparison_summary?.beatbox_note_count ?? 0}</span>
+                  <span>리드 적합도: {selectedLeadFitLabel}</span>
+                  <span>최대 도약: {selectedComparisonSummary?.support_max_leap ?? '없음'} 반음</span>
+                  <span>병행 경고: {selectedComparisonSummary?.parallel_motion_alerts ?? 0}</span>
+                  <span>비트박스 타격 수: {selectedComparisonSummary?.beatbox_note_count ?? 0}</span>
                 </div>
               </div>
             ) : (
@@ -664,8 +695,12 @@ export function ArrangementPage() {
           <section className="panel arrangement-center">
             <div className="arrangement-center__header">
               <div>
-                <p className="eyebrow">악보 캔버스</p>
-                <h2>편곡을 미리 듣고 악보 패키지로 내보내세요</h2>
+                <p className="eyebrow">Score + Player</p>
+                <h2>{selectedArrangement ? `${selectedArrangement.candidate_code} 악보 미리듣기` : '후보를 선택해 악보를 검토하세요'}</h2>
+                <p className="panel__summary">
+                  재생, 정지, 가이드 겹치기를 같은 캔버스에서 다루고, 재생 위치와 score playhead를 같이
+                  확인합니다.
+                </p>
               </div>
               <div className="candidate-chip-row">
                 <span className="candidate-chip">
@@ -674,18 +709,48 @@ export function ArrangementPage() {
                 {selectedArrangement ? (
                   <span className="candidate-chip">{selectedArrangement.part_count}성부</span>
                 ) : null}
+                {selectedArrangement ? (
+                  <span className="candidate-chip candidate-chip--good">{`리드 적합도 ${selectedLeadFitLabel}`}</span>
+                ) : null}
               </div>
             </div>
 
-            <ArrangementScore
-                  musicXmlUrl={normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url)}
-              playheadRatio={arrangementPlaybackRatio}
-              renderKey={
-                selectedArrangement
-                  ? `${selectedArrangement.arrangement_id}:${selectedArrangement.updated_at}`
-                  : 'empty-arrangement'
-              }
-            />
+            <div className="arrangement-center__stage">
+              <div className="arrangement-preview-toolbar">
+                <div className="arrangement-preview-toolbar__actions">
+                  <button
+                    className="button-primary"
+                    disabled={selectedArrangement === null}
+                    type="button"
+                    onClick={() => void handlePlayArrangement()}
+                  >
+                    미리듣기 재생
+                  </button>
+                  <button
+                    className="button-secondary"
+                    disabled={arrangementPlaybackPositionMs === 0 && arrangementTransportState.phase !== 'playing'}
+                    type="button"
+                    onClick={() => void stopArrangementPlayback()}
+                  >
+                    정지
+                  </button>
+                </div>
+                <div className="arrangement-preview-toolbar__meta">
+                  <span className="candidate-chip">{guideModeEnabled ? '가이드 겹치기 켜짐' : '가이드 겹치기 꺼짐'}</span>
+                  <span className="candidate-chip">{arrangementTransportState.phase === 'playing' ? '재생 중' : '재생 대기'}</span>
+                </div>
+              </div>
+
+              <ArrangementScore
+                musicXmlUrl={normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url)}
+                playheadRatio={arrangementPlaybackRatio}
+                renderKey={
+                  selectedArrangement
+                    ? `${selectedArrangement.arrangement_id}:${selectedArrangement.updated_at}`
+                    : 'empty-arrangement'
+                }
+              />
+            </div>
 
             <div className="arrangement-center__footer">
               <div className="transport-card">
@@ -709,11 +774,24 @@ export function ArrangementPage() {
 
           <aside className="panel arrangement-rail arrangement-rail--right">
             <div>
-              <p className="eyebrow">오른쪽 레일</p>
+              <p className="eyebrow">Inspector</p>
               <h2>파트 집중과 내보내기</h2>
+              <p className="panel__summary">
+                선택한 후보를 기준으로 export, 가이드 focus, 파트 볼륨과 solo 상태를 한 곳에서 정리합니다.
+              </p>
             </div>
 
-            <div className="button-row">
+            {selectedArrangement ? (
+              <div className="arrangement-inspector-note">
+                <span>선택 후보</span>
+                <strong>{selectedArrangementLabel}</strong>
+                <p>
+                  {`리드 적합도 ${selectedLeadFitLabel}, 병행 경고 ${selectedComparisonSummary?.parallel_motion_alerts ?? 0}회, 최대 도약 ${selectedComparisonSummary?.support_max_leap ?? '없음'}반음`}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="button-row arrangement-export-stack">
               {normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url) ? (
                 <a
                   className="button-primary"
@@ -740,23 +818,25 @@ export function ArrangementPage() {
               ) : null}
             </div>
 
-            <label className="toggle-card">
-              <input
-                checked={guideModeEnabled}
-                type="checkbox"
-                onChange={(event) => setGuideModeEnabled(event.target.checked)}
-              />
-              <div>
-                <strong>가이드 모드</strong>
-                <span>선택한 기준 파트를 더 또렷하게 두고 나머지 성부는 한걸음 뒤로 물립니다.</span>
-              </div>
-            </label>
+            <div className="arrangement-focus-block">
+              <label className="toggle-card">
+                <input
+                  checked={guideModeEnabled}
+                  type="checkbox"
+                  onChange={(event) => setGuideModeEnabled(event.target.checked)}
+                />
+                <div>
+                  <strong>가이드 모드</strong>
+                  <span>선택한 기준 파트를 더 또렷하게 두고 나머지 성부는 한걸음 뒤로 물립니다.</span>
+                </div>
+              </label>
 
-            <p
-              className={arrangementTransportState.phase === 'error' ? 'form-error' : 'status-card__hint'}
-            >
-              {arrangementTransportState.message}
-            </p>
+              <p
+                className={arrangementTransportState.phase === 'error' ? 'form-error' : 'status-card__hint'}
+              >
+                {arrangementTransportState.message}
+              </p>
+            </div>
 
             {selectedArrangement ? (
               <div className="arrangement-part-list">

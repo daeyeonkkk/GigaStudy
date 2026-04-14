@@ -474,10 +474,12 @@ test('release gate arrangement workspace presents a score-first compare and expo
 
   await page.goto(`/projects/${projectId}/arrangement`)
 
-  await expect(page.getByRole('heading', { name: '테이크에 맞는 화음 구성을 고르세요' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '편곡을 미리 듣고 악보 패키지로 내보내세요' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '후보를 바꿔 듣고 악보 기준으로 바로 고르세요' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '후보와 제약' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /악보 미리듣기$/ })).toBeVisible()
   await expect(page.getByRole('heading', { name: '파트 집중과 내보내기' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'A', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /A ·/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: '미리듣기 재생' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'MusicXML 내보내기' })).toBeVisible()
   await expect(page.getByRole('link', { name: '편곡 MIDI 내보내기' })).toBeVisible()
   await expect(page.getByRole('link', { name: '스튜디오에서 자세히 수정하기' })).toBeVisible()

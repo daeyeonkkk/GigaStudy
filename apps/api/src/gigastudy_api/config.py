@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 from typing import Annotated
 
@@ -42,6 +43,14 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
+            normalized = value.strip()
+            if normalized.startswith("["):
+                try:
+                    decoded = json.loads(normalized)
+                except json.JSONDecodeError:
+                    decoded = None
+                if isinstance(decoded, list):
+                    return [str(item).strip() for item in decoded if str(item).strip()]
             return [item.strip() for item in value.split(",") if item.strip()]
 
         return value

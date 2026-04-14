@@ -193,8 +193,11 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
 - [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
 - [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
-- [ ] A Studio v2 and Arrangement v2 mockup pass has absorbed the accepted Filmora patterns:
+- [x] A Studio v2 and Arrangement v2 mockup pass has absorbed the accepted Filmora patterns:
   source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
+- [x] A browser-reviewed Studio or Arrangement implementation pass has moved the live product noticeably closer to the Filmora-informed v2 mockups.
+  Arrangement now passes a dedicated cross-browser release-gate check against the v2 workspace structure.
+- [ ] The Studio route has received the same browser-reviewed v2 implementation pass that Arrangement now has.
 
 ## 17. Mockup Track
 
@@ -205,6 +208,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] `Home`, `Studio`, and `Arrangement` each have a frozen mockup version that implementation can target directly.
 - [x] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
 - [x] Each visually refactored screen references the mockup version it implements, rather than only the low-fidelity wireframe.
+- [x] The next workspace-pass exports for `Studio` and `Arrangement` now exist as `studio-v2` and `arrangement-v2`, even though the live product still needs a code pass to match them.
 
 ## 18. Foundation Hygiene
 

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960" fill="none">
+  <rect width="1440" height="960" fill="#E7DACB"/>
+  <rect x="28" y="24" width="1384" height="912" rx="36" fill="#15232D"/>
+  <rect x="60" y="56" width="1320" height="848" rx="30" fill="#F7F0E8"/>
+  <rect x="88" y="84" width="1264" height="128" rx="28" fill="#15232D"/>
+  <text x="118" y="128" fill="#B8673D" font-size="16" font-family="Arial, sans-serif">ARRANGEMENT WORKSPACE</text>
+  <text x="118" y="174" fill="#FFF8F1" font-size="38" font-family="Georgia, serif">하모니 후보 비교와 악보 검토</text>
+  <text x="118" y="204" fill="#E8DCCC" font-size="18" font-family="Arial, sans-serif">후보를 빠르게 바꿔 듣고, 악보를 중심으로 검토한 뒤, 바로 내보내는 편곡 작업면.</text>
+  <g>
+    <rect x="962" y="108" width="112" height="76" rx="18" fill="#243542"/>
+    <text x="998" y="136" fill="#EADFD0" font-size="13" font-family="Arial, sans-serif">초안</text>
+    <text x="973" y="166" fill="#FFF8F1" font-size="16" font-family="Arial, sans-serif">Take 2 melody</text>
+    <rect x="1086" y="108" width="112" height="76" rx="18" fill="#243542"/>
+    <text x="1118" y="136" fill="#EADFD0" font-size="13" font-family="Arial, sans-serif">난이도</text>
+    <text x="1128" y="166" fill="#FFF8F1" font-size="16" font-family="Arial, sans-serif">기본</text>
+    <rect x="1210" y="108" width="112" height="76" rx="18" fill="#315744"/>
+    <text x="1242" y="136" fill="#E5F2E9" font-size="13" font-family="Arial, sans-serif">리듬</text>
+    <text x="1230" y="166" fill="#FFF8F1" font-size="16" font-family="Arial, sans-serif">Drive</text>
+  </g>
+  <rect x="88" y="240" width="248" height="596" rx="28" fill="#FBF5EE"/>
+  <text x="116" y="282" fill="#B8673D" font-size="15" font-family="Arial, sans-serif">CANDIDATE RACK</text>
+  <text x="116" y="322" fill="#1D2C37" font-size="30" font-family="Georgia, serif">후보와 제약</text>
+  <rect x="116" y="362" width="192" height="84" rx="18" fill="#F8F0E7"/>
+  <text x="136" y="394" fill="#1D2C37" font-size="18" font-family="Arial, sans-serif">Candidate A</text>
+  <text x="136" y="422" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">안전한 보이싱 · 좁은 도약</text>
+  <rect x="116" y="460" width="192" height="84" rx="18" fill="#F1E5D8" stroke="#B8673D"/>
+  <text x="136" y="492" fill="#1D2C37" font-size="18" font-family="Arial, sans-serif">Candidate B</text>
+  <text x="136" y="520" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">선택됨 · 균형형 · cadence 강조</text>
+  <rect x="116" y="558" width="192" height="84" rx="18" fill="#F8F0E7"/>
+  <text x="136" y="590" fill="#1D2C37" font-size="18" font-family="Arial, sans-serif">Candidate C</text>
+  <text x="136" y="618" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">넓은 대비 · 밝은 ending</text>
+  <rect x="116" y="666" width="192" height="142" rx="18" fill="#FFFFFF" stroke="#E2D4C7"/>
+  <text x="136" y="700" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">음역   Alto preset</text>
+  <text x="136" y="730" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">도약   완전4도 이하</text>
+  <text x="136" y="760" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">병행   1 low-risk</text>
+  <text x="136" y="790" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">비트박스   Drive</text>
+  <rect x="364" y="240" width="724" height="596" rx="28" fill="#FCF7F2"/>
+  <text x="392" y="282" fill="#B8673D" font-size="15" font-family="Arial, sans-serif">SCORE + PLAYER</text>
+  <text x="392" y="322" fill="#1D2C37" font-size="32" font-family="Georgia, serif">Candidate B score</text>
+  <rect x="392" y="358" width="668" height="62" rx="18" fill="#FFF8F1" stroke="#E2D4C7"/>
+  <rect x="416" y="373" width="74" height="32" rx="16" fill="#B8673D"/>
+  <text x="441" y="394" fill="#FFF8F1" font-size="15" font-family="Arial, sans-serif">재생</text>
+  <rect x="500" y="373" width="64" height="32" rx="16" fill="#F8F0E7" stroke="#D7C0A9"/>
+  <text x="521" y="394" fill="#1D2C37" font-size="15" font-family="Arial, sans-serif">정지</text>
+  <rect x="392" y="438" width="668" height="366" rx="24" fill="#FFFDF9" stroke="#E2D4C7"/>
+  <rect x="444" y="488" width="560" height="228" fill="url(#staff)" opacity="0.85"/>
+  <rect x="700" y="468" width="6" height="286" rx="3" fill="#B8673D"/>
+  <circle cx="612" cy="576" r="12" fill="#1D2C37"/>
+  <circle cx="666" cy="556" r="12" fill="#1D2C37"/>
+  <circle cx="720" cy="592" r="12" fill="#1D2C37"/>
+  <circle cx="774" cy="570" r="12" fill="#1D2C37"/>
+  <circle cx="828" cy="606" r="12" fill="#1D2C37"/>
+  <rect x="1116" y="240" width="236" height="596" rx="28" fill="#FBF5EE"/>
+  <text x="1144" y="282" fill="#B8673D" font-size="15" font-family="Arial, sans-serif">INSPECTOR</text>
+  <text x="1144" y="322" fill="#1D2C37" font-size="30" font-family="Georgia, serif">파트 집중과 내보내기</text>
+  <rect x="1144" y="360" width="180" height="152" rx="18" fill="#F8F0E7"/>
+  <text x="1164" y="394" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">Lead   Solo / 0 dB</text>
+  <text x="1164" y="424" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">Alto   Solo / -2 dB</text>
+  <text x="1164" y="454" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">Tenor  Solo / -1 dB</text>
+  <text x="1164" y="484" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">Bass   Solo / -3 dB</text>
+  <rect x="1144" y="532" width="180" height="104" rx="18" fill="#FFFFFF" stroke="#E2D4C7"/>
+  <text x="1164" y="564" fill="#5D6B76" font-size="12" font-family="Arial, sans-serif">선택 후보</text>
+  <text x="1164" y="592" fill="#1D2C37" font-size="18" font-family="Arial, sans-serif">Candidate B</text>
+  <text x="1164" y="620" fill="#5D6B76" font-size="14" font-family="Arial, sans-serif">중간 음역 분배가 가장 고름</text>
+  <rect x="1144" y="656" width="180" height="44" rx="16" fill="#F1E5D8"/>
+  <rect x="1144" y="712" width="180" height="44" rx="16" fill="#F1E5D8"/>
+  <rect x="1144" y="768" width="180" height="44" rx="16" fill="#F1E5D8"/>
+  <text x="1174" y="684" fill="#1D2C37" font-size="16" font-family="Arial, sans-serif">MusicXML 내보내기</text>
+  <text x="1160" y="740" fill="#1D2C37" font-size="16" font-family="Arial, sans-serif">Arrangement MIDI 내보내기</text>
+  <text x="1176" y="796" fill="#1D2C37" font-size="16" font-family="Arial, sans-serif">Guide WAV 내보내기</text>
+  <defs>
+    <pattern id="staff" width="560" height="48" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="10" x2="560" y2="10" stroke="#1D2C37" stroke-width="1"/>
+      <line x1="0" y1="22" x2="560" y2="22" stroke="#1D2C37" stroke-width="1"/>
+      <line x1="0" y1="34" x2="560" y2="34" stroke="#1D2C37" stroke-width="1"/>
+      <line x1="0" y1="46" x2="560" y2="46" stroke="#1D2C37" stroke-width="1"/>
+    </pattern>
+  </defs>
+</svg>

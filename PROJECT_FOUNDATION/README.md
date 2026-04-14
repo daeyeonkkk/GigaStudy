@@ -71,6 +71,8 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
   Repo-visible frozen mockup exports for canonical screens.
 - `DESIGN/UI_EDITABLE_SOURCE/`
   Repo-local editable HTML and CSS artboards for the canonical mockups.
+  The latest Studio and Arrangement workspace-pass source now lives in `filmora-workspace-pass-v2.html`.
+  The first live implementation pass from that source is now reflected on the dedicated Arrangement route.
 - `BACKLOGS/PHASE1_BACKLOG.md`
   Build backlog for the recording pipeline and studio foundation slice.
 - `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`

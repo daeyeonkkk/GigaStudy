@@ -426,10 +426,12 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
   template-marketplace density, generic video-editor jargon, effects-shopping chrome, and any visual move that weakens the `Quiet Studio Console` identity.
 - Completion for this pass means:
   one updated Studio mockup, one updated Arrangement mockup, and one browser-reviewed implementation change that clearly reflects the accepted Filmora patterns.
+  The live workspace should also keep one obvious playback surface instead of scattering the same listening controls across multiple panels.
 - The mockup half of this pass is now complete through:
   `DESIGN/UI_EDITABLE_SOURCE/filmora-workspace-pass-v2.html`,
   `DESIGN/UI_MOCKUPS/studio-v2.svg`, and
   `DESIGN/UI_MOCKUPS/arrangement-v2.svg`.
 - The first browser-reviewed implementation half is now complete on the live Arrangement workspace:
   the route now leans into a candidate rack, score/player stage, and export-focused inspector, and the dedicated arrangement release gate passes in Chromium, Firefox, and WebKit.
-- The next remaining work is the matching Studio implementation pass that adopts the same v2 workspace discipline in live product code.
+- The second browser-reviewed implementation half is now also complete on the live Studio workspace:
+  the route now follows the same v2 workspace discipline, and guide / take listening is consolidated into one obvious playback surface in the lower time rail.

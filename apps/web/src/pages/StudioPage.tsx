@@ -3648,16 +3648,13 @@ export function StudioPage() {
                     </div>
                   )}
 
-                  {selectedTakePlaybackUrl ? (
-                    <div className="audio-preview">
-                      <p className="json-label">선택한 테이크 재생</p>
-                      <ManagedAudioPlayer
-                        muted={isTrackMutedByMixer(selectedTake.track_id)}
-                        src={selectedTakePlaybackUrl}
-                        volume={mixerState[selectedTake.track_id]?.volume ?? 1}
-                      />
-                    </div>
-                  ) : null}
+                  <div className="mini-card mini-card--stack">
+                    <span>재생은 한 곳에서</span>
+                    <strong>아래 시간선에서만 들어보면 됩니다</strong>
+                    <small>
+                      가이드와 선택한 테이크 듣기는 아래 시간선의 플레이어에만 모아 두었습니다.
+                    </small>
+                  </div>
                 </div>
               ) : (
                 <div className="empty-card">

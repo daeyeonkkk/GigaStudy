@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
 from collections import Counter
+from io import BytesIO
+from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
@@ -55,6 +58,57 @@ from gigastudy_api.services.environment_validation_packet_builder import (
 )
 from gigastudy_api.services.melody import MELODY_MODEL_VERSION, PYIN_FALLBACK_MODEL_VERSION
 from gigastudy_api.services.projects import get_or_create_default_user
+
+ENVIRONMENT_VALIDATION_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "environment_validation"
+    / "environment_validation_runs.template.csv"
+)
+
+
+def build_environment_validation_template_download() -> tuple[str, bytes]:
+    csv_text = ENVIRONMENT_VALIDATION_TEMPLATE_PATH.read_text(encoding="utf-8")
+    readme_text = """# GigaStudy 환경 검증 시작 묶음
+
+이 묶음은 실기기 브라우저 검증을 시작할 때 바로 쓸 수 있는 기본 시트입니다.
+
+## 쓰는 순서
+
+1. `environment_validation_runs.template.csv`를 복사해서 이번 검증 라운드 이름으로 저장합니다.
+2. 기기 한 조합마다 한 줄씩 채웁니다.
+3. 결과는 `PASS`, `WARN`, `FAIL` 중 하나로 적습니다.
+4. 저장한 CSV를 ops 화면의 `가져오기 입력` 영역에서 미리 보고 가져옵니다.
+
+## 꼭 채울 항목
+
+- 기기 이름
+- 운영체제 / 브라우저
+- 입력 장치 / 출력 경로
+- 녹음 성공 여부
+- 분석 성공 여부
+- 재생 성공 여부
+- warning_flags
+- validated_at
+
+## 결과 기준
+
+- `PASS`: 녹음, 분석, 재생이 모두 자연스럽게 끝났을 때
+- `WARN`: 핵심 흐름은 되지만 경고, 재생 제한, 권한 혼선이 있을 때
+- `FAIL`: 녹음이나 분석이 막히거나 제품 설명과 실제 동작이 어긋날 때
+
+## 메모
+
+- Bluetooth, 유선 이어폰, 내장 스피커처럼 출력 경로가 다르면 줄을 따로 적는 편이 좋습니다.
+- Safari / WebKit은 별도 근거가 중요하니 가능한 한 따로 기록해 주세요.
+"""
+
+    filename = "gigastudy-environment-validation-starter-pack.zip"
+    archive_buffer = BytesIO()
+    with ZipFile(archive_buffer, mode="w", compression=ZIP_DEFLATED) as archive:
+        archive.writestr("README.md", readme_text)
+        archive.writestr("environment_validation_runs.template.csv", csv_text)
+
+    return filename, archive_buffer.getvalue()
 
 
 def _count_records(session: Session, statement) -> int:
@@ -563,4 +617,3 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
             for job in recent_jobs
         ],
     )
-

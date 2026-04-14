@@ -1,6 +1,8 @@
 from collections.abc import Iterator
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
+from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
 import pytest
@@ -306,6 +308,32 @@ def test_environment_validation_runs_can_be_created_and_listed(client: TestClien
     assert overview_payload["recent_environment_validation_runs"][0]["tester"] == "QA lead"
     assert overview_payload["recent_environment_validation_runs"][0]["outcome"] == "WARN"
     assert overview_payload["environment_claim_gate"]["summary_message"]
+
+
+def test_environment_validation_template_download_returns_starter_pack_zip(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/admin/environment-validations/template")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert (
+        response.headers["content-disposition"]
+        == 'attachment; filename="gigastudy-environment-validation-starter-pack.zip"'
+    )
+
+    archive = ZipFile(BytesIO(response.content))
+    names = set(archive.namelist())
+    assert "README.md" in names
+    assert "environment_validation_runs.template.csv" in names
+
+    readme_text = archive.read("README.md").decode("utf-8")
+    csv_text = archive.read("environment_validation_runs.template.csv").decode("utf-8")
+
+    assert "GigaStudy 환경 검증 시작 묶음" in readme_text
+    assert "가져오기 입력" in readme_text
+    assert csv_text.startswith(
+        "label,tester,device_name,os,browser,input_device,output_route,outcome,"
+    )
 
 
 def test_environment_validation_packet_reports_matrix_and_guardrails(client: TestClient) -> None:

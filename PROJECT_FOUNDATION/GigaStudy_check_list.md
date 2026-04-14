@@ -161,6 +161,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Environment-validation intake CLIs can target one named evidence round directly instead of repeating CSV and preview-output paths.
 - [x] One round-local browser and hardware packet plus claim-gate preview can be regenerated from an evidence-round CSV before ops import.
 - [x] Ops can preview and import external environment-validation CSV evidence directly instead of relying on CLI-only intake.
+- [x] Ops can download a Korean-first environment validation starter pack so testers can begin from a ready CSV and README instead of hunting for repo template paths.
 - [x] A native browser and hardware validation protocol exists in `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`.
 - [x] Manual PASS / WARN / FAIL validation runs can be recorded from ops.
 - [x] Chromium seeded release-gate coverage exists for recording, playback, export, sharing, and endurance.

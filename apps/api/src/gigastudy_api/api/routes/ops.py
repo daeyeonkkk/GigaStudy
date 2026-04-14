@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.ops import (
@@ -16,6 +16,7 @@ from gigastudy_api.api.schemas.ops import (
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.ops import (
     build_environment_validation_packet,
+    build_environment_validation_template_download,
     build_environment_validation_claim_gate,
     build_environment_validation_run_response,
     create_environment_validation_run,
@@ -43,6 +44,16 @@ def get_environment_validation_packet_endpoint(
     session: Session = Depends(get_db_session),
 ) -> EnvironmentValidationPacketResponse:
     return build_environment_validation_packet(session)
+
+
+@router.get("/environment-validations/template")
+def download_environment_validation_template_endpoint() -> Response:
+    filename, payload = build_environment_validation_template_download()
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/environment-validation-release-notes", response_class=PlainTextResponse)

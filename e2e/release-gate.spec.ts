@@ -794,6 +794,21 @@ test('release gate ops overview can store a manual environment validation run', 
   ).toBeTruthy()
 })
 
+test('release gate ops overview can download an environment validation starter pack', async ({
+  page,
+}) => {
+  await page.goto('/ops')
+  const importPanel = page.getByTestId('validation-import-panel')
+  await expect(importPanel).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await importPanel.getByTestId('download-validation-template-button').click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('gigastudy-environment-validation-starter-pack.zip')
+  const downloadPath = await download.path()
+  expect(downloadPath).toBeTruthy()
+})
+
 test('release gate ops overview can preview and import validation CSV intake', async ({
   page,
   request,

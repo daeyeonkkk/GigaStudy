@@ -1142,6 +1142,17 @@ export function OpsPage() {
           </p>
 
           <div className="project-form ops-import-form">
+            <div className="button-row">
+              <a
+                className="button-secondary button-secondary--small"
+                data-testid="download-validation-template-button"
+                download="gigastudy-environment-validation-starter-pack.zip"
+                href={buildApiUrl('/api/admin/environment-validations/template')}
+              >
+                검증 시트 받기
+              </a>
+            </div>
+
             <label className="field">
               <span>환경 검증 CSV</span>
               <textarea

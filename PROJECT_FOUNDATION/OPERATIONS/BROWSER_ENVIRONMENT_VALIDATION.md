@@ -128,10 +128,12 @@ uv run python scripts/create_evidence_round.py --round-id round-YYYYMMDD
    This now also writes `environment_validation_packet.preview.json` and `environment_validation_claim_gate.preview.{json,md}` inside the round before anything is imported into ops.
 8. Run `uv run python scripts/inspect_evidence_round.py --round-root <round>` when you want one summary of what the round is still missing before review
 9. Prefer the ops CSV preview/import panel for spreadsheet evidence intake
-10. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
+10. If a tester needs a fresh starter sheet from the product UI, download the `환경 검증 시트 받기` starter pack from `/ops`
+    The pack now includes a CSV template plus a short Korean README so collection can begin without searching repo paths first.
+11. If CLI is easier for the round, convert that sheet with `uv run python scripts/import_environment_validation_runs.py`
    Prefer `uv run python scripts/import_environment_validation_runs.py --round-root <round>` so the round CSV and generated preview JSON stay together.
-11. Review the preview rows before importing them into the ops log
-12. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
+12. Review the preview rows before importing them into the ops log
+13. Prepare a new validation run entry in the ops validation log form if any manual follow-up is still needed
 
 After a manual validation round:
 

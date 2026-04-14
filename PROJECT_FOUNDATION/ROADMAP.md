@@ -344,6 +344,7 @@
 - browser / hardware claim gate로 checklist-closure review readiness를 반복 가능하게 판정
 - ops overview에서 현재 browser / hardware claim gate 상태를 inline으로 확인하고 바로 release-review blocker를 읽을 수 있게 함
 - external QA or hardware evidence CSV를 ops에서 preview 후 import하는 흐름으로 CLI-only intake bottleneck을 제거
+- ops에서 한국어 기준 환경 검증 시작 묶음(zip)을 바로 내려받아 CSV 템플릿과 안내 README를 함께 전달
 - evidence round refresh로 ops import 이전에도 round-local packet / claim-gate preview를 재생성할 수 있게 함
 - `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` 기준 matrix 실행
 - native Safari / WebKit recording, permission, playback 검증

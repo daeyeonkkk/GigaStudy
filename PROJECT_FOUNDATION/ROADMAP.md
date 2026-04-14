@@ -307,6 +307,7 @@
 - export된 analyzed case에서 note-level guide/take clip WAVs를 같이 만들어 rater가 전체 take를 반복 스크럽하지 않고도 노트 단위 판단을 할 수 있게 함
 - export된 analyzed case에서 self-contained review packet HTML을 같이 만들어 rater가 한 페이지에서 full take와 per-note clips를 바로 들을 수 있게 함
 - human-rating review packet과 rating-sheet 입력값을 한국어 우선 기준으로 정리하고, builder가 이를 canonical calibration label로 정규화하게 함
+- studio에서 선택한 테이크를 사람 평가 패킷 zip으로 바로 내려받아, guide / take / 노트 클립 / 리뷰 HTML / 평가 시트를 한 번에 전달할 수 있게 함
 - real-vocal corpus inventory / validation report for audio-path and rating coverage sanity checks
 - human-rating corpus manifest와 agreement report workflow
 - threshold-fit report generator for difficulty tiers

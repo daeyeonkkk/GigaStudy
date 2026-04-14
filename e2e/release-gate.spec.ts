@@ -367,6 +367,13 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
   await expect(noteFeedbackPanel.getByText('음정 기준', { exact: true })).toBeVisible()
   await expect(noteFeedbackPanel.getByRole('button', { name: 'N1' })).toBeVisible()
   await expect(noteFeedbackPanel.getByRole('heading', { name: /1번 노트/i })).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByTestId('download-human-rating-packet-button').click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^gigastudy-.*-human-rating-packet\.zip$/)
+  const downloadPath = await download.path()
+  expect(downloadPath).toBeTruthy()
 })
 
 test('release gate share flow opens a frozen snapshot and loses access after deactivation', async ({

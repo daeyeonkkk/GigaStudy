@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from gigastudy_api.config import get_settings
 from gigastudy_api.db.base import Base
 from gigastudy_api.db.session import get_db_session, get_engine, get_session_factory
-from gigastudy_api.main import app
 from gigastudy_api.services.audio_fixture_library import build_named_audio_fixture
 
 
@@ -164,6 +163,8 @@ def _restore_env(previous_values: dict[str, str | None]) -> None:
 
 @contextmanager
 def isolated_calibration_client() -> Iterator[TestClient]:
+    from gigastudy_api.main import app
+
     with TemporaryDirectory(prefix="gigastudy-calibration-") as temp_dir:
         temp_root = Path(temp_dir)
         database_path = temp_root / "calibration.db"

@@ -29,6 +29,7 @@ The repo now supports:
 - note-level guide/take clip WAV exports for analyzed cases so raters can review one note at a time without manual scrubbing
 - self-contained review packet HTML exports for analyzed cases so raters can open one page for full-take and per-note listening
 - Korean-first review packet copy plus Korean rating-label normalization (`높음 / 정확 / 낮음 / 판단 어려움`, `양호 / 검토 / 교정 필요`) for local rater collection
+- a product-facing packet download path in Studio for the selected take, so the first rater handoff no longer depends on CLI access alone
 - template inputs for the collection round:
   `apps/api/calibration/human_rating_cases.template.json`
   `apps/api/calibration/human_rating_sheet.template.csv`
@@ -137,6 +138,7 @@ This copies the project's canonical guide/take WAV files into the round and repl
 When note-event artifacts already exist for that take, the export also writes neutral reference files under `human-rating/references/` with `note_index`, time windows, and target pitch labels, without copying the scorer's sharp / flat verdict text into the rater view.
 That same export now also writes note-level guide/take clip WAV files under `human-rating/references/clips/<case-id>/`, so raters can compare one note at a time instead of scrubbing the full take for every label.
 It also writes a review packet HTML under `human-rating/review-packets/`, so one rater can open a single file and work through full-take listening plus per-note clip review from one place.
+When the take is already open in Studio, the same handoff bundle can also be downloaded directly from `평가 자료 받기`, which packages the `human-rating/` folder into one zip for raters.
 
 3. If export is not possible yet, place the real guide/take WAV files into `human-rating/audio/guides/` and `human-rating/audio/takes/` manually.
 4. Update the generated `human-rating/human_rating_cases.json` metadata file so each case points to the real WAV paths for that round.

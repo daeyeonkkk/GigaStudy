@@ -1,6 +1,7 @@
 from uuid import UUID
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from gigastudy_api.api.schemas.tracks import (
@@ -13,6 +14,7 @@ from gigastudy_api.api.schemas.tracks import (
 )
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.services.takes import (
+    build_take_human_rating_packet_download,
     build_take_response,
     complete_take_upload,
     create_take_track,
@@ -87,3 +89,21 @@ def complete_take_upload_endpoint(
 ) -> TakeTrackResponse:
     track = complete_take_upload(session, track_id, payload)
     return build_take_response(track, request)
+
+
+@router.get(
+    "/projects/{project_id}/tracks/{track_id}/human-rating-packet",
+    name="download_take_human_rating_packet",
+)
+def download_take_human_rating_packet_endpoint(
+    project_id: UUID,
+    track_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> Response:
+    filename, payload = build_take_human_rating_packet_download(session, project_id, track_id)
+    content_disposition = f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quote(filename)}'
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": content_disposition},
+    )

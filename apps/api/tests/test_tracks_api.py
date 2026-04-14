@@ -1,5 +1,7 @@
 from collections.abc import Iterator
+from io import BytesIO
 from pathlib import Path
+from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
 import pytest
@@ -38,6 +40,47 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
     app.dependency_overrides.clear()
     get_settings.cache_clear()
+
+
+def _upload_ready_track(
+    client: TestClient,
+    project_id: str,
+    *,
+    role: str,
+    wav_bytes: bytes,
+    filename: str,
+    part_type: str = "LEAD",
+) -> str:
+    if role == "guide":
+        init_response = client.post(
+            f"/api/projects/{project_id}/guide/upload-url",
+            json={"filename": filename, "content_type": "audio/wav"},
+        )
+        track_id = init_response.json()["track_id"]
+        client.put(init_response.json()["upload_url"], content=wav_bytes)
+        complete_response = client.post(
+            f"/api/projects/{project_id}/guide/complete",
+            json={"track_id": track_id, "source_format": "audio/wav"},
+        )
+        assert complete_response.status_code == 200
+        return track_id
+
+    create_response = client.post(
+        f"/api/projects/{project_id}/tracks",
+        json={"part_type": part_type},
+    )
+    track_id = create_response.json()["track_id"]
+    upload_response = client.post(
+        f"/api/tracks/{track_id}/upload-url",
+        json={"filename": filename, "content_type": "audio/wav"},
+    )
+    client.put(upload_response.json()["upload_url"], content=wav_bytes)
+    complete_response = client.post(
+        f"/api/tracks/{track_id}/complete",
+        json={"source_format": "audio/wav"},
+    )
+    assert complete_response.status_code == 200
+    return track_id
 
 
 def test_take_upload_lifecycle_and_list(client: TestClient) -> None:
@@ -132,3 +175,46 @@ def test_take_complete_marks_failed_when_upload_is_missing(client: TestClient) -
     assert list_response.status_code == 200
     assert list_response.json()["items"][0]["track_status"] == "FAILED"
     assert list_response.json()["items"][0]["failure_message"] is not None
+
+
+def test_take_human_rating_packet_download_returns_zip_with_review_assets(client: TestClient) -> None:
+    guide_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=440.0, sample_rate=32000)
+    take_bytes = build_test_wav_bytes(duration_ms=1600, frequency_hz=466.16, sample_rate=32000)
+    project_id = client.post(
+        "/api/projects",
+        json={"title": "Human Rating Packet Session", "base_key": "C", "bpm": 96},
+    ).json()["project_id"]
+
+    _upload_ready_track(client, project_id, role="guide", wav_bytes=guide_bytes, filename="guide.wav")
+    take_id = _upload_ready_track(
+        client,
+        project_id,
+        role="take",
+        wav_bytes=take_bytes,
+        filename="take.wav",
+    )
+
+    analysis_response = client.post(f"/api/projects/{project_id}/tracks/{take_id}/analysis")
+    assert analysis_response.status_code == 200
+
+    packet_response = client.get(f"/api/projects/{project_id}/tracks/{take_id}/human-rating-packet")
+    assert packet_response.status_code == 200
+    assert packet_response.headers["content-type"] == "application/zip"
+    assert "human-rating-packet.zip" in packet_response.headers["content-disposition"]
+
+    with ZipFile(BytesIO(packet_response.content)) as archive:
+        names = archive.namelist()
+        assert "README.md" in names
+        assert "human-rating/human_rating_cases.json" in names
+        assert "human-rating/human_rating_sheet.csv" in names
+        assert any(name.startswith("human-rating/audio/guides/") for name in names)
+        assert any(name.startswith("human-rating/audio/takes/") for name in names)
+        assert any(name.startswith("human-rating/references/") for name in names)
+        assert any(name.startswith("human-rating/review-packets/") for name in names)
+
+        review_packet_name = next(
+            name for name in names if name.startswith("human-rating/review-packets/") and name.endswith(".html")
+        )
+        review_packet_html = archive.read(review_packet_name).decode("utf-8")
+        assert "사람 평가 리뷰 패킷" in review_packet_html
+        assert "높음 / 정확 / 낮음 / 판단 어려움" in review_packet_html

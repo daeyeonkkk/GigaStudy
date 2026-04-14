@@ -145,6 +145,7 @@ Date: 2026-04-14
 - The export path now also writes a self-contained review packet HTML for analyzed cases, so raters can open one page that includes the full guide/take plus the per-note clip table instead of assembling those files manually.
 - The round audit now also counts review packet HTML files, so a round can distinguish between having raw assets and having a ready-to-open rater handoff package.
 - Human-rating collection materials are now Korean-first as well: the review packet copy is localized for local raters, and the rating-sheet builder now normalizes Korean labels back into canonical calibration values.
+- The Studio route now also exposes a Korean-first human-rating packet download for the selected take, so guide / take audio, note clips, the review packet HTML, and the seeded rating sheet can be handed to raters without falling back to a CLI-only export step first.
 - The repo now also has a real-vocal corpus inventory tool, so future collection rounds can verify audio-path integrity, WAV metadata, and rating coverage before they spend time on calibration or threshold fitting.
 - The repo now also has a threshold-fit report path for candidate `strict / basic / beginner` cent bands, so future human-rated corpora can produce a repeatable recommendation report instead of ad hoc threshold notes.
 - The repo now also has a human-rating evidence-bundle path, so calibration summary, threshold-fit output, and claim guardrails can be exported together as release-review artifacts instead of being assembled by hand.

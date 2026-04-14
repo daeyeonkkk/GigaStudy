@@ -3363,6 +3363,10 @@ export function StudioPage() {
     takesState.items.find((take) => take.track_id === selectedTakeId) ?? takesState.items[0] ?? null
   const selectedTakePreview = selectedTake ? audioPreviews[selectedTake.track_id] ?? null : null
   const selectedTakePlaybackUrl = getSelectedTakePlaybackUrl(selectedTake)
+  const humanRatingPacketUrl =
+    projectId && selectedTake
+      ? buildApiUrl(`/api/projects/${projectId}/tracks/${selectedTake.track_id}/human-rating-packet`)
+      : null
   const selectedTakeScore = selectedTake?.latest_score ?? null
   const selectedTakeNoteFeedback = selectedTakeScore?.note_feedback_json ?? []
   const selectedTakeAnalysisJob = selectedTake?.latest_analysis_job ?? null
@@ -4009,6 +4013,37 @@ export function StudioPage() {
             )}
 
             <div className="support-stack">
+              <div className="mini-card mini-card--stack">
+                <span>사람 평가 자료</span>
+                <strong>
+                  {selectedTake
+                    ? selectedTakeScore
+                      ? '노트별 자료까지 함께 준비됩니다'
+                      : '지금도 받을 수 있고, 분석 후엔 더 자세해집니다'
+                    : '테이크를 먼저 고르면 준비됩니다'}
+                </strong>
+                <small>
+                  {selectedTake
+                    ? selectedTakeScore
+                      ? '가이드, 테이크, 노트 클립, 평가 시트를 한 번에 내려받아 바로 사람 평가를 시작할 수 있습니다.'
+                      : '가이드와 테이크는 바로 담아 드리고, 분석을 마치면 노트별 클립과 리뷰 화면도 함께 들어갑니다.'
+                    : '사람 평가를 시작하려면 먼저 평가할 테이크를 선택해 주세요.'}
+                </small>
+                {humanRatingPacketUrl ? (
+                  <a
+                    data-testid="download-human-rating-packet-button"
+                    className="button-secondary button-secondary--small"
+                    href={humanRatingPacketUrl}
+                  >
+                    평가 자료 받기
+                  </a>
+                ) : (
+                  <button className="button-secondary button-secondary--small" disabled type="button">
+                    평가 자료 받기
+                  </button>
+                )}
+              </div>
+
               <div className="mini-card mini-card--stack">
                 <span>환경 경고</span>
                 <strong>

@@ -143,6 +143,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A threshold-fit report tool exists for future human-rated corpora, even though the evidence corpus is still open.
 - [x] A human-rating evidence bundle workflow exists for packaging calibration, threshold-fit, and claim guardrails into release-review artifacts.
 - [x] A human-rating claim gate evaluator exists for deciding whether threshold evidence is strong enough to begin checklist-closure review.
+- [x] A selected take can be downloaded from the product as a Korean-first human-rating packet instead of leaving the first rater handoff as a CLI-only export step.
 - [ ] Real human vocal fixtures or a trusted human-rating corpus are part of the release-quality evidence.
 - [ ] Threshold calibration has been validated against human raters strongly enough to claim a human-trustworthy intonation judge.
 

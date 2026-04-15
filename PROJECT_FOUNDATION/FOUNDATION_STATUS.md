@@ -444,6 +444,8 @@ Date: 2026-04-14
   That locks the next Studio refactor target to one dominant waveform stage, one slim tool rail, one lower trim-control strip, and one obvious save action.
 - The first live implementation half of that pass is now complete on the dedicated Arrangement route:
   the page has been restructured around a candidate rack, central score/player stage, and export-first inspector, and the dedicated arrangement workspace release gate now passes again in Chromium, Firefox, and WebKit.
+- The dedicated Arrangement route now also behaves more like one task-led compare desk instead of one long control stack:
+  `후보 고르기`, `악보 보기`, and `내보내기` modes now keep the left rail focused on core candidate-flow entry points, while detailed generation controls stay behind one optional section.
 - The second live implementation half of that pass is now complete on the Studio route as well:
   the page now exposes a dedicated source rack, a clearer preview canvas, a stronger lower time rail, and a right-side inspector without bringing developer-facing copy back onto the default surface.
 - The live Studio route has now also adopted the stricter `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace:

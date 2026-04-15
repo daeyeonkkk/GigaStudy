@@ -3,7 +3,12 @@ import { Link, useParams } from 'react-router-dom'
 
 import { ArrangementScore } from '../components/ArrangementScore'
 import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
-import { getArrangementPartRoleLabel, getTrackStatusLabel } from '../lib/localizedLabels'
+import {
+  getArrangementPartRoleLabel,
+  getArrangementStyleLabel,
+  getDifficultyLabel,
+  getTrackStatusLabel,
+} from '../lib/localizedLabels'
 import {
   startArrangementPlayback,
   type ArrangementPlaybackController,
@@ -164,6 +169,7 @@ export function ArrangementPage() {
   const [arrangementConfig, setArrangementConfig] = useState(defaultArrangementConfig)
   const [melodyState, setMelodyState] = useState<ActionState>({ phase: 'idle' })
   const [arrangementState, setArrangementState] = useState<ActionState>({ phase: 'idle' })
+  const [workspaceMode, setWorkspaceMode] = useState<'compare' | 'review' | 'export'>('compare')
   const [guideModeEnabled, setGuideModeEnabled] = useState(false)
   const [guideFocusPartName, setGuideFocusPartName] = useState<string | null>(null)
   const [arrangementPartMixerState, setArrangementPartMixerState] = useState<Record<string, ArrangementPlaybackMixerState>>({})
@@ -184,13 +190,15 @@ export function ArrangementPage() {
   const arrangementDurationMs = getArrangementDurationMs(selectedArrangement?.parts_json ?? [])
   const arrangementPlaybackRatio =
     arrangementDurationMs > 0 ? Math.min(1, arrangementPlaybackPositionMs / arrangementDurationMs) : 0
-  const selectedDifficultyMeta = getOptionMeta(difficultyOptions, arrangementConfig.difficulty)
   const selectedVoiceRangeMeta = getOptionMeta(voiceRangeOptions, arrangementConfig.voiceRangePreset)
   const selectedBeatboxMeta = getOptionMeta(beatboxOptions, arrangementConfig.beatboxTemplate)
+  const selectedStyleLabel = getArrangementStyleLabel(arrangementConfig.style)
+  const selectedDifficultyLabel = getDifficultyLabel(arrangementConfig.difficulty)
   const selectedComparisonSummary = selectedArrangement?.comparison_summary ?? null
   const selectedArrangementLabel = selectedArrangement
     ? `${selectedArrangement.candidate_code} · ${selectedArrangement.title}`
     : '아직 선택한 후보가 없습니다'
+  const selectedTakeLabel = selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '선택 전'
   const selectedLeadFitLabel = selectedComparisonSummary
     ? formatCompactPercent(selectedComparisonSummary.lead_range_fit_percent)
     : '계산 전'
@@ -351,6 +359,7 @@ export function ArrangementPage() {
       }
       setArrangements(payload.items)
       setSelectedArrangementId(payload.items[0]?.arrangement_id ?? null)
+      setWorkspaceMode('compare')
       await refreshSnapshot()
       setArrangementState({
         phase: 'success',
@@ -416,6 +425,7 @@ export function ArrangementPage() {
         phase: 'playing',
         message: '편곡 미리듣기를 재생 중입니다.',
       })
+      setWorkspaceMode('review')
     } catch (error) {
       setArrangementTransportState({
         phase: 'error',
@@ -483,7 +493,57 @@ export function ArrangementPage() {
         </div>
 
         <div className="arrangement-grid">
-          <aside className="panel arrangement-rail arrangement-rail--left">
+          <aside
+            className={`panel arrangement-rail arrangement-rail--left arrangement-workspace-panel ${
+              workspaceMode === 'compare' ? 'arrangement-workspace-panel--active' : ''
+            }`}
+          >
+            <div className="arrangement-rack__section arrangement-rack__section--modes">
+              <div className="arrangement-rack__head">
+                <p className="eyebrow">작업 흐름</p>
+                <h2>왼쪽에서는 핵심만 고릅니다</h2>
+                <p className="panel__summary">
+                  후보를 고르고, 보고 싶은 화면을 바꾼 뒤, 자세한 조건은 필요할 때만 펼쳐서 손봅니다.
+                </p>
+              </div>
+
+              <div className="arrangement-mode-switch" role="tablist" aria-label="편곡 작업 흐름">
+                <button
+                  aria-selected={workspaceMode === 'compare'}
+                  className={`arrangement-mode-button ${
+                    workspaceMode === 'compare' ? 'arrangement-mode-button--active' : ''
+                  }`}
+                  type="button"
+                  onClick={() => setWorkspaceMode('compare')}
+                >
+                  <span>1단계</span>
+                  <strong>후보 고르기</strong>
+                </button>
+                <button
+                  aria-selected={workspaceMode === 'review'}
+                  className={`arrangement-mode-button ${
+                    workspaceMode === 'review' ? 'arrangement-mode-button--active' : ''
+                  }`}
+                  type="button"
+                  onClick={() => setWorkspaceMode('review')}
+                >
+                  <span>2단계</span>
+                  <strong>악보 보기</strong>
+                </button>
+                <button
+                  aria-selected={workspaceMode === 'export'}
+                  className={`arrangement-mode-button ${
+                    workspaceMode === 'export' ? 'arrangement-mode-button--active' : ''
+                  }`}
+                  type="button"
+                  onClick={() => setWorkspaceMode('export')}
+                >
+                  <span>3단계</span>
+                  <strong>내보내기</strong>
+                </button>
+              </div>
+            </div>
+
             <div className="arrangement-rack__section">
               <div className="arrangement-rack__head">
                 <p className="eyebrow">후보 랙</p>
@@ -508,7 +568,10 @@ export function ArrangementPage() {
                           : ''
                       }`}
                       type="button"
-                      onClick={() => setSelectedArrangementId(arrangement.arrangement_id)}
+                      onClick={() => {
+                        setSelectedArrangementId(arrangement.arrangement_id)
+                        setWorkspaceMode('review')
+                      }}
                     >
                       <strong>{`${arrangement.candidate_code} · ${arrangement.title}`}</strong>
                       <span>
@@ -520,118 +583,16 @@ export function ArrangementPage() {
               </div>
             </div>
 
-            <div className="arrangement-rack__section">
-              <div className="arrangement-rack__head">
-                <p className="eyebrow">소스와 제약</p>
-                <h2>기준 테이크와 편곡 조건</h2>
+            <div className="arrangement-summary-block arrangement-summary-block--compact">
+              <div className="mini-card mini-card--stack">
+                <span>기준 테이크</span>
+                <strong>{selectedTakeLabel}</strong>
+                <small>
+                  {selectedTake
+                    ? `${getTrackStatusLabel(selectedTake.track_status)} · 멜로디 ${selectedTakeMelody ? '준비됨' : '아직 없음'}`
+                    : '편곡의 기준이 되는 테이크를 먼저 골라 주세요.'}
+                </small>
               </div>
-
-              <div className="field-grid arrangement-field-grid">
-                <label className="field">
-                  <span>기준 테이크</span>
-                  <select
-                    className="text-input"
-                    value={selectedTake?.track_id ?? ''}
-                    onChange={(event) => setSelectedTakeId(event.target.value || null)}
-                  >
-                    {takes.map((take) => (
-                      <option key={take.track_id} value={take.track_id}>
-                        {`${take.take_no ?? '?'}번 테이크 · ${getTrackStatusLabel(take.track_status)}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field">
-                  <span>스타일</span>
-                  <select
-                    className="text-input"
-                    value={arrangementConfig.style}
-                    onChange={(event) =>
-                      setArrangementConfig((current) => ({ ...current, style: event.target.value }))
-                    }
-                  >
-                    <option value="contemporary">컨템퍼러리</option>
-                    <option value="ballad">발라드</option>
-                    <option value="anthem">앤섬</option>
-                  </select>
-                </label>
-
-                <label className="field">
-                  <span>난이도</span>
-                  <select
-                    className="text-input"
-                    value={arrangementConfig.difficulty}
-                    onChange={(event) =>
-                      setArrangementConfig((current) => ({ ...current, difficulty: event.target.value }))
-                    }
-                  >
-                    {difficultyOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field">
-                  <span>리드 음역</span>
-                  <select
-                    className="text-input"
-                    value={arrangementConfig.voiceRangePreset}
-                    onChange={(event) =>
-                      setArrangementConfig((current) => ({ ...current, voiceRangePreset: event.target.value }))
-                    }
-                  >
-                    {voiceRangeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field">
-                  <span>비트박스</span>
-                  <select
-                    className="text-input"
-                    value={arrangementConfig.beatboxTemplate}
-                    onChange={(event) =>
-                      setArrangementConfig((current) => ({ ...current, beatboxTemplate: event.target.value }))
-                    }
-                  >
-                    {beatboxOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="arrangement-action-row">
-                <button
-                  className="button-secondary"
-                  disabled={melodyState.phase === 'submitting'}
-                  type="button"
-                  onClick={() => void handleExtractMelody()}
-                >
-                  {melodyState.phase === 'submitting' ? '멜로디 추출 중...' : '멜로디 초안 추출'}
-                </button>
-                <button
-                  className="button-primary"
-                  disabled={arrangementState.phase === 'submitting'}
-                  type="button"
-                  onClick={() => void handleGenerateArrangements()}
-                >
-                  {arrangementState.phase === 'submitting'
-                    ? '후보 생성 중...'
-                    : '편곡 후보 생성'}
-                </button>
-              </div>
-            </div>
-
-            <div className="arrangement-summary-block">
               <div className="mini-card mini-card--stack">
                 <span>멜로디 초안</span>
                 <strong>{selectedTakeMelody ? `노트 ${selectedTakeMelody.note_count}개` : '아직 없음'}</strong>
@@ -642,21 +603,127 @@ export function ArrangementPage() {
                 </small>
               </div>
               <div className="mini-card mini-card--stack">
-                <span>난이도 프리셋</span>
-                <strong>{selectedDifficultyMeta.label}</strong>
-                <small>{selectedDifficultyMeta.description}</small>
-              </div>
-              <div className="mini-card mini-card--stack">
-                <span>리드 음역</span>
-                <strong>{selectedVoiceRangeMeta.label}</strong>
-                <small>{selectedVoiceRangeMeta.description}</small>
-              </div>
-              <div className="mini-card mini-card--stack">
-                <span>비트박스</span>
-                <strong>{selectedBeatboxMeta.label}</strong>
-                <small>{selectedBeatboxMeta.description}</small>
+                <span>이번 만들기 기준</span>
+                <strong>{`${selectedStyleLabel} · ${selectedDifficultyLabel}`}</strong>
+                <small>{`${selectedVoiceRangeMeta.label} · ${selectedBeatboxMeta.label}`}</small>
               </div>
             </div>
+
+            <details
+              className="advanced-panel arrangement-advanced-panel"
+              open={
+                workspaceMode === 'compare' ||
+                melodyState.phase === 'error' ||
+                arrangementState.phase === 'error'
+              }
+            >
+              <summary className="advanced-panel__summary">세부 조건 조정</summary>
+              <div className="advanced-panel__body arrangement-advanced-panel__body">
+                <div className="field-grid arrangement-field-grid">
+                  <label className="field">
+                    <span>기준 테이크</span>
+                    <select
+                      className="text-input"
+                      value={selectedTake?.track_id ?? ''}
+                      onChange={(event) => setSelectedTakeId(event.target.value || null)}
+                    >
+                      {takes.map((take) => (
+                        <option key={take.track_id} value={take.track_id}>
+                          {`${take.take_no ?? '?'}번 테이크 · ${getTrackStatusLabel(take.track_status)}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    <span>스타일</span>
+                    <select
+                      className="text-input"
+                      value={arrangementConfig.style}
+                      onChange={(event) =>
+                        setArrangementConfig((current) => ({ ...current, style: event.target.value }))
+                      }
+                    >
+                      <option value="contemporary">컨템퍼러리</option>
+                      <option value="ballad">발라드</option>
+                      <option value="anthem">앤섬</option>
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    <span>난이도</span>
+                    <select
+                      className="text-input"
+                      value={arrangementConfig.difficulty}
+                      onChange={(event) =>
+                        setArrangementConfig((current) => ({ ...current, difficulty: event.target.value }))
+                      }
+                    >
+                      {difficultyOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    <span>리드 음역</span>
+                    <select
+                      className="text-input"
+                      value={arrangementConfig.voiceRangePreset}
+                      onChange={(event) =>
+                        setArrangementConfig((current) => ({ ...current, voiceRangePreset: event.target.value }))
+                      }
+                    >
+                      {voiceRangeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    <span>비트박스</span>
+                    <select
+                      className="text-input"
+                      value={arrangementConfig.beatboxTemplate}
+                      onChange={(event) =>
+                        setArrangementConfig((current) => ({ ...current, beatboxTemplate: event.target.value }))
+                      }
+                    >
+                      {beatboxOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="arrangement-action-row">
+                  <button
+                    className="button-secondary"
+                    disabled={melodyState.phase === 'submitting'}
+                    type="button"
+                    onClick={() => void handleExtractMelody()}
+                  >
+                    {melodyState.phase === 'submitting' ? '멜로디 추출 중...' : '멜로디 초안 추출'}
+                  </button>
+                  <button
+                    className="button-primary"
+                    disabled={arrangementState.phase === 'submitting'}
+                    type="button"
+                    onClick={() => void handleGenerateArrangements()}
+                  >
+                    {arrangementState.phase === 'submitting'
+                      ? '후보 생성 중...'
+                      : '편곡 후보 생성'}
+                  </button>
+                </div>
+              </div>
+            </details>
 
             {selectedArrangement ? (
               <div className="arrangement-compare-card">
@@ -689,7 +756,11 @@ export function ArrangementPage() {
             ) : null}
           </aside>
 
-          <section className="panel arrangement-center">
+          <section
+            className={`panel arrangement-center arrangement-workspace-panel ${
+              workspaceMode === 'review' ? 'arrangement-workspace-panel--active' : ''
+            }`}
+          >
             <div className="arrangement-center__header">
               <div>
                 <p className="eyebrow">악보와 미리듣기</p>
@@ -760,13 +831,26 @@ export function ArrangementPage() {
                 </div>
               </div>
 
-              <Link className="button-secondary" to={`/projects/${projectId}/studio#score-playback`}>
-                스튜디오에서 자세히 수정하기
-              </Link>
+              <div className="arrangement-center__footer-actions">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  onClick={() => setWorkspaceMode('export')}
+                >
+                  내보내기 보기
+                </button>
+                <Link className="button-secondary" to={`/projects/${projectId}/studio#score-playback`}>
+                  스튜디오에서 자세히 수정하기
+                </Link>
+              </div>
             </div>
           </section>
 
-          <aside className="panel arrangement-rail arrangement-rail--right">
+          <aside
+            className={`panel arrangement-rail arrangement-rail--right arrangement-workspace-panel ${
+              workspaceMode === 'export' ? 'arrangement-workspace-panel--active' : ''
+            }`}
+          >
             <div>
               <p className="eyebrow">세부 조정</p>
               <h2>파트 집중과 내보내기</h2>
@@ -789,6 +873,7 @@ export function ArrangementPage() {
               {normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url) ? (
                 <a
                   className="button-primary"
+                  onClick={() => setWorkspaceMode('export')}
                   href={normalizeAssetUrl(selectedArrangement?.musicxml_artifact_url) ?? undefined}
                 >
                   MusicXML 내보내기
@@ -797,6 +882,7 @@ export function ArrangementPage() {
               {normalizeAssetUrl(selectedArrangement?.midi_artifact_url) ? (
                 <a
                   className="button-secondary"
+                  onClick={() => setWorkspaceMode('export')}
                   href={normalizeAssetUrl(selectedArrangement?.midi_artifact_url) ?? undefined}
                 >
                   편곡 MIDI 내보내기
@@ -805,6 +891,7 @@ export function ArrangementPage() {
               {normalizeAssetUrl(guide?.guide_wav_artifact_url) ? (
                 <a
                   className="button-secondary"
+                  onClick={() => setWorkspaceMode('export')}
                   href={normalizeAssetUrl(guide?.guide_wav_artifact_url) ?? undefined}
                 >
                   가이드 WAV 내보내기

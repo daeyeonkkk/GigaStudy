@@ -2640,6 +2640,20 @@ button.studio-source-card {
   align-items: start;
 }
 
+.arrangement-workspace-panel {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.arrangement-workspace-panel--active {
+  border-color: rgba(184, 103, 61, 0.28);
+  box-shadow:
+    0 18px 36px rgba(17, 28, 37, 0.12),
+    0 0 0 3px rgba(184, 103, 61, 0.08);
+}
+
 .arrangement-rail,
 .arrangement-center {
   display: flex;
@@ -2653,10 +2667,61 @@ button.studio-source-card {
   gap: 14px;
 }
 
+.arrangement-rack__section--modes {
+  gap: 12px;
+}
+
 .arrangement-rack__head {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.arrangement-mode-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.arrangement-mode-button {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(34, 62, 83, 0.12);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink-strong);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.arrangement-mode-button:hover {
+  transform: translateY(-1px);
+}
+
+.arrangement-mode-button span {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.arrangement-mode-button strong {
+  font-size: 1rem;
+}
+
+.arrangement-mode-button--active {
+  background: rgba(184, 103, 61, 0.12);
+  border-color: rgba(184, 103, 61, 0.32);
+  box-shadow: inset 3px 0 0 #b8673d;
 }
 
 .arrangement-candidate-list {
@@ -2675,6 +2740,17 @@ button.studio-source-card {
   grid-template-columns: 1fr;
 }
 
+.arrangement-advanced-panel {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(34, 62, 83, 0.1);
+}
+
+.arrangement-advanced-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .arrangement-action-row {
   display: flex;
   flex-wrap: wrap;
@@ -2685,6 +2761,10 @@ button.studio-source-card {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+}
+
+.arrangement-summary-block--compact {
+  gap: 10px;
 }
 
 .arrangement-compare-card {
@@ -2711,6 +2791,13 @@ button.studio-source-card {
   gap: 16px;
   align-items: flex-start;
   flex-wrap: wrap;
+}
+
+.arrangement-center__footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .arrangement-center__stage {

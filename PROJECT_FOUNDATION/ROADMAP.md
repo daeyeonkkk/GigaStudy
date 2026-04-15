@@ -433,6 +433,8 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 - Completion for this pass means:
   one updated Studio mockup, one updated Arrangement mockup, and one browser-reviewed implementation change that clearly reflects the accepted Filmora patterns.
   The live workspace should also keep one obvious playback surface instead of scattering the same listening controls across multiple panels.
+- The same discipline now also applies to Ops:
+  the default triage surface should read in Korean task language first, while raw request traces, IDs, browser strings, and model-version records stay in expandable detail panels instead of leading the desk.
 - The mockup half of this pass is now complete through:
   `DESIGN/UI_EDITABLE_SOURCE/filmora-workspace-pass-v2.html`,
   `DESIGN/UI_MOCKUPS/studio-v2.svg`, and

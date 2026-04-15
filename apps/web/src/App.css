@@ -2616,6 +2616,17 @@ button.workspace-flow-bar__item {
   padding: 0 18px 18px;
 }
 
+.ops-advanced-panel {
+  margin-top: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ops-advanced-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .arrangement-topbar__copy {
   display: flex;
   flex-direction: column;

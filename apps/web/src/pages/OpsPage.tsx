@@ -431,6 +431,40 @@ function getRuntimeSourceLabel(source: string): string {
   return source === 'client' ? '화면' : '서버'
 }
 
+function getRuntimeEventTypeLabel(eventType: string): string {
+  switch (eventType) {
+    case 'unhandled_error':
+      return '처리되지 않은 오류'
+    case 'unhandled_rejection':
+      return '처리되지 않은 작업 실패'
+    case 'fetch_failure':
+      return '연결 실패'
+    case 'http_error':
+      return '요청 오류'
+    case 'server_exception':
+      return '서버 예외'
+    default:
+      return eventType.replace(/[_-]+/g, ' ').trim() || '기록 유형 확인 필요'
+  }
+}
+
+function getRuntimeScopeLabel(item: OpsOverview['recent_runtime_events'][number]): string {
+  if (item.project_id && item.track_id) {
+    return '프로젝트와 테이크에 함께 연결된 기록'
+  }
+  if (item.project_id) {
+    return '프로젝트 안에서 난 기록'
+  }
+  if (item.track_id) {
+    return '특정 테이크에 연결된 기록'
+  }
+  return '공통 운영 흐름에서 남은 기록'
+}
+
+function getAnalysisTargetLabel(trackRole: string, takeNo: number | null): string {
+  return `${getTrackRoleLabel(trackRole)}${takeNo ? ` ${takeNo}번 테이크` : ''}`
+}
+
 function getRuntimeFollowUpMessage(item: OpsOverview['recent_runtime_events'][number]): string {
   if (item.source === 'client') {
     return '같은 화면 흐름을 다시 열어 보고, 버튼이나 입력 순서가 겹치지 않는지 먼저 확인해 주세요.'
@@ -1185,7 +1219,8 @@ export function OpsPage() {
                         <strong>{selectedRuntimeEvent.message}</strong>
                         <span>
                           {getRuntimeSourceLabel(selectedRuntimeEvent.source)}
-                          {selectedRuntimeEvent.surface ? ` / ${selectedRuntimeEvent.surface}` : ''}
+                          {' / '}
+                          {getRuntimeScopeLabel(selectedRuntimeEvent)}
                           {' / '}
                           {formatDate(selectedRuntimeEvent.created_at)}
                         </span>
@@ -1210,41 +1245,76 @@ export function OpsPage() {
 
                     <div className="mini-grid">
                       <div className="mini-card">
-                        <span>구분</span>
-                        <strong>{selectedRuntimeEvent.event_type}</strong>
+                        <span>문제 종류</span>
+                        <strong>{getRuntimeEventTypeLabel(selectedRuntimeEvent.event_type)}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>영향 화면</span>
+                        <strong>
+                          {selectedRuntimeEvent.surface ??
+                            selectedRuntimeEvent.route_path ??
+                            '공통 화면'}
+                        </strong>
                       </div>
                       <div className="mini-card">
                         <span>요청</span>
                         <strong>
-                          {selectedRuntimeEvent.request_method ?? '-'}{' '}
-                          {selectedRuntimeEvent.request_path ?? selectedRuntimeEvent.route_path ?? '-'}
+                          {selectedRuntimeEvent.request_method && selectedRuntimeEvent.request_path
+                            ? `${selectedRuntimeEvent.request_method} ${selectedRuntimeEvent.request_path}`
+                            : selectedRuntimeEvent.route_path ?? '요청 정보 없음'}
                         </strong>
                       </div>
                       <div className="mini-card">
                         <span>응답</span>
-                        <strong>{selectedRuntimeEvent.status_code ?? '-'}</strong>
-                      </div>
-                      <div className="mini-card">
-                        <span>추적 번호</span>
-                        <strong>{selectedRuntimeEvent.request_id ?? '-'}</strong>
-                      </div>
-                      <div className="mini-card">
-                        <span>프로젝트</span>
                         <strong>
-                          {selectedRuntimeEvent.project_id
-                            ? selectedRuntimeEvent.project_id.slice(0, 8)
-                            : '없음'}
+                          {selectedRuntimeEvent.status_code
+                            ? `${selectedRuntimeEvent.status_code} 응답`
+                            : '응답 정보 없음'}
                         </strong>
                       </div>
                       <div className="mini-card">
-                        <span>테이크</span>
-                        <strong>
-                          {selectedRuntimeEvent.track_id
-                            ? selectedRuntimeEvent.track_id.slice(0, 8)
-                            : '없음'}
-                        </strong>
+                        <span>기록 범위</span>
+                        <strong>{getRuntimeScopeLabel(selectedRuntimeEvent)}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>기록 시각</span>
+                        <strong>{formatDate(selectedRuntimeEvent.created_at)}</strong>
                       </div>
                     </div>
+
+                    <details className="advanced-panel ops-advanced-panel">
+                      <summary className="advanced-panel__summary">자세한 기록 보기</summary>
+                      <div className="advanced-panel__body ops-advanced-panel__body">
+                        <div className="mini-grid">
+                          <div className="mini-card">
+                            <span>추적 번호</span>
+                            <strong>{selectedRuntimeEvent.request_id ?? '없음'}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>프로젝트 ID</span>
+                            <strong>{selectedRuntimeEvent.project_id ?? '없음'}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>테이크 ID</span>
+                            <strong>{selectedRuntimeEvent.track_id ?? '없음'}</strong>
+                          </div>
+                          <div className="mini-card">
+                            <span>브라우저 기록</span>
+                            <strong>{selectedRuntimeEvent.user_agent ?? '없음'}</strong>
+                          </div>
+                        </div>
+                        {selectedRuntimeEvent.details ? (
+                          <div className="json-grid">
+                            <div>
+                              <p className="json-label">원본 기록</p>
+                              <pre className="json-card">
+                                {JSON.stringify(selectedRuntimeEvent.details, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </details>
                   </article>
                 ) : null}
 
@@ -1264,14 +1334,13 @@ export function OpsPage() {
                         <strong>{item.message}</strong>
                         <span>
                           {getRuntimeSourceLabel(item.source)}
-                          {item.surface ? ` / ${item.surface}` : ''}
+                          {' / '}
+                          {getRuntimeEventTypeLabel(item.event_type)}
                         </span>
                       </div>
                       <div className="ops-runtime-row__meta">
                         <small>{formatDate(item.created_at)}</small>
-                        <small>
-                          {item.request_method ?? '-'} {item.request_path ?? item.route_path ?? '-'}
-                        </small>
+                        <small>{item.surface ?? item.route_path ?? getRuntimeScopeLabel(item)}</small>
                       </div>
                     </button>
                   ))}
@@ -1284,38 +1353,43 @@ export function OpsPage() {
 
       <section className="section ops-section ops-section--versions">
         <div className="section__header ops-section__header">
-          <p className="eyebrow">모델 추적</p>
-          <h2>현재 어떤 분석 버전이 동작 중인지 확인합니다</h2>
+          <p className="eyebrow">운영 기록</p>
+          <h2>버전 기록은 필요할 때만 펼쳐서 확인합니다</h2>
         </div>
 
-        <div className="card-grid">
-          <article className="info-card ops-info-card">
-            <h3>분석 버전</h3>
-            <ul>
-              {payload.model_versions.analysis.map((version) => (
-                <li key={version}>{version}</li>
-              ))}
-            </ul>
-          </article>
+        <details className="advanced-panel ops-advanced-panel">
+          <summary className="advanced-panel__summary">버전 기록 펼쳐 보기</summary>
+          <div className="advanced-panel__body ops-advanced-panel__body">
+            <div className="card-grid">
+              <article className="info-card ops-info-card">
+                <h3>분석 버전</h3>
+                <ul>
+                  {payload.model_versions.analysis.map((version) => (
+                    <li key={version}>{version}</li>
+                  ))}
+                </ul>
+              </article>
 
-          <article className="info-card ops-info-card">
-            <h3>멜로디 버전</h3>
-            <ul>
-              {payload.model_versions.melody.map((version) => (
-                <li key={version}>{version}</li>
-              ))}
-            </ul>
-          </article>
+              <article className="info-card ops-info-card">
+                <h3>멜로디 버전</h3>
+                <ul>
+                  {payload.model_versions.melody.map((version) => (
+                    <li key={version}>{version}</li>
+                  ))}
+                </ul>
+              </article>
 
-          <article className="info-card ops-info-card">
-            <h3>편곡 버전</h3>
-            <ul>
-              {payload.model_versions.arrangement_engine.map((version) => (
-                <li key={version}>{version}</li>
-              ))}
-            </ul>
-          </article>
-        </div>
+              <article className="info-card ops-info-card">
+                <h3>편곡 버전</h3>
+                <ul>
+                  {payload.model_versions.arrangement_engine.map((version) => (
+                    <li key={version}>{version}</li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </div>
+        </details>
       </section>
 
       <section
@@ -2149,10 +2223,26 @@ export function OpsPage() {
                       <strong>{formatDate(track.updated_at)}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>트랙 ID</span>
-                      <strong>{track.track_id.slice(0, 8)}</strong>
+                      <span>대상</span>
+                      <strong>{getAnalysisTargetLabel(track.track_role, track.take_no)}</strong>
                     </div>
                   </div>
+
+                  <details className="advanced-panel ops-advanced-panel">
+                    <summary className="advanced-panel__summary">자세한 기록 보기</summary>
+                    <div className="advanced-panel__body ops-advanced-panel__body">
+                      <div className="mini-grid">
+                        <div className="mini-card">
+                          <span>프로젝트 ID</span>
+                          <strong>{track.project_id}</strong>
+                        </div>
+                        <div className="mini-card">
+                          <span>트랙 ID</span>
+                          <strong>{track.track_id}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
 
                   <p className="form-error">
                     {track.failure_message ?? '저장된 오류 메시지 없이 실패한 트랙입니다.'}
@@ -2179,10 +2269,7 @@ export function OpsPage() {
                   <div className="ops-card__header">
                     <div>
                       <strong>{job.project_title}</strong>
-                      <span>
-                        {getTrackRoleLabel(job.track_role)}
-                        {job.take_no ? ` | ${job.take_no}번 테이크` : ''} | {job.model_version}
-                      </span>
+                      <span>{getAnalysisTargetLabel(job.track_role, job.take_no)}</span>
                     </div>
 
                     {job.status === 'FAILED' ? (
@@ -2214,10 +2301,34 @@ export function OpsPage() {
                       <strong>{getAnalysisJobStatusLabel(job.status)}</strong>
                     </div>
                     <div className="mini-card">
-                      <span>작업 ID</span>
-                      <strong>{job.job_id.slice(0, 8)}</strong>
+                      <span>대상</span>
+                      <strong>{getAnalysisTargetLabel(job.track_role, job.take_no)}</strong>
                     </div>
                   </div>
+
+                  <details className="advanced-panel ops-advanced-panel">
+                    <summary className="advanced-panel__summary">자세한 기록 보기</summary>
+                    <div className="advanced-panel__body ops-advanced-panel__body">
+                      <div className="mini-grid">
+                        <div className="mini-card">
+                          <span>작업 ID</span>
+                          <strong>{job.job_id}</strong>
+                        </div>
+                        <div className="mini-card">
+                          <span>프로젝트 ID</span>
+                          <strong>{job.project_id}</strong>
+                        </div>
+                        <div className="mini-card">
+                          <span>트랙 ID</span>
+                          <strong>{job.track_id}</strong>
+                        </div>
+                        <div className="mini-card">
+                          <span>분석 버전</span>
+                          <strong>{job.model_version}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
 
                   {job.error_message ? (
                     <p className="form-error">{job.error_message}</p>

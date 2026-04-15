@@ -218,6 +218,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The live Studio and Arrangement routes now share one compact `작업 이동` handoff bar, so internal workspaces feel like one connected product instead of isolated screens with separate local navigation.
 - [x] The Shared Review and Ops routes now also use the same compact workflow-bar discipline, so review and triage surfaces stop inventing their own local mode chrome apart from the main Studio / Arrangement workspaces.
 - [x] Arrangement, Shared Review, and Ops now also share the same reusable workspace-shell and active-panel emphasis rules, so layout tuning no longer drifts route by route after the visual refactor pass.
+- [x] The Ops default triage and recovery cards now lead with Korean task labels and operator-facing summaries, while raw request IDs, track IDs, job IDs, browser user-agent strings, and model-version strings live behind one optional `자세한 기록 보기` panel.
 
 ## 17. Mockup Track
 

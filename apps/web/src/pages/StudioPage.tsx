@@ -5538,16 +5538,6 @@ export function StudioPage() {
                   </div>
                 </div>
 
-                <div className="mini-card mini-card--stack">
-                  <span>스토리지 키</span>
-                  <strong>{guide.storage_key ?? '없음'}</strong>
-                </div>
-
-                <div className="mini-card mini-card--stack">
-                  <span>체크섬</span>
-                  <strong>{guide.checksum ?? '없음'}</strong>
-                </div>
-
                 {guide.failure_message ? (
                   <p className="form-error">{guide.failure_message}</p>
                 ) : null}
@@ -7774,12 +7764,6 @@ export function StudioPage() {
 
                 {mixdownPreviewSource ? <WaveformPreview preview={mixdownPreviewSource} /> : null}
 
-                {mixdownSummary ? (
-                  <div className="mini-card mini-card--stack">
-                    <span>스토리지 키</span>
-                    <strong>{mixdownSummary.storage_key ?? '없음'}</strong>
-                  </div>
-                ) : null}
               </div>
             ) : (
               <div className="empty-card">

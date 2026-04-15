@@ -43,3 +43,15 @@ This document defines the working rules for keeping the repository, delivery flo
 - Before ending a task, check whether the change created any document, mockup, report, or generated file that no longer needs to stay where it was created.
 - If it is canonical, move it into the correct `PROJECT_FOUNDATION` category.
 - If it is temporary, remove it or make sure it is ignored.
+
+## 7. Record Accepted Verification Warnings
+
+- When `lint`, production `build`, API tests, or browser release-gate runs pass with warnings, do not leave those warnings undocumented.
+- Either remove the warning in the same change or record why it is currently acceptable, what area it affects, and what should trigger re-review.
+- Keep that note in `FOUNDATION_STATUS.md` or the more specific operations document that owns the warning, and update it in the same change that introduces or accepts the warning.
+
+## 8. Close Visual Work Only After A Browser UX Audit
+
+- Do not close a visual-refactor, wireframe-match, or mockup-match checklist item from structure alone.
+- Re-review the live route in a browser on desktop and narrow mobile widths for typography pairing, contrast, line wrapping, control density, and default browser-control styling before marking it done.
+- If the layout is structurally correct but the rendered screen still reads too faint, too loud, too cramped, or too verbose for the intended user scenario, keep the checklist item open and record the blocker in `FOUNDATION_STATUS.md`.

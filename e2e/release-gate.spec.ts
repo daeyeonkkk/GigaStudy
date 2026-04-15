@@ -360,6 +360,8 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
 }) => {
   const projectId = await createStudioProject(page, 'Playwright release gate session')
   await seedGuideAndTake(page, request, projectId)
+  await expect(page.getByText('스토리지 키', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('체크섬', { exact: true })).toHaveCount(0)
 
   const workspaceModes = page.getByTestId('studio-workspace-modes')
   await expect(workspaceModes).toBeVisible()

@@ -27,6 +27,33 @@ Date: 2026-04-15
 - An item should be marked `[x]` only when the implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
 - This status document remains the audit narrative that explains why the checked items are considered done and which gaps are still open on purpose.
 
+## Accepted Verification Warnings
+
+- As of 2026-04-15, `npm run build:web` still emits one Vite chunk-size warning for `osmd-vendor`, which is currently the `opensheetmusicdisplay` score-rendering payload.
+- This is accepted for now because the score viewer remains route- and component-lazy:
+  `apps/web/src/App.tsx` lazy-loads the non-home workspaces, `apps/web/src/components/ArrangementScore.tsx` dynamically imports `opensheetmusicdisplay`, and the generated `apps/web/dist/index.html` only preloads the main entry/runtime assets rather than the score-rendering chunk.
+- Re-review this warning immediately if the Home route starts preloading that chunk, if score rendering moves onto the default landing surface, or if further workspace growth turns the lazy-loaded score path into a noticeable route-entry delay.
+- As of 2026-04-15, `uv run pytest` still emits two dependency warnings in this Windows Python 3.12 environment:
+  `pydub` warns that `audioop` is deprecated ahead of Python 3.13 removal, and it also warns that no local `ffmpeg` or `avconv` binary was found.
+- These are accepted for now because the full API suite still passes (`106 passed`), the app source does not directly shell out to `ffmpeg`, and the current tested upload / analysis / export paths do not require a locally installed media binary to complete.
+- Re-review those warnings immediately if we upgrade the runtime to Python 3.13, if any product path starts depending on local `ffmpeg`, or if `pydub` becomes a first-class dependency in app code rather than a transitive test/runtime import.
+
+## Strict Browser UX Re-Audit (2026-04-15)
+
+- Scope: a seeded browser review of `Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops` on desktop (`1440x1100`) and narrow mobile (`390x844`) with screenshots plus computed-style capture.
+- Result: the structural refactor still stands, but the strict UX audit re-opened several visual-closure claims that had been marked done too early.
+- Re-opened typography closure:
+  `DESIGN/UI_DESIGN_DIRECTION.md` still calls for `Instrument Sans` or `Manrope` plus `Fraunces` or `Cormorant Garamond`, while the live app still ships `'Segoe UI'` and `Bahnschrift` from `apps/web/src/index.css`.
+  The audit also caught browser-default `Arial` leaking through native audio controls rendered by `apps/web/src/components/ManagedAudioPlayer.tsx`.
+  On `Ops`, secondary section labels are still rendered down at roughly `12.8px` to `13.6px`, which is denser than the current release-desk task labels can carry comfortably.
+- Re-opened Shared Review and Ops mode-switch closure:
+  those routes now have the right task slices, but the three step buttons are still too tall to count as lightweight control chrome.
+  In the audit capture they render as `134px` to `141px` blocks because the control summaries are carrying too much copy for a mode switch.
+- Re-opened cross-workspace handoff-bar closure:
+  the shared `작업 이동` pattern is structurally in place, but the seeded Studio review shows the handoff items still wrapping into `134px` to `141px` blocks on narrow layouts, so the bar is not yet compact enough to count as a finished workflow primitive.
+- Still considered closed after this re-audit:
+  no horizontal overflow was observed on the sampled routes, `Home` still reads as a poster-like studio entry after a delayed browser re-check, `Arrangement` still reads as a dedicated score-first workspace, and `Studio` still reads as one integrated rehearsal desk rather than a return to stacked utility panels.
+
 ## Foundation Hygiene
 
 - `PROJECT_FOUNDATION` root is now restricted to canonical core docs only: plan, roadmap, checklist, audit, and the root index.
@@ -86,6 +113,7 @@ Date: 2026-04-15
 ## Reinforcement Added In This Pass
 
 - User-facing copy on the default Home, Studio, Arrangement, and Ops surfaces has been tightened again so internal labels like `DeviceProfile`, `AudioWorklet`, raw environment names, generation ids, and JSON-first wording no longer lead the interface.
+- The 2026-04-15 re-audit also removed stray Studio default-surface file metadata (`guide` storage key, `guide` checksum, and mixdown storage key), so internal storage identifiers no longer leak onto the rehearsal surface after guide upload or mixdown save.
 - Home no longer leads with API address or environment-first diagnostics in the main entry card, and the default Arrangement workspace now prefers Korean task language such as `악보와 미리듣기` and `세부 조정`.
 - Ops language now treats browser environment evidence as "장치 기록" and "브라우저 재생 경로" instead of exposing raw implementation labels in the default view.
 - 사용자에게 노출되는 핵심 화면의 기본 문구는 이제 한국어를 우선하도록 정리되었고, Home, Studio, Arrangement, Shared Review, Ops에서 내부 개발 단계명이나 백로그 번호 노출을 걷어냈다.
@@ -411,7 +439,7 @@ Date: 2026-04-15
 - The new round-local environment packet and claim-gate preview remove another pre-import review bottleneck, but they still only summarize the current CSV and do not replace native Safari or broad real-hardware evidence.
 - The new curated home-photo layer improves atmosphere on the entry screen, but it is intentionally limited to one non-identifying ambient image and should not become a shortcut around the broader mockup discipline.
 - The new evidence-bundle workflow removes the last ad hoc step in packaging human-rating release evidence, but it still does not populate the corpus or justify closing the human-trust checklist items on its own.
-- The default development path still runs on SQLite and local filesystem storage for convenience, but the default product deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.
+- The default development path still runs on SQLite and local filesystem storage for convenience, while a separate production-ready deployment path is now documented and verified on PostgreSQL + S3-compatible object storage.
 - Browser-level automation now covers the main studio smoke path, the read-only sharing journey, and arrangement export reachability across Chromium, Firefox, and WebKit, plus arrangement playback behavior across Chromium and Firefox. Recorder transport and the longer endurance path are still only verified in Chromium with a fake microphone, and WebKit playback remains unavailable in this Windows automation environment. The new capability snapshot reduces blind spots, but the larger browser-side gap is still environment coverage: real hardware-specific recording variability, permission differences, and true Safari/WebKit audio validation on native environments.
 - The new ops diagnostics surface helps triage those remaining gaps, but it does not replace native Safari/WebKit runs or real hardware recording validation yet.
 - The new environment report export and validation protocol make those native runs operationally easier, but the runs themselves still need to happen.
@@ -421,6 +449,7 @@ Date: 2026-04-15
 - The new environment-validation importer removes another manual bottleneck, but it still does not count as native Safari or real-hardware evidence until those runs are actually collected.
 - The alpha deployment track now has one real verified HTTPS staging environment on the chosen stack rather than only repo-side container and script readiness.
 - `https://gigastudy-alpha.pages.dev` now runs against the deployed Cloud Run backend `https://gigastudy-api-alpha-ajpmdzbrga-du.a.run.app` instead of local development defaults, and the live alpha path has already passed a frontend load, backend health, project creation, guide/take upload, and analysis smoke run.
+- The live alpha URLs still respond on 2026-04-15, but the backend `/api/health` endpoint currently reports `env: development`; re-check the deployed env labeling before using the alpha stack as proof of production-like configuration discipline.
 - The operator path has now also confirmed the real GCP alpha project id as `gigastudy-alpha-493208`, and Cloud Run / Cloud Build / Artifact Registry are enabled for that project.
 - The repo now also has alpha-specific env templates plus deploy scripts for the chosen stack: `apps/api/.env.alpha.example`, `apps/web/.env.alpha.example`, `scripts/deploy_alpha_backend.ps1`, `scripts/migrate_alpha_database.ps1`, and `scripts/deploy_alpha_frontend.ps1`.
 - The alpha path now also has a remote Cloud Run Job fallback for Neon migration, because the current operator machine times out on outbound PostgreSQL traffic to Neon even though the GCP-side stack is otherwise ready.
@@ -431,9 +460,9 @@ Date: 2026-04-15
 - The manual Wrangler fallback was also exercised again from a real Windows PowerShell shell without `pwsh`, and the resulting unique Pages deployment matched the current production `https://gigastudy-alpha.pages.dev` bundle after the redeploy completed.
 - The web build now also ships a top-level `_redirects` file, so Cloudflare Pages can serve client-side routes through the SPA entry instead of breaking deep links.
 - The foundation now also has a dedicated operator handoff document at `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`, so the remaining real-cloud steps are explicit instead of living only in chat.
-- The product now has one chosen visual direction, and all five canonical screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`) have been brought into that system closely enough to stop the visual layer from drifting screen by screen.
+- The product now has one chosen visual direction and one canonical target set for all five screens (`Home`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`), even though the 2026-04-15 strict browser UX re-audit reopened several rendered-state closure claims.
 - The product now also has a canonical wireframe pack plus frozen mockup exports for all five screens, and the implemented UI now has a concrete target for every first-wave route instead of leaving `Ops` as the remaining visual outlier.
-- The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is now upgrading the repo-local editable source into a shared Figma workflow rather than creating the first editable source from scratch.
+- The new mockup track makes the design workflow more concrete, and the currently refactored screens now explicitly target `home-v1`, `studio-v1`, `arrangement-v1`, `shared-review-v1`, and `ops-v1`. The remaining design-system gap is no longer only about moving the editable source into Figma; it also includes bringing live typography, contrast, and control density back into alignment with those targets.
 - Filmora is now documented as an accepted secondary reference for `Studio` and `Arrangement`, specifically for panel logic:
   source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
   It is explicitly not accepted as a full-product style replacement for `Quiet Studio Console`.

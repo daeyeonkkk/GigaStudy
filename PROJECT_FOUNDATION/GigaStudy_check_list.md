@@ -18,7 +18,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Backend foundation exists on FastAPI with a tested API surface.
 - [x] The planned analysis stack is fully adopted at runtime across Basic Pitch + `librosa.pyin` + `music21` + `note-seq`.
 - [x] Score rendering and playback are separated so notation is not coupled to the playback engine.
-- [x] The default product storage path is production-ready PostgreSQL + S3-compatible object storage rather than SQLite + local filesystem.
+- [x] A production-ready PostgreSQL + S3-compatible storage path exists and has a repeatable smoke path, even though local development still defaults to SQLite + local filesystem.
 - [x] Job state, artifact metadata, model versions, and failure reasons are stored and inspectable.
 
 ## 3. Recording Pipeline
@@ -187,10 +187,12 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The checklist is now treated as a live progress board, not just as a planning appendix.
 - [x] `FOUNDATION_STATUS.md` is used as the audit narrative that explains why each checked area is considered done.
 - [x] Remaining unchecked items are deliberate gaps, not silently deferred assumptions.
+- [x] Verification commands that pass with warnings are now documented explicitly in `FOUNDATION_STATUS.md` with scope and re-review triggers instead of being treated as invisible green passes.
 
 ## 16. Visual Refactor Track
 
 - [x] One canonical visual direction is locked in `DESIGN/UI_DESIGN_DIRECTION.md`.
+- [ ] The live typography system now follows the canonical font pairing in `DESIGN/UI_DESIGN_DIRECTION.md` across headings, body copy, and default control chrome instead of shipping fallback system fonts or browser-default UI text.
 - [x] A Filmora reference review is documented for Studio and Arrangement workspace improvement, and it is scoped as a secondary structural reference rather than a whole-product style replacement.
 - [x] A MyEdit reference review is documented for the stricter next Studio-only waveform editor pass.
 - [x] A reference-led wireframe pack exists in `DESIGN/UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
@@ -201,9 +203,9 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Arrangement route now also uses a lightweight workspace-mode switch (`후보 고르기`, `악보 보기`, `내보내기`) and keeps the left rail limited to core candidate-flow entry points.
   Detailed generation controls now sit behind one optional section instead of competing with candidate choice on the default surface.
 - [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
-- [x] The Shared Review route now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) and keeps the left rail limited to core review entry points instead of turning the shared viewer into another stacked detail page.
+- [ ] The Shared Review route now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) and keeps the left rail limited to core review entry points instead of turning the shared viewer into another stacked detail page.
 - [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
-- [x] The Ops route now also uses a lightweight workspace-mode switch (`문제 확인`, `환경 검증`, `복구 처리`) and keeps the default surface focused on one triage task at a time instead of presenting one flat admin list.
+- [ ] The Ops route now also uses a lightweight workspace-mode switch (`문제 확인`, `환경 검증`, `복구 처리`) and keeps the default surface focused on one triage task at a time instead of presenting one flat admin list.
 - [x] A Studio v2 and Arrangement v2 mockup pass has absorbed the accepted Filmora patterns:
   source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
 - [x] A browser-reviewed Studio or Arrangement implementation pass has moved the live product noticeably closer to the Filmora-informed v2 mockups.
@@ -215,7 +217,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A MyEdit-informed `studio-v3-wave-editor` mockup pass now exists, narrowing the next Studio target into a waveform-first review and trim desk.
 - [x] The live Studio route has adopted the `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace:
   one slim left rail for core entry points, one dominant waveform stage, one lower range-and-action strip, and one dedicated listening / take rail.
-- [x] The live Studio and Arrangement routes now share one compact `작업 이동` handoff bar, so internal workspaces feel like one connected product instead of isolated screens with separate local navigation.
+- [ ] The live Studio and Arrangement routes now share one compact `작업 이동` handoff bar, so internal workspaces feel like one connected product instead of isolated screens with separate local navigation.
 - [x] The Shared Review and Ops routes now also use the same compact workflow-bar discipline, so review and triage surfaces stop inventing their own local mode chrome apart from the main Studio / Arrangement workspaces.
 - [x] Arrangement, Shared Review, and Ops now also share the same reusable workspace-shell and active-panel emphasis rules, so layout tuning no longer drifts route by route after the visual refactor pass.
 - [x] The Ops default triage and recovery cards now lead with Korean task labels and operator-facing summaries, while raw request IDs, track IDs, job IDs, browser user-agent strings, and model-version strings live behind one optional `자세한 기록 보기` panel.

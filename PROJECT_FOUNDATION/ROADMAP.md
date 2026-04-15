@@ -260,6 +260,7 @@
 - 운영 대시보드 초안
 - 실패 대응 플로우
 - 출시 판정표
+- 런타임 로그 수집 최소선 구축: client error / fetch failure / server exception + request id
 
 완료 기준:
 

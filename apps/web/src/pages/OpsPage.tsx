@@ -178,6 +178,31 @@ type OpsOverview = {
   policies: OpsPolicies
   model_versions: OpsModelVersions
   environment_diagnostics: OpsEnvironmentDiagnostics
+  runtime_log_summary: {
+    total_event_count: number
+    error_event_count: number
+    client_error_event_count: number
+    server_error_event_count: number
+  }
+  recent_runtime_events: Array<{
+    runtime_event_id: string
+    source: string
+    severity: string
+    event_type: string
+    message: string
+    project_id: string | null
+    track_id: string | null
+    surface: string | null
+    route_path: string | null
+    request_id: string | null
+    request_method: string | null
+    request_path: string | null
+    status_code: number | null
+    user_agent: string | null
+    details: Record<string, unknown> | unknown[] | null
+    created_at: string
+    updated_at: string
+  }>
   environment_claim_gate: EnvironmentValidationClaimGate
   recent_environment_validation_runs: EnvironmentValidationRun[]
   failed_tracks: FailedTrackSummary[]
@@ -819,6 +844,8 @@ export function OpsPage() {
 
   const { payload } = pageState
   const environmentDiagnostics = payload.environment_diagnostics
+  const runtimeLogSummary = payload.runtime_log_summary
+  const recentRuntimeEvents = payload.recent_runtime_events
   const environmentClaimGate = payload.environment_claim_gate
   const failedClaimChecks = environmentClaimGate.checks.filter((check) => !check.passed)
   const validationRuns = payload.recent_environment_validation_runs
@@ -935,6 +962,28 @@ export function OpsPage() {
             </div>
           </article>
 
+          <article className="info-card ops-kpi-card">
+            <h3>런타임 로그</h3>
+            <div className="mini-grid">
+              <div className="mini-card">
+                <span>전체 사건</span>
+                <strong>{runtimeLogSummary.total_event_count}</strong>
+              </div>
+              <div className="mini-card">
+                <span>오류 합계</span>
+                <strong>{runtimeLogSummary.error_event_count}</strong>
+              </div>
+              <div className="mini-card">
+                <span>화면 오류</span>
+                <strong>{runtimeLogSummary.client_error_event_count}</strong>
+              </div>
+              <div className="mini-card">
+                <span>서버 오류</span>
+                <strong>{runtimeLogSummary.server_error_event_count}</strong>
+              </div>
+            </div>
+          </article>
+
           <article className="info-card ops-kpi-card ops-claim-gate-card">
             <div className="ops-claim-gate-card__header">
               <div>
@@ -1019,6 +1068,68 @@ export function OpsPage() {
             </div>
           </article>
         </div>
+        <article className="panel studio-block ops-panel">
+          <p className="eyebrow">런타임 로그</p>
+          <h2>최근에 실제 사용 중 잡힌 오류를 바로 확인합니다</h2>
+
+          <div className="ops-list">
+            {recentRuntimeEvents.length === 0 ? (
+              <div className="empty-card">
+                <p>아직 런타임 로그가 없습니다.</p>
+                <p>화면 오류나 서버 500 응답이 생기면 이곳에 최근 순서대로 쌓입니다.</p>
+              </div>
+            ) : (
+              recentRuntimeEvents.map((item) => (
+                <article className="ops-card" key={item.runtime_event_id}>
+                  <div className="ops-card__header">
+                    <div>
+                      <strong>{item.message}</strong>
+                      <span>
+                        {item.source === 'client' ? '화면' : '서버'}
+                        {item.surface ? ` / ${item.surface}` : ''}
+                        {' / '}
+                        {formatDate(item.created_at)}
+                      </span>
+                    </div>
+
+                    <div
+                      className={`status-pill ${
+                        item.severity === 'error'
+                          ? 'status-pill--error'
+                          : item.severity === 'warn'
+                            ? 'status-pill--loading'
+                            : 'status-pill--ready'
+                      }`}
+                    >
+                      {item.severity === 'error' ? '오류' : item.severity === 'warn' ? '주의' : '참고'}
+                    </div>
+                  </div>
+
+                  <div className="mini-grid">
+                    <div className="mini-card">
+                      <span>구분</span>
+                      <strong>{item.event_type}</strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>요청</span>
+                      <strong>
+                        {item.request_method ?? '-'} {item.request_path ?? item.route_path ?? '-'}
+                      </strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>응답</span>
+                      <strong>{item.status_code ?? '-'}</strong>
+                    </div>
+                    <div className="mini-card">
+                      <span>추적 번호</span>
+                      <strong>{item.request_id ?? '-'}</strong>
+                    </div>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </article>
       </section>
 
       <section className="section ops-section ops-section--versions">

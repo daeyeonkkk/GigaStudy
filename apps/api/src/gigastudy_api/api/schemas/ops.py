@@ -68,6 +68,33 @@ class OpsEnvironmentDiagnosticsResponse(BaseModel):
     recent_profiles: list[OpsEnvironmentProfileResponse] = Field(default_factory=list)
 
 
+class OpsRuntimeSummaryResponse(BaseModel):
+    total_event_count: int = Field(ge=0)
+    error_event_count: int = Field(ge=0)
+    client_error_event_count: int = Field(ge=0)
+    server_error_event_count: int = Field(ge=0)
+
+
+class OpsRuntimeEventResponse(BaseModel):
+    runtime_event_id: UUID
+    source: str
+    severity: str
+    event_type: str
+    message: str
+    project_id: UUID | None = None
+    track_id: UUID | None = None
+    surface: str | None = None
+    route_path: str | None = None
+    request_id: str | None = None
+    request_method: str | None = None
+    request_path: str | None = None
+    status_code: int | None = None
+    user_agent: str | None = None
+    details: dict | list | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class EnvironmentValidationMatrixCellResponse(BaseModel):
     label: str
     covered: bool
@@ -241,6 +268,8 @@ class OpsOverviewResponse(BaseModel):
     policies: OpsPolicyResponse
     model_versions: OpsModelVersionsResponse
     environment_diagnostics: OpsEnvironmentDiagnosticsResponse
+    runtime_log_summary: OpsRuntimeSummaryResponse
+    recent_runtime_events: list[OpsRuntimeEventResponse] = Field(default_factory=list)
     environment_claim_gate: EnvironmentValidationClaimGateResponse
     recent_environment_validation_runs: list[EnvironmentValidationRunResponse] = Field(default_factory=list)
     failed_tracks: list[FailedTrackSummaryResponse] = Field(default_factory=list)

@@ -273,6 +273,27 @@ class EnvironmentValidationRun(TimestampMixin, Base):
     user: Mapped["User"] = relationship(back_populates="environment_validation_runs")
 
 
+class RuntimeEvent(TimestampMixin, Base):
+    __tablename__ = "runtime_events"
+
+    runtime_event_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.user_id"), nullable=False, index=True)
+    project_id: Mapped[UUID | None] = mapped_column(ForeignKey("projects.project_id"), index=True)
+    track_id: Mapped[UUID | None] = mapped_column(ForeignKey("tracks.track_id"), index=True)
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    surface: Mapped[str | None] = mapped_column(String(64))
+    route_path: Mapped[str | None] = mapped_column(String(256))
+    request_method: Mapped[str | None] = mapped_column(String(16))
+    request_path: Mapped[str | None] = mapped_column(String(512))
+    status_code: Mapped[int | None] = mapped_column(Integer)
+    message: Mapped[str] = mapped_column(String(2000), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(1024))
+    details_json: Mapped[dict | list | None] = mapped_column(JSON)
+
+
 class AnalysisJob(Base):
     __tablename__ = "analysis_jobs"
 

@@ -27,6 +27,8 @@ from gigastudy_api.api.schemas.ops import (
     OpsModelVersionsResponse,
     OpsOverviewResponse,
     OpsPolicyResponse,
+    OpsRuntimeEventResponse,
+    OpsRuntimeSummaryResponse,
     OpsSummaryResponse,
 )
 from gigastudy_api.config import get_settings
@@ -37,6 +39,7 @@ from gigastudy_api.db.models import (
     EnvironmentValidationRun,
     MelodyDraft,
     Project,
+    RuntimeEvent,
     Track,
     TrackRole,
     TrackStatus,
@@ -58,6 +61,7 @@ from gigastudy_api.services.environment_validation_packet_builder import (
 )
 from gigastudy_api.services.melody import MELODY_MODEL_VERSION, PYIN_FALLBACK_MODEL_VERSION
 from gigastudy_api.services.projects import get_or_create_default_user
+from gigastudy_api.services.runtime_events import list_recent_runtime_events
 
 ENVIRONMENT_VALIDATION_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[3]
@@ -223,6 +227,56 @@ def _build_environment_diagnostics(
         browser_matrix=sorted_browser_matrix,
         warning_flags=sorted_warning_flags,
         recent_profiles=recent_profiles,
+    )
+
+
+def _build_runtime_log_summary(session: Session) -> OpsRuntimeSummaryResponse:
+    return OpsRuntimeSummaryResponse(
+        total_event_count=int(session.scalar(select(func.count()).select_from(RuntimeEvent)) or 0),
+        error_event_count=int(
+            session.scalar(
+                select(func.count()).select_from(RuntimeEvent).where(RuntimeEvent.severity == "error")
+            )
+            or 0
+        ),
+        client_error_event_count=int(
+            session.scalar(
+                select(func.count())
+                .select_from(RuntimeEvent)
+                .where(RuntimeEvent.severity == "error", RuntimeEvent.source == "client")
+            )
+            or 0
+        ),
+        server_error_event_count=int(
+            session.scalar(
+                select(func.count())
+                .select_from(RuntimeEvent)
+                .where(RuntimeEvent.severity == "error", RuntimeEvent.source == "server")
+            )
+            or 0
+        ),
+    )
+
+
+def _build_runtime_event_response(item: RuntimeEvent) -> OpsRuntimeEventResponse:
+    return OpsRuntimeEventResponse(
+        runtime_event_id=item.runtime_event_id,
+        source=item.source,
+        severity=item.severity,
+        event_type=item.event_type,
+        message=item.message,
+        project_id=item.project_id,
+        track_id=item.track_id,
+        surface=item.surface,
+        route_path=item.route_path,
+        request_id=item.request_id,
+        request_method=item.request_method,
+        request_path=item.request_path,
+        status_code=item.status_code,
+        user_agent=item.user_agent,
+        details=item.details_json,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
     )
 
 
@@ -540,6 +594,7 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
         ).all()
     )
     recent_validation_runs = list_environment_validation_runs(session, limit=recent_limit)
+    recent_runtime_events = list_recent_runtime_events(session, limit=recent_limit)
 
     analysis_versions = sorted(
         {
@@ -579,6 +634,11 @@ def get_ops_overview(session: Session) -> OpsOverviewResponse:
             session,
             recent_limit=recent_limit,
         ),
+        runtime_log_summary=_build_runtime_log_summary(session),
+        recent_runtime_events=[
+            _build_runtime_event_response(item)
+            for item in recent_runtime_events
+        ],
         environment_claim_gate=EnvironmentValidationClaimGateResponse.model_validate(
             environment_claim_gate
         ),

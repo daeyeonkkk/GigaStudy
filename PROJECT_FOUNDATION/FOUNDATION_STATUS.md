@@ -52,6 +52,7 @@ Date: 2026-04-14
   difficulty presets, voice-range presets, A/B/C candidate comparison, beatbox templates, project history, share links, and admin ops monitoring.
 - Admin ops monitoring now also includes browser-audio environment diagnostics from saved DeviceProfiles, so capability warnings can be reviewed by browser and OS instead of staying buried in studio-only state.
 - Admin ops monitoring now also includes manual environment validation runs, so native Safari and real-hardware checks can be stored next to the diagnostics baseline instead of living only in ad hoc notes.
+- Admin ops monitoring now also includes recent runtime logs, so client-side screen errors, failed fetches, and unhandled server exceptions are no longer invisible when UX quality drops in the alpha product.
 - Device profile capture is stored with requested constraints and applied settings, and the studio snapshot includes the latest profile as the foundation docs require.
 - Device profiles now also store a browser capability snapshot plus normalized diagnostic warning flags, so permission state, recorder codec support, secure-context status, and Web Audio / OfflineAudioContext support can be audited per environment.
 - Upload processing creates canonical audio plus waveform preview artifacts and keeps retry paths for failed processing.

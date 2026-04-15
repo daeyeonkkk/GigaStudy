@@ -106,6 +106,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] Failure reasons are visible in product and ops views.
 - [x] Ops monitoring exists for jobs, errors, and environment diagnostics.
 - [x] Ops can store structured browser and hardware validation runs.
+- [x] Runtime logs now collect recent client-side errors, fetch failures, and server exceptions with request ids so UX regressions can be triaged from ops instead of only from ad hoc reproduction.
 
 ## 11. Release Gate For MVP
 

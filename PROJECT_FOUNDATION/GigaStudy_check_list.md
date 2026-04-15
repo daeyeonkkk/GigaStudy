@@ -1,6 +1,6 @@
 # GigaStudy Live Checklist
 
-Date: 2026-04-14
+Date: 2026-04-15
 Status rule: mark `[x]` only when implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
 
 ## 1. Product Alignment
@@ -217,6 +217,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
   one slim left rail for core entry points, one dominant waveform stage, one lower range-and-action strip, and one dedicated listening / take rail.
 - [x] The live Studio and Arrangement routes now share one compact `작업 이동` handoff bar, so internal workspaces feel like one connected product instead of isolated screens with separate local navigation.
 - [x] The Shared Review and Ops routes now also use the same compact workflow-bar discipline, so review and triage surfaces stop inventing their own local mode chrome apart from the main Studio / Arrangement workspaces.
+- [x] Arrangement, Shared Review, and Ops now also share the same reusable workspace-shell and active-panel emphasis rules, so layout tuning no longer drifts route by route after the visual refactor pass.
 
 ## 17. Mockup Track
 

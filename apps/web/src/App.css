@@ -1,3 +1,28 @@
+.workspace-desk {
+  display: grid;
+  grid-template-columns: var(
+    --workspace-desk-columns,
+    minmax(260px, 0.9fr) minmax(0, 1.7fr) minmax(280px, 0.95fr)
+  );
+  gap: var(--workspace-desk-gap, 22px);
+  align-items: start;
+}
+
+.workspace-desk__panel {
+  min-width: 0;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.workspace-desk__panel--active {
+  border-color: rgba(181, 100, 58, 0.26);
+  box-shadow:
+    0 18px 36px rgba(17, 28, 37, 0.11),
+    0 0 0 3px rgba(181, 100, 58, 0.08);
+}
+
 .page-shell {
   display: flex;
   flex-direction: column;
@@ -2738,24 +2763,8 @@ button.workspace-flow-bar__item {
 }
 
 .arrangement-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.7fr) minmax(280px, 0.95fr);
-  gap: 22px;
-  align-items: start;
-}
-
-.arrangement-workspace-panel {
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
-}
-
-.arrangement-workspace-panel--active {
-  border-color: rgba(184, 103, 61, 0.28);
-  box-shadow:
-    0 18px 36px rgba(17, 28, 37, 0.12),
-    0 0 0 3px rgba(184, 103, 61, 0.08);
+  --workspace-desk-columns: minmax(260px, 0.9fr) minmax(0, 1.7fr) minmax(280px, 0.95fr);
+  --workspace-desk-gap: 22px;
 }
 
 .arrangement-rail,
@@ -3255,24 +3264,8 @@ button.workspace-flow-bar__item {
 }
 
 .shared-review-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(280px, 320px);
-  gap: 20px;
-  align-items: start;
-}
-
-.shared-review-workspace-panel {
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
-}
-
-.shared-review-workspace-panel--active {
-  border-color: rgba(181, 100, 58, 0.28);
-  box-shadow:
-    0 18px 36px rgba(17, 28, 37, 0.1),
-    0 0 0 3px rgba(181, 100, 58, 0.08);
+  --workspace-desk-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(280px, 320px);
+  --workspace-desk-gap: 20px;
 }
 
 .shared-review-rail,
@@ -3764,20 +3757,6 @@ button.workspace-flow-bar__item {
     inset 3px 0 0 #b5643a;
 }
 
-.ops-workspace-panel {
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
-}
-
-.ops-workspace-panel--active {
-  border-color: rgba(181, 100, 58, 0.24);
-  box-shadow:
-    0 18px 36px rgba(17, 28, 37, 0.1),
-    0 0 0 3px rgba(181, 100, 58, 0.07);
-}
-
 .ops-kpi-strip {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
@@ -4075,7 +4054,7 @@ button.workspace-flow-bar__item {
   }
 
   .arrangement-topbar,
-  .arrangement-grid {
+  .workspace-desk {
     grid-template-columns: 1fr;
   }
 
@@ -4088,7 +4067,6 @@ button.workspace-flow-bar__item {
   }
 
   .shared-review-header,
-  .shared-review-grid,
   .shared-review-strip,
   .shared-review-canvas__meta {
     grid-template-columns: 1fr;

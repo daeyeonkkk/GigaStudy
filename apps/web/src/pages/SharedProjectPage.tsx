@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
+import { WorkspaceDesk, WorkspaceDeskPanel } from '../components/WorkspaceDesk'
 import { WaveformPreview } from '../components/WaveformPreview'
 import { WorkspaceFlowBar } from '../components/WorkspaceFlowBar'
 import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
@@ -354,11 +355,11 @@ export function SharedProjectPage() {
           items={sharedReviewFlowItems}
         />
 
-        <div className="shared-review-grid">
-          <aside
-            className={`panel shared-review-rail shared-review-rail--left shared-review-workspace-panel ${
-              workspaceMode === 'take' ? 'shared-review-workspace-panel--active' : ''
-            }`}
+        <WorkspaceDesk className="shared-review-grid">
+          <WorkspaceDeskPanel
+            active={workspaceMode === 'take'}
+            as="aside"
+            className="panel shared-review-rail shared-review-rail--left"
           >
             <div className="panel-header">
               <div>
@@ -463,12 +464,12 @@ export function SharedProjectPage() {
                 <p>이 버전에는 저장된 테이크가 없습니다.</p>
               </div>
             )}
-          </aside>
+          </WorkspaceDeskPanel>
 
-          <section
-            className={`panel shared-review-canvas shared-review-workspace-panel ${
-              workspaceMode === 'score' ? 'shared-review-workspace-panel--active' : ''
-            }`}
+          <WorkspaceDeskPanel
+            active={workspaceMode === 'score'}
+            as="section"
+            className="panel shared-review-canvas"
           >
             <div className="panel-header">
               <div>
@@ -584,12 +585,12 @@ export function SharedProjectPage() {
                 결과 요약 보기
               </button>
             </div>
-          </section>
+          </WorkspaceDeskPanel>
 
-          <aside
-            className={`panel shared-review-rail shared-review-rail--right shared-review-workspace-panel ${
-              workspaceMode === 'summary' ? 'shared-review-workspace-panel--active' : ''
-            }`}
+          <WorkspaceDeskPanel
+            active={workspaceMode === 'summary'}
+            as="aside"
+            className="panel shared-review-rail shared-review-rail--right"
           >
             <div className="panel-header">
               <div>
@@ -673,8 +674,8 @@ export function SharedProjectPage() {
             >
               다시 악보 보기
             </button>
-          </aside>
-        </div>
+          </WorkspaceDeskPanel>
+        </WorkspaceDesk>
       </section>
     </div>
   )

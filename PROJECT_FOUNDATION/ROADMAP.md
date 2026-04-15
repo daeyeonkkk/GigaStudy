@@ -447,6 +447,7 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 - The Shared Review workspace now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) so the shared viewer keeps only the core read-only entry points on the left rail and reads like one frozen review desk instead of another stacked detail page.
 - The Ops workspace now also uses a lightweight task-mode switch (`문제 확인`, `환경 검증`, `복구 처리`) so runtime incidents, environment checks, and retry work read like one triage desk instead of one long admin surface.
 - Shared Review and Ops now also follow the same compact top-level workflow-bar rule as Studio and Arrangement, so the product no longer changes its basic task-switching chrome from screen to screen.
+- Arrangement, Shared Review, and Ops now also share one reusable workspace-shell rule for left rail / center stage / right rail emphasis, so future layout tuning lands once instead of forking screen by screen.
 - The stricter Studio-only visual pass is now locked to the attached MyEdit waveform editor as a direct structural reference.
 - That pass is now complete at the mockup and browser-reviewed implementation level:
   the repo carries the editable source plus frozen export, and the live Studio route now behaves like a waveform-first review and trim workspace with one slim left rail, one dominant waveform stage, one lower trim/action strip, and one dedicated listening rail.

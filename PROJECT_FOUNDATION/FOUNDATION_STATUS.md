@@ -1,6 +1,6 @@
 # Foundation Status
 
-Date: 2026-04-14
+Date: 2026-04-15
 
 ## Sources Checked
 
@@ -167,6 +167,8 @@ Date: 2026-04-14
 - The Shared Review screen now also behaves more like one read-only review workspace than one stacked detail page:
   `테이크 보기`, `악보 보기`, and `결과 읽기` switches keep the left rail focused on review entry points while the center and right panels act like one frozen review desk.
 - The Ops screen now follows the `ops-v1` mockup closely enough to read like a dense release desk instead of a generic stack of admin cards: KPI strip on top, validation and recovery work areas in the middle, and diagnostics plus recent environment capture at the bottom.
+- Arrangement, Shared Review, and Ops now also reuse one shared workspace-shell and active-panel emphasis rule, so future layout tuning lands once and keeps the non-Studio workspaces visually aligned instead of drifting route by route.
+- Verification for this shared workspace-shell pass: `npm run lint:web`, `npm run build:web`, and `npm run test:e2e` all passed again (`37 passed / 5 skipped`).
 - The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
 - The foundation now also has an equivalent editable design source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the product no longer depends on frozen SVG exports alone when updating canonical screen mockups.
 - The Home page now also uses one curated non-identifying ambient photo from the user-owned external library as a supporting visual layer, and the selected source `C:\my_project\DCIM\102_PANA\IMG_9729.JPG` has been copied into the repo-owned path `apps/web/public/photography/home-ambient-quiet-hall.jpg` without modifying `C:\my_project\DCIM`.

@@ -1163,8 +1163,8 @@ export function OpsPage() {
           </article>
         </div>
         <article
-          className={`panel studio-block ops-panel ops-workspace-panel ${
-            workspaceMode === 'triage' ? 'ops-workspace-panel--active' : ''
+          className={`panel studio-block ops-panel workspace-desk__panel ${
+            workspaceMode === 'triage' ? 'workspace-desk__panel--active' : ''
           }`}
         >
           <p className="eyebrow">런타임 로그</p>
@@ -1320,7 +1320,7 @@ export function OpsPage() {
 
       <section
         className={`section ops-section ops-section--diagnostics ${
-          workspaceMode === 'validation' ? 'ops-workspace-panel ops-workspace-panel--active' : ''
+          workspaceMode === 'validation' ? 'workspace-desk__panel workspace-desk__panel--active' : ''
         }`}
       >
         <div className="section__header ops-section__header">
@@ -1399,7 +1399,7 @@ export function OpsPage() {
 
       <section
         className={`section section--split ops-section ops-section--validation ${
-          workspaceMode === 'validation' ? 'ops-workspace-panel ops-workspace-panel--active' : ''
+          workspaceMode === 'validation' ? 'workspace-desk__panel workspace-desk__panel--active' : ''
         }`}
       >
         <article className="panel studio-block ops-panel" data-testid="validation-import-panel">
@@ -2101,7 +2101,7 @@ export function OpsPage() {
 
       <section
         className={`section section--split ops-section ops-section--recovery ${
-          workspaceMode === 'recovery' ? 'ops-workspace-panel ops-workspace-panel--active' : ''
+          workspaceMode === 'recovery' ? 'workspace-desk__panel workspace-desk__panel--active' : ''
         }`}
       >
         <article className="panel studio-block ops-panel">

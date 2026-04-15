@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ArrangementScore } from '../components/ArrangementScore'
+import { WorkspaceDesk, WorkspaceDeskPanel } from '../components/WorkspaceDesk'
 import { WorkspaceFlowBar } from '../components/WorkspaceFlowBar'
 import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import {
@@ -526,11 +527,11 @@ export function ArrangementPage() {
           title="편곡 화면도 한 흐름 안에서 이어집니다"
         />
 
-        <div className="arrangement-grid">
-          <aside
-            className={`panel arrangement-rail arrangement-rail--left arrangement-workspace-panel ${
-              workspaceMode === 'compare' ? 'arrangement-workspace-panel--active' : ''
-            }`}
+        <WorkspaceDesk className="arrangement-grid">
+          <WorkspaceDeskPanel
+            active={workspaceMode === 'compare'}
+            as="aside"
+            className="panel arrangement-rail arrangement-rail--left"
           >
             <div className="arrangement-rack__section arrangement-rack__section--modes">
               <div className="arrangement-rack__head">
@@ -788,12 +789,12 @@ export function ArrangementPage() {
                 {arrangementState.message}
               </p>
             ) : null}
-          </aside>
+          </WorkspaceDeskPanel>
 
-          <section
-            className={`panel arrangement-center arrangement-workspace-panel ${
-              workspaceMode === 'review' ? 'arrangement-workspace-panel--active' : ''
-            }`}
+          <WorkspaceDeskPanel
+            active={workspaceMode === 'review'}
+            as="section"
+            className="panel arrangement-center"
           >
             <div className="arrangement-center__header">
               <div>
@@ -878,12 +879,12 @@ export function ArrangementPage() {
                 </Link>
               </div>
             </div>
-          </section>
+          </WorkspaceDeskPanel>
 
-          <aside
-            className={`panel arrangement-rail arrangement-rail--right arrangement-workspace-panel ${
-              workspaceMode === 'export' ? 'arrangement-workspace-panel--active' : ''
-            }`}
+          <WorkspaceDeskPanel
+            active={workspaceMode === 'export'}
+            as="aside"
+            className="panel arrangement-rail arrangement-rail--right"
           >
             <div>
               <p className="eyebrow">세부 조정</p>
@@ -1036,8 +1037,8 @@ export function ArrangementPage() {
                 <p>후보를 선택하거나 생성하면 솔로, 기준 지정, 내보내기 도구를 사용할 수 있습니다.</p>
               </div>
             )}
-          </aside>
-        </div>
+          </WorkspaceDeskPanel>
+        </WorkspaceDesk>
       </section>
     </div>
   )

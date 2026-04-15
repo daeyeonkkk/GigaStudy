@@ -858,6 +858,19 @@ function formatTimeSpan(startMs: number, endMs: number): string {
   return `${(startMs / 1000).toFixed(2)}s - ${(endMs / 1000).toFixed(2)}s`
 }
 
+function formatEditorClock(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '알 수 없음'
+  }
+
+  const totalTenths = Math.max(0, Math.round(value / 100))
+  const minutes = Math.floor(totalTenths / 600)
+  const seconds = Math.floor((totalTenths % 600) / 10)
+  const tenths = totalTenths % 10
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${tenths}`
+}
+
 function formatSignedCents(value: number | null): string {
   if (value === null || Number.isNaN(value)) {
     return '없음'
@@ -1238,6 +1251,7 @@ export function StudioPage() {
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null)
   const [workspaceMode, setWorkspaceMode] = useState<StudioWorkspaceModeId>('record')
+  const [editorRangeMode, setEditorRangeMode] = useState<'take' | 'note'>('take')
   const [takeUploadProgress, setTakeUploadProgress] = useState<Record<string, number>>({})
   const [failedTakeUploads, setFailedTakeUploads] = useState<
     Record<string, FailedTakeUpload>
@@ -3439,6 +3453,23 @@ export function StudioPage() {
   const selectedTakeMelody = selectedTake?.latest_melody ?? null
   const selectedNoteFeedback =
     selectedTakeNoteFeedback[selectedNoteFeedbackIndex] ?? selectedTakeNoteFeedback[0] ?? null
+  const selectedTakeDurationMs = selectedTakePreview?.durationMs ?? selectedTake?.duration_ms ?? null
+  const editorRangeStartMs =
+    editorRangeMode === 'note' && selectedNoteFeedback ? selectedNoteFeedback.start_ms : 0
+  const editorRangeEndMs =
+    editorRangeMode === 'note' && selectedNoteFeedback
+      ? selectedNoteFeedback.end_ms
+      : selectedTakeDurationMs
+  const editorRangeTitle =
+    editorRangeMode === 'note' && selectedNoteFeedback
+      ? `${selectedNoteFeedback.note_index + 1}번째 노트`
+      : '테이크 전체'
+  const editorPrimaryAction =
+    workspaceMode === 'arrange'
+      ? 'arrangement'
+      : workspaceMode === 'review'
+        ? 'analysis'
+        : 'recording'
   const chordMarkerCount = project.chord_timeline_json?.length ?? 0
   const chordDraftRowCount = chordTimelineDraft.length
   const noteFeedbackTimelineDurationMs =
@@ -3544,6 +3575,600 @@ export function StudioPage() {
 
   return (
     <div className="page-shell">
+      <section className="studio-console-shell studio-console-shell--wave-editor">
+        <div className="studio-wave-editor__topbar">
+          <div className="studio-wave-editor__title">
+            <p className="eyebrow">GigaStudy 스튜디오</p>
+            <h1>{project.title}</h1>
+            <p className="panel__summary">
+              한 번에 한 테이크만 고르고, 듣고, 살피고, 다음 작업으로 넘길 수 있게 상단 작업면을
+              파형 중심으로 정리했습니다.
+            </p>
+          </div>
+
+          <div className="studio-wave-editor__status">
+            <span className="studio-wave-editor__status-chip">
+              <strong>{selectedTakeLabel}</strong>
+              <small>{selectedTake ? getTrackStatusLabel(selectedTake.track_status) : '테이크를 먼저 고르세요'}</small>
+            </span>
+            <span className="studio-wave-editor__status-chip">
+              <strong>{selectedTakeScoreLabel}</strong>
+              <small>{selectedTakeScore ? '현재 점수' : '점수 대기 중'}</small>
+            </span>
+            <span className={`studio-wave-editor__status-chip studio-wave-editor__status-chip--${consoleMicTone}`}>
+              <strong>{consoleMicLabel}</strong>
+              <small>{latestProfile ? '장치 기록 있음' : '장치 기록 전'}</small>
+            </span>
+            <span className="studio-wave-editor__status-chip">
+              <strong>{transportBpm} BPM</strong>
+              <small>{project.time_signature ?? '4/4'}</small>
+            </span>
+            <span className="studio-wave-editor__status-chip">
+              <strong>정렬 {consoleAlignmentLabel}</strong>
+              <small>{selectedTake ? '선택 테이크 기준' : '테이크를 고르면 표시'}</small>
+            </span>
+          </div>
+
+          <Link className="back-link studio-wave-editor__back" to="/">
+            홈으로
+          </Link>
+        </div>
+
+        <div className="studio-wave-editor__body">
+          <aside className="studio-wave-editor__rail">
+            <div className="studio-wave-editor__mode-switch" data-testid="studio-workspace-modes">
+              {studioWorkspaceModes.map((mode) => (
+                <button
+                  key={mode.id}
+                  className={`studio-wave-editor__mode-button ${
+                    activeWorkspaceMode.id === mode.id ? 'studio-wave-editor__mode-button--active' : ''
+                  }`}
+                  data-testid={`studio-workspace-mode-${mode.id}`}
+                  type="button"
+                  aria-pressed={activeWorkspaceMode.id === mode.id}
+                  onClick={() => setWorkspaceMode(mode.id)}
+                >
+                  <span>{mode.eyebrow}</span>
+                  <strong>{mode.label}</strong>
+                </button>
+              ))}
+            </div>
+
+            <section className="studio-wave-editor__rail-section">
+              <p className="studio-wave-editor__rail-kicker">핵심 진입점</p>
+              <div className="studio-wave-editor__rail-links">
+                {activeWorkbenchLinks.map((link) => (
+                  <a
+                    className="studio-wave-editor__rail-link"
+                    data-testid={`studio-workrail-link-${link.id}`}
+                    href={`#${link.id}`}
+                    key={link.id}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            </section>
+
+            <section className="studio-wave-editor__rail-section studio-wave-editor__rail-section--summary">
+              <p className="studio-wave-editor__rail-kicker">지금 작업 요약</p>
+              <div className="studio-wave-editor__rail-summary">
+                <div className="studio-wave-editor__rail-card">
+                  <span>준비된 테이크</span>
+                  <strong>{readyTakeCount}개</strong>
+                </div>
+                <div className="studio-wave-editor__rail-card">
+                  <span>멜로디 초안</span>
+                  <strong>{melodySummaryLabel}</strong>
+                </div>
+                <div className="studio-wave-editor__rail-card">
+                  <span>편곡 후보</span>
+                  <strong>{arrangementSummaryLabel}</strong>
+                </div>
+                <div className="studio-wave-editor__rail-card">
+                  <span>화성 기준</span>
+                  <strong>{consoleChordLabel}</strong>
+                </div>
+              </div>
+            </section>
+
+            <div className="studio-wave-editor__rail-footer">
+              <span className="studio-wave-editor__rail-badge">{activeWorkspaceMode.label} 중심</span>
+              <p>{activeWorkspaceMode.summary}</p>
+            </div>
+          </aside>
+
+          <div className="studio-wave-editor__main">
+            <div className="studio-wave-editor__file-chip">
+              <span className="studio-wave-editor__file-close" aria-hidden="true">
+                ×
+              </span>
+              <div>
+                <strong>{selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '테이크를 골라주세요'}</strong>
+                <small>{selectedTake ? formatDuration(selectedTake.duration_ms) : '가이드만 준비됨'}</small>
+              </div>
+            </div>
+
+            <article className="panel studio-wave-editor__stage">
+              <div className="studio-wave-editor__stage-header">
+                <div>
+                  <p className="eyebrow">파형 작업면</p>
+                  <h2>
+                    {selectedTake
+                      ? '선택한 테이크를 한 화면에서 듣고 보고 고칩니다'
+                      : '먼저 테이크를 골라 파형 작업면을 열어주세요'}
+                  </h2>
+                </div>
+                <span
+                  className={`status-pill ${
+                    selectedTakePreview
+                      ? 'status-pill--ready'
+                      : waveformState.phase === 'error'
+                        ? 'status-pill--error'
+                        : 'status-pill--loading'
+                  }`}
+                >
+                  {selectedTakePreview
+                    ? '파형 준비됨'
+                    : waveformState.phase === 'error'
+                      ? '파형 불러오기 실패'
+                      : '파형 준비 중'}
+                </span>
+              </div>
+
+              <div className="studio-wave-editor__stage-meta">
+                <span>{selectedTakeLabel}</span>
+                <span>{selectedTake ? getTrackStatusLabel(selectedTake.track_status) : '선택 대기 중'}</span>
+                <span>{selectedTakeScore ? `총점 ${formatPercent(selectedTakeScore.total_score)}` : '점수 대기 중'}</span>
+                <span>{selectedTakeNoteFeedback.length > 0 ? `노트 피드백 ${selectedTakeNoteFeedback.length}개` : '노트 피드백 대기 중'}</span>
+              </div>
+
+              <div className="studio-wave-editor__canvas">
+                {selectedTakePreview ? (
+                  <WaveformPreview preview={selectedTakePreview} />
+                ) : (
+                  <div className="empty-card">
+                    <p>아직 파형 미리보기가 없습니다.</p>
+                    <p>테이크를 녹음하거나 준비된 테이크를 골라주세요.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="studio-wave-editor__focus-grid">
+                <article className="studio-wave-editor__focus-card">
+                  <span>지금 확인할 포인트</span>
+                  <div className="studio-wave-editor__focus-heading">
+                    <strong>
+                      {selectedNoteFeedback
+                        ? `${midiToPitchName(selectedNoteFeedback.target_midi)} · ${selectedNoteFeedback.note_index + 1}번째 노트`
+                        : selectedTake
+                          ? '아래 노트 피드백에서 구간을 고를 수 있습니다'
+                          : '테이크를 먼저 골라주세요'}
+                    </strong>
+                    {selectedNoteFeedback ? (
+                      <span
+                        className={`candidate-chip candidate-chip--${getPitchDirectionTone(
+                          inspectorDirectionValue,
+                        )}`}
+                      >
+                        {getPitchDirectionLabel(inspectorDirectionValue)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p>
+                    {selectedNoteFeedback
+                      ? selectedNoteFeedback.message
+                      : selectedTake
+                        ? '분석을 마친 뒤 아래 노트 피드백에서 한 노트를 고르면 시작, 유지, 타이밍을 바로 확인할 수 있습니다.'
+                        : '가이드와 테이크를 준비하면 이곳에 지금 살펴볼 포인트가 정리됩니다.'}
+                  </p>
+                  {selectedNoteFeedback ? (
+                    <div className="studio-wave-editor__focus-metrics">
+                      <div>
+                        <small>시작</small>
+                        <strong>{formatSignedCents(selectedNoteFeedback.attack_signed_cents)}</strong>
+                      </div>
+                      <div>
+                        <small>유지</small>
+                        <strong>{formatSignedCents(selectedNoteFeedback.sustain_median_cents)}</strong>
+                      </div>
+                      <div>
+                        <small>타이밍</small>
+                        <strong>{formatSignedMs(selectedNoteFeedback.timing_offset_ms)}</strong>
+                      </div>
+                      <div>
+                        <small>신뢰도</small>
+                        <strong>{formatConfidence(selectedNoteFeedback.confidence)}</strong>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+
+                <article className="studio-wave-editor__focus-card">
+                  <span>현재 점수</span>
+                  <div className="studio-wave-editor__score-grid">
+                    <div className="studio-wave-editor__score-card">
+                      <small>음정</small>
+                      <strong>{formatPercent(selectedTakeScore?.pitch_score ?? null)}</strong>
+                    </div>
+                    <div className="studio-wave-editor__score-card">
+                      <small>리듬</small>
+                      <strong>{formatPercent(selectedTakeScore?.rhythm_score ?? null)}</strong>
+                    </div>
+                    <div className="studio-wave-editor__score-card">
+                      <small>화성</small>
+                      <strong>{formatPercent(selectedTakeScore?.harmony_fit_score ?? null)}</strong>
+                    </div>
+                    <div className="studio-wave-editor__score-card studio-wave-editor__score-card--highlight">
+                      <small>총점</small>
+                      <strong>{formatPercent(selectedTakeScore?.total_score ?? null)}</strong>
+                    </div>
+                  </div>
+                  <p className="studio-wave-editor__focus-note">
+                    {selectedTakeScore
+                      ? `${getPitchQualityModeLabel(selectedTakeScore.pitch_quality_mode)} · ${getHarmonyReferenceLabel(
+                          selectedTakeScore.harmony_reference_mode,
+                        )}`
+                      : '분석을 마치면 점수와 기준이 이곳에 정리됩니다.'}
+                  </p>
+                </article>
+              </div>
+
+              <div className="studio-wave-editor__transport-row">
+                <button
+                  data-testid="quick-start-take-button"
+                  className="button-primary"
+                  type="button"
+                  disabled={isRecordingBusy}
+                  onClick={() => void handleStartRecording()}
+                >
+                  {recordingState.phase === 'counting-in'
+                    ? '카운트인 중...'
+                    : recordingState.phase === 'uploading'
+                      ? '업로드 중...'
+                      : '테이크 녹음'}
+                </button>
+
+                <button
+                  data-testid="quick-stop-take-button"
+                  className="button-secondary"
+                  type="button"
+                  disabled={recordingState.phase !== 'recording'}
+                  onClick={() => void handleStopRecording()}
+                >
+                  녹음 멈추기
+                </button>
+
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={metronomePreviewState.phase === 'submitting'}
+                  onClick={() => void handlePreviewMetronome()}
+                >
+                  {metronomePreviewState.phase === 'submitting'
+                    ? '박자 소리 준비 중...'
+                    : '박자 소리 들어보기'}
+                </button>
+
+                <button
+                  data-testid="quick-analyze-take-button"
+                  className="button-secondary"
+                  type="button"
+                  disabled={selectedTake === null || analysisState.phase === 'submitting'}
+                  onClick={() => void handleRunAnalysis()}
+                >
+                  {analysisState.phase === 'submitting' ? '분석 중...' : '선택 테이크 분석'}
+                </button>
+              </div>
+            </article>
+
+            <article className="panel studio-wave-editor__control-strip">
+              <div className="studio-wave-editor__range-grid">
+                <label className="studio-wave-editor__field">
+                  <span>시작</span>
+                  <strong>{formatEditorClock(editorRangeStartMs)}</strong>
+                </label>
+                <label className="studio-wave-editor__field">
+                  <span>끝</span>
+                  <strong>{formatEditorClock(editorRangeEndMs)}</strong>
+                </label>
+              </div>
+
+              <div className="studio-wave-editor__mode-box">
+                <span className="studio-wave-editor__mode-label">보기 방식</span>
+                <div className="studio-wave-editor__mode-options">
+                  <label>
+                    <input
+                      checked={editorRangeMode === 'take'}
+                      name="studio-range-mode"
+                      type="radio"
+                      onChange={() => setEditorRangeMode('take')}
+                    />
+                    전체 흐름 보기
+                  </label>
+                  <label>
+                    <input
+                      checked={editorRangeMode === 'note'}
+                      disabled={selectedNoteFeedback === null}
+                      name="studio-range-mode"
+                      type="radio"
+                      onChange={() => setEditorRangeMode('note')}
+                    />
+                    선택한 노트 보기
+                  </label>
+                </div>
+              </div>
+
+              <div className="studio-wave-editor__action-box">
+                <div className="studio-wave-editor__action-copy">
+                  <span>다음으로 넘기기</span>
+                  <strong>{editorRangeTitle}</strong>
+                  <small>
+                    {editorRangeMode === 'note' && selectedNoteFeedback
+                      ? '선택한 노트 구간을 기준으로 아래 피드백과 자료 넘기기를 이어갑니다.'
+                      : '테이크 전체 흐름을 보면서 녹음, 분석, 편곡으로 자연스럽게 이어갑니다.'}
+                  </small>
+                </div>
+
+                <div className="studio-wave-editor__action-buttons">
+                  {humanRatingPacketUrl ? (
+                    <a
+                      data-testid="download-human-rating-packet-button"
+                      className="button-secondary button-secondary--small"
+                      href={humanRatingPacketUrl}
+                    >
+                      평가 자료 받기
+                    </a>
+                  ) : (
+                    <button className="button-secondary button-secondary--small" disabled type="button">
+                      평가 자료 받기
+                    </button>
+                  )}
+
+                  {realEvidenceBatchUrl ? (
+                    <a
+                      data-testid="download-real-evidence-batch-button"
+                      className="button-secondary button-secondary--small"
+                      href={realEvidenceBatchUrl}
+                    >
+                      선택 테이크 묶음
+                    </a>
+                  ) : (
+                    <button className="button-secondary button-secondary--small" disabled type="button">
+                      선택 테이크 묶음
+                    </button>
+                  )}
+
+                  {projectRealEvidenceBatchUrl ? (
+                    <a
+                      data-testid="download-project-real-evidence-batch-button"
+                      className="button-secondary button-secondary--small"
+                      href={projectRealEvidenceBatchUrl}
+                    >
+                      준비된 테이크 묶음
+                    </a>
+                  ) : (
+                    <button className="button-secondary button-secondary--small" disabled type="button">
+                      준비된 테이크 묶음
+                    </button>
+                  )}
+
+                  {editorPrimaryAction === 'arrangement' ? (
+                    arrangementRoute ? (
+                      <Link className="button-primary" to={arrangementRoute}>
+                        편곡 화면 열기
+                      </Link>
+                    ) : (
+                      <a className="button-primary" href="#arrangement">
+                        편곡 구역 열기
+                      </a>
+                    )
+                  ) : editorPrimaryAction === 'analysis' ? (
+                    <a className="button-primary" href="#analysis">
+                      노트 피드백 열기
+                    </a>
+                  ) : (
+                    <a className="button-primary" href="#recording">
+                      녹음 구역 열기
+                    </a>
+                  )}
+                </div>
+              </div>
+            </article>
+
+            <article className="panel studio-wave-editor__timeline">
+              <div className="studio-wave-editor__timeline-header">
+                <div>
+                  <p className="eyebrow">듣기와 테이크 고르기</p>
+                  <h2>재생은 아래 한 곳에서만 하고, 여기서 테이크를 바꿉니다</h2>
+                </div>
+                <span className="status-pill status-pill--ready">{totalTrackCount}개 트랙</span>
+              </div>
+
+              <p
+                className={
+                  recordingState.phase === 'error' || analysisState.phase === 'error'
+                    ? 'form-error'
+                    : 'status-card__hint'
+                }
+              >
+                {recordingState.phase === 'error'
+                  ? recordingState.message
+                  : analysisState.phase === 'error'
+                    ? analysisState.message
+                    : metronomePreviewState.phase === 'success'
+                      ? metronomePreviewState.message
+                      : selectedTake
+                        ? '재생은 이 아래 한 곳에서만 두고, 선택과 음량 조절도 같은 자리에서 이어갑니다.'
+                        : '가이드를 준비하고 마이크 권한을 받은 뒤 첫 테이크를 녹음해 주세요.'}
+              </p>
+
+              {(guideSourceUrl || selectedTakePlaybackUrl) ? (
+                <div className="studio-wave-editor__players">
+                  {guideSourceUrl ? (
+                    <div className="studio-wave-editor__player">
+                      <span>가이드 듣기</span>
+                      <ManagedAudioPlayer
+                        muted={guide ? isTrackMutedByMixer(guide.track_id) : false}
+                        src={guideSourceUrl}
+                        volume={guideMixer?.volume ?? 0.85}
+                      />
+                    </div>
+                  ) : null}
+
+                  {selectedTakePlaybackUrl ? (
+                    <div className="studio-wave-editor__player">
+                      <span>선택 테이크 듣기</span>
+                      <ManagedAudioPlayer
+                        muted={selectedTake ? isTrackMutedByMixer(selectedTake.track_id) : false}
+                        src={selectedTakePlaybackUrl}
+                        volume={selectedTake ? (mixerState[selectedTake.track_id]?.volume ?? 1) : 1}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="track-lane">
+                {guide ? (
+                  <div className="track-row">
+                    <div className="track-row__meta">
+                      <strong>가이드</strong>
+                      <span>{getTrackStatusLabel(guide.track_status)}</span>
+                    </div>
+
+                    <div className="track-row__controls">
+                      <button
+                        className="button-secondary button-secondary--small"
+                        type="button"
+                        onClick={() =>
+                          updateMixerTrack(guide.track_id, {
+                            muted: !(mixerState[guide.track_id]?.muted ?? false),
+                          })
+                        }
+                      >
+                        {(mixerState[guide.track_id]?.muted ?? false) ? '음소거 해제' : '음소거'}
+                      </button>
+
+                      <button
+                        className="button-secondary button-secondary--small"
+                        type="button"
+                        onClick={() =>
+                          updateMixerTrack(guide.track_id, {
+                            solo: !(mixerState[guide.track_id]?.solo ?? false),
+                          })
+                        }
+                      >
+                        {(mixerState[guide.track_id]?.solo ?? false) ? '단독 듣기 해제' : '단독 듣기'}
+                      </button>
+
+                      <label className="track-row__slider">
+                        <span>볼륨</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={mixerState[guide.track_id]?.volume ?? 0.85}
+                          onChange={(event) =>
+                            updateMixerTrack(guide.track_id, {
+                              volume: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+
+                {takesState.items.map((take) => {
+                  const progress = takeUploadProgress[take.track_id]
+
+                  return (
+                    <div
+                      className={`track-row ${
+                        selectedTake?.track_id === take.track_id ? 'track-row--selected' : ''
+                      }`}
+                      key={`console-track-${take.track_id}`}
+                    >
+                      <div className="track-row__meta">
+                        <strong>{take.take_no ?? '?'}번 테이크</strong>
+                        <span>
+                          {getTrackStatusLabel(take.track_status)}
+                          {take.latest_score ? ` · ${formatPercent(take.latest_score.total_score)}` : ''}
+                        </span>
+                      </div>
+
+                      <div className="track-row__controls">
+                        {typeof progress === 'number' && progress < 100 ? (
+                          <span className="studio-inline-status">업로드 {progress}%</span>
+                        ) : null}
+
+                        <button
+                          className="button-secondary button-secondary--small"
+                          type="button"
+                          onClick={() => setSelectedTakeId(take.track_id)}
+                        >
+                          {selectedTake?.track_id === take.track_id ? '선택됨' : '이 테이크 보기'}
+                        </button>
+
+                        <button
+                          className="button-secondary button-secondary--small"
+                          type="button"
+                          onClick={() =>
+                            updateMixerTrack(take.track_id, {
+                              muted: !(mixerState[take.track_id]?.muted ?? false),
+                            })
+                          }
+                        >
+                          {(mixerState[take.track_id]?.muted ?? false) ? '음소거 해제' : '음소거'}
+                        </button>
+
+                        <button
+                          className="button-secondary button-secondary--small"
+                          type="button"
+                          onClick={() =>
+                            updateMixerTrack(take.track_id, {
+                              solo: !(mixerState[take.track_id]?.solo ?? false),
+                            })
+                          }
+                        >
+                          {(mixerState[take.track_id]?.solo ?? false) ? '단독 듣기 해제' : '단독 듣기'}
+                        </button>
+
+                        <label className="track-row__slider">
+                          <span>볼륨</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={mixerState[take.track_id]?.volume ?? 1}
+                            onChange={(event) =>
+                              updateMixerTrack(take.track_id, {
+                                volume: Number(event.target.value),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {takesState.items.length === 0 ? (
+                  <div className="empty-card">
+                    <p>아직 테이크가 없습니다.</p>
+                    <p>첫 테이크를 녹음하면 여기서 바로 선택하고 다시 들어볼 수 있습니다.</p>
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      {/*
       <section className="studio-console-shell">
         <div className="studio-console-strip">
           <div className="studio-console-strip__title">
@@ -4222,6 +4847,8 @@ export function StudioPage() {
           </div>
         </div>
       </section>
+
+      */}
 
       <section className={getStudioSectionClassName('harmony-authoring')} id="harmony-authoring">
         <div className="section__header">

@@ -446,6 +446,8 @@ Date: 2026-04-14
   the page has been restructured around a candidate rack, central score/player stage, and export-first inspector, and the dedicated arrangement workspace release gate now passes again in Chromium, Firefox, and WebKit.
 - The second live implementation half of that pass is now complete on the Studio route as well:
   the page now exposes a dedicated source rack, a clearer preview canvas, a stronger lower time rail, and a right-side inspector without bringing developer-facing copy back onto the default surface.
+- The live Studio route has now also adopted the stricter `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace:
+  one slim left rail for core entry points, one dominant waveform stage, one lower range-and-action strip, and one dedicated listening / take rail.
 - The deployed Studio route now also keeps one obvious playback surface for guide / take listening:
   the preview canvas stays focused on waveform review, while actual listening is centralized in the lower time rail so the same selected-take player does not appear twice.
 - The deployed Studio route now also behaves more like a task-led rehearsal workspace instead of one long stacked board:
@@ -462,4 +464,4 @@ Date: 2026-04-14
 7. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
 8. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior and broader microphone variability.
 9. Re-review the dedicated Studio and Arrangement routes after any further export, playback, or inspector changes so they stay aligned with `studio-v2`, `studio-v3-wave-editor`, and `arrangement-v2` instead of drifting back toward generic tool surfaces.
-10. Use the new MyEdit-informed pass when the next Studio UX refactor begins, and keep the implementation focused on Korean-first single-task waveform editing rather than reintroducing broad dashboard stacking.
+10. Keep the `studio-v3-wave-editor` pass as the default Studio maintenance baseline, and reject future changes that reintroduce broad dashboard stacking, duplicate playback surfaces, or non-core shortcut clutter on the left rail.

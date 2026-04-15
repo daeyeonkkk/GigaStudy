@@ -209,7 +209,8 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Studio route now also exposes a lightweight workspace-mode switch (`녹음`, `리뷰`, `편곡`) so the live product behaves more like one task-focused rehearsal desk than one long stacked dashboard.
 
 - [x] A MyEdit-informed `studio-v3-wave-editor` mockup pass now exists, narrowing the next Studio target into a waveform-first review and trim desk.
-- [ ] The live Studio route has adopted the `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace instead of a broad stacked rehearsal screen.
+- [x] The live Studio route has adopted the `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace:
+  one slim left rail for core entry points, one dominant waveform stage, one lower range-and-action strip, and one dedicated listening / take rail.
 
 ## 17. Mockup Track
 

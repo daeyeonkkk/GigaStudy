@@ -442,3 +442,6 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 - The second browser-reviewed implementation half is now also complete on the live Studio workspace:
   the route now follows the same v2 workspace discipline, and guide / take listening is consolidated into one obvious playback surface in the lower time rail.
 - The Studio workspace now also uses a lightweight task-mode switch (`녹음`, `리뷰`, `편곡`) so the live screen emphasizes only the sections and shortcuts that match the user’s current task.
+- The next Studio-only visual pass now also accepts the attached MyEdit waveform editor as a direct structural reference.
+- Completion for that pass means:
+  one editable source, one frozen export, and one later browser-reviewed Studio implementation pass that clearly narrows the screen into a waveform-first review and trim workspace.

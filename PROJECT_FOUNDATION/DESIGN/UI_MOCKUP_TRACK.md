@@ -108,6 +108,16 @@ That means the mockup pass should explicitly test:
 
 It does not mean importing Filmora's template-marketplace density or generic video-editor chrome.
 
+For the stricter next Studio-only pass, the accepted direct structural reference is now the attached MyEdit waveform editor.
+That pass should explicitly test:
+
+- one dominant waveform stage
+- one left tool rail with short Korean labels
+- one lower trim-control strip for `시작`, `끝`, and `방식`
+- one obvious primary action area for `적용` and `저장`
+
+It does not mean copying MyEdit branding, mixed image/audio product chrome, or English-first consumer downloader language.
+
 ## 7. Current Seeded Assets
 
 The repo now carries seeded exports for:

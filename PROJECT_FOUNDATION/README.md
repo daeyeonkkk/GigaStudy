@@ -35,20 +35,21 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 2. `ROADMAP.md`
 3. `DESIGN/UI_DESIGN_DIRECTION.md`
 4. `DESIGN/FILMORA_REFERENCE_REVIEW.md`
-5. `DESIGN/UI_WIREFRAMES_V1.md`
-6. `DESIGN/UI_MOCKUP_TRACK.md`
-7. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
-8. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
-9. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-10. `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
-11. `BACKLOGS/PHASE1_BACKLOG.md`
-12. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
-13. `GigaStudy_check_list.md`
-14. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-15. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
-16. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
-17. `FOUNDATION_STATUS.md`
-18. `OPERATIONS/WORKING_PRINCIPLES.md`
+5. `DESIGN/MYEDIT_REFERENCE_REVIEW.md`
+6. `DESIGN/UI_WIREFRAMES_V1.md`
+7. `DESIGN/UI_MOCKUP_TRACK.md`
+8. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
+9. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
+10. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+11. `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
+12. `BACKLOGS/PHASE1_BACKLOG.md`
+13. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
+14. `GigaStudy_check_list.md`
+15. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
+16. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+17. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
+18. `FOUNDATION_STATUS.md`
+19. `OPERATIONS/WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -64,6 +65,8 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
   Canonical visual direction for the product.
 - `DESIGN/FILMORA_REFERENCE_REVIEW.md`
   Accepted reference review describing what Filmora contributes to the Studio and Arrangement workspace structure, what should be rejected, and what the next mockup pass still needs to absorb.
+- `DESIGN/MYEDIT_REFERENCE_REVIEW.md`
+  Accepted reference review describing what the attached MyEdit waveform editor contributes to the next Studio-only single-task workspace pass.
 - `DESIGN/UI_WIREFRAMES_V1.md`
   Reference-led low-fidelity wireframe pack for the canonical screens.
 - `DESIGN/UI_MOCKUP_TRACK.md`
@@ -73,6 +76,7 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 - `DESIGN/UI_EDITABLE_SOURCE/`
   Repo-local editable HTML and CSS artboards for the canonical mockups.
   The latest Studio and Arrangement workspace-pass source now lives in `filmora-workspace-pass-v2.html`.
+  The stricter next Studio waveform-editor source now also lives in `myedit-wave-editor-pass-v3.html`.
   The first live implementation pass from that source is now reflected on the dedicated Arrangement route.
 - `BACKLOGS/PHASE1_BACKLOG.md`
   Build backlog for the recording pipeline and studio foundation slice.

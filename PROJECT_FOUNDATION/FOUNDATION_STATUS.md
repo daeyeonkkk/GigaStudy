@@ -11,6 +11,7 @@ Date: 2026-04-14
 - `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
 - `DESIGN/UI_DESIGN_DIRECTION.md`
 - `DESIGN/FILMORA_REFERENCE_REVIEW.md`
+- `DESIGN/MYEDIT_REFERENCE_REVIEW.md`
 - `DESIGN/UI_WIREFRAMES_V1.md`
 - `DESIGN/UI_MOCKUP_TRACK.md`
 - `DESIGN/UI_EDITABLE_SOURCE/README.md`
@@ -435,6 +436,12 @@ Date: 2026-04-14
   `DESIGN/UI_MOCKUPS/studio-v2.svg`, and
   `DESIGN/UI_MOCKUPS/arrangement-v2.svg`.
   That closes the mockup-pass planning gap.
+- The design source now also includes a stricter MyEdit-informed Studio waveform-editor pass:
+  `DESIGN/MYEDIT_REFERENCE_REVIEW.md`,
+  `DESIGN/UI_EDITABLE_SOURCE/myedit-wave-editor-pass-v3.html`,
+  `DESIGN/UI_EDITABLE_SOURCE/myedit-wave-editor-pass-v3.css`, and
+  `DESIGN/UI_MOCKUPS/studio-v3-wave-editor.svg`.
+  That locks the next Studio refactor target to one dominant waveform stage, one slim tool rail, one lower trim-control strip, and one obvious save action.
 - The first live implementation half of that pass is now complete on the dedicated Arrangement route:
   the page has been restructured around a candidate rack, central score/player stage, and export-first inspector, and the dedicated arrangement workspace release gate now passes again in Chromium, Firefox, and WebKit.
 - The second live implementation half of that pass is now complete on the Studio route as well:
@@ -454,4 +461,5 @@ Date: 2026-04-14
 6. Move browser hardening from missing flow coverage toward environment coverage: validate the new capability snapshot and warning flags against real hardware-specific recording variability, native Safari/WebKit audio behavior, and richer endurance runs, then feed the findings back into ops diagnostics and release notes.
 7. Use `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` plus downloaded ops reports as the default workflow for native browser verification rounds.
 8. Use the now-verified alpha environment as the default staging baseline, then spend the next browser-quality pass on real-device gaps: native Safari/WebKit audio behavior and broader microphone variability.
-9. Re-review the dedicated Studio and Arrangement routes after any further export, playback, or inspector changes so they stay aligned with `studio-v2` and `arrangement-v2` instead of drifting back toward generic tool surfaces.
+9. Re-review the dedicated Studio and Arrangement routes after any further export, playback, or inspector changes so they stay aligned with `studio-v2`, `studio-v3-wave-editor`, and `arrangement-v2` instead of drifting back toward generic tool surfaces.
+10. Use the new MyEdit-informed pass when the next Studio UX refactor begins, and keep the implementation focused on Korean-first single-task waveform editing rather than reintroducing broad dashboard stacking.

@@ -295,6 +295,7 @@ Those outputs are review artifacts, not canonical foundation docs.
 
 - Keep the visual refactor locked to `PROJECT_FOUNDATION/DESIGN/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/DESIGN/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
 - Use `PROJECT_FOUNDATION/DESIGN/UI_MOCKUP_TRACK.md` plus the editable source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/` and the exports under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/` as the visual implementation baseline, not prose interpretation alone.
+- Use `PROJECT_FOUNDATION/DESIGN/MYEDIT_REFERENCE_REVIEW.md` plus `studio-v3-wave-editor` when the next Studio refactor needs a stricter waveform-first workspace target.
 - The first-wave product screens now all follow that visual system; next is to upgrade the repo-local editable source into a shared Figma workflow and keep future ops-only work from bleeding utility styling back into rehearsal screens.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Use `PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.

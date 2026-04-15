@@ -192,6 +192,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 
 - [x] One canonical visual direction is locked in `DESIGN/UI_DESIGN_DIRECTION.md`.
 - [x] A Filmora reference review is documented for Studio and Arrangement workspace improvement, and it is scoped as a secondary structural reference rather than a whole-product style replacement.
+- [x] A MyEdit reference review is documented for the stricter next Studio-only waveform editor pass.
 - [x] A reference-led wireframe pack exists in `DESIGN/UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
 - [x] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
 - [x] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
@@ -207,6 +208,9 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Studio route keeps one obvious playback surface for guide / take listening instead of duplicating the same take player across multiple panels.
 - [x] The Studio route now also exposes a lightweight workspace-mode switch (`녹음`, `리뷰`, `편곡`) so the live product behaves more like one task-focused rehearsal desk than one long stacked dashboard.
 
+- [x] A MyEdit-informed `studio-v3-wave-editor` mockup pass now exists, narrowing the next Studio target into a waveform-first review and trim desk.
+- [ ] The live Studio route has adopted the `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace instead of a broad stacked rehearsal screen.
+
 ## 17. Mockup Track
 
 - [x] A canonical mockup workflow is documented in `DESIGN/UI_MOCKUP_TRACK.md`.
@@ -217,6 +221,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
 - [x] Each visually refactored screen references the mockup version it implements, rather than only the low-fidelity wireframe.
 - [x] The next workspace-pass exports for `Studio` and `Arrangement` now exist as `studio-v2` and `arrangement-v2`, even though the live product still needs a code pass to match them.
+- [x] The stricter Studio-only waveform pass now also exists as `studio-v3-wave-editor` in both editable and frozen-export form.
 
 ## 18. Foundation Hygiene
 

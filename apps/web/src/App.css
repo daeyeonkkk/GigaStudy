@@ -2479,6 +2479,8 @@ button.studio-source-card {
   background: rgba(255, 255, 255, 0.82);
   color: var(--ink-strong);
   text-decoration: none;
+  text-align: left;
+  font: inherit;
   transition:
     transform 140ms ease,
     border-color 140ms ease,
@@ -2486,10 +2488,25 @@ button.studio-source-card {
     background-color 140ms ease;
 }
 
+button.workspace-flow-bar__item {
+  width: 100%;
+  appearance: none;
+  cursor: pointer;
+}
+
 .workspace-flow-bar__item:hover {
   transform: translateY(-1px);
   border-color: rgba(181, 100, 58, 0.24);
   box-shadow: 0 12px 24px rgba(24, 38, 50, 0.08);
+}
+
+.workspace-flow-bar__item--disabled,
+.workspace-flow-bar__item--disabled:hover {
+  cursor: not-allowed;
+  transform: none;
+  border-color: rgba(34, 62, 83, 0.08);
+  box-shadow: none;
+  opacity: 0.54;
 }
 
 .workspace-flow-bar__item span {

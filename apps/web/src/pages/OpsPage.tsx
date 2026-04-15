@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { WorkspaceFlowBar } from '../components/WorkspaceFlowBar'
 import { buildApiUrl } from '../lib/api'
 import { getBrowserAudioWarningLabel } from '../lib/browserAudioDiagnostics'
 import {
@@ -905,6 +906,35 @@ export function OpsPage() {
     recentRuntimeEvents.find((item) => item.runtime_event_id === selectedRuntimeEventId) ??
     recentRuntimeEvents[0] ??
     null
+  const opsFlowItems = [
+    {
+      id: 'triage',
+      step: '1단계',
+      label: '문제 확인',
+      summary: '화면 오류와 서버 오류를 먼저 읽습니다.',
+      current: workspaceMode === 'triage',
+      onClick: () => setWorkspaceMode('triage'),
+      testId: 'ops-workspace-mode-triage',
+    },
+    {
+      id: 'validation',
+      step: '2단계',
+      label: '환경 검증',
+      summary: '브라우저와 장치 편차를 한곳에 모읍니다.',
+      current: workspaceMode === 'validation',
+      onClick: () => setWorkspaceMode('validation'),
+      testId: 'ops-workspace-mode-validation',
+    },
+    {
+      id: 'recovery',
+      step: '3단계',
+      label: '복구 처리',
+      summary: '실패한 업로드와 분석 작업을 다시 돌립니다.',
+      current: workspaceMode === 'recovery',
+      onClick: () => setWorkspaceMode('recovery'),
+      testId: 'ops-workspace-mode-recovery',
+    },
+  ]
 
   return (
     <div className="page-shell ops-page">
@@ -973,47 +1003,13 @@ export function OpsPage() {
           </p>
         ) : null}
 
-        <div className="ops-workspace-switch" role="tablist" aria-label="운영 작업 모드">
-          <button
-            className={`ops-workspace-button ${
-              workspaceMode === 'triage' ? 'ops-workspace-button--active' : ''
-            }`}
-            type="button"
-            data-testid="ops-workspace-mode-triage"
-            aria-selected={workspaceMode === 'triage'}
-            onClick={() => setWorkspaceMode('triage')}
-          >
-            <span>1단계</span>
-            <strong>문제 확인</strong>
-            <small>화면 오류와 서버 오류를 먼저 읽습니다.</small>
-          </button>
-          <button
-            className={`ops-workspace-button ${
-              workspaceMode === 'validation' ? 'ops-workspace-button--active' : ''
-            }`}
-            type="button"
-            data-testid="ops-workspace-mode-validation"
-            aria-selected={workspaceMode === 'validation'}
-            onClick={() => setWorkspaceMode('validation')}
-          >
-            <span>2단계</span>
-            <strong>환경 검증</strong>
-            <small>브라우저와 장치 편차를 모아 봅니다.</small>
-          </button>
-          <button
-            className={`ops-workspace-button ${
-              workspaceMode === 'recovery' ? 'ops-workspace-button--active' : ''
-            }`}
-            type="button"
-            data-testid="ops-workspace-mode-recovery"
-            aria-selected={workspaceMode === 'recovery'}
-            onClick={() => setWorkspaceMode('recovery')}
-          >
-            <span>3단계</span>
-            <strong>복구 처리</strong>
-            <small>실패한 업로드와 분석 작업을 다시 돌립니다.</small>
-          </button>
-        </div>
+        <WorkspaceFlowBar
+          ariaLabel="운영 작업 모드"
+          eyebrow="운영 흐름"
+          title="한 번에 한 가지 운영 일만 다룹니다"
+          summary="문제를 읽고, 환경 검증 기록을 모으고, 마지막에 복구 처리로 넘어가는 순서를 모든 운영 화면에서 같은 규칙으로 씁니다."
+          items={opsFlowItems}
+        />
 
         <div className="card-grid ops-kpi-strip">
           <article className="info-card ops-kpi-card">

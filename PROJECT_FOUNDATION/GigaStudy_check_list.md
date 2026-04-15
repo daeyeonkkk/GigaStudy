@@ -216,6 +216,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The live Studio route has adopted the `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace:
   one slim left rail for core entry points, one dominant waveform stage, one lower range-and-action strip, and one dedicated listening / take rail.
 - [x] The live Studio and Arrangement routes now share one compact `작업 이동` handoff bar, so internal workspaces feel like one connected product instead of isolated screens with separate local navigation.
+- [x] The Shared Review and Ops routes now also use the same compact workflow-bar discipline, so review and triage surfaces stop inventing their own local mode chrome apart from the main Studio / Arrangement workspaces.
 
 ## 17. Mockup Track
 

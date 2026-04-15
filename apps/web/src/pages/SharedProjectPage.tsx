@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
+import { WorkspaceFlowBar } from '../components/WorkspaceFlowBar'
 import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import type { AudioPreviewData } from '../lib/audioPreview'
 import {
@@ -261,6 +262,33 @@ export function SharedProjectPage() {
   const selectedArrangementLabel = selectedArrangement
     ? `${selectedArrangement.candidate_code} · ${selectedArrangement.title}`
     : '선택한 편곡 없음'
+  const sharedReviewFlowItems = [
+    {
+      id: 'take',
+      step: '1단계',
+      label: '테이크 보기',
+      summary: '지금 들을 테이크를 먼저 고릅니다.',
+      current: workspaceMode === 'take',
+      onClick: () => setWorkspaceMode('take'),
+    },
+    {
+      id: 'score',
+      step: '2단계',
+      label: '악보 보기',
+      summary: '편곡과 악보 스냅샷을 차분히 봅니다.',
+      current: workspaceMode === 'score',
+      disabled: payload.arrangements.length === 0,
+      onClick: () => setWorkspaceMode('score'),
+    },
+    {
+      id: 'summary',
+      step: '3단계',
+      label: '결과 읽기',
+      summary: '점수와 주의 노트를 한 자리에서 읽습니다.',
+      current: workspaceMode === 'summary',
+      onClick: () => setWorkspaceMode('summary'),
+    },
+  ]
 
   return (
     <div className="page-shell shared-review-page">
@@ -318,6 +346,14 @@ export function SharedProjectPage() {
           </div>
         </section>
 
+        <WorkspaceFlowBar
+          ariaLabel="공유 검토 흐름"
+          eyebrow="검토 순서"
+          title="읽는 순서를 먼저 잡고 들어갑니다"
+          summary="공유 화면은 수정하는 곳이 아니라 읽고 확인하는 자리입니다. 테이크를 고른 뒤 악보를 보고, 마지막에 결과를 읽는 흐름으로 통일했습니다."
+          items={sharedReviewFlowItems}
+        />
+
         <div className="shared-review-grid">
           <aside
             className={`panel shared-review-rail shared-review-rail--left shared-review-workspace-panel ${
@@ -335,43 +371,6 @@ export function SharedProjectPage() {
               이 화면은 수정 없이 읽는 자리입니다. 먼저 테이크를 고르고, 필요하면 악보나 결과 요약으로
               바로 넘어가면 됩니다.
             </p>
-
-            <div className="shared-review-mode-switch" role="tablist" aria-label="공유 검토 흐름">
-              <button
-                aria-selected={workspaceMode === 'take'}
-                className={`shared-review-mode-button ${
-                  workspaceMode === 'take' ? 'shared-review-mode-button--active' : ''
-                }`}
-                type="button"
-                onClick={() => setWorkspaceMode('take')}
-              >
-                <span>1단계</span>
-                <strong>테이크 보기</strong>
-              </button>
-              <button
-                aria-selected={workspaceMode === 'score'}
-                className={`shared-review-mode-button ${
-                  workspaceMode === 'score' ? 'shared-review-mode-button--active' : ''
-                }`}
-                disabled={payload.arrangements.length === 0}
-                type="button"
-                onClick={() => setWorkspaceMode('score')}
-              >
-                <span>2단계</span>
-                <strong>악보 보기</strong>
-              </button>
-              <button
-                aria-selected={workspaceMode === 'summary'}
-                className={`shared-review-mode-button ${
-                  workspaceMode === 'summary' ? 'shared-review-mode-button--active' : ''
-                }`}
-                type="button"
-                onClick={() => setWorkspaceMode('summary')}
-              >
-                <span>3단계</span>
-                <strong>결과 읽기</strong>
-              </button>
-            </div>
 
             <div className="shared-review-quick-cards">
               <div className="mini-card mini-card--stack">

@@ -7,7 +7,10 @@ type WorkspaceFlowItem = {
   summary: string
   to?: string
   href?: string
+  onClick?: () => void
+  disabled?: boolean
   current?: boolean
+  testId?: string
 }
 
 type WorkspaceFlowBarProps = {
@@ -19,7 +22,9 @@ type WorkspaceFlowBarProps = {
 }
 
 function WorkspaceFlowAction({ item }: { item: WorkspaceFlowItem }) {
-  const className = `workspace-flow-bar__item${item.current ? ' workspace-flow-bar__item--current' : ''}`
+  const className = `workspace-flow-bar__item${item.current ? ' workspace-flow-bar__item--current' : ''}${
+    item.disabled ? ' workspace-flow-bar__item--disabled' : ''
+  }`
   const content = (
     <>
       <span>{item.step}</span>
@@ -28,9 +33,25 @@ function WorkspaceFlowAction({ item }: { item: WorkspaceFlowItem }) {
     </>
   )
 
+  if (item.onClick) {
+    return (
+      <button
+        aria-current={item.current ? 'step' : undefined}
+        aria-selected={item.current}
+        className={className}
+        data-testid={item.testId}
+        disabled={item.disabled}
+        type="button"
+        onClick={item.onClick}
+      >
+        {content}
+      </button>
+    )
+  }
+
   if (item.current || (!item.to && !item.href)) {
     return (
-      <div aria-current={item.current ? 'step' : undefined} className={className}>
+      <div aria-current={item.current ? 'step' : undefined} className={className} data-testid={item.testId}>
         {content}
       </div>
     )
@@ -38,14 +59,14 @@ function WorkspaceFlowAction({ item }: { item: WorkspaceFlowItem }) {
 
   if (item.to) {
     return (
-      <Link className={className} to={item.to}>
+      <Link className={className} data-testid={item.testId} to={item.to}>
         {content}
       </Link>
     )
   }
 
   return (
-    <a className={className} href={item.href}>
+    <a className={className} data-testid={item.testId} href={item.href}>
       {content}
     </a>
   )

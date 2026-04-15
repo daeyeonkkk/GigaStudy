@@ -602,6 +602,9 @@ test('release gate ops overview can export the environment diagnostics report', 
 
   await page.goto('/ops')
   await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
+  await expect(page.getByTestId('ops-workspace-mode-triage')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('ops-workspace-mode-validation')).toBeVisible()
+  await expect(page.getByTestId('ops-workspace-mode-recovery')).toBeVisible()
   await expect(page.getByRole('heading', { name: '브라우저 오디오 편차를 지원 이슈가 되기 전에 추적합니다' })).toBeVisible()
 
   const downloadPromise = page.waitForEvent('download')

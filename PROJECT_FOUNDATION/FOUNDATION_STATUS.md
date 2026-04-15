@@ -308,6 +308,7 @@ Date: 2026-04-14
 - Ops overview browser-environment claim-gate export is now also verified in Chromium, Firefox, and WebKit.
 - Ops overview CSV preview/import is now also verified in Chromium, Firefox, and WebKit.
 - Ops overview now also verifies the inline browser-environment claim-gate summary across Chromium, Firefox, and WebKit before export is triggered.
+- Ops overview now also verifies the new triage-workspace switch (`문제 확인`, `환경 검증`, `복구 처리`) across Chromium, Firefox, and WebKit before the diagnostics export path is exercised.
 - Environment-validation intake regression:
   `uv run pytest apps/api/tests/test_environment_validation_import.py`
 - Result:
@@ -458,6 +459,10 @@ Date: 2026-04-14
   `녹음`, `리뷰`, and `편곡` modes now change the visible shortcut rail and de-emphasize unrelated sections, so the user sees one focused slice of work at a time.
 - The Shared Review route now also gets the same workspace discipline:
   the left rail focuses on take choice and mode switching, while the frozen score canvas and result summary stay visually separate enough to read like one review session rather than another settings page.
+- The Ops route now also gets the same workspace discipline:
+  `문제 확인`, `환경 검증`, and `복구 처리` modes keep the default surface focused on one operator task at a time, while recent runtime incidents now read as one selected issue plus a short queue instead of one flat card list.
+- The Ops runtime panel now behaves more like a triage desk than a monitoring feed:
+  one selected incident shows severity, scope, and next follow-up at full width, while the remaining incidents stay in a compact queue for fast scanning.
 
 ## Recommended Next Work
 

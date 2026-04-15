@@ -3607,6 +3607,73 @@ button.studio-source-card {
   justify-content: flex-end;
 }
 
+.ops-workspace-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ops-workspace-button {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(34, 62, 83, 0.1);
+  background: rgba(255, 252, 247, 0.84);
+  color: var(--ink-strong);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.ops-workspace-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ops-workspace-button span {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ops-workspace-button strong {
+  font-size: 1rem;
+}
+
+.ops-workspace-button small {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.ops-workspace-button--active {
+  border-color: rgba(181, 100, 58, 0.3);
+  background: rgba(181, 100, 58, 0.1);
+  box-shadow:
+    0 16px 28px rgba(31, 48, 64, 0.08),
+    inset 3px 0 0 #b5643a;
+}
+
+.ops-workspace-panel {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.ops-workspace-panel--active {
+  border-color: rgba(181, 100, 58, 0.24);
+  box-shadow:
+    0 18px 36px rgba(17, 28, 37, 0.1),
+    0 0 0 3px rgba(181, 100, 58, 0.07);
+}
+
 .ops-kpi-strip {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
@@ -3781,6 +3848,65 @@ button.studio-source-card {
   gap: 14px;
 }
 
+.ops-runtime-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 16px;
+}
+
+.ops-runtime-focus {
+  min-width: 0;
+}
+
+.ops-runtime-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ops-runtime-row {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(34, 62, 83, 0.08);
+  background: rgba(248, 244, 238, 0.86);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.ops-runtime-row:hover {
+  transform: translateY(-1px);
+}
+
+.ops-runtime-row--active {
+  border-color: rgba(181, 100, 58, 0.3);
+  box-shadow: inset 3px 0 0 #b5643a;
+  background: rgba(255, 249, 243, 0.94);
+}
+
+.ops-runtime-row__main,
+.ops-runtime-row__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ops-runtime-row__main span,
+.ops-runtime-row__meta small {
+  color: var(--ink-soft);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .text-area {
   min-height: 220px;
   resize: vertical;
@@ -3945,6 +4071,7 @@ button.studio-source-card {
     grid-template-columns: 1fr;
   }
 
+  .ops-workspace-switch,
   .ops-claim-gate-card__header,
   .ops-claim-gate-card__detail {
     grid-template-columns: 1fr;
@@ -3952,6 +4079,10 @@ button.studio-source-card {
 
   .ops-claim-gate-card__header {
     display: grid;
+  }
+
+  .ops-runtime-workspace {
+    grid-template-columns: 1fr;
   }
 
   .arrangement-topbar {

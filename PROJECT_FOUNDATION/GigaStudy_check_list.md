@@ -203,6 +203,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
 - [x] The Shared Review route now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) and keeps the left rail limited to core review entry points instead of turning the shared viewer into another stacked detail page.
 - [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
+- [x] The Ops route now also uses a lightweight workspace-mode switch (`문제 확인`, `환경 검증`, `복구 처리`) and keeps the default surface focused on one triage task at a time instead of presenting one flat admin list.
 - [x] A Studio v2 and Arrangement v2 mockup pass has absorbed the accepted Filmora patterns:
   source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
 - [x] A browser-reviewed Studio or Arrangement implementation pass has moved the live product noticeably closer to the Filmora-informed v2 mockups.

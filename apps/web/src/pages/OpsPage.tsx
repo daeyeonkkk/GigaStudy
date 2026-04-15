@@ -415,6 +415,33 @@ function parseWarningFlags(value: string): string[] {
     .filter(Boolean)
 }
 
+function getRuntimeSeverityLabel(severity: string): string {
+  switch (severity) {
+    case 'error':
+      return '오류'
+    case 'warn':
+      return '주의'
+    default:
+      return '참고'
+  }
+}
+
+function getRuntimeSourceLabel(source: string): string {
+  return source === 'client' ? '화면' : '서버'
+}
+
+function getRuntimeFollowUpMessage(item: OpsOverview['recent_runtime_events'][number]): string {
+  if (item.source === 'client') {
+    return '같은 화면 흐름을 다시 열어 보고, 버튼이나 입력 순서가 겹치지 않는지 먼저 확인해 주세요.'
+  }
+
+  if (item.status_code && item.status_code >= 500) {
+    return '서버 500 계열이므로 요청 경로와 추적 번호를 기준으로 백엔드 로그를 먼저 대조해 주세요.'
+  }
+
+  return '같은 시간대의 요청과 최근 작업 기록을 함께 보고, 다시 실행이 필요한지 확인해 주세요.'
+}
+
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const payload = (await response.json()) as { detail?: unknown }
@@ -431,6 +458,10 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 export function OpsPage() {
   const [pageState, setPageState] = useState<PageState>({ phase: 'loading' })
   const [actionState, setActionState] = useState<ActionState>({ phase: 'idle' })
+  const [workspaceMode, setWorkspaceMode] = useState<'triage' | 'validation' | 'recovery'>(
+    'triage',
+  )
+  const [selectedRuntimeEventId, setSelectedRuntimeEventId] = useState<string | null>(null)
   const [validationImportText, setValidationImportText] = useState('')
   const [validationImportPreview, setValidationImportPreview] =
     useState<EnvironmentValidationImportPreview | null>(null)
@@ -464,6 +495,27 @@ export function OpsPage() {
     void loadOverview(controller.signal)
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    if (pageState.phase !== 'ready') {
+      return
+    }
+
+    const firstRuntimeEvent = pageState.payload.recent_runtime_events[0]
+    if (!firstRuntimeEvent) {
+      if (selectedRuntimeEventId !== null) {
+        setSelectedRuntimeEventId(null)
+      }
+      return
+    }
+
+    const selectedStillExists = pageState.payload.recent_runtime_events.some(
+      (item) => item.runtime_event_id === selectedRuntimeEventId,
+    )
+    if (!selectedStillExists) {
+      setSelectedRuntimeEventId(firstRuntimeEvent.runtime_event_id)
+    }
+  }, [pageState, selectedRuntimeEventId])
 
   async function handleRetryProcessing(trackId: string): Promise<void> {
     setActionState({
@@ -849,6 +901,10 @@ export function OpsPage() {
   const environmentClaimGate = payload.environment_claim_gate
   const failedClaimChecks = environmentClaimGate.checks.filter((check) => !check.passed)
   const validationRuns = payload.recent_environment_validation_runs
+  const selectedRuntimeEvent =
+    recentRuntimeEvents.find((item) => item.runtime_event_id === selectedRuntimeEventId) ??
+    recentRuntimeEvents[0] ??
+    null
 
   return (
     <div className="page-shell ops-page">
@@ -916,6 +972,48 @@ export function OpsPage() {
             {actionState.message}
           </p>
         ) : null}
+
+        <div className="ops-workspace-switch" role="tablist" aria-label="운영 작업 모드">
+          <button
+            className={`ops-workspace-button ${
+              workspaceMode === 'triage' ? 'ops-workspace-button--active' : ''
+            }`}
+            type="button"
+            data-testid="ops-workspace-mode-triage"
+            aria-selected={workspaceMode === 'triage'}
+            onClick={() => setWorkspaceMode('triage')}
+          >
+            <span>1단계</span>
+            <strong>문제 확인</strong>
+            <small>화면 오류와 서버 오류를 먼저 읽습니다.</small>
+          </button>
+          <button
+            className={`ops-workspace-button ${
+              workspaceMode === 'validation' ? 'ops-workspace-button--active' : ''
+            }`}
+            type="button"
+            data-testid="ops-workspace-mode-validation"
+            aria-selected={workspaceMode === 'validation'}
+            onClick={() => setWorkspaceMode('validation')}
+          >
+            <span>2단계</span>
+            <strong>환경 검증</strong>
+            <small>브라우저와 장치 편차를 모아 봅니다.</small>
+          </button>
+          <button
+            className={`ops-workspace-button ${
+              workspaceMode === 'recovery' ? 'ops-workspace-button--active' : ''
+            }`}
+            type="button"
+            data-testid="ops-workspace-mode-recovery"
+            aria-selected={workspaceMode === 'recovery'}
+            onClick={() => setWorkspaceMode('recovery')}
+          >
+            <span>3단계</span>
+            <strong>복구 처리</strong>
+            <small>실패한 업로드와 분석 작업을 다시 돌립니다.</small>
+          </button>
+        </div>
 
         <div className="card-grid ops-kpi-strip">
           <article className="info-card ops-kpi-card">
@@ -1068,65 +1166,121 @@ export function OpsPage() {
             </div>
           </article>
         </div>
-        <article className="panel studio-block ops-panel">
+        <article
+          className={`panel studio-block ops-panel ops-workspace-panel ${
+            workspaceMode === 'triage' ? 'ops-workspace-panel--active' : ''
+          }`}
+        >
           <p className="eyebrow">런타임 로그</p>
           <h2>최근에 실제 사용 중 잡힌 오류를 바로 확인합니다</h2>
 
-          <div className="ops-list">
+          <div className="ops-runtime-workspace">
             {recentRuntimeEvents.length === 0 ? (
               <div className="empty-card">
                 <p>아직 런타임 로그가 없습니다.</p>
                 <p>화면 오류나 서버 500 응답이 생기면 이곳에 최근 순서대로 쌓입니다.</p>
               </div>
             ) : (
-              recentRuntimeEvents.map((item) => (
-                <article className="ops-card" key={item.runtime_event_id}>
-                  <div className="ops-card__header">
-                    <div>
-                      <strong>{item.message}</strong>
-                      <span>
-                        {item.source === 'client' ? '화면' : '서버'}
-                        {item.surface ? ` / ${item.surface}` : ''}
-                        {' / '}
-                        {formatDate(item.created_at)}
-                      </span>
+              <>
+                {selectedRuntimeEvent ? (
+                  <article className="ops-card ops-runtime-focus">
+                    <div className="ops-card__header">
+                      <div>
+                        <strong>{selectedRuntimeEvent.message}</strong>
+                        <span>
+                          {getRuntimeSourceLabel(selectedRuntimeEvent.source)}
+                          {selectedRuntimeEvent.surface ? ` / ${selectedRuntimeEvent.surface}` : ''}
+                          {' / '}
+                          {formatDate(selectedRuntimeEvent.created_at)}
+                        </span>
+                      </div>
+
+                      <div
+                        className={`status-pill ${
+                          selectedRuntimeEvent.severity === 'error'
+                            ? 'status-pill--error'
+                            : selectedRuntimeEvent.severity === 'warn'
+                              ? 'status-pill--loading'
+                              : 'status-pill--ready'
+                        }`}
+                      >
+                        {getRuntimeSeverityLabel(selectedRuntimeEvent.severity)}
+                      </div>
                     </div>
 
-                    <div
-                      className={`status-pill ${
-                        item.severity === 'error'
-                          ? 'status-pill--error'
-                          : item.severity === 'warn'
-                            ? 'status-pill--loading'
-                            : 'status-pill--ready'
+                    <p className="panel__summary">
+                      {getRuntimeFollowUpMessage(selectedRuntimeEvent)}
+                    </p>
+
+                    <div className="mini-grid">
+                      <div className="mini-card">
+                        <span>구분</span>
+                        <strong>{selectedRuntimeEvent.event_type}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>요청</span>
+                        <strong>
+                          {selectedRuntimeEvent.request_method ?? '-'}{' '}
+                          {selectedRuntimeEvent.request_path ?? selectedRuntimeEvent.route_path ?? '-'}
+                        </strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>응답</span>
+                        <strong>{selectedRuntimeEvent.status_code ?? '-'}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>추적 번호</span>
+                        <strong>{selectedRuntimeEvent.request_id ?? '-'}</strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>프로젝트</span>
+                        <strong>
+                          {selectedRuntimeEvent.project_id
+                            ? selectedRuntimeEvent.project_id.slice(0, 8)
+                            : '없음'}
+                        </strong>
+                      </div>
+                      <div className="mini-card">
+                        <span>테이크</span>
+                        <strong>
+                          {selectedRuntimeEvent.track_id
+                            ? selectedRuntimeEvent.track_id.slice(0, 8)
+                            : '없음'}
+                        </strong>
+                      </div>
+                    </div>
+                  </article>
+                ) : null}
+
+                <div className="ops-runtime-queue" role="list" aria-label="최근 런타임 로그 대기열">
+                  {recentRuntimeEvents.map((item) => (
+                    <button
+                      key={item.runtime_event_id}
+                      className={`ops-runtime-row ${
+                        selectedRuntimeEvent?.runtime_event_id === item.runtime_event_id
+                          ? 'ops-runtime-row--active'
+                          : ''
                       }`}
+                      type="button"
+                      onClick={() => setSelectedRuntimeEventId(item.runtime_event_id)}
                     >
-                      {item.severity === 'error' ? '오류' : item.severity === 'warn' ? '주의' : '참고'}
-                    </div>
-                  </div>
-
-                  <div className="mini-grid">
-                    <div className="mini-card">
-                      <span>구분</span>
-                      <strong>{item.event_type}</strong>
-                    </div>
-                    <div className="mini-card">
-                      <span>요청</span>
-                      <strong>
-                        {item.request_method ?? '-'} {item.request_path ?? item.route_path ?? '-'}
-                      </strong>
-                    </div>
-                    <div className="mini-card">
-                      <span>응답</span>
-                      <strong>{item.status_code ?? '-'}</strong>
-                    </div>
-                    <div className="mini-card">
-                      <span>추적 번호</span>
-                      <strong>{item.request_id ?? '-'}</strong>
-                    </div>
-                  </div>
-                </article>
-              ))
+                      <div className="ops-runtime-row__main">
+                        <strong>{item.message}</strong>
+                        <span>
+                          {getRuntimeSourceLabel(item.source)}
+                          {item.surface ? ` / ${item.surface}` : ''}
+                        </span>
+                      </div>
+                      <div className="ops-runtime-row__meta">
+                        <small>{formatDate(item.created_at)}</small>
+                        <small>
+                          {item.request_method ?? '-'} {item.request_path ?? item.route_path ?? '-'}
+                        </small>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </article>
@@ -1168,7 +1322,11 @@ export function OpsPage() {
         </div>
       </section>
 
-      <section className="section ops-section ops-section--diagnostics">
+      <section
+        className={`section ops-section ops-section--diagnostics ${
+          workspaceMode === 'validation' ? 'ops-workspace-panel ops-workspace-panel--active' : ''
+        }`}
+      >
         <div className="section__header ops-section__header">
           <p className="eyebrow">환경 진단</p>
           <h2>브라우저 오디오 편차를 지원 이슈가 되기 전에 추적합니다</h2>
@@ -1243,7 +1401,11 @@ export function OpsPage() {
         </div>
       </section>
 
-      <section className="section section--split ops-section ops-section--validation">
+      <section
+        className={`section section--split ops-section ops-section--validation ${
+          workspaceMode === 'validation' ? 'ops-workspace-panel ops-workspace-panel--active' : ''
+        }`}
+      >
         <article className="panel studio-block ops-panel" data-testid="validation-import-panel">
           <p className="eyebrow">가져오기 입력</p>
           <h2>외부 검증 시트를 미리 보고 가져옵니다</h2>
@@ -1941,7 +2103,11 @@ export function OpsPage() {
         </article>
       </section>
 
-      <section className="section section--split ops-section ops-section--recovery">
+      <section
+        className={`section section--split ops-section ops-section--recovery ${
+          workspaceMode === 'recovery' ? 'ops-workspace-panel ops-workspace-panel--active' : ''
+        }`}
+      >
         <article className="panel studio-block ops-panel">
           <p className="eyebrow">실패한 트랙</p>
           <h2>실패한 업로드와 처리 상태를 점검합니다</h2>

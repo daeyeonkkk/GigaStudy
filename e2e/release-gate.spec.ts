@@ -435,11 +435,11 @@ test('release gate share flow opens a frozen snapshot and loses access after dea
   await expect(sharePage).toHaveURL(/\/shared\//)
   await expect(sharePage.getByRole('heading', { name: 'Playwright share gate session' })).toBeVisible()
   await expect(sharePage.getByText('읽기 전용 공유', { exact: true })).toBeVisible()
-  await expect(sharePage.getByRole('heading', { name: '선택한 원본 테이크' })).toBeVisible()
+  await expect(sharePage.getByRole('heading', { name: '왼쪽에서는 검토 대상을 고릅니다' })).toBeVisible()
   await expect(sharePage.getByRole('heading', { name: '고정된 리뷰 스냅샷' })).toBeVisible()
   await expect(sharePage.getByRole('heading', { name: '녹음 결과 요약' })).toBeVisible()
   await expect(sharePage.getByText('Coach review', { exact: true })).toBeVisible()
-  await expect(sharePage.getByText('1번 테이크', { exact: false })).toBeVisible()
+  await expect(sharePage.getByRole('button', { name: '1번 테이크' })).toBeVisible()
   await expect(
     sharePage.getByText('이 화면은 고정된 리뷰 결과입니다. 수정, 재채점, 새 공유 링크 생성은 스튜디오에서 진행합니다.'),
   ).toBeVisible()

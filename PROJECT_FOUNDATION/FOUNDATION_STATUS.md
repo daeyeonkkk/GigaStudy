@@ -164,6 +164,8 @@ Date: 2026-04-14
 - The Studio page now follows the `studio-v1` mockup closely enough to stop reading as stacked tools: a top utility strip, central waveform canvas, lower transport and track lane rail, right-side inspector, and anchored deep-work sections now behave like one rehearsal workspace instead of a phase-by-phase card stack.
 - The Arrangement screen now exists as a dedicated `/projects/:projectId/arrangement` workspace and follows the `arrangement-v1` mockup closely enough to read as one score-first comparison and export surface instead of another subsection buried in the studio page.
 - The Shared Review screen now follows the `shared-review-v1` mockup closely enough to read like a frozen review desk instead of a generic read-only detail page: selected take on the left, frozen score canvas in the center, and score summary plus note highlight on the right.
+- The Shared Review screen now also behaves more like one read-only review workspace than one stacked detail page:
+  `테이크 보기`, `악보 보기`, and `결과 읽기` switches keep the left rail focused on review entry points while the center and right panels act like one frozen review desk.
 - The Ops screen now follows the `ops-v1` mockup closely enough to read like a dense release desk instead of a generic stack of admin cards: KPI strip on top, validation and recovery work areas in the middle, and diagnostics plus recent environment capture at the bottom.
 - The repo now also includes seeded mockup exports for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`, so the remaining visual work can anchor against visible design files inside the repo even before a shared Figma source is fully established.
 - The foundation now also has an equivalent editable design source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the product no longer depends on frozen SVG exports alone when updating canonical screen mockups.
@@ -454,6 +456,8 @@ Date: 2026-04-14
   the preview canvas stays focused on waveform review, while actual listening is centralized in the lower time rail so the same selected-take player does not appear twice.
 - The deployed Studio route now also behaves more like a task-led rehearsal workspace instead of one long stacked board:
   `녹음`, `리뷰`, and `편곡` modes now change the visible shortcut rail and de-emphasize unrelated sections, so the user sees one focused slice of work at a time.
+- The Shared Review route now also gets the same workspace discipline:
+  the left rail focuses on take choice and mode switching, while the frozen score canvas and result summary stay visually separate enough to read like one review session rather than another settings page.
 
 ## Recommended Next Work
 

@@ -3157,9 +3157,80 @@ button.studio-source-card {
   align-items: start;
 }
 
+.shared-review-workspace-panel {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.shared-review-workspace-panel--active {
+  border-color: rgba(181, 100, 58, 0.28);
+  box-shadow:
+    0 18px 36px rgba(17, 28, 37, 0.1),
+    0 0 0 3px rgba(181, 100, 58, 0.08);
+}
+
 .shared-review-rail,
 .shared-review-canvas {
   min-width: 0;
+}
+
+.shared-review-mode-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shared-review-mode-button {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(34, 62, 83, 0.12);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--ink-strong);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.shared-review-mode-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.shared-review-mode-button:disabled {
+  opacity: 0.54;
+  cursor: not-allowed;
+}
+
+.shared-review-mode-button span {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shared-review-mode-button strong {
+  font-size: 1rem;
+}
+
+.shared-review-mode-button--active {
+  background: rgba(181, 100, 58, 0.12);
+  border-color: rgba(181, 100, 58, 0.3);
+  box-shadow: inset 3px 0 0 #b5643a;
+}
+
+.shared-review-quick-cards {
+  display: grid;
+  gap: 10px;
 }
 
 .shared-review-pill-row {
@@ -3209,6 +3280,11 @@ button.studio-source-card {
 
 .shared-review-export-row {
   padding-top: 6px;
+}
+
+.shared-review-canvas__footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .shared-review-score-grid {

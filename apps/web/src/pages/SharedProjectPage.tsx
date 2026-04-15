@@ -179,6 +179,7 @@ export function SharedProjectPage() {
   const [pageState, setPageState] = useState<PageState>({ phase: 'loading' })
   const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null)
   const [selectedArrangementId, setSelectedArrangementId] = useState<string | null>(null)
+  const [workspaceMode, setWorkspaceMode] = useState<'take' | 'score' | 'summary'>('take')
 
   useEffect(() => {
     if (!shareToken) {
@@ -201,6 +202,7 @@ export function SharedProjectPage() {
         setPageState({ phase: 'ready', payload })
         setSelectedTakeId(getDefaultTake(payload.takes)?.track_id ?? null)
         setSelectedArrangementId(getDefaultArrangement(payload.arrangements)?.arrangement_id ?? null)
+        setWorkspaceMode(payload.arrangements.length > 0 ? 'score' : 'take')
       } catch (error) {
         if (controller.signal.aborted) {
           return
@@ -255,6 +257,10 @@ export function SharedProjectPage() {
     getDefaultArrangement(payload.arrangements)
   const noteHighlight = selectedTake?.latest_score?.note_feedback_json[0] ?? null
   const selectedMessages = selectedTake?.latest_score?.feedback_json.slice(0, 3) ?? []
+  const selectedTakeLabel = selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '선택한 테이크 없음'
+  const selectedArrangementLabel = selectedArrangement
+    ? `${selectedArrangement.candidate_code} · ${selectedArrangement.title}`
+    : '선택한 편곡 없음'
 
   return (
     <div className="page-shell shared-review-page">
@@ -313,18 +319,72 @@ export function SharedProjectPage() {
         </section>
 
         <div className="shared-review-grid">
-          <aside className="panel shared-review-rail shared-review-rail--left">
+          <aside
+            className={`panel shared-review-rail shared-review-rail--left shared-review-workspace-panel ${
+              workspaceMode === 'take' ? 'shared-review-workspace-panel--active' : ''
+            }`}
+          >
             <div className="panel-header">
               <div>
-                <p className="eyebrow">왼쪽 레일</p>
-                <h2>선택한 원본 테이크</h2>
+                <p className="eyebrow">검토 흐름</p>
+                <h2>왼쪽에서는 검토 대상을 고릅니다</h2>
               </div>
             </div>
 
             <p className="panel__summary">
-              스냅샷에 포함된 테이크를 바꿔 보면서, 스튜디오 편집 화면으로 돌아가지 않고도
-              가이드, 테이크 오디오, 파형을 확인할 수 있습니다.
+              이 화면은 수정 없이 읽는 자리입니다. 먼저 테이크를 고르고, 필요하면 악보나 결과 요약으로
+              바로 넘어가면 됩니다.
             </p>
+
+            <div className="shared-review-mode-switch" role="tablist" aria-label="공유 검토 흐름">
+              <button
+                aria-selected={workspaceMode === 'take'}
+                className={`shared-review-mode-button ${
+                  workspaceMode === 'take' ? 'shared-review-mode-button--active' : ''
+                }`}
+                type="button"
+                onClick={() => setWorkspaceMode('take')}
+              >
+                <span>1단계</span>
+                <strong>테이크 보기</strong>
+              </button>
+              <button
+                aria-selected={workspaceMode === 'score'}
+                className={`shared-review-mode-button ${
+                  workspaceMode === 'score' ? 'shared-review-mode-button--active' : ''
+                }`}
+                disabled={payload.arrangements.length === 0}
+                type="button"
+                onClick={() => setWorkspaceMode('score')}
+              >
+                <span>2단계</span>
+                <strong>악보 보기</strong>
+              </button>
+              <button
+                aria-selected={workspaceMode === 'summary'}
+                className={`shared-review-mode-button ${
+                  workspaceMode === 'summary' ? 'shared-review-mode-button--active' : ''
+                }`}
+                type="button"
+                onClick={() => setWorkspaceMode('summary')}
+              >
+                <span>3단계</span>
+                <strong>결과 읽기</strong>
+              </button>
+            </div>
+
+            <div className="shared-review-quick-cards">
+              <div className="mini-card mini-card--stack">
+                <span>지금 보는 테이크</span>
+                <strong>{selectedTakeLabel}</strong>
+                <small>{selectedTake ? getTrackStatusLabel(selectedTake.track_status) : '없음'}</small>
+              </div>
+              <div className="mini-card mini-card--stack">
+                <span>지금 보는 악보</span>
+                <strong>{selectedArrangementLabel}</strong>
+                <small>{selectedArrangement ? getArrangementStyleLabel(selectedArrangement.style) : '없음'}</small>
+              </div>
+            </div>
 
             <div className="shared-review-pill-row" role="tablist" aria-label="공유 테이크">
               {payload.takes.map((take) => (
@@ -335,7 +395,10 @@ export function SharedProjectPage() {
                     selectedTake?.track_id === take.track_id ? 'shared-review-pill--active' : ''
                   }`}
                   type="button"
-                  onClick={() => setSelectedTakeId(take.track_id)}
+                  onClick={() => {
+                    setSelectedTakeId(take.track_id)
+                    setWorkspaceMode('take')
+                  }}
                 >
                   {`${take.take_no ?? '?'}번 테이크`}
                 </button>
@@ -403,10 +466,14 @@ export function SharedProjectPage() {
             )}
           </aside>
 
-          <section className="panel shared-review-canvas">
+          <section
+            className={`panel shared-review-canvas shared-review-workspace-panel ${
+              workspaceMode === 'score' ? 'shared-review-workspace-panel--active' : ''
+            }`}
+          >
             <div className="panel-header">
               <div>
-                <p className="eyebrow">중앙 캔버스</p>
+                <p className="eyebrow">악보와 스냅샷</p>
                 <h2>고정된 리뷰 스냅샷</h2>
               </div>
             </div>
@@ -428,7 +495,10 @@ export function SharedProjectPage() {
                         : ''
                     }`}
                     type="button"
-                    onClick={() => setSelectedArrangementId(arrangement.arrangement_id)}
+                    onClick={() => {
+                      setSelectedArrangementId(arrangement.arrangement_id)
+                      setWorkspaceMode('score')
+                    }}
                   >
                     {arrangement.candidate_code}
                   </button>
@@ -505,12 +575,26 @@ export function SharedProjectPage() {
                 </a>
               ) : null}
             </div>
+
+            <div className="shared-review-canvas__footer">
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => setWorkspaceMode('summary')}
+              >
+                결과 요약 보기
+              </button>
+            </div>
           </section>
 
-          <aside className="panel shared-review-rail shared-review-rail--right">
+          <aside
+            className={`panel shared-review-rail shared-review-rail--right shared-review-workspace-panel ${
+              workspaceMode === 'summary' ? 'shared-review-workspace-panel--active' : ''
+            }`}
+          >
             <div className="panel-header">
               <div>
-                <p className="eyebrow">오른쪽 레일</p>
+                <p className="eyebrow">결과 요약</p>
                 <h2>녹음 결과 요약</h2>
               </div>
             </div>
@@ -582,6 +666,14 @@ export function SharedProjectPage() {
             <div className="empty-card empty-card--warn">
               <p>이 화면은 고정된 리뷰 결과입니다. 수정, 재채점, 새 공유 링크 생성은 스튜디오에서 진행합니다.</p>
             </div>
+
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={() => setWorkspaceMode(payload.arrangements.length > 0 ? 'score' : 'take')}
+            >
+              다시 악보 보기
+            </button>
           </aside>
         </div>
       </section>

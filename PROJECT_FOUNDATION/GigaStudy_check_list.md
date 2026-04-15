@@ -201,6 +201,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The Arrangement route now also uses a lightweight workspace-mode switch (`후보 고르기`, `악보 보기`, `내보내기`) and keeps the left rail limited to core candidate-flow entry points.
   Detailed generation controls now sit behind one optional section instead of competing with candidate choice on the default surface.
 - [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
+- [x] The Shared Review route now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) and keeps the left rail limited to core review entry points instead of turning the shared viewer into another stacked detail page.
 - [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
 - [x] A Studio v2 and Arrangement v2 mockup pass has absorbed the accepted Filmora patterns:
   source rack, preview/player hierarchy, timeline rail, and contextual property inspector.

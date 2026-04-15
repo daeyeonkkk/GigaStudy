@@ -1,20 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { buildApiUrl } from '../lib/api'
 import type { Project } from '../types/project'
-
-type HealthPayload = {
-  env: string
-  service: string
-  status: string
-  version: string
-}
-
-type HealthState =
-  | { phase: 'loading' }
-  | { phase: 'ready'; payload: HealthPayload }
-  | { phase: 'error'; message: string }
 
 type CreateProjectState =
   | { phase: 'idle' }
@@ -67,64 +55,16 @@ const workflowSteps = [
   },
 ] as const
 
-const proofHighlights = [
-  '가이드 기준 테이크 녹음, 장치 진단, 믹스다운 미리 듣기',
-  '녹음 후 정렬, 3축 점수, 노트 단위 방향 음정 피드백',
-  'Basic Pitch 기반 멜로디 초안 추출과 수정',
-  '편곡 후보 비교, 악보 보기, 미리 듣기, 내보내기',
-] as const
-
-const nextStudioOutputs = [
-  '브라우저 경고까지 함께 남기는 장치 기록 저장',
-  '가이드 업로드, 테이크 녹음, 파형 미리보기',
-  '녹음 후 정렬과 노트 단위 피드백',
-  '멜로디 초안 추출과 편곡 후보 생성',
-] as const
-
 const waveformBars = [24, 40, 58, 72, 44, 66, 80, 55, 68, 38, 61, 82, 52, 74, 47] as const
 const notePreview = ['C4', 'E4', 'G4', 'A4', 'G4', 'E4'] as const
 const ambientVenuePhoto = '/photography/home-ambient-quiet-hall.jpg'
 
 export function HomePage() {
   const navigate = useNavigate()
-  const [health, setHealth] = useState<HealthState>({ phase: 'loading' })
   const [createProjectState, setCreateProjectState] = useState<CreateProjectState>({
     phase: 'idle',
   })
   const [formState, setFormState] = useState(initialFormState)
-
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function loadHealth(): Promise<void> {
-      try {
-        const response = await fetch(buildApiUrl('/api/health'), {
-          signal: controller.signal,
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const payload = (await response.json()) as HealthPayload
-        setHealth({ phase: 'ready', payload })
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return
-        }
-
-        setHealth({
-          phase: 'error',
-          message:
-            error instanceof Error ? error.message : 'API 확인 중 알 수 없는 오류가 발생했습니다.',
-        })
-      }
-    }
-
-    void loadHealth()
-
-    return () => controller.abort()
-  }, [])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -165,13 +105,6 @@ export function HomePage() {
       })
     }
   }
-
-  const healthLabel =
-    health.phase === 'loading'
-      ? 'API 확인 중'
-      : health.phase === 'ready'
-        ? 'API 연결됨'
-        : 'API 연결 안 됨'
 
   return (
     <div className="page-shell home-page">
@@ -216,17 +149,6 @@ export function HomePage() {
                   <p className="eyebrow">스튜디오 미리보기</p>
                   <h2>녹음 후 피드백을 한 화면에서 이어서 확인합니다</h2>
                 </div>
-                <span
-                  className={`status-pill ${
-                    health.phase === 'ready'
-                      ? 'status-pill--ready'
-                      : health.phase === 'error'
-                        ? 'status-pill--error'
-                        : 'status-pill--loading'
-                  }`}
-                >
-                  {healthLabel}
-                </span>
               </div>
 
               <div className="home-visual__transport">
@@ -314,19 +236,7 @@ export function HomePage() {
 
       <section className="home-section home-proof" id="proof">
         <div className="home-proof__copy">
-          <p className="eyebrow">현재 구현 상태</p>
           <h2>녹음, 음정 확인, 편곡 비교를 한 스튜디오에서 다룹니다</h2>
-          <p>
-            현재 빌드는 가이드 녹음부터 악보 렌더링과 내보내기까지 MVP 흐름을 이미
-            포함합니다. 다음 단계는 기능을 더 붙이는 것보다, 이 흐름을 더 자연스럽게
-            다듬는 일입니다.
-          </p>
-
-          <ul className="home-proof__list">
-            {proofHighlights.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
         </div>
 
         <div className="home-proof__board" aria-label="작업 흐름 근거">
@@ -364,7 +274,7 @@ export function HomePage() {
       <section className="home-section home-intake" id="project-intake">
         <div className="home-section__header">
           <p className="eyebrow">연습 프로젝트 시작</p>
-          <h2>세션 틀만 정하고 바로 스튜디오 콘솔로 들어갑니다</h2>
+          <h2>기본값만 정하고 바로 시작합니다</h2>
           <p>
             입력은 짧게 끝냅니다. 여기서는 음악적 기본값만 잡고, 실제 작업은 녹음,
             분석, 편곡이 함께 있는 스튜디오 안에서 진행합니다.
@@ -477,52 +387,6 @@ export function HomePage() {
               </button>
             </form>
           </article>
-
-          <aside className="home-intake__aside">
-            <article className="panel home-intake__support">
-              <p className="eyebrow">다음 단계</p>
-              <h3>현재 빌드에 이미 연결된 스튜디오 기능</h3>
-              <ul className="home-output-list">
-                {nextStudioOutputs.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-
-              <div className="button-row">
-                <Link className="button-secondary" to="/ops">
-                  운영 화면 열기
-                </Link>
-              </div>
-            </article>
-
-            <article className="status-card home-status-card" aria-label="API 상태">
-              <div className="status-card__header">
-                <span
-                  className={`status-pill ${
-                    health.phase === 'ready'
-                      ? 'status-pill--ready'
-                      : health.phase === 'error'
-                        ? 'status-pill--error'
-                        : 'status-pill--loading'
-                  }`}
-                >
-                  {healthLabel}
-                </span>
-                <p className="status-card__caption">서비스 연결 상태</p>
-              </div>
-
-              {health.phase === 'error' ? (
-                <p className="status-card__error">
-                  지금은 서비스 연결을 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요. 메시지:
-                  {' '}{health.message}
-                </p>
-              ) : (
-                <p className="status-card__hint">
-                  연결만 확인되면 이 화면에서 추가 준비 없이 바로 스튜디오로 들어갈 수 있습니다.
-                </p>
-              )}
-            </article>
-          </aside>
         </div>
       </section>
     </div>

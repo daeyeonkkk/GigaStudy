@@ -4,7 +4,6 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
-import { WorkspaceFlowBar } from '../components/WorkspaceFlowBar'
 import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
 import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import { getAudioContextConstructor } from '../lib/audioContext'
@@ -599,7 +598,7 @@ const voiceRangePresetOptions = [
   {
     value: 'alto',
     label: 'A (Alto)',
-    description: '현재 MVP 흐름과 가장 잘 맞는 균형형 기본 프리셋입니다.',
+    description: '가장 무난하게 시작하기 좋은 균형형 기본 프리셋입니다.',
   },
   {
     value: 'tenor',
@@ -3396,7 +3395,7 @@ export function StudioPage() {
 
   if (studioState.phase === 'loading') {
     return (
-      <div className="page-shell">
+      <div className="page-shell page-shell--studio">
         <section className="panel studio-panel">
           <p className="eyebrow">스튜디오</p>
           <h1>프로젝트를 불러오는 중입니다</h1>
@@ -3410,7 +3409,7 @@ export function StudioPage() {
 
   if (studioState.phase === 'error') {
     return (
-      <div className="page-shell">
+      <div className="page-shell page-shell--studio">
         <section className="panel studio-panel">
           <p className="eyebrow">스튜디오</p>
           <h1>스튜디오를 열 수 없습니다</h1>
@@ -3541,7 +3540,7 @@ export function StudioPage() {
       : permissionState.phase === 'error'
         ? 'error'
         : 'loading'
-  const consoleChordLabel = chordMarkerCount > 0 ? '화성 기준 있음' : '키 기준으로 비교'
+  const consoleChordLabel = chordMarkerCount > 0 ? '화성 기준' : '키 기준'
   const consoleAlignmentLabel =
     selectedTake?.alignment_confidence === null || selectedTake?.alignment_confidence === undefined
       ? '없음'
@@ -3558,42 +3557,11 @@ export function StudioPage() {
     ? `${selectedTakeMelody.note_count}개 음표`
     : '초안 없음'
   const arrangementSummaryLabel = arrangements.length > 0 ? `${arrangements.length}개 후보` : '후보 없음'
+  const formatScoreCell = (value: number | null | undefined) =>
+    value === null || value === undefined || Number.isNaN(value) ? '--' : formatPercent(value)
   const arrangementRoute = projectId ? `/projects/${projectId}/arrangement` : null
   const activeWorkspaceMode =
     studioWorkspaceModes.find((mode) => mode.id === workspaceMode) ?? studioWorkspaceModes[0]
-  const studioFlowItems = [
-    {
-      id: 'studio-record',
-      step: '1단계',
-      label: '녹음실',
-      summary: '장치 확인과 새 테이크 녹음을 이어갑니다.',
-      href: '#recording',
-      current: activeWorkspaceMode.id === 'record',
-    },
-    {
-      id: 'studio-review',
-      step: '2단계',
-      label: '바로 리뷰',
-      summary: '점수와 보정 표시를 보고 다음 선택을 정합니다.',
-      href: '#analysis',
-      current: activeWorkspaceMode.id === 'review',
-    },
-    {
-      id: 'studio-arrange',
-      step: '3단계',
-      label: '편곡 작업',
-      summary: '후보를 고르고 악보와 미리듣기로 넘어갑니다.',
-      ...(arrangementRoute ? { to: arrangementRoute } : { href: '#arrangement' }),
-      current: activeWorkspaceMode.id === 'arrange',
-    },
-    {
-      id: 'studio-sharing',
-      step: '4단계',
-      label: '공유 준비',
-      summary: '버전 정리와 읽기 전용 공유를 마무리합니다.',
-      href: '#sharing',
-    },
-  ]
   const activeWorkbenchLinks = studioWorkbenchLinks
     .filter((link) => activeWorkspaceMode.sectionIds.includes(link.id))
     .map((link) => ({
@@ -3608,38 +3576,36 @@ export function StudioPage() {
     }`
 
   return (
-    <div className="page-shell">
+    <div className="page-shell page-shell--studio">
       <section className="studio-console-shell studio-console-shell--wave-editor">
         <div className="studio-wave-editor__topbar">
           <div className="studio-wave-editor__title">
             <p className="eyebrow">GigaStudy 스튜디오</p>
             <h1>{project.title}</h1>
-            <p className="panel__summary">
-              한 번에 한 테이크만 고르고, 듣고, 살피고, 다음 작업으로 넘길 수 있게 상단 작업면을
-              파형 중심으로 정리했습니다.
-            </p>
           </div>
 
           <div className="studio-wave-editor__status">
             <span className="studio-wave-editor__status-chip">
+              <small>테이크</small>
               <strong>{selectedTakeLabel}</strong>
-              <small>{selectedTake ? getTrackStatusLabel(selectedTake.track_status) : '테이크를 먼저 고르세요'}</small>
             </span>
             <span className="studio-wave-editor__status-chip">
+              <small>점수</small>
               <strong>{selectedTakeScoreLabel}</strong>
-              <small>{selectedTakeScore ? '현재 점수' : '점수 대기 중'}</small>
             </span>
             <span className={`studio-wave-editor__status-chip studio-wave-editor__status-chip--${consoleMicTone}`}>
+              <small>마이크</small>
               <strong>{consoleMicLabel}</strong>
-              <small>{latestProfile ? '장치 기록 있음' : '장치 기록 전'}</small>
             </span>
             <span className="studio-wave-editor__status-chip">
-              <strong>{transportBpm} BPM</strong>
-              <small>{project.time_signature ?? '4/4'}</small>
+              <small>박자</small>
+              <strong>
+                {transportBpm} BPM / {project.time_signature ?? '4/4'}
+              </strong>
             </span>
             <span className="studio-wave-editor__status-chip">
-              <strong>정렬 {consoleAlignmentLabel}</strong>
-              <small>{selectedTake ? '선택 테이크 기준' : '테이크를 고르면 표시'}</small>
+              <small>정렬</small>
+              <strong>{consoleAlignmentLabel}</strong>
             </span>
           </div>
 
@@ -3669,7 +3635,7 @@ export function StudioPage() {
             </div>
 
             <section className="studio-wave-editor__rail-section">
-              <p className="studio-wave-editor__rail-kicker">핵심 진입점</p>
+              <p className="studio-wave-editor__rail-kicker">구역</p>
               <div className="studio-wave-editor__rail-links">
                 {activeWorkbenchLinks.map((link) => (
                   <a
@@ -3685,7 +3651,7 @@ export function StudioPage() {
             </section>
 
             <section className="studio-wave-editor__rail-section studio-wave-editor__rail-section--summary">
-              <p className="studio-wave-editor__rail-kicker">지금 작업 요약</p>
+              <p className="studio-wave-editor__rail-kicker">현황</p>
               <div className="studio-wave-editor__rail-summary">
                 <div className="studio-wave-editor__rail-card">
                   <span>준비된 테이크</span>
@@ -3705,11 +3671,6 @@ export function StudioPage() {
                 </div>
               </div>
             </section>
-
-            <div className="studio-wave-editor__rail-footer">
-              <span className="studio-wave-editor__rail-badge">{activeWorkspaceMode.label} 중심</span>
-              <p>{activeWorkspaceMode.summary}</p>
-            </div>
           </aside>
 
           <div className="studio-wave-editor__main">
@@ -3718,19 +3679,17 @@ export function StudioPage() {
                 ×
               </span>
               <div>
-                <strong>{selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '테이크를 골라주세요'}</strong>
-                <small>{selectedTake ? formatDuration(selectedTake.duration_ms) : '가이드만 준비됨'}</small>
+                <strong>{selectedTake ? `${selectedTake.take_no ?? '?'}번 테이크` : '테이크 없음'}</strong>
+                {selectedTake ? <small>{formatDuration(selectedTake.duration_ms)}</small> : null}
               </div>
             </div>
 
             <article className="panel studio-wave-editor__stage">
               <div className="studio-wave-editor__stage-header">
                 <div>
-                  <p className="eyebrow">파형 작업면</p>
+                  <p className="eyebrow">파형</p>
                   <h2>
-                    {selectedTake
-                      ? '선택한 테이크를 한 화면에서 듣고 보고 고칩니다'
-                      : '먼저 테이크를 골라 파형 작업면을 열어주세요'}
+                    {selectedTake ? '선택 테이크' : '테이크 선택'}
                   </h2>
                 </div>
                 <span
@@ -3752,9 +3711,9 @@ export function StudioPage() {
 
               <div className="studio-wave-editor__stage-meta">
                 <span>{selectedTakeLabel}</span>
-                <span>{selectedTake ? getTrackStatusLabel(selectedTake.track_status) : '선택 대기 중'}</span>
-                <span>{selectedTakeScore ? `총점 ${formatPercent(selectedTakeScore.total_score)}` : '점수 대기 중'}</span>
-                <span>{selectedTakeNoteFeedback.length > 0 ? `노트 피드백 ${selectedTakeNoteFeedback.length}개` : '노트 피드백 대기 중'}</span>
+                <span>{selectedTake ? getTrackStatusLabel(selectedTake.track_status) : '대기'}</span>
+                <span>{selectedTakeScore ? `총점 ${formatPercent(selectedTakeScore.total_score)}` : '--'}</span>
+                <span>{selectedTakeNoteFeedback.length > 0 ? `노트 ${selectedTakeNoteFeedback.length}` : '--'}</span>
               </div>
 
               <div className="studio-wave-editor__canvas">
@@ -3762,22 +3721,21 @@ export function StudioPage() {
                   <WaveformPreview preview={selectedTakePreview} />
                 ) : (
                   <div className="empty-card">
-                    <p>아직 파형 미리보기가 없습니다.</p>
-                    <p>테이크를 녹음하거나 준비된 테이크를 골라주세요.</p>
+                    <p>파형 없음</p>
                   </div>
                 )}
               </div>
 
               <div className="studio-wave-editor__focus-grid">
                 <article className="studio-wave-editor__focus-card">
-                  <span>지금 확인할 포인트</span>
+                  <span>선택 노트</span>
                   <div className="studio-wave-editor__focus-heading">
                     <strong>
                       {selectedNoteFeedback
                         ? `${midiToPitchName(selectedNoteFeedback.target_midi)} · ${selectedNoteFeedback.note_index + 1}번째 노트`
                         : selectedTake
-                          ? '아래 노트 피드백에서 구간을 고를 수 있습니다'
-                          : '테이크를 먼저 골라주세요'}
+                          ? '노트를 선택하세요'
+                          : '테이크를 선택하세요'}
                     </strong>
                     {selectedNoteFeedback ? (
                       <span
@@ -3789,62 +3747,66 @@ export function StudioPage() {
                       </span>
                     ) : null}
                   </div>
-                  <p>
-                    {selectedNoteFeedback
-                      ? selectedNoteFeedback.message
-                      : selectedTake
-                        ? '분석을 마친 뒤 아래 노트 피드백에서 한 노트를 고르면 시작, 유지, 타이밍을 바로 확인할 수 있습니다.'
-                        : '가이드와 테이크를 준비하면 이곳에 지금 살펴볼 포인트가 정리됩니다.'}
-                  </p>
-                  {selectedNoteFeedback ? (
-                    <div className="studio-wave-editor__focus-metrics">
-                      <div>
-                        <small>시작</small>
-                        <strong>{formatSignedCents(selectedNoteFeedback.attack_signed_cents)}</strong>
-                      </div>
-                      <div>
-                        <small>유지</small>
-                        <strong>{formatSignedCents(selectedNoteFeedback.sustain_median_cents)}</strong>
-                      </div>
-                      <div>
-                        <small>타이밍</small>
-                        <strong>{formatSignedMs(selectedNoteFeedback.timing_offset_ms)}</strong>
-                      </div>
-                      <div>
-                        <small>신뢰도</small>
-                        <strong>{formatConfidence(selectedNoteFeedback.confidence)}</strong>
-                      </div>
+                  {selectedNoteFeedback ? <p>{selectedNoteFeedback.message}</p> : null}
+                  <div className="studio-wave-editor__focus-metrics">
+                    <div>
+                      <small>시작</small>
+                      <strong>
+                        {selectedNoteFeedback
+                          ? formatSignedCents(selectedNoteFeedback.attack_signed_cents)
+                          : '--'}
+                      </strong>
                     </div>
-                  ) : null}
+                    <div>
+                      <small>유지</small>
+                      <strong>
+                        {selectedNoteFeedback
+                          ? formatSignedCents(selectedNoteFeedback.sustain_median_cents)
+                          : '--'}
+                      </strong>
+                    </div>
+                    <div>
+                      <small>타이밍</small>
+                      <strong>
+                        {selectedNoteFeedback ? formatSignedMs(selectedNoteFeedback.timing_offset_ms) : '--'}
+                      </strong>
+                    </div>
+                    <div>
+                      <small>신뢰도</small>
+                      <strong>
+                        {selectedNoteFeedback ? formatConfidence(selectedNoteFeedback.confidence) : '--'}
+                      </strong>
+                    </div>
+                  </div>
                 </article>
 
                 <article className="studio-wave-editor__focus-card">
-                  <span>현재 점수</span>
-                  <div className="studio-wave-editor__score-grid">
-                    <div className="studio-wave-editor__score-card">
-                      <small>음정</small>
-                      <strong>{formatPercent(selectedTakeScore?.pitch_score ?? null)}</strong>
+                  <span>점수</span>
+                    <div className="studio-wave-editor__score-grid">
+                      <div className="studio-wave-editor__score-card">
+                        <small>음정</small>
+                        <strong>{formatScoreCell(selectedTakeScore?.pitch_score)}</strong>
+                      </div>
+                      <div className="studio-wave-editor__score-card">
+                        <small>리듬</small>
+                        <strong>{formatScoreCell(selectedTakeScore?.rhythm_score)}</strong>
+                      </div>
+                      <div className="studio-wave-editor__score-card">
+                        <small>화성</small>
+                        <strong>{formatScoreCell(selectedTakeScore?.harmony_fit_score)}</strong>
+                      </div>
+                      <div className="studio-wave-editor__score-card studio-wave-editor__score-card--highlight">
+                        <small>총점</small>
+                        <strong>{formatScoreCell(selectedTakeScore?.total_score)}</strong>
+                      </div>
                     </div>
-                    <div className="studio-wave-editor__score-card">
-                      <small>리듬</small>
-                      <strong>{formatPercent(selectedTakeScore?.rhythm_score ?? null)}</strong>
-                    </div>
-                    <div className="studio-wave-editor__score-card">
-                      <small>화성</small>
-                      <strong>{formatPercent(selectedTakeScore?.harmony_fit_score ?? null)}</strong>
-                    </div>
-                    <div className="studio-wave-editor__score-card studio-wave-editor__score-card--highlight">
-                      <small>총점</small>
-                      <strong>{formatPercent(selectedTakeScore?.total_score ?? null)}</strong>
-                    </div>
-                  </div>
-                  <p className="studio-wave-editor__focus-note">
-                    {selectedTakeScore
-                      ? `${getPitchQualityModeLabel(selectedTakeScore.pitch_quality_mode)} · ${getHarmonyReferenceLabel(
-                          selectedTakeScore.harmony_reference_mode,
-                        )}`
-                      : '분석을 마치면 점수와 기준이 이곳에 정리됩니다.'}
-                  </p>
+                  {selectedTakeScore ? (
+                    <p className="studio-wave-editor__focus-note">
+                      {`${getPitchQualityModeLabel(selectedTakeScore.pitch_quality_mode)} · ${getHarmonyReferenceLabel(
+                        selectedTakeScore.harmony_reference_mode,
+                      )}`}
+                    </p>
+                  ) : null}
                 </article>
               </div>
 
@@ -3935,13 +3897,8 @@ export function StudioPage() {
 
               <div className="studio-wave-editor__action-box">
                 <div className="studio-wave-editor__action-copy">
-                  <span>다음으로 넘기기</span>
+                  <span>작업</span>
                   <strong>{editorRangeTitle}</strong>
-                  <small>
-                    {editorRangeMode === 'note' && selectedNoteFeedback
-                      ? '선택한 노트 구간을 기준으로 아래 피드백과 자료 넘기기를 이어갑니다.'
-                      : '테이크 전체 흐름을 보면서 녹음, 분석, 편곡으로 자연스럽게 이어갑니다.'}
-                  </small>
                 </div>
 
                 <div className="studio-wave-editor__action-buttons">
@@ -4013,29 +3970,19 @@ export function StudioPage() {
             <article className="panel studio-wave-editor__timeline">
               <div className="studio-wave-editor__timeline-header">
                 <div>
-                  <p className="eyebrow">듣기와 테이크 고르기</p>
-                  <h2>재생은 아래 한 곳에서만 하고, 여기서 테이크를 바꿉니다</h2>
+                  <p className="eyebrow">재생</p>
+                  <h2>재생 / 트랙</h2>
                 </div>
                 <span className="status-pill status-pill--ready">{totalTrackCount}개 트랙</span>
               </div>
 
-              <p
-                className={
-                  recordingState.phase === 'error' || analysisState.phase === 'error'
-                    ? 'form-error'
-                    : 'status-card__hint'
-                }
-              >
-                {recordingState.phase === 'error'
-                  ? recordingState.message
-                  : analysisState.phase === 'error'
-                    ? analysisState.message
-                    : metronomePreviewState.phase === 'success'
-                      ? metronomePreviewState.message
-                      : selectedTake
-                        ? '재생은 이 아래 한 곳에서만 두고, 선택과 음량 조절도 같은 자리에서 이어갑니다.'
-                        : '가이드를 준비하고 마이크 권한을 받은 뒤 첫 테이크를 녹음해 주세요.'}
-              </p>
+              {recordingState.phase === 'error' ? (
+                <p className="form-error">{recordingState.message}</p>
+              ) : analysisState.phase === 'error' ? (
+                <p className="form-error">{analysisState.message}</p>
+              ) : metronomePreviewState.phase === 'success' ? (
+                <p className="studio-wave-editor__signal">{metronomePreviewState.message}</p>
+              ) : null}
 
               {(guideSourceUrl || selectedTakePlaybackUrl) ? (
                 <div className="studio-wave-editor__players">
@@ -4851,14 +4798,6 @@ export function StudioPage() {
 
       */}
 
-      <WorkspaceFlowBar
-        ariaLabel="스튜디오 작업 이동"
-        eyebrow="작업 이동"
-        items={studioFlowItems}
-        summary="지금 보고 있는 면에서 바로 다음 작업면으로 이어갈 수 있게, 핵심 이동만 남겼습니다."
-        title={`지금은 ${activeWorkspaceMode.label}에서 다음 자리까지 이어가면 됩니다`}
-      />
-
       <section className={getStudioSectionClassName('harmony-authoring')} id="harmony-authoring">
         <div className="section__header">
           <p className="eyebrow">화성 기준 연결</p>
@@ -5103,7 +5042,7 @@ export function StudioPage() {
       <section className={getStudioSectionClassName('audio-setup')} id="audio-setup">
         <div className="section__header">
           <p className="eyebrow">입력 준비</p>
-          <h2>오디오 설정과 가이드 연결</h2>
+          <h2>오디오 / 가이드</h2>
         </div>
 
         <div className="card-grid studio-work-grid">
@@ -5111,7 +5050,7 @@ export function StudioPage() {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">장치 패널</p>
-                <h2>마이크 권한을 열고 장치 기록을 저장합니다</h2>
+                <h2>장치</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -5447,7 +5386,7 @@ export function StudioPage() {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">가이드 트랙</p>
-                <h2>가이드 하나를 올리고 바로 재생할 수 있게 유지합니다</h2>
+                <h2>가이드</h2>
               </div>
               <span
                 className={`status-pill ${
@@ -5918,7 +5857,7 @@ export function StudioPage() {
       <section className="section" id="track-lane">
         <div className="section__header">
           <p className="eyebrow">트랙/미리보기</p>
-          <h2>트랙과 미리듣기</h2>
+          <h2>트랙 / 미리듣기</h2>
         </div>
 
         <div className="card-grid studio-work-grid">
@@ -5926,7 +5865,7 @@ export function StudioPage() {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">트랙 레인</p>
-                <h2>가이드와 테이크를 하나의 믹서 뷰에서 관리합니다</h2>
+                <h2>믹서</h2>
               </div>
               <span className="status-pill status-pill--ready">
                 {guide ? takesState.items.length + 1 : takesState.items.length}개 트랙
@@ -6082,7 +6021,7 @@ export function StudioPage() {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">파형</p>
-                <h2>선택한 테이크를 즉시 확인하고 새로고침 뒤에도 이어서 봅니다</h2>
+                <h2>파형 확인</h2>
               </div>
               <span
                 className={`status-pill ${

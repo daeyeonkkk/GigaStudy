@@ -215,6 +215,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] A MyEdit-informed `studio-v3-wave-editor` mockup pass now exists, narrowing the next Studio target into a waveform-first review and trim desk.
 - [x] The live Studio route has adopted the `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace:
   one slim left rail for core entry points, one dominant waveform stage, one lower range-and-action strip, and one dedicated listening / take rail.
+- [x] The live Studio and Arrangement routes now share one compact `작업 이동` handoff bar, so internal workspaces feel like one connected product instead of isolated screens with separate local navigation.
 
 ## 17. Mockup Track
 

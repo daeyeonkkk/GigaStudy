@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrangementScore } from '../components/ArrangementScore'
 import { ManagedAudioPlayer } from '../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../components/WaveformPreview'
+import { WorkspaceFlowBar } from '../components/WorkspaceFlowBar'
 import { buildAudioPreviewFromBlob, buildAudioPreviewFromUrl, type AudioPreviewData } from '../lib/audioPreview'
 import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import { getAudioContextConstructor } from '../lib/audioContext'
@@ -3560,6 +3561,39 @@ export function StudioPage() {
   const arrangementRoute = projectId ? `/projects/${projectId}/arrangement` : null
   const activeWorkspaceMode =
     studioWorkspaceModes.find((mode) => mode.id === workspaceMode) ?? studioWorkspaceModes[0]
+  const studioFlowItems = [
+    {
+      id: 'studio-record',
+      step: '1단계',
+      label: '녹음실',
+      summary: '장치 확인과 새 테이크 녹음을 이어갑니다.',
+      href: '#recording',
+      current: activeWorkspaceMode.id === 'record',
+    },
+    {
+      id: 'studio-review',
+      step: '2단계',
+      label: '바로 리뷰',
+      summary: '점수와 보정 표시를 보고 다음 선택을 정합니다.',
+      href: '#analysis',
+      current: activeWorkspaceMode.id === 'review',
+    },
+    {
+      id: 'studio-arrange',
+      step: '3단계',
+      label: '편곡 작업',
+      summary: '후보를 고르고 악보와 미리듣기로 넘어갑니다.',
+      ...(arrangementRoute ? { to: arrangementRoute } : { href: '#arrangement' }),
+      current: activeWorkspaceMode.id === 'arrange',
+    },
+    {
+      id: 'studio-sharing',
+      step: '4단계',
+      label: '공유 준비',
+      summary: '버전 정리와 읽기 전용 공유를 마무리합니다.',
+      href: '#sharing',
+    },
+  ]
   const activeWorkbenchLinks = studioWorkbenchLinks
     .filter((link) => activeWorkspaceMode.sectionIds.includes(link.id))
     .map((link) => ({
@@ -4806,49 +4840,24 @@ export function StudioPage() {
           </aside>
         </div>
 
-        <nav className="studio-workrail" aria-label="스튜디오 워크벤치">
-          <span className="studio-workrail__label">지금 필요한 바로가기</span>
-          {activeWorkbenchLinks.map((link) => (
-            <a
-              className="studio-workrail__link"
-              data-testid={`studio-workrail-link-${link.id}`}
-              href={`#${link.id}`}
-              key={link.id}
-            >
-              {link.label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="studio-workspace-switch" data-testid="studio-workspace-modes">
-          <div className="studio-workspace-switch__copy">
-            <p className="eyebrow">작업 모드</p>
-            <h2>지금은 {activeWorkspaceMode.label}에 집중하면 됩니다</h2>
-            <p className="panel__summary">{activeWorkspaceMode.summary}</p>
-          </div>
-
-          <div className="studio-workspace-switch__actions">
-            {studioWorkspaceModes.map((mode) => (
-              <button
-                key={mode.id}
-                className={`studio-workspace-switch__button ${
-                  activeWorkspaceMode.id === mode.id ? 'studio-workspace-switch__button--active' : ''
-                }`}
-                data-testid={`studio-workspace-mode-${mode.id}`}
-                type="button"
-                aria-pressed={activeWorkspaceMode.id === mode.id}
-                onClick={() => setWorkspaceMode(mode.id)}
-              >
-                <span>{mode.eyebrow}</span>
-                <strong>{mode.label}</strong>
-                <small>{mode.summary}</small>
-              </button>
-            ))}
-          </div>
-        </div>
+        <WorkspaceFlowBar
+          ariaLabel="스튜디오 작업 이동"
+          eyebrow="작업 이동"
+          items={studioFlowItems}
+          summary="지금 보고 있는 면에서 바로 다음 작업면으로 이어갈 수 있게, 핵심 이동만 남겼습니다."
+          title={`지금은 ${activeWorkspaceMode.label}에서 다음 자리까지 이어가면 됩니다`}
+        />
       </section>
 
       */}
+
+      <WorkspaceFlowBar
+        ariaLabel="스튜디오 작업 이동"
+        eyebrow="작업 이동"
+        items={studioFlowItems}
+        summary="지금 보고 있는 면에서 바로 다음 작업면으로 이어갈 수 있게, 핵심 이동만 남겼습니다."
+        title={`지금은 ${activeWorkspaceMode.label}에서 다음 자리까지 이어가면 됩니다`}
+      />
 
       <section className={getStudioSectionClassName('harmony-authoring')} id="harmony-authoring">
         <div className="section__header">

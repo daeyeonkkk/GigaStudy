@@ -443,6 +443,7 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 - The second browser-reviewed implementation half is now also complete on the live Studio workspace:
   the route now follows the same v2 workspace discipline, and guide / take listening is consolidated into one obvious playback surface in the lower time rail.
 - The Studio workspace now also uses a lightweight task-mode switch (`녹음`, `리뷰`, `편곡`) so the live screen emphasizes only the sections and shortcuts that match the user’s current task.
+- Studio와 Arrangement는 공통 `작업 이동` 막대를 공유해, 녹음실 / 편곡 작업 / 공유 준비가 route별 로컬 버튼 묶음이 아니라 하나의 handoff 규칙으로 읽히게 유지한다.
 - The Shared Review workspace now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) so the shared viewer keeps only the core read-only entry points on the left rail and reads like one frozen review desk instead of another stacked detail page.
 - The Ops workspace now also uses a lightweight task-mode switch (`문제 확인`, `환경 검증`, `복구 처리`) so runtime incidents, environment checks, and retry work read like one triage desk instead of one long admin surface.
 - The stricter Studio-only visual pass is now locked to the attached MyEdit waveform editor as a direct structural reference.

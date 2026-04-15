@@ -457,6 +457,8 @@ Date: 2026-04-14
   the preview canvas stays focused on waveform review, while actual listening is centralized in the lower time rail so the same selected-take player does not appear twice.
 - The deployed Studio route now also behaves more like a task-led rehearsal workspace instead of one long stacked board:
   `녹음`, `리뷰`, and `편곡` modes now change the visible shortcut rail and de-emphasize unrelated sections, so the user sees one focused slice of work at a time.
+- The deployed Studio and Arrangement routes now also share one compact `작업 이동` handoff bar:
+  the user can move between `녹음실`, `바로 리뷰`, `편곡 작업`, and `공유 준비` without relearning each route’s local header buttons, so the internal product feels more like one connected workspace than separate tools.
 - The Shared Review route now also gets the same workspace discipline:
   the left rail focuses on take choice and mode switching, while the frozen score canvas and result summary stay visually separate enough to read like one review session rather than another settings page.
 - The Ops route now also gets the same workspace discipline:

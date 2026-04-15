@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ArrangementScore } from '../components/ArrangementScore'
+import { WorkspaceFlowBar } from '../components/WorkspaceFlowBar'
 import { buildApiUrl, normalizeAssetUrl } from '../lib/api'
 import {
   getArrangementPartRoleLabel,
@@ -195,6 +196,8 @@ export function ArrangementPage() {
   const selectedStyleLabel = getArrangementStyleLabel(arrangementConfig.style)
   const selectedDifficultyLabel = getDifficultyLabel(arrangementConfig.difficulty)
   const selectedComparisonSummary = selectedArrangement?.comparison_summary ?? null
+  const studioRecordingRoute = projectId ? `/projects/${projectId}/studio#recording` : '/'
+  const studioSharingRoute = projectId ? `/projects/${projectId}/studio#sharing` : '/'
   const selectedArrangementLabel = selectedArrangement
     ? `${selectedArrangement.candidate_code} · ${selectedArrangement.title}`
     : '아직 선택한 후보가 없습니다'
@@ -202,6 +205,29 @@ export function ArrangementPage() {
   const selectedLeadFitLabel = selectedComparisonSummary
     ? formatCompactPercent(selectedComparisonSummary.lead_range_fit_percent)
     : '계산 전'
+  const arrangementFlowItems = [
+    {
+      id: 'arrangement-studio',
+      step: '1단계',
+      label: '녹음실',
+      summary: '테이크를 다시 고르거나 보정 피드백으로 돌아갑니다.',
+      to: studioRecordingRoute,
+    },
+    {
+      id: 'arrangement-workspace',
+      step: '2단계',
+      label: '편곡 작업',
+      summary: '후보를 비교하고 악보와 미리듣기로 바로 결정합니다.',
+      current: true,
+    },
+    {
+      id: 'arrangement-sharing',
+      step: '3단계',
+      label: '공유 준비',
+      summary: '확정한 결과를 버전과 공유 흐름으로 넘깁니다.',
+      to: studioSharingRoute,
+    },
+  ]
 
   const refreshSnapshot = useCallback(async (): Promise<void> => {
     if (!projectId) {
@@ -491,6 +517,14 @@ export function ArrangementPage() {
             </Link>
           </div>
         </div>
+
+        <WorkspaceFlowBar
+          ariaLabel="편곡 작업 이동"
+          eyebrow="작업 이동"
+          items={arrangementFlowItems}
+          summary="녹음실에서 준비한 테이크를 바탕으로 편곡을 고르고, 끝나면 공유 준비로 바로 넘깁니다."
+          title="편곡 화면도 한 흐름 안에서 이어집니다"
+        />
 
         <div className="arrangement-grid">
           <aside

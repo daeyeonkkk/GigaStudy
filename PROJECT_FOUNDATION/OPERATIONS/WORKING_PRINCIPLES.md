@@ -25,6 +25,7 @@ This document defines the working rules for keeping the repository, delivery flo
   `BACKLOGS/`, `DESIGN/`, `QUALITY/`, or `OPERATIONS/`.
 - Mockups, editable design sources, screenshots, exports, calibration notes, and protocols must never be dropped into the root.
 - A new foundation document is not complete until it is linked from `PROJECT_FOUNDATION/README.md`.
+- If one canonical document or package replaces another, remove the superseded foundation files and update every root/readme/checklist/status reference in the same change.
 
 ## 4. Remove Or Ignore One-Off Artifacts Quickly
 

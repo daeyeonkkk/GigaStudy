@@ -18,3 +18,15 @@ export type Project = {
   created_at: string
   updated_at: string
 }
+
+export type ProjectLaunchSummary = {
+  has_guide: boolean
+  take_count: number
+  ready_take_count: number
+  arrangement_count: number
+  has_mixdown: boolean
+}
+
+export type ProjectListItem = Project & {
+  launch_summary: ProjectLaunchSummary
+}

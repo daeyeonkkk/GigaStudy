@@ -1,6 +1,6 @@
 # GigaStudy Live Checklist
 
-Date: 2026-04-15
+Date: 2026-04-16
 Status rule: mark `[x]` only when implementation exists and the behavior has been verified by code paths, tests, or browser release-gate runs.
 
 ## 1. Product Alignment
@@ -95,7 +95,7 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] MIDI export exists.
 - [x] MusicXML export exists.
 - [x] Guide WAV export exists.
-- [x] Heavy notation and arrangement workspace code is route-split so the home entry does not pay the full score-workspace cost upfront.
+- [x] Heavy notation and arrangement workspace code is route-split so the default entry surface does not pay the full score-workspace cost upfront.
 
 ## 10. Operations And Reliability
 
@@ -191,48 +191,25 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 
 ## 16. Visual Refactor Track
 
-- [x] One canonical visual direction is locked in `DESIGN/UI_DESIGN_DIRECTION.md`.
-- [ ] The live typography system now follows the canonical font pairing in `DESIGN/UI_DESIGN_DIRECTION.md` across headings, body copy, and default control chrome instead of shipping fallback system fonts or browser-default UI text.
-- [x] A Filmora reference review is documented for Studio and Arrangement workspace improvement, and it is scoped as a secondary structural reference rather than a whole-product style replacement.
-- [x] A MyEdit reference review is documented for the stricter next Studio-only waveform editor pass.
-- [x] A reference-led wireframe pack exists in `DESIGN/UI_WIREFRAMES_V1.md` for Home, Studio, Arrangement, Shared Review, and Ops.
-- [x] The Home page implementation matches the canonical wireframe pack closely enough to stop acting like a generic utility dashboard.
-- [x] The Studio page implementation matches the integrated console wireframe closely enough to stop reading as stacked tools.
-- [x] The deployed Studio route has been re-reviewed on desktop and narrow mobile widths so Korean headings, status pills, and card content wrap cleanly without horizontal overflow.
-- [x] The Arrangement page implementation matches the score-first wireframe closely enough to feel like one comparison and export workspace.
-- [x] The Arrangement route now also uses a lightweight workspace-mode switch (`후보 고르기`, `악보 보기`, `내보내기`) and keeps the left rail limited to core candidate-flow entry points.
-  Detailed generation controls now sit behind one optional section instead of competing with candidate choice on the default surface.
-- [x] The Shared Review page implementation matches the frozen review wireframe closely enough to avoid edit ambiguity.
-- [ ] The Shared Review route now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) and keeps the left rail limited to core review entry points instead of turning the shared viewer into another stacked detail page.
-- [x] The Ops page implementation matches the utility-only wireframe closely enough to stay dense without becoming the visual default for the whole product.
-- [ ] The Ops route now also uses a lightweight workspace-mode switch (`문제 확인`, `환경 검증`, `복구 처리`) and keeps the default surface focused on one triage task at a time instead of presenting one flat admin list.
-- [x] A Studio v2 and Arrangement v2 mockup pass has absorbed the accepted Filmora patterns:
-  source rack, preview/player hierarchy, timeline rail, and contextual property inspector.
-- [x] A browser-reviewed Studio or Arrangement implementation pass has moved the live product noticeably closer to the Filmora-informed v2 mockups.
-  Arrangement now passes a dedicated cross-browser release-gate check against the v2 workspace structure.
-- [x] The Studio route has received the same browser-reviewed v2 implementation pass that Arrangement now has.
-- [x] The Studio route keeps one obvious playback surface for guide / take listening instead of duplicating the same take player across multiple panels.
-- [x] The Studio route now also exposes a lightweight workspace-mode switch (`녹음`, `리뷰`, `편곡`) so the live product behaves more like one task-focused rehearsal desk than one long stacked dashboard.
-
-- [x] A MyEdit-informed `studio-v3-wave-editor` mockup pass now exists, narrowing the next Studio target into a waveform-first review and trim desk.
-- [x] The live Studio route has adopted the `studio-v3-wave-editor` pass closely enough to behave like a single-task waveform workspace:
-  one slim left rail for core entry points, one dominant waveform stage, one lower range-and-action strip, and one dedicated listening / take rail.
-- [ ] The live Studio and Arrangement routes now share one compact `작업 이동` handoff bar, so internal workspaces feel like one connected product instead of isolated screens with separate local navigation.
-- [x] The Shared Review and Ops routes now also use the same compact workflow-bar discipline, so review and triage surfaces stop inventing their own local mode chrome apart from the main Studio / Arrangement workspaces.
-- [x] Arrangement, Shared Review, and Ops now also share the same reusable workspace-shell and active-panel emphasis rules, so layout tuning no longer drifts route by route after the visual refactor pass.
-- [x] The Ops default triage and recovery cards now lead with Korean task labels and operator-facing summaries, while raw request IDs, track IDs, job IDs, browser user-agent strings, and model-version strings live behind one optional `자세한 기록 보기` panel.
+- [x] One canonical screen-spec package is locked in `DESIGN/UI_SCREEN_SPEC_PACKAGE/`.
+- [x] The core product first screen is now defined as `Root Launch`, not a marketing landing page.
+- [x] The package includes one single interaction source of truth in `DESIGN/UI_SCREEN_SPEC_PACKAGE/06_INTERACTION_CONNECTION_MATRIX.md`.
+- [x] Legacy UI direction, reference-review, wireframe, editable-source, and old mockup-track docs have been removed from `PROJECT_FOUNDATION/DESIGN/`.
+- [x] The live `/` route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_ROOT_LAUNCH_SCREEN_SPEC.md` closely enough to count as aligned.
+- [ ] The live typography system now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md` across headings, body copy, and default control chrome instead of shipping fallback system fonts or browser-default UI text.
+- [ ] The live Studio route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_STUDIO_SCREEN_SPEC.md` closely enough to count as aligned.
+- [ ] The live Arrangement route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_ARRANGEMENT_SCREEN_SPEC.md` closely enough to count as aligned.
+- [ ] The live Shared Review route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SHARED_REVIEW_SCREEN_SPEC.md` closely enough to count as aligned.
+- [ ] The live Ops route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_OPS_SCREEN_SPEC.md` closely enough to count as aligned.
+- [ ] Compact mode-switch and workflow-handoff controls now match the package contract instead of reverting to tall card-like toggles.
 
 ## 17. Mockup Track
 
-- [x] A canonical mockup workflow is documented in `DESIGN/UI_MOCKUP_TRACK.md`.
-- [x] Repo-visible mockup exports exist for the first visual-priority screens in `DESIGN/UI_MOCKUPS/`.
-- [x] A shared Figma file or equivalent editable design source exists for the canonical product mockups.
-- [x] Any approved real-photo ambient asset used on brand-facing surfaces is copied into a repo-owned path without modifying the original source library.
-- [x] `Home`, `Studio`, and `Arrangement` each have a frozen mockup version that implementation can target directly.
-- [x] `Shared Review` and `Ops` each have a frozen mockup version that implementation can target directly.
-- [x] Each visually refactored screen references the mockup version it implements, rather than only the low-fidelity wireframe.
-- [x] The next workspace-pass exports for `Studio` and `Arrangement` now exist as `studio-v2` and `arrangement-v2`, even though the live product still needs a code pass to match them.
-- [x] The stricter Studio-only waveform pass now also exists as `studio-v3-wave-editor` in both editable and frozen-export form.
+- [x] Repo-visible frozen mockup exports exist for `Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops` in `DESIGN/UI_SCREEN_SPEC_PACKAGE/MOCKUPS/`.
+- [x] Each canonical screen now has both a fixed spec document and a matching frozen mockup export.
+- [x] The package mockups now exist as both SVG source and PNG review render.
+- [ ] The live routes are now re-reviewed against the package mockups rather than against deleted wireframe or legacy mockup names.
+- [ ] Release-gate and browser-review notes now reference `launch-desktop-v1`, `studio-desktop-v1`, `arrangement-desktop-v1`, `shared-review-desktop-v1`, and `ops-desktop-v1` instead of legacy mockup IDs.
 
 ## 18. Foundation Hygiene
 

@@ -22,7 +22,8 @@
 
 - 한국어 중심 용어 체계 정리
 - 사용자에게 노출되는 기본 UI 문구는 한국어를 우선하고, 영어는 관용적인 기술 용어만 제한적으로 남긴다.
-- canonical UI direction을 `DESIGN/UI_DESIGN_DIRECTION.md`의 `Quiet Studio Console`로 고정
+- canonical UI source of truth를 `DESIGN/UI_SCREEN_SPEC_PACKAGE/`로 고정
+- `/`는 marketing home이 아니라 `Root Launch` 작업 진입 화면으로 유지
 - 오디오 설정, 정렬 상태, 저신뢰도 상태를 설명 가능한 UI로 노출
 - 재녹음과 후보 비교 흐름을 최소 클릭으로 유지
 
@@ -50,10 +51,10 @@
 
 ### 2.5 시각 산출물 축
 
-- canonical mockup source of truth를 `DESIGN/UI_MOCKUP_TRACK.md`로 고정
-- Figma 또는 동등한 디자인 파일을 선호하되, repo 안에는 항상 export된 mockup asset을 함께 둔다
-- `Home`, `Studio`, `Arrangement`를 먼저 high-fidelity mockup으로 고정한 뒤 구현에 연결
-- 구현 화면은 임의 해석보다 frozen mockup 버전을 우선 기준으로 삼는다
+- canonical screen-spec source of truth를 `DESIGN/UI_SCREEN_SPEC_PACKAGE/`로 고정
+- 각 core screen은 fixed spec + interaction matrix + frozen mockup export를 함께 가진다
+- 1차 canonical screen set은 `Launch`, `Studio`, `Arrangement`, `Shared Review`, `Ops`다
+- 구현 화면은 임의 해석보다 해당 화면 spec과 frozen mockup 버전을 우선 기준으로 삼는다
 
 ## 3. 단계별 로드맵
 
@@ -144,7 +145,7 @@
 목표:
 
 - 사용자가 왜 점수가 나왔는지 이해하고 바로 재시도할 수 있는 학습 UI를 만든다.
-- 이 단계 이후의 시각 리팩터는 `Quiet Studio Console` 방향을 기준으로 한다.
+- 이 단계 이후의 시각 리팩터는 `DESIGN/UI_SCREEN_SPEC_PACKAGE/`의 canonical screen contracts를 기준으로 한다.
 
 주요 작업:
 
@@ -423,33 +424,15 @@ note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관
 - The detailed assessment for that path now lives in:
   `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
 
-## 8. Filmora-Informed Workspace Pass
+## 8. Screen-Spec Package Reset
 
-- The next UX/UI improvement pass should treat Wondershare Filmora as an accepted secondary reference for `Studio` and `Arrangement`.
-- Scope is limited to workspace structure:
-  source rack, preview/player hierarchy, timeline rail, contextual property inspector, and comparison-oriented review patterns.
-- Scope explicitly excludes:
-  template-marketplace density, generic video-editor jargon, effects-shopping chrome, and any visual move that weakens the `Quiet Studio Console` identity.
-- Completion for this pass means:
-  one updated Studio mockup, one updated Arrangement mockup, and one browser-reviewed implementation change that clearly reflects the accepted Filmora patterns.
-  The live workspace should also keep one obvious playback surface instead of scattering the same listening controls across multiple panels.
-- The same discipline now also applies to Ops:
-  the default triage surface should read in Korean task language first, while raw request traces, IDs, browser strings, and model-version records stay in expandable detail panels instead of leading the desk.
-- The mockup half of this pass is now complete through:
-  `DESIGN/UI_EDITABLE_SOURCE/filmora-workspace-pass-v2.html`,
-  `DESIGN/UI_MOCKUPS/studio-v2.svg`, and
-  `DESIGN/UI_MOCKUPS/arrangement-v2.svg`.
-- The first browser-reviewed implementation half is now complete on the live Arrangement workspace:
-  the route now leans into a candidate rack, score/player stage, and export-focused inspector, and the dedicated arrangement release gate passes in Chromium, Firefox, and WebKit.
-- The Arrangement workspace now also uses a lightweight task-mode switch (`후보 고르기`, `악보 보기`, `내보내기`) so the left rail stays focused on core candidate-flow entry points and detailed generation controls do not crowd the default workspace.
-- The second browser-reviewed implementation half is now also complete on the live Studio workspace:
-  the route now follows the same v2 workspace discipline, and guide / take listening is consolidated into one obvious playback surface in the lower time rail.
-- The Studio workspace now also uses a lightweight task-mode switch (`녹음`, `리뷰`, `편곡`) so the live screen emphasizes only the sections and shortcuts that match the user’s current task.
-- Studio와 Arrangement는 공통 `작업 이동` 막대를 공유해, 녹음실 / 편곡 작업 / 공유 준비가 route별 로컬 버튼 묶음이 아니라 하나의 handoff 규칙으로 읽히게 유지한다.
-- The Shared Review workspace now also uses a lightweight review-flow switch (`테이크 보기`, `악보 보기`, `결과 읽기`) so the shared viewer keeps only the core read-only entry points on the left rail and reads like one frozen review desk instead of another stacked detail page.
-- The Ops workspace now also uses a lightweight task-mode switch (`문제 확인`, `환경 검증`, `복구 처리`) so runtime incidents, environment checks, and retry work read like one triage desk instead of one long admin surface.
-- Shared Review and Ops now also follow the same compact top-level workflow-bar rule as Studio and Arrangement, so the product no longer changes its basic task-switching chrome from screen to screen.
-- Arrangement, Shared Review, and Ops now also share one reusable workspace-shell rule for left rail / center stage / right rail emphasis, so future layout tuning lands once instead of forking screen by screen.
-- The stricter Studio-only visual pass is now locked to the attached MyEdit waveform editor as a direct structural reference.
-- That pass is now complete at the mockup and browser-reviewed implementation level:
-  the repo carries the editable source plus frozen export, and the live Studio route now behaves like a waveform-first review and trim workspace with one slim left rail, one dominant waveform stage, one lower trim/action strip, and one dedicated listening rail.
+- Legacy UI direction docs, reference reviews, wireframes, editable-source artboards, and old mockup-track files are no longer canonical.
+- The only accepted design source of truth is `DESIGN/UI_SCREEN_SPEC_PACKAGE/`.
+- That package now fixes:
+  `Root Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`, plus one interaction connection matrix and frozen SVG/PNG mockups.
+- The next UI implementation work should follow this order:
+  1. browser-review the live `/` route against the `Root Launch` contract and close the visible gaps,
+  2. re-audit `Studio`, `Arrangement`, `Shared Review`, and `Ops` against their new package specs,
+  3. close checklist items only after browser review against the package mockups.
+- Completion for this track means:
+  the root docs reference only the package, deleted legacy files are no longer cited anywhere in `PROJECT_FOUNDATION`, and the live routes are re-closed against the new `Launch / Studio / Arrangement / Shared Review / Ops` set.

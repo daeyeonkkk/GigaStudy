@@ -281,22 +281,18 @@ Those outputs are review artifacts, not canonical foundation docs.
 - The browser release gate now also covers environment diagnostics report export in Chromium, Firefox, and WebKit.
 - The browser release gate now also covers manual environment validation run capture in Chromium, Firefox, and WebKit.
 - The PostgreSQL + S3-compatible product storage path is now exercised by a repeatable smoke script instead of staying an optional note.
-- The foundation now also includes a reference-led wireframe pack for the canonical Home, Studio, Arrangement, Shared Review, and Ops screens, so the next UI refactor can follow one agreed layout system.
-- The foundation now also includes a mockup track plus repo-visible mockup exports, so visual implementation can target explicit design files instead of only textual wireframes.
-- Seeded mockup exports now exist for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/`.
-- A repo-local equivalent editable design source now also exists under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/`, so the canonical mockups are editable in-repo even before a shared Figma file is connected.
-- The Home, Studio, Arrangement, Shared Review, and Ops screens now follow that visual system closely enough to read like one product workspace family instead of a utility dashboard plus stacked tool panels.
-- The Home screen now also carries one curated non-identifying ambient photo copied from the user-owned external library into a repo-owned asset path, so the entry surface can gain real atmosphere without coupling the app to the raw photo archive.
+- The foundation now includes one fixed screen-spec package for the canonical `Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops` screens, so visual implementation can target explicit contracts instead of scattered legacy docs.
+- Frozen SVG and PNG mockup exports now exist for all five canonical screens under `PROJECT_FOUNDATION/DESIGN/UI_SCREEN_SPEC_PACKAGE/MOCKUPS/`.
+- The root route is now defined in foundation as `Root Launch`, not as a marketing home page.
 - Arrangement work now also has its own dedicated `/projects/:projectId/arrangement` route, so score comparison and export can happen in a score-first workspace instead of only inside the studio page.
 - Shared review now also reads like a frozen review desk instead of a generic details page, making the read-only boundary much clearer for recipients.
-- The web app now also route-splits the heavy non-home workspaces, so the home entry does not ship the full studio, arrangement, sharing, and ops surfaces up front.
+- The web app now also route-splits the heavy non-entry workspaces, so the default entry surface does not ship the full studio, arrangement, sharing, and ops surfaces up front.
 
 ## Current Hardening Focus
 
-- Keep the visual refactor locked to `PROJECT_FOUNDATION/DESIGN/UI_DESIGN_DIRECTION.md` plus `PROJECT_FOUNDATION/DESIGN/UI_WIREFRAMES_V1.md` and stop adding one-off local UI styles.
-- Use `PROJECT_FOUNDATION/DESIGN/UI_MOCKUP_TRACK.md` plus the editable source under `PROJECT_FOUNDATION/DESIGN/UI_EDITABLE_SOURCE/` and the exports under `PROJECT_FOUNDATION/DESIGN/UI_MOCKUPS/` as the visual implementation baseline, not prose interpretation alone.
-- Use `PROJECT_FOUNDATION/DESIGN/MYEDIT_REFERENCE_REVIEW.md` plus `studio-v3-wave-editor` when the next Studio refactor needs a stricter waveform-first workspace target.
-- The first-wave product screens now all follow that visual system; next is to upgrade the repo-local editable source into a shared Figma workflow and keep future ops-only work from bleeding utility styling back into rehearsal screens.
+- Keep the visual refactor locked to `PROJECT_FOUNDATION/DESIGN/UI_SCREEN_SPEC_PACKAGE/` and stop adding one-off local UI styles or resurrecting deleted legacy design docs.
+- Use the fixed screen specs, interaction matrix, and mockup exports in `PROJECT_FOUNDATION/DESIGN/UI_SCREEN_SPEC_PACKAGE/` as the visual implementation baseline.
+- The next UI implementation step is to replace the live `/` route with the `Root Launch` contract and then re-audit the remaining routes against the package.
 - Execute the remaining Phase 9 intonation quality track: real-vocal calibration and human-rating comparison on top of the current synthetic-vocal checkpoint.
 - Use `PROJECT_FOUNDATION/QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md` as the default path for adding real singer evidence instead of inventing ad hoc one-off rating notes.
 - Prefer the new human-rating intake builder workflow over editing the final corpus JSON by hand.
@@ -321,8 +317,8 @@ Those outputs are review artifacts, not canonical foundation docs.
 
 - [Master Plan](./PROJECT_FOUNDATION/GigaStudy_master_plan.md)
 - [Roadmap](./PROJECT_FOUNDATION/ROADMAP.md)
-- [UI Design Direction](./PROJECT_FOUNDATION/DESIGN/UI_DESIGN_DIRECTION.md)
-- [UI Wireframes v1](./PROJECT_FOUNDATION/DESIGN/UI_WIREFRAMES_V1.md)
+- [UI Screen Spec Package](./PROJECT_FOUNDATION/DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md)
+- [Global UI Fixed Spec](./PROJECT_FOUNDATION/DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md)
 - [Phase 1 Backlog](./PROJECT_FOUNDATION/BACKLOGS/PHASE1_BACKLOG.md)
 - [Phase 9 Intonation Backlog](./PROJECT_FOUNDATION/BACKLOGS/PHASE9_INTONATION_BACKLOG.md)
 - [Intonation Calibration Report](./PROJECT_FOUNDATION/QUALITY/INTONATION_CALIBRATION_REPORT.md)

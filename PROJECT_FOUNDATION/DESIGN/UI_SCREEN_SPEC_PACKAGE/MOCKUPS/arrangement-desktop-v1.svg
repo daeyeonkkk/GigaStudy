@@ -1,0 +1,218 @@
+<svg width="1440" height="1120" viewBox="0 0 1440 1120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .ui { font-family: "Instrument Sans", "Manrope", "Noto Sans KR", sans-serif; }
+      .paper { fill: #FFFDF9; }
+      .paper50 { fill: #FBF6EE; }
+      .paper100 { fill: #F2E7D8; }
+      .ink900 { fill: #1E2A35; }
+      .ink700 { fill: #465867; }
+      .ink500 { fill: #6B7B88; }
+      .shell { fill: #151C22; }
+      .accent { fill: #B75B2D; }
+      .cyan { fill: #4C8FA6; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="1120" fill="#FBF6EE"/>
+
+  <g class="ui">
+    <rect x="0" y="0" width="1440" height="72" fill="#FFFDF9"/>
+    <line x1="0" y1="72.5" x2="1440" y2="72.5" stroke="#DDD2C3"/>
+    <text x="28" y="31" font-size="12" font-weight="600" class="ink500">봄 합창 1차 세션</text>
+    <g transform="translate(240 16)">
+      <text x="0" y="14" font-size="14" font-weight="700" class="ink900">A</text>
+      <text x="0" y="32" font-size="11" font-weight="600" class="ink500">fit 91</text>
+      <line x1="-2" y1="56.5" x2="54" y2="56.5" stroke="#B75B2D" stroke-width="3"/>
+
+      <text x="90" y="14" font-size="14" font-weight="700" class="ink500">B</text>
+      <text x="90" y="32" font-size="11" font-weight="600" class="ink500">fit 87</text>
+
+      <text x="180" y="14" font-size="14" font-weight="700" class="ink500">C</text>
+      <text x="180" y="32" font-size="11" font-weight="600" class="ink500">fit 84</text>
+    </g>
+    <g transform="translate(682 18)">
+      <rect x="0.5" y="0.5" width="46" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+      <text x="23" y="24" font-size="14" font-weight="600" text-anchor="middle" class="ink900">재생</text>
+      <rect x="54.5" y="0.5" width="46" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+      <text x="77" y="24" font-size="14" font-weight="600" text-anchor="middle" class="ink900">정지</text>
+      <text x="122" y="24" font-size="14" font-weight="600" class="ink900">00:18 / 02:14</text>
+    </g>
+    <g transform="translate(1116 18)">
+      <rect x="0.5" y="0.5" width="72" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+      <text x="36" y="24" font-size="14" font-weight="600" text-anchor="middle" class="ink900">스튜디오로</text>
+      <rect x="198.5" y="0.5" width="88" height="36" fill="#1B242D" stroke="#1B242D"/>
+      <text x="242" y="24" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFDF9">내보내기</text>
+      <rect x="80.5" y="0.5" width="108" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+      <text x="134" y="24" font-size="14" font-weight="600" text-anchor="middle" class="ink900">후보 비교</text>
+    </g>
+  </g>
+
+  <g class="ui">
+    <rect x="0" y="72" width="280" height="1048" fill="#FFFDF9"/>
+    <line x1="280.5" y1="72" x2="280.5" y2="1120" stroke="#DDD2C3"/>
+    <rect x="1140" y="72" width="300" height="1048" fill="#FFFDF9"/>
+    <line x1="1140.5" y1="72" x2="1140.5" y2="1120" stroke="#DDD2C3"/>
+
+    <text x="28" y="112" font-size="20" font-weight="700" class="ink900">제약</text>
+    <text x="28" y="144" font-size="12" font-weight="600" class="ink500">style</text>
+    <rect x="28.5" y="156.5" width="224" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="44" y="180" font-size="14" class="ink900">Contemporary choir</text>
+
+    <text x="28" y="224" font-size="12" font-weight="600" class="ink500">difficulty</text>
+    <rect x="28.5" y="236.5" width="224" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="44" y="260" font-size="14" class="ink900">Intermediate</text>
+
+    <text x="28" y="304" font-size="12" font-weight="600" class="ink500">voice range preset</text>
+    <rect x="28.5" y="316.5" width="224" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="44" y="340" font-size="14" class="ink900">Mixed choir SATB</text>
+
+    <text x="28" y="384" font-size="12" font-weight="600" class="ink500">beatbox</text>
+    <rect x="28.5" y="396.5" width="224" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="44" y="420" font-size="14" class="ink900">Off</text>
+
+    <text x="28" y="464" font-size="12" font-weight="600" class="ink500">max leap</text>
+    <rect x="28.5" y="476.5" width="224" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="44" y="500" font-size="14" class="ink900">P4</text>
+
+    <text x="28" y="544" font-size="12" font-weight="600" class="ink500">avoid parallel</text>
+    <rect x="28.5" y="556.5" width="224" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="44" y="580" font-size="14" class="ink900">Strict</text>
+
+    <rect x="28.5" y="628.5" width="108" height="36" fill="#1B242D" stroke="#1B242D"/>
+    <text x="82" y="652" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFDF9">후보 다시 생성</text>
+    <rect x="144.5" y="628.5" width="108" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="198" y="652" font-size="14" font-weight="600" text-anchor="middle" class="ink900">제약 초기화</text>
+
+    <line x1="28" y1="708.5" x2="252" y2="708.5" stroke="#DDD2C3"/>
+    <text x="28" y="740" font-size="20" font-weight="700" class="ink900">후보 요약</text>
+    <text x="28" y="780" font-size="12" font-weight="600" class="ink500">lead fit</text>
+    <text x="192" y="780" font-size="18" font-weight="700" class="ink900">91</text>
+    <text x="28" y="818" font-size="12" font-weight="600" class="ink500">max leap</text>
+    <text x="192" y="818" font-size="18" font-weight="700" class="ink900">M3</text>
+    <text x="28" y="856" font-size="12" font-weight="600" class="ink500">parallel alerts</text>
+    <text x="192" y="856" font-size="18" font-weight="700" class="ink900">0</text>
+    <text x="28" y="894" font-size="12" font-weight="600" class="ink500">beatbox hits</text>
+    <text x="192" y="894" font-size="18" font-weight="700" class="ink900">none</text>
+  </g>
+
+  <g class="ui">
+    <rect x="280" y="72" width="860" height="1048" fill="#FBF6EE"/>
+    <text x="320" y="118" font-size="28" font-weight="700" class="ink900">Candidate A</text>
+    <text x="320" y="144" font-size="14" class="ink700">Contemporary choir / Intermediate / 4 voices</text>
+    <rect x="948.5" y="98.5" width="64" height="28" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="980" y="117" font-size="12" font-weight="600" text-anchor="middle" class="ink900">100%</text>
+    <rect x="1020.5" y="98.5" width="84" height="28" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1062" y="117" font-size="12" font-weight="600" text-anchor="middle" class="ink900">전체 악보</text>
+
+    <rect x="340.5" y="180.5" width="740" height="760" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <g transform="translate(372 220)">
+      <path d="M0 68H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 86H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 104H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 122H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 140H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 250H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 268H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 286H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 304H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 322H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 432H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 450H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 468H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 486H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 504H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 614H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 632H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 650H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 668H676" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 686H676" stroke="#BDAF9A" stroke-width="1.5"/>
+
+      <line x1="0" y1="52" x2="0" y2="704" stroke="#1E2A35" stroke-width="2"/>
+      <line x1="92" y1="52" x2="92" y2="704" stroke="#DDD2C3"/>
+      <line x1="240" y1="52" x2="240" y2="704" stroke="#DDD2C3"/>
+      <line x1="388" y1="52" x2="388" y2="704" stroke="#DDD2C3"/>
+      <line x1="536" y1="52" x2="536" y2="704" stroke="#DDD2C3"/>
+      <line x1="676" y1="52" x2="676" y2="704" stroke="#1E2A35" stroke-width="2"/>
+      <line x1="404" y1="52" x2="404" y2="704" stroke="#B75B2D" stroke-width="2"/>
+
+      <text x="-24" y="84" font-size="12" font-weight="600" class="ink500">A</text>
+      <text x="-24" y="266" font-size="12" font-weight="600" class="ink500">B</text>
+      <text x="-24" y="448" font-size="12" font-weight="600" class="ink500">C</text>
+      <text x="-24" y="630" font-size="12" font-weight="600" class="ink500">D</text>
+
+      <path d="M40 98C40 78 58 78 58 98V126" stroke="#1E2A35" stroke-width="2.5"/>
+      <ellipse cx="58" cy="124" rx="10" ry="7" fill="#1E2A35" transform="rotate(-18 58 124)"/>
+      <path d="M130 110V78" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="130" cy="110" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 130 110)"/>
+      <path d="M168 124V92" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="168" cy="124" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 168 124)"/>
+      <path d="M204 140V108" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="204" cy="140" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 204 140)"/>
+      <path d="M296 116V84" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="296" cy="116" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 296 116)"/>
+      <path d="M334 134V102" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="334" cy="134" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 334 134)"/>
+      <path d="M444 468V436" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="444" cy="468" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 444 468)"/>
+      <path d="M482 452V420" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="482" cy="452" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 482 452)"/>
+      <path d="M518 440V408" stroke="#1E2A35" stroke-width="2"/>
+      <ellipse cx="518" cy="440" rx="9" ry="6" fill="#1E2A35" transform="rotate(-18 518 440)"/>
+    </g>
+
+    <rect x="340" y="964" width="740" height="44" fill="#FFFDF9" stroke="#DDD2C3"/>
+    <text x="364" y="992" font-size="14" font-weight="600" class="ink900">현재 마디 18</text>
+    <text x="520" y="992" font-size="14" font-weight="600" class="ink700">이전 리허설 마크</text>
+    <text x="714" y="992" font-size="14" font-weight="600" class="ink700">다음 리허설 마크</text>
+    <text x="932" y="992" font-size="14" font-weight="600" class="ink700">현재 섹션 반복</text>
+  </g>
+
+  <g class="ui">
+    <text x="1168" y="112" font-size="20" font-weight="700" class="ink900">Playback</text>
+    <rect x="1168.5" y="128.5" width="76" height="36" fill="#1B242D" stroke="#1B242D"/>
+    <text x="1206" y="152" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFDF9">재생</text>
+    <rect x="1252.5" y="128.5" width="76" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1290" y="152" font-size="14" font-weight="600" text-anchor="middle" class="ink900">정지</text>
+    <rect x="1336.5" y="128.5" width="76" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1374" y="152" font-size="14" font-weight="600" text-anchor="middle" class="ink900">처음으로</text>
+    <text x="1168" y="194" font-size="14" class="ink700">00:18 / 02:14</text>
+
+    <line x1="1168" y1="228.5" x2="1412" y2="228.5" stroke="#DDD2C3"/>
+    <text x="1168" y="260" font-size="20" font-weight="700" class="ink900">Part mixer</text>
+    <text x="1168" y="298" font-size="14" class="ink900">Lead</text>
+    <text x="1232" y="298" font-size="12" font-weight="600" class="ink500">S</text>
+    <text x="1260" y="298" font-size="12" font-weight="600" class="ink500">M</text>
+    <rect x="1288" y="290" width="108" height="6" fill="#4C8FA6"/>
+    <text x="1168" y="332" font-size="14" class="ink900">Alto</text>
+    <text x="1232" y="332" font-size="12" font-weight="600" class="ink500">S</text>
+    <text x="1260" y="332" font-size="12" font-weight="600" class="ink500">M</text>
+    <rect x="1288" y="324" width="96" height="6" fill="#4C8FA6"/>
+    <text x="1168" y="366" font-size="14" class="ink900">Tenor</text>
+    <text x="1232" y="366" font-size="12" font-weight="600" class="ink500">S</text>
+    <text x="1260" y="366" font-size="12" font-weight="600" class="ink500">M</text>
+    <rect x="1288" y="358" width="82" height="6" fill="#4C8FA6"/>
+    <text x="1168" y="400" font-size="14" class="ink900">Bass</text>
+    <text x="1232" y="400" font-size="12" font-weight="600" class="ink500">S</text>
+    <text x="1260" y="400" font-size="12" font-weight="600" class="ink500">M</text>
+    <rect x="1288" y="392" width="90" height="6" fill="#4C8FA6"/>
+
+    <line x1="1168" y1="438.5" x2="1412" y2="438.5" stroke="#DDD2C3"/>
+    <text x="1168" y="470" font-size="20" font-weight="700" class="ink900">Guide mode</text>
+    <rect x="1168.5" y="488.5" width="88" height="30" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1212" y="508" font-size="12" font-weight="600" text-anchor="middle" class="ink900">Guide 없음</text>
+    <rect x="1264.5" y="488.5" width="76" height="30" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1302" y="508" font-size="12" font-weight="600" text-anchor="middle" class="ink900">Lead 기준</text>
+    <rect x="1348.5" y="488.5" width="64" height="30" fill="#1B242D" stroke="#1B242D"/>
+    <text x="1380" y="508" font-size="12" font-weight="600" text-anchor="middle" fill="#FFFDF9">전체 겹치기</text>
+
+    <line x1="1168" y1="552.5" x2="1412" y2="552.5" stroke="#DDD2C3"/>
+    <text x="1168" y="584" font-size="20" font-weight="700" class="ink900">Export</text>
+    <rect x="1168.5" y="602.5" width="244" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1290" y="626" font-size="14" font-weight="600" text-anchor="middle" class="ink900">MusicXML 받기</text>
+    <rect x="1168.5" y="648.5" width="244" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1290" y="672" font-size="14" font-weight="600" text-anchor="middle" class="ink900">MIDI 받기</text>
+    <rect x="1168.5" y="694.5" width="244" height="36" fill="#1B242D" stroke="#1B242D"/>
+    <text x="1290" y="718" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFDF9">Guide WAV 받기</text>
+  </g>
+</svg>

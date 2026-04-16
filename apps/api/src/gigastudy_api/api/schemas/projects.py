@@ -74,3 +74,15 @@ class ProjectResponse(BaseModel):
     chord_timeline_json: list[ChordTimelineItem] | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class ProjectLaunchSummaryResponse(BaseModel):
+    has_guide: bool
+    take_count: int
+    ready_take_count: int
+    arrangement_count: int
+    has_mixdown: bool
+
+
+class ProjectListItemResponse(ProjectResponse):
+    launch_summary: ProjectLaunchSummaryResponse

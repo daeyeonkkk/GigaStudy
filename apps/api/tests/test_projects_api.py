@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,7 +9,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from gigastudy_api.db.base import Base
-from gigastudy_api.db.models import Project, User
+from gigastudy_api.db.models import Project, Track, TrackRole, TrackStatus, User
 from gigastudy_api.db.session import get_db_session
 from gigastudy_api.config import get_settings
 from gigastudy_api.main import app
@@ -84,6 +85,71 @@ def test_project_creation_reuses_default_user(client: TestClient, tmp_path: Path
 
     assert len(users) == 1
     assert len(projects) == 2
+
+
+def test_list_projects_returns_recent_first_with_launch_summary(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    first_project_id = client.post("/api/projects", json={"title": "Morning Drill"}).json()["project_id"]
+    second_project_id = client.post("/api/projects", json={"title": "Choir Set"}).json()["project_id"]
+
+    database_path = tmp_path / "projects-api.db"
+    engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
+
+    with Session(engine) as session:
+        projects = {
+            str(project.project_id): project for project in session.scalars(select(Project)).all()
+        }
+
+        projects[first_project_id].updated_at = datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc)
+        projects[second_project_id].updated_at = datetime(2026, 4, 15, 18, 30, tzinfo=timezone.utc)
+
+        session.add(
+            Track(
+                project_id=projects[second_project_id].project_id,
+                track_role=TrackRole.GUIDE,
+                track_status=TrackStatus.READY,
+            )
+        )
+        session.add(
+            Track(
+                project_id=projects[second_project_id].project_id,
+                track_role=TrackRole.VOCAL_TAKE,
+                track_status=TrackStatus.READY,
+                take_no=1,
+            )
+        )
+        session.add(
+            Track(
+                project_id=projects[second_project_id].project_id,
+                track_role=TrackRole.VOCAL_TAKE,
+                track_status=TrackStatus.PENDING_UPLOAD,
+                take_no=2,
+            )
+        )
+        session.commit()
+
+    response = client.get("/api/projects")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["project_id"] for item in payload] == [second_project_id, first_project_id]
+    assert payload[0]["launch_summary"] == {
+        "has_guide": True,
+        "take_count": 2,
+        "ready_take_count": 1,
+        "arrangement_count": 0,
+        "has_mixdown": False,
+    }
+    assert payload[1]["launch_summary"]["take_count"] == 0
+
+
+def test_list_projects_returns_empty_array_when_no_project_exists(client: TestClient) -> None:
+    response = client.get("/api/projects")
+
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_get_or_create_default_user_recovers_from_insert_race(tmp_path: Path) -> None:

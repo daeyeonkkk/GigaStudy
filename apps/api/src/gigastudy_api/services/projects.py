@@ -2,11 +2,15 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from gigastudy_api.api.schemas.projects import ProjectCreateRequest, ProjectUpdateRequest
+from gigastudy_api.api.schemas.projects import (
+    ProjectCreateRequest,
+    ProjectLaunchSummaryResponse,
+    ProjectUpdateRequest,
+)
 from gigastudy_api.config import get_settings
-from gigastudy_api.db.models import Project, User
+from gigastudy_api.db.models import Project, TrackRole, TrackStatus, User
 
 
 def get_or_create_default_user(session: Session) -> User:
@@ -58,8 +62,43 @@ def create_project(session: Session, payload: ProjectCreateRequest) -> Project:
     return project
 
 
+def list_projects(session: Session) -> list[Project]:
+    statement = (
+        select(Project)
+        .options(
+            selectinload(Project.tracks),
+            selectinload(Project.arrangements),
+        )
+        .order_by(Project.updated_at.desc(), Project.created_at.desc())
+    )
+    return list(session.scalars(statement))
+
+
 def get_project_by_id(session: Session, project_id: UUID) -> Project | None:
     return session.get(Project, project_id)
+
+
+def build_project_launch_summary(project: Project) -> ProjectLaunchSummaryResponse:
+    guide_tracks = [
+        track
+        for track in project.tracks
+        if track.track_role == TrackRole.GUIDE and track.track_status == TrackStatus.READY
+    ]
+    take_tracks = [track for track in project.tracks if track.track_role == TrackRole.VOCAL_TAKE]
+    ready_take_tracks = [track for track in take_tracks if track.track_status == TrackStatus.READY]
+    mixdown_tracks = [
+        track
+        for track in project.tracks
+        if track.track_role == TrackRole.MIXDOWN and track.track_status == TrackStatus.READY
+    ]
+
+    return ProjectLaunchSummaryResponse(
+        has_guide=bool(guide_tracks),
+        take_count=len(take_tracks),
+        ready_take_count=len(ready_take_tracks),
+        arrangement_count=len(project.arrangements),
+        has_mixdown=bool(mixdown_tracks),
+    )
 
 
 def update_project(session: Session, project_id: UUID, payload: ProjectUpdateRequest) -> Project | None:

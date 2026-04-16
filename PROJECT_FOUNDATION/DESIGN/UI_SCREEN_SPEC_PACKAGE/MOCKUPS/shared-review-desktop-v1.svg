@@ -1,0 +1,123 @@
+<svg width="1440" height="1000" viewBox="0 0 1440 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .ui { font-family: "Instrument Sans", "Manrope", "Noto Sans KR", sans-serif; }
+      .paper { fill: #FFFDF9; }
+      .paper50 { fill: #FBF6EE; }
+      .paper100 { fill: #F2E7D8; }
+      .ink900 { fill: #1E2A35; }
+      .ink700 { fill: #465867; }
+      .ink500 { fill: #6B7B88; }
+      .accent { fill: #B75B2D; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="1000" fill="#FBF6EE"/>
+
+  <g class="ui">
+    <rect x="0" y="0" width="1440" height="72" fill="#FFFDF9"/>
+    <line x1="0" y1="72.5" x2="1440" y2="72.5" stroke="#DDD2C3"/>
+    <text x="28" y="28" font-size="12" font-weight="600" class="accent">SHARED REVIEW</text>
+    <text x="28" y="56" font-size="28" font-weight="700" class="ink900">봄 합창 1차 세션</text>
+    <text x="428" y="42" font-size="13" font-weight="500" class="ink700">snapshot 2026.04.16 10:42</text>
+    <rect x="582" y="22" width="88" height="28" rx="14" fill="#F2E7D8"/>
+    <text x="626" y="40" font-size="12" font-weight="600" text-anchor="middle" class="ink900">읽기 전용</text>
+    <g transform="translate(1112 18)">
+      <rect x="0.5" y="0.5" width="80" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+      <text x="40" y="24" font-size="14" font-weight="600" text-anchor="middle" class="ink900">가이드 듣기</text>
+      <rect x="90.5" y="0.5" width="78" height="36" fill="#FFFDF9" stroke="#BDAF9A"/>
+      <text x="129" y="24" font-size="14" font-weight="600" text-anchor="middle" class="ink900">MusicXML</text>
+      <rect x="178.5" y="0.5" width="60" height="36" fill="#1B242D" stroke="#1B242D"/>
+      <text x="208" y="24" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFDF9">MIDI</text>
+    </g>
+  </g>
+
+  <g class="ui">
+    <rect x="0" y="72" width="1440" height="56" fill="#FFFDF9"/>
+    <line x1="0" y1="128.5" x2="1440" y2="128.5" stroke="#DDD2C3"/>
+
+    <rect x="28" y="86" width="122" height="28" rx="12" fill="#F2E7D8"/>
+    <text x="44" y="97" font-size="11" font-weight="600" class="ink500">guide</text>
+    <text x="44" y="111" font-size="15" font-weight="600" class="ink900">spring-guide.wav</text>
+
+    <rect x="164" y="86" width="92" height="28" rx="12" fill="#F2E7D8"/>
+    <text x="180" y="97" font-size="11" font-weight="600" class="ink500">takes</text>
+    <text x="180" y="111" font-size="15" font-weight="600" class="ink900">4</text>
+
+    <rect x="270" y="86" width="108" height="28" rx="12" fill="#F2E7D8"/>
+    <text x="286" y="97" font-size="11" font-weight="600" class="ink500">ready takes</text>
+    <text x="286" y="111" font-size="15" font-weight="600" class="ink900">3</text>
+
+    <rect x="392" y="86" width="120" height="28" rx="12" fill="#F2E7D8"/>
+    <text x="408" y="97" font-size="11" font-weight="600" class="ink500">arrangements</text>
+    <text x="408" y="111" font-size="15" font-weight="600" class="ink900">A / B / C</text>
+
+    <rect x="526" y="86" width="122" height="28" rx="12" fill="#F2E7D8"/>
+    <text x="542" y="97" font-size="11" font-weight="600" class="ink500">selected version</text>
+    <text x="542" y="111" font-size="15" font-weight="600" class="ink900">Candidate A</text>
+  </g>
+
+  <g class="ui">
+    <rect x="0" y="128" width="260" height="872" fill="#FFFDF9"/>
+    <line x1="260.5" y1="128" x2="260.5" y2="1000" stroke="#DDD2C3"/>
+    <rect x="1160" y="128" width="280" height="872" fill="#FFFDF9"/>
+    <line x1="1160.5" y1="128" x2="1160.5" y2="1000" stroke="#DDD2C3"/>
+    <rect x="260" y="128" width="900" height="872" fill="#FBF6EE"/>
+
+    <text x="28" y="170" font-size="20" font-weight="700" class="ink900">선택 take</text>
+    <text x="28" y="206" font-size="28" font-weight="700" class="ink900">take_04</text>
+    <text x="28" y="238" font-size="14" class="ink700">가이드와 가장 가까운 take</text>
+    <line x1="28" y1="276.5" x2="232" y2="276.5" stroke="#DDD2C3"/>
+    <text x="28" y="312" font-size="12" font-weight="600" class="ink500">alignment confidence</text>
+    <text x="28" y="344" font-size="24" font-weight="700" class="ink900">높음</text>
+    <text x="28" y="392" font-size="12" font-weight="600" class="ink500">melody draft status</text>
+    <text x="28" y="424" font-size="24" font-weight="700" class="ink900">저장됨</text>
+    <text x="28" y="472" font-size="12" font-weight="600" class="ink500">current arrangement</text>
+    <text x="28" y="504" font-size="24" font-weight="700" class="ink900">Candidate A</text>
+
+    <text x="288" y="170" font-size="20" font-weight="700" class="ink900">검토 캔버스</text>
+    <rect x="980.5" y="148.5" width="152" height="30" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <text x="1056" y="168" font-size="12" font-weight="600" text-anchor="middle" class="ink900">악보</text>
+
+    <rect x="292.5" y="196.5" width="832" height="596" fill="#FFFDF9" stroke="#BDAF9A"/>
+    <g transform="translate(322 228)">
+      <path d="M0 54H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 72H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 90H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 108H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 126H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 250H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 268H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 286H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 304H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <path d="M0 322H772" stroke="#BDAF9A" stroke-width="1.5"/>
+      <line x1="420" y1="34" x2="420" y2="356" stroke="#B75B2D" stroke-width="2"/>
+      <circle cx="454" cy="92" r="8" fill="#B75B2D"/>
+      <circle cx="486" cy="82" r="8" fill="#1E2A35"/>
+      <circle cx="518" cy="90" r="8" fill="#1E2A35"/>
+      <circle cx="548" cy="100" r="8" fill="#1E2A35"/>
+      <circle cx="356" cy="282" r="8" fill="#1E2A35"/>
+      <circle cx="388" cy="272" r="8" fill="#1E2A35"/>
+      <circle cx="420" cy="276" r="8" fill="#B75B2D"/>
+      <circle cx="452" cy="266" r="8" fill="#1E2A35"/>
+    </g>
+
+    <rect x="292" y="820" width="832" height="118" fill="#FFFDF9" stroke="#DDD2C3"/>
+    <text x="320" y="852" font-size="12" font-weight="600" class="ink500">요약</text>
+    <text x="320" y="892" font-size="16" class="ink700">읽기 전용으로 현재 선택 버전과 핵심 피드백만 검토합니다.</text>
+
+    <text x="1188" y="170" font-size="20" font-weight="700" class="ink900">점수 요약</text>
+    <text x="1188" y="206" font-size="12" font-weight="600" class="ink500">pitch</text>
+    <text x="1360" y="206" font-size="24" font-weight="700" text-anchor="end" class="ink900">86</text>
+    <text x="1188" y="250" font-size="12" font-weight="600" class="ink500">rhythm</text>
+    <text x="1360" y="250" font-size="24" font-weight="700" text-anchor="end" class="ink900">91</text>
+    <text x="1188" y="294" font-size="12" font-weight="600" class="ink500">harmony</text>
+    <text x="1360" y="294" font-size="24" font-weight="700" text-anchor="end" class="ink900">79</text>
+    <text x="1188" y="338" font-size="12" font-weight="600" class="ink500">highlighted note</text>
+    <text x="1360" y="338" font-size="24" font-weight="700" text-anchor="end" class="ink900">A4</text>
+    <line x1="1188" y1="370.5" x2="1412" y2="370.5" stroke="#DDD2C3"/>
+    <text x="1188" y="406" font-size="14" class="ink700">시작을 약간 낮추고 끝에서 흔들림을 줄이면 더 안정됩니다.</text>
+    <rect x="1188.5" y="444.5" width="224" height="36" fill="#1B242D" stroke="#1B242D"/>
+    <text x="1300" y="468" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFDF9">노트 세부</text>
+  </g>
+</svg>

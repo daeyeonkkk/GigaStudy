@@ -1,7 +1,8 @@
-import { Suspense, lazy } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Suspense, lazy, useEffect } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
-import { HomePage } from './pages/HomePage'
+import { rememberWorkspaceVisit } from './lib/workspaceHistory'
+import { LaunchPage } from './pages/LaunchPage'
 import './App.css'
 
 const ArrangementPage = lazy(() =>
@@ -29,17 +30,28 @@ function RouteFallback() {
   return (
     <div className="page-shell">
       <section className="panel">
-        <p>작업 공간을 불러오는 중입니다...</p>
+        <p>작업 화면을 불러오는 중입니다...</p>
       </section>
     </div>
   )
 }
 
+function WorkspaceHistorySync() {
+  const location = useLocation()
+
+  useEffect(() => {
+    rememberWorkspaceVisit(location.pathname)
+  }, [location.pathname])
+
+  return null
+}
+
 function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
+      <WorkspaceHistorySync />
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<LaunchPage />} />
         <Route path="/ops" element={<OpsPage />} />
         <Route path="/projects/:projectId/studio" element={<StudioPage />} />
         <Route path="/projects/:projectId/arrangement" element={<ArrangementPage />} />

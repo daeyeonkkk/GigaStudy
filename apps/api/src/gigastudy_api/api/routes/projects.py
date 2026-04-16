@@ -3,9 +3,20 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from gigastudy_api.api.schemas.projects import ProjectCreateRequest, ProjectResponse, ProjectUpdateRequest
+from gigastudy_api.api.schemas.projects import (
+    ProjectCreateRequest,
+    ProjectListItemResponse,
+    ProjectResponse,
+    ProjectUpdateRequest,
+)
 from gigastudy_api.db.session import get_db_session
-from gigastudy_api.services.projects import create_project, get_project_by_id, update_project
+from gigastudy_api.services.projects import (
+    build_project_launch_summary,
+    create_project,
+    get_project_by_id,
+    list_projects,
+    update_project,
+)
 
 router = APIRouter(prefix="/projects")
 
@@ -17,6 +28,20 @@ def create_project_endpoint(
 ) -> ProjectResponse:
     project = create_project(session, payload)
     return ProjectResponse.model_validate(project)
+
+
+@router.get("", response_model=list[ProjectListItemResponse])
+def list_projects_endpoint(
+    session: Session = Depends(get_db_session),
+) -> list[ProjectListItemResponse]:
+    projects = list_projects(session)
+    return [
+        ProjectListItemResponse(
+            **ProjectResponse.model_validate(project).model_dump(),
+            launch_summary=build_project_launch_summary(project),
+        )
+        for project in projects
+    ]
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

@@ -23,7 +23,7 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 - `BACKLOGS/`
   Execution backlogs and implementation ticket breakdowns.
 - `DESIGN/`
-  Visual direction, wireframes, mockup workflow, frozen exports, and editable design source.
+  Fixed screen specs, interaction contracts, and frozen mockup exports.
 - `QUALITY/`
   Intonation assessment, calibration evidence, and human-rating workflow material.
 - `OPERATIONS/`
@@ -33,23 +33,26 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
 
 1. `GigaStudy_master_plan.md`
 2. `ROADMAP.md`
-3. `DESIGN/UI_DESIGN_DIRECTION.md`
-4. `DESIGN/FILMORA_REFERENCE_REVIEW.md`
-5. `DESIGN/MYEDIT_REFERENCE_REVIEW.md`
-6. `DESIGN/UI_WIREFRAMES_V1.md`
-7. `DESIGN/UI_MOCKUP_TRACK.md`
-8. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
-9. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
-10. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-11. `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
-12. `BACKLOGS/PHASE1_BACKLOG.md`
-13. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
-14. `GigaStudy_check_list.md`
-15. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-16. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
-17. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
-18. `FOUNDATION_STATUS.md`
-19. `OPERATIONS/WORKING_PRINCIPLES.md`
+3. `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
+4. `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
+5. `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_ROOT_LAUNCH_SCREEN_SPEC.md`
+6. `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_STUDIO_SCREEN_SPEC.md`
+7. `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_ARRANGEMENT_SCREEN_SPEC.md`
+8. `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SHARED_REVIEW_SCREEN_SPEC.md`
+9. `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_OPS_SCREEN_SPEC.md`
+10. `DESIGN/UI_SCREEN_SPEC_PACKAGE/06_INTERACTION_CONNECTION_MATRIX.md`
+11. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
+12. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
+13. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
+14. `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
+15. `BACKLOGS/PHASE1_BACKLOG.md`
+16. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
+17. `GigaStudy_check_list.md`
+18. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
+19. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
+20. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
+21. `FOUNDATION_STATUS.md`
+22. `OPERATIONS/WORKING_PRINCIPLES.md`
 
 ## What Each Document Does
 
@@ -61,23 +64,24 @@ Screenshots, scratch notes, one-off exports, and generated evidence files do not
   Live checklist for scope control, implementation readiness, and release gating. Check marks should map only to verified implementation, not to intent.
 - `FOUNDATION_STATUS.md`
   Current implementation audit against the foundation docs, including verified coverage and remaining gaps.
-- `DESIGN/UI_DESIGN_DIRECTION.md`
-  Canonical visual direction for the product.
-- `DESIGN/FILMORA_REFERENCE_REVIEW.md`
-  Accepted reference review describing what Filmora contributes to the Studio and Arrangement workspace structure, what should be rejected, and what the next mockup pass still needs to absorb.
-- `DESIGN/MYEDIT_REFERENCE_REVIEW.md`
-  Accepted reference review describing what the attached MyEdit waveform editor contributes to the next Studio-only single-task workspace pass.
-- `DESIGN/UI_WIREFRAMES_V1.md`
-  Reference-led low-fidelity wireframe pack for the canonical screens.
-- `DESIGN/UI_MOCKUP_TRACK.md`
-  Canonical mockup workflow and visual source-of-truth rules.
-- `DESIGN/UI_MOCKUPS/`
-  Repo-visible frozen mockup exports for canonical screens.
-- `DESIGN/UI_EDITABLE_SOURCE/`
-  Repo-local editable HTML and CSS artboards for the canonical mockups.
-  The latest Studio and Arrangement workspace-pass source now lives in `filmora-workspace-pass-v2.html`.
-  The stricter next Studio waveform-editor source now also lives in `myedit-wave-editor-pass-v3.html`.
-  The first live implementation pass from that source is now reflected on the dedicated Arrangement route.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
+  Entry point for the canonical UI package.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
+  Global typography, spacing, color, button, modal, and interaction rules.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_ROOT_LAUNCH_SCREEN_SPEC.md`
+  Fixed contract for the `/` entry surface, which is now a launch screen rather than a marketing landing page.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_STUDIO_SCREEN_SPEC.md`
+  Fixed contract for the Studio workspace.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_ARRANGEMENT_SCREEN_SPEC.md`
+  Fixed contract for the Arrangement workspace.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SHARED_REVIEW_SCREEN_SPEC.md`
+  Fixed contract for the read-only shared review workspace.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_OPS_SCREEN_SPEC.md`
+  Fixed contract for the operator and release-desk workspace.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/06_INTERACTION_CONNECTION_MATRIX.md`
+  Single source of truth for page, modal, drawer, popover, and dropdown connections.
+- `DESIGN/UI_SCREEN_SPEC_PACKAGE/MOCKUPS/`
+  Frozen SVG and PNG mockup exports for `Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`.
 - `BACKLOGS/PHASE1_BACKLOG.md`
   Build backlog for the recording pipeline and studio foundation slice.
 - `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
@@ -119,3 +123,6 @@ If a file is temporary, generated, or only useful for one local verification pas
 it should stay outside `PROJECT_FOUNDATION` or be ignored rather than promoted into the foundation tree.
 
 If implementation, backlog, or UI behavior drifts from these foundation docs, update the foundation first or in the same change.
+
+Legacy UI direction docs, reference reviews, wireframes, editable-source artboards, and old mockup-track files were intentionally removed after the screen-spec package reset.
+Do not reintroduce them as canonical references.

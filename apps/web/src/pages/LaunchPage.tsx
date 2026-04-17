@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { buildApiUrl } from '../lib/api'
+import { buildApiUrl, normalizeRequestError, readApiErrorMessage } from '../lib/api'
 import {
   buildWorkspacePath,
   getPinnedProjectIds,
@@ -44,7 +44,6 @@ const initialFormState = {
   bpm: '92',
   baseKey: 'C',
   timeSignature: '4/4',
-  mode: 'practice',
 }
 
 const launchFilters: { id: LaunchFilter; label: string }[] = [
@@ -53,24 +52,24 @@ const launchFilters: { id: LaunchFilter; label: string }[] = [
   { id: 'pinned', label: '고정' },
 ]
 
-const projectGoalLabels: Record<string, string> = {
-  practice: '기본 연습',
-  songwriting: '개인 작업',
-  'part-practice': '파트 연습',
-  arrangement: '편곡 준비',
-}
-
 const workspaceLabels: Record<WorkspaceKind, string> = {
   studio: '스튜디오',
   arrangement: '편곡실',
 }
 
-function getProjectGoalLabel(mode: string | null): string {
-  if (!mode) {
-    return '기본 연습'
-  }
-
-  return projectGoalLabels[mode] ?? mode
+const launchErrorMessages = {
+  recentList: {
+    fallback: '최근 작업을 불러오지 못했습니다.',
+    network: '최근 작업을 불러올 수 없습니다. 지금은 서비스에 연결할 수 없습니다.',
+  },
+  createProject: {
+    fallback: '프로젝트를 만들지 못했습니다.',
+    network: '프로젝트를 만들 수 없습니다. 지금은 서비스에 연결할 수 없습니다.',
+  },
+  shareLinks: {
+    fallback: '공유 링크를 준비하지 못했습니다.',
+    network: '공유 링크를 준비할 수 없습니다. 지금은 서비스에 연결할 수 없습니다.',
+  },
 }
 
 function formatTimestamp(value: string): string {
@@ -219,6 +218,7 @@ export function LaunchPage() {
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null)
   const [recentFeedback, setRecentFeedback] = useState<string | null>(null)
   const [rowActionProjectId, setRowActionProjectId] = useState<string | null>(null)
+  const [projectListReloadKey, setProjectListReloadKey] = useState(0)
   const deferredSearchTerm = useDeferredValue(searchTerm)
 
   useEffect(() => {
@@ -277,7 +277,9 @@ export function LaunchPage() {
       try {
         const response = await fetch(buildApiUrl('/api/projects'))
         if (!response.ok) {
-          throw new Error('최근 작업을 불러오지 못했습니다.')
+          throw new Error(
+            await readApiErrorMessage(response, launchErrorMessages.recentList.fallback),
+          )
         }
 
         const payload = (await response.json()) as ProjectListItem[]
@@ -291,8 +293,11 @@ export function LaunchPage() {
         if (!cancelled) {
           setProjectListState({
             phase: 'error',
-            message:
-              error instanceof Error ? error.message : '최근 작업을 불러오지 못했습니다.',
+            message: normalizeRequestError(
+              error,
+              launchErrorMessages.recentList.fallback,
+              launchErrorMessages.recentList.network,
+            ),
           })
         }
       }
@@ -303,7 +308,11 @@ export function LaunchPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [projectListReloadKey])
+
+  function handleRetryProjectList() {
+    setProjectListReloadKey((current) => current + 1)
+  }
 
   async function handleCreateProject(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -314,7 +323,7 @@ export function LaunchPage() {
       bpm: formState.bpm ? Number(formState.bpm) : null,
       base_key: formState.baseKey || null,
       time_signature: formState.timeSignature || null,
-      mode: formState.mode || null,
+      mode: null,
     }
 
     try {
@@ -327,11 +336,8 @@ export function LaunchPage() {
       })
 
       if (!response.ok) {
-        const errorPayload = (await response.json()) as { detail?: unknown }
         throw new Error(
-          typeof errorPayload.detail === 'string'
-            ? errorPayload.detail
-            : '프로젝트를 만들지 못했습니다.',
+          await readApiErrorMessage(response, launchErrorMessages.createProject.fallback),
         )
       }
 
@@ -340,7 +346,11 @@ export function LaunchPage() {
     } catch (error) {
       setCreateProjectState({
         phase: 'error',
-        message: error instanceof Error ? error.message : '프로젝트를 만들지 못했습니다.',
+        message: normalizeRequestError(
+          error,
+          launchErrorMessages.createProject.fallback,
+          launchErrorMessages.createProject.network,
+        ),
       })
     }
   }
@@ -400,7 +410,9 @@ export function LaunchPage() {
     try {
       const listResponse = await fetch(buildApiUrl(`/api/projects/${project.project_id}/share-links`))
       if (!listResponse.ok) {
-        throw new Error('공유 링크를 준비하지 못했습니다.')
+        throw new Error(
+          await readApiErrorMessage(listResponse, launchErrorMessages.shareLinks.fallback),
+        )
       }
 
       const shareLinksPayload = (await listResponse.json()) as ShareLinkListResponse
@@ -421,7 +433,9 @@ export function LaunchPage() {
         )
 
         if (!createResponse.ok) {
-          throw new Error('공유 링크를 만들지 못했습니다.')
+          throw new Error(
+            await readApiErrorMessage(createResponse, launchErrorMessages.shareLinks.fallback),
+          )
         }
 
         const createdShareLink = (await createResponse.json()) as ShareLinkResponse
@@ -436,7 +450,13 @@ export function LaunchPage() {
       setRecentFeedback('공유 링크를 복사했습니다.')
       setMenuProjectId(null)
     } catch (error) {
-      setRecentFeedback(error instanceof Error ? error.message : '공유 링크를 복사하지 못했습니다.')
+      setRecentFeedback(
+        normalizeRequestError(
+          error,
+          launchErrorMessages.shareLinks.fallback,
+          launchErrorMessages.shareLinks.network,
+        ),
+      )
     } finally {
       setRowActionProjectId(null)
     }
@@ -474,7 +494,6 @@ export function LaunchPage() {
               project.title,
               project.base_key,
               project.time_signature,
-              getProjectGoalLabel(project.mode),
             ]
               .filter(Boolean)
               .join(' ')
@@ -579,7 +598,6 @@ export function LaunchPage() {
             <div className="launch-recent-head" role="row">
               <span>프로젝트</span>
               <span>마지막 수정</span>
-              <span>작업 목적</span>
               <span>작업 상태</span>
               <span>열 위치</span>
               <span>열기</span>
@@ -595,7 +613,7 @@ export function LaunchPage() {
                 <button
                   type="button"
                   className="launch-inline-button"
-                  onClick={() => window.location.reload()}
+                  onClick={handleRetryProjectList}
                 >
                   다시 불러오기
                 </button>
@@ -649,11 +667,6 @@ export function LaunchPage() {
                       </div>
 
                       <div className="launch-recent-row__meta">
-                        <strong>{getProjectGoalLabel(project.mode)}</strong>
-                        <span>{project.mode ? '작업 목적' : '기본 설정'}</span>
-                      </div>
-
-                      <div className="launch-recent-row__meta">
                         <strong>{buildProgressSummary(project)}</strong>
                         <span>{buildProgressDetail(project)}</span>
                       </div>
@@ -665,7 +678,6 @@ export function LaunchPage() {
 
                       <div className="launch-recent-row__mobile-summary">
                         <span>{formatCompactDate(project.updated_at)}</span>
-                        <span>{getProjectGoalLabel(project.mode)}</span>
                         <span>{buildProgressSummary(project)}</span>
                         <span>{workspaceLabels[workspacePreference.kind]}</span>
                       </div>
@@ -755,12 +767,15 @@ export function LaunchPage() {
                   name="title"
                   placeholder="예: 주일 예배 2절 가이드"
                   value={formState.title}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setFormState((current) => ({
                       ...current,
                       title: event.target.value,
                     }))
-                  }
+                    if (createProjectState.phase === 'error') {
+                      setCreateProjectState({ phase: 'idle' })
+                    }
+                  }}
                   required
                 />
               </label>
@@ -773,12 +788,15 @@ export function LaunchPage() {
                     name="bpm"
                     inputMode="numeric"
                     value={formState.bpm}
-                    onChange={(event) =>
+                    onChange={(event) => {
                       setFormState((current) => ({
                         ...current,
                         bpm: event.target.value,
                       }))
-                    }
+                      if (createProjectState.phase === 'error') {
+                        setCreateProjectState({ phase: 'idle' })
+                      }
+                    }}
                   />
                 </label>
 
@@ -789,54 +807,40 @@ export function LaunchPage() {
                     className="launch-input"
                     name="baseKey"
                     value={formState.baseKey}
-                    onChange={(event) =>
+                    onChange={(event) => {
                       setFormState((current) => ({
                         ...current,
                         baseKey: event.target.value,
                       }))
-                    }
+                      if (createProjectState.phase === 'error') {
+                        setCreateProjectState({ phase: 'idle' })
+                      }
+                    }}
                   />
                 </label>
               </div>
 
               <div className="launch-form__grid">
-                <label className="launch-field">
+                <label className="launch-field launch-field--full">
                   <span>박자</span>
                   <select
                     className="launch-input"
                     name="timeSignature"
                     value={formState.timeSignature}
-                    onChange={(event) =>
+                    onChange={(event) => {
                       setFormState((current) => ({
                         ...current,
                         timeSignature: event.target.value,
                       }))
-                    }
+                      if (createProjectState.phase === 'error') {
+                        setCreateProjectState({ phase: 'idle' })
+                      }
+                    }}
                   >
                     <option value="4/4">4/4</option>
                     <option value="3/4">3/4</option>
                     <option value="6/8">6/8</option>
                     <option value="2/4">2/4</option>
-                  </select>
-                </label>
-
-                <label className="launch-field">
-                  <span>작업 목적</span>
-                  <select
-                    className="launch-input"
-                    name="mode"
-                    value={formState.mode}
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        mode: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="practice">기본 연습</option>
-                    <option value="songwriting">개인 작업</option>
-                    <option value="part-practice">파트 연습</option>
-                    <option value="arrangement">편곡 준비</option>
                   </select>
                 </label>
               </div>

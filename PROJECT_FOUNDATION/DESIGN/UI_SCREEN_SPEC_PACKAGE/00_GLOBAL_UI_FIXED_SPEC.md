@@ -198,6 +198,23 @@
 
 ## 10. 입력 요소 규격
 
+## 9A. Control hierarchy
+
+### Control hierarchy contract
+
+- One user intent maps to one primary control.
+- Stateful opposites such as `record / stop`, `pin / unpin`, or `mute / unmute` collapse into one toggle button when the mental model is a single action.
+- Controls that are meaningless before prerequisites exist stay `disabled` by default instead of appearing active.
+- Only the primary action stays permanently visible in the main layout.
+- Secondary or infrequent actions move into `details`, dropdown, drawer, or modal surfaces.
+- Row-level utility clusters follow the same rule: keep the row's primary action inline and collapse mix or advanced utilities into a compact secondary surface.
+- On compact viewports, supporting side surfaces collapse to one-line summary rows instead of staying fully expanded above or below the main work surface.
+- On compact viewports, dense meta blocks, long editable lists, and history logs do not stay open by default; they collapse to one summary row and open only when the user asks for them.
+- If a drawer or modal owns the authoring flow, the base page must not duplicate the same inputs inline.
+- If a persisted field's product meaning is ambiguous or overloaded, the UI must hide that field until a dedicated label and storage contract exist.
+
+## 10. Input elements
+
 ### 10.1 Root Launch form input
 
 - height: `56px`
@@ -246,6 +263,12 @@
 - desktop min width: `96px`
 - border bottom active only
 - no pill tabs in Studio or Arrangement
+
+## 12A. Embedded audio player
+
+- All inline audio playback inside `Root Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops` uses a product-styled custom transport surface.
+- Native browser `<audio controls>` must not be exposed in the live UI.
+- A hidden media element without browser chrome is allowed only as the playback engine behind the custom transport.
 
 ## 13. 카드 사용 규칙
 
@@ -348,3 +371,4 @@
 - Studio/Arrangement/Ops에서 둥근 카드 더미
 - 12px 미만 본문
 - 영어 개발 용어를 그대로 노출하는 UI 라벨
+- `Failed to fetch`, `Load failed`, stack trace, or raw browser / platform exception copy

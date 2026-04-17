@@ -87,6 +87,21 @@ def test_project_creation_reuses_default_user(client: TestClient, tmp_path: Path
     assert len(projects) == 2
 
 
+def test_create_project_without_mode_keeps_mode_null(client: TestClient) -> None:
+    response = client.post(
+        "/api/projects",
+        json={
+            "title": "No Intent Yet",
+            "bpm": 92,
+            "base_key": "C",
+            "time_signature": "4/4",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["mode"] is None
+
+
 def test_list_projects_returns_recent_first_with_launch_summary(
     client: TestClient,
     tmp_path: Path,

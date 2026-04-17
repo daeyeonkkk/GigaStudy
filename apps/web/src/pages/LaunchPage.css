@@ -235,10 +235,10 @@
 .launch-recent-head,
 .launch-recent-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.65fr) minmax(96px, 0.9fr) minmax(84px, 0.8fr) minmax(
-      150px,
-      1.1fr
-    ) minmax(104px, 0.9fr) auto;
+  grid-template-columns: minmax(220px, 1.7fr) minmax(96px, 0.85fr) minmax(168px, 1.25fr) minmax(
+      104px,
+      0.95fr
+    ) auto;
   gap: 12px;
   align-items: center;
 }
@@ -424,6 +424,7 @@
 
 .launch-field--full {
   width: 100%;
+  grid-column: 1 / -1;
 }
 
 .launch-submit-button {

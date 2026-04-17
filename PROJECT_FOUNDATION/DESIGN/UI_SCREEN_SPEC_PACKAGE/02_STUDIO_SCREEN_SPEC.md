@@ -264,8 +264,7 @@ Right:
 
 - status pill `파형 준비됨 | 준비 중 | 오류`
 - command group:
-  - `테이크 녹음`
-  - `녹음 멈춤`
+  - primary toggle `테이크 녹음 ↔ 녹음 중지`
   - `분석`
 
 ### 5.2 Overlay toolbar
@@ -501,10 +500,13 @@ Each row columns:
 
 1. name
 2. status
-3. mute
-4. solo
-5. volume slider
-6. waveform mini strip
+3. select button (`take` rows only)
+4. `믹스` details trigger
+5. collapsed mix body:
+   - mute
+   - solo
+   - volume slider
+6. waveform mini strip or future preview slot
 7. more menu
 
 ## 8. Lower workbench
@@ -630,7 +632,7 @@ Buttons:
 
 Contains:
 
-- version note input
+- collapsed version note input surface
 - version list
 
 Buttons:
@@ -642,16 +644,30 @@ Buttons:
 
 Contains:
 
-- share label input
-- permission summary
+- share launcher summary
 - share links list
 
 Buttons:
 
-- `공유 링크 만들기`
+- `공유 만들기`
 - `링크 복사`
 - `읽기 화면 열기`
 - `비활성화`
+
+### 8.10 Control hierarchy contract
+
+- The live recording intent is represented by one primary toggle button, not a separate `start` and `stop` pair.
+- `record` becomes `stop` in place, while `count-in` and `uploading` lock the same button in a disabled state.
+- Buttons that depend on prerequisites stay disabled until those prerequisites exist:
+  note-list focus requires note feedback, melody tools require a selected take, arrangement generation requires a melody draft, and share launch requires at least one shareable artifact.
+- Advanced capture constraints live in a collapsed `details` surface by default.
+- Export and evidence-download actions do not sit inline beside the center-stage primary action; they live under one collapsed secondary surface.
+- In track rows, `select` remains inline and visible, while mute / solo / volume live under one compact `mix` details surface.
+- On compact mobile viewports, the left rail and right inspector do not stay expanded by default; they collapse to one-line summary surfaces and open on demand.
+- On compact mobile viewports, long recorder lists such as the take list also collapse to one summary row and open on demand.
+- On compact mobile viewports, dense non-recording workbench surfaces also collapse by default: analysis diagnostics, note-correction lists, melody note editors, arrangement preset explanations, arrangement part-mix lists, mixdown render summaries, version history, and share history.
+- Version naming and version note inputs are collapsed by default and only expand when the user wants to override the automatic version label.
+- Share label, expiry, version pinning, and artifact selection live only in `MODAL-STUDIO-SHARE`; the lower `share` tab only exposes the launcher and the history list.
 
 ## 9. Connected surfaces
 
@@ -692,7 +708,6 @@ Buttons:
   - BPM
   - key
   - time signature
-  - default review mode
 - footer buttons:
   - `취소`
   - `저장`
@@ -722,8 +737,10 @@ Buttons:
 - title: `읽기 전용 공유 만들기`
 - fields:
   - link label
-  - included artifacts checklist
+  - expiry days
   - snapshot version select
+    - includes `현재 작업면 그대로` as the first option
+  - included artifacts checklist
 - footer:
   - `취소`
   - `공유 링크 만들기`
@@ -793,7 +810,10 @@ Buttons:
 ## 13. Mobile adaptation
 
 - project utility block becomes 2-row strip
-- left rail becomes horizontal tabs
-- right inspector moves below stage as accordion
+- left rail collapses to one summary row labeled `프로젝트` and opens on demand
+- right inspector collapses to one summary row labeled `선택 상태` and opens on demand
+- recorder panel keeps transport and record controls visible, but collapses the take list to one summary row on initial mobile load
 - timeline lane keeps playback first, rows below
+- track rows keep `select` inline and hide mix utilities under one `믹스` details trigger
 - workbench tabs become horizontal scroller
+- non-recording workbench tabs keep the primary command row visible, while dense diagnostics, editable note lists, preset explanations, part-mix lists, and history logs collapse to summary folds

@@ -30,7 +30,7 @@ class ProjectCreateRequest(BaseModel):
     bpm: int | None = Field(default=None, ge=1, le=400)
     base_key: str | None = Field(default=None, max_length=24)
     time_signature: str | None = Field(default=None, max_length=24)
-    mode: str | None = Field(default="practice", max_length=40)
+    mode: str | None = Field(default=None, max_length=40)
     chord_timeline_json: list[ChordTimelineItem] | None = None
 
     @field_validator("title")

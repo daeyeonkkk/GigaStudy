@@ -33,6 +33,8 @@ from gigastudy_api.services.projects import get_project_by_id
 from gigastudy_api.services.studio import get_studio_snapshot
 from gigastudy_api.services.takes import build_take_response
 
+DEFAULT_SHARE_INCLUDED_ARTIFACTS = ("guide", "takes", "mixdown", "arrangements")
+
 
 def _get_project_or_404(session: Session, project_id: UUID):
     project = get_project_by_id(session, project_id)
@@ -106,6 +108,31 @@ def _sanitize_shared_snapshot(snapshot_json: dict) -> dict:
         sanitize_track(track) for track in shared_snapshot.get("takes", []) if isinstance(track, dict)
     ]
     return shared_snapshot
+
+
+def _filter_snapshot_for_share(snapshot_json: dict, included_artifacts: set[str]) -> dict:
+    filtered_snapshot = {
+        key: value
+        for key, value in snapshot_json.items()
+        if key != "latest_device_profile"
+    }
+
+    if "guide" not in included_artifacts:
+        filtered_snapshot["guide"] = None
+
+    if "takes" not in included_artifacts or not isinstance(filtered_snapshot.get("takes"), list):
+        filtered_snapshot["takes"] = []
+
+    if "mixdown" not in included_artifacts:
+        filtered_snapshot["mixdown"] = None
+
+    if "arrangements" not in included_artifacts:
+        filtered_snapshot["arrangements"] = []
+        filtered_snapshot["arrangement_generation_id"] = None
+    elif not isinstance(filtered_snapshot.get("arrangements"), list):
+        filtered_snapshot["arrangements"] = []
+
+    return filtered_snapshot
 
 
 def _default_snapshot_label(source_type: ProjectVersionSource, now: datetime) -> str:
@@ -221,19 +248,32 @@ def create_share_link(
 ) -> ShareLinkResponse:
     project = _get_project_or_404(session, project_id)
     now = datetime.now(timezone.utc)
+    included_artifacts = set(payload.included_artifacts)
+    should_reuse_existing_version = False
 
     if payload.version_id is not None:
-        version = _get_project_version_or_404(session, payload.version_id)
-        if version.project_id != project.project_id:
+        selected_version = _get_project_version_or_404(session, payload.version_id)
+        if selected_version.project_id != project.project_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Version does not match project")
+        base_snapshot_json = (
+            selected_version.snapshot_json if isinstance(selected_version.snapshot_json, dict) else {}
+        )
+        should_reuse_existing_version = included_artifacts == set(DEFAULT_SHARE_INCLUDED_ARTIFACTS)
     else:
         snapshot_response = _build_studio_snapshot_response(session, project.project_id, request)
+        base_snapshot_json = snapshot_response.model_dump(mode="json")
+
+    if should_reuse_existing_version:
+        version = selected_version
+    else:
+        filtered_snapshot_json = _filter_snapshot_for_share(base_snapshot_json, included_artifacts)
         version = ProjectVersion(
             project_id=project.project_id,
             source_type=ProjectVersionSource.SHARE_LINK,
-            label=payload.label or _default_snapshot_label(ProjectVersionSource.SHARE_LINK, now),
+            label=payload.label
+            or (selected_version.label if payload.version_id is not None else _default_snapshot_label(ProjectVersionSource.SHARE_LINK, now)),
             note="Captured automatically for a read-only share link.",
-            snapshot_json=snapshot_response.model_dump(mode="json"),
+            snapshot_json=filtered_snapshot_json,
             created_at=now,
             updated_at=now,
         )

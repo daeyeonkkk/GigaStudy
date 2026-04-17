@@ -129,14 +129,15 @@ Contains:
 - row background hover only
 - no individual card radius
 
-Each row contains 6 columns:
+Each row contains 5 columns:
 
 1. project title stack
 2. last updated
-3. 작업 목적
-4. progress summary
-5. last workspace
-6. open action + overflow
+3. progress summary
+4. last workspace
+5. open action + overflow
+
+- No separate workflow-purpose column appears on `Launch` until the product owns a dedicated persisted field for it.
 
 ### Row typography
 
@@ -166,6 +167,13 @@ Items fixed:
 Only one line permitted:
 
 - `아직 프로젝트가 없습니다`
+
+### Service unavailable state
+
+- raw platform strings such as `Failed to fetch` never appear
+- message: `최근 작업을 불러올 수 없습니다. 지금은 서비스에 연결할 수 없습니다.`
+- retry button: `다시 불러오기`
+- retry action re-runs only the recent-project request instead of forcing a full page reload
 
 ## 3.4 Command Rail
 
@@ -197,7 +205,7 @@ Desktop:
 
 - row 1: project name full width
 - row 2: BPM / Key
-- row 3: Time signature / Goal
+- row 3: Time signature full width
 
 ### Fields
 
@@ -206,8 +214,7 @@ Desktop:
 | 프로젝트 이름 | text | `56px` | full |
 | 템포(BPM) | number | `56px` | half |
 | 기준 키 | text / select-combobox | `56px` | half |
-| 박자 | select | `56px` | half |
-| 작업 목적 | select | `56px` | half |
+| 박자 | select | `56px` | full |
 
 ### Dropdown items
 
@@ -218,12 +225,9 @@ Desktop:
 - `6/8`
 - `2/4`
 
-#### DROPDOWN-LAUNCH-PROJECT-GOAL
+### Workflow intent field
 
-- `기본 연습`
-- `개인 점검`
-- `팀 파트 연습`
-- `편곡 준비`
+- No workflow-purpose dropdown exists on `Launch` until a dedicated product field is defined separately from musical mode data.
 
 ### Primary submit button
 
@@ -244,6 +248,9 @@ Desktop:
 - font: `14px`
 - color: `danger-500`
 - max lines: `2`
+- when project creation fails because the service is unreachable, use:
+  `프로젝트를 만들 수 없습니다. 지금은 서비스에 연결할 수 없습니다.`
+- raw platform strings such as `Failed to fetch` never appear
 
 ## 3.6 Shared Review Opener
 
@@ -295,11 +302,6 @@ Section ID: `LAUNCH-SECTION-SHARE`
 
 - trigger: `박자`
 - type: custom dropdown
-
-### DROPDOWN-LAUNCH-PROJECT-GOAL
-
-- trigger: `작업 목적`
-- same style as above
 
 ### POPOVER-LAUNCH-RECENT-ACTIONS
 
@@ -354,6 +356,7 @@ Section ID: `LAUNCH-SECTION-SHARE`
 
 - only local error line visible
 - layout unchanged
+- raw platform strings such as `Failed to fetch` never appear
 
 ## 8. Mobile adaptation
 

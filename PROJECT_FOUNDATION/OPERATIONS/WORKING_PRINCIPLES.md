@@ -56,3 +56,9 @@ This document defines the working rules for keeping the repository, delivery flo
 - Do not close a visual-refactor, wireframe-match, or mockup-match checklist item from structure alone.
 - Re-review the live route in a browser on desktop and narrow mobile widths for typography pairing, contrast, line wrapping, control density, and default browser-control styling before marking it done.
 - If the layout is structurally correct but the rendered screen still reads too faint, too loud, too cramped, or too verbose for the intended user scenario, keep the checklist item open and record the blocker in `FOUNDATION_STATUS.md`.
+
+## 9. Normalize User-Facing Failure Copy
+
+- Raw browser or platform exception text such as `Failed to fetch`, `Load failed`, stack traces, or connector-specific jargon must not appear in the product UI.
+- If a request fails, translate it into the shortest product-language sentence that explains what the user cannot do right now and what action is available next.
+- If retry is meaningful, retry the failed surface in place instead of forcing a full page reload by default.

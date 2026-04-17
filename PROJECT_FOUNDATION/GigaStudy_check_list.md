@@ -196,20 +196,21 @@ Status rule: mark `[x]` only when implementation exists and the behavior has bee
 - [x] The package includes one single interaction source of truth in `DESIGN/UI_SCREEN_SPEC_PACKAGE/06_INTERACTION_CONNECTION_MATRIX.md`.
 - [x] Legacy UI direction, reference-review, wireframe, editable-source, and old mockup-track docs have been removed from `PROJECT_FOUNDATION/DESIGN/`.
 - [x] The live `/` route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_ROOT_LAUNCH_SCREEN_SPEC.md` closely enough to count as aligned.
-- [ ] The live typography system now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md` across headings, body copy, and default control chrome instead of shipping fallback system fonts or browser-default UI text.
-- [ ] The live Studio route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_STUDIO_SCREEN_SPEC.md` closely enough to count as aligned.
-- [ ] The live Arrangement route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_ARRANGEMENT_SCREEN_SPEC.md` closely enough to count as aligned.
-- [ ] The live Shared Review route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SHARED_REVIEW_SCREEN_SPEC.md` closely enough to count as aligned.
-- [ ] The live Ops route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_OPS_SCREEN_SPEC.md` closely enough to count as aligned.
-- [ ] Compact mode-switch and workflow-handoff controls now match the package contract instead of reverting to tall card-like toggles.
+- [x] The live typography system now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md` across headings, body copy, and default control chrome instead of shipping fallback system fonts or browser-default UI text.
+- [x] The live Studio route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_STUDIO_SCREEN_SPEC.md` closely enough to count as aligned.
+- [x] The live Arrangement route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_ARRANGEMENT_SCREEN_SPEC.md` closely enough to count as aligned.
+- [x] The live Shared Review route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SHARED_REVIEW_SCREEN_SPEC.md` closely enough to count as aligned.
+- [x] The live Ops route now follows `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_OPS_SCREEN_SPEC.md` closely enough to count as aligned.
+- [x] Compact mode-switch and workflow-handoff controls now match the package contract instead of reverting to tall card-like toggles.
+- [x] Live workspace routes now follow the control-hierarchy contract: single-intent action consolidation, disabled-by-default prerequisite controls, collapsed low-priority tools, and no duplicate inline authoring surfaces.
 
 ## 17. Mockup Track
 
 - [x] Repo-visible frozen mockup exports exist for `Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops` in `DESIGN/UI_SCREEN_SPEC_PACKAGE/MOCKUPS/`.
 - [x] Each canonical screen now has both a fixed spec document and a matching frozen mockup export.
 - [x] The package mockups now exist as both SVG source and PNG review render.
-- [ ] The live routes are now re-reviewed against the package mockups rather than against deleted wireframe or legacy mockup names.
-- [ ] Release-gate and browser-review notes now reference `launch-desktop-v1`, `studio-desktop-v1`, `arrangement-desktop-v1`, `shared-review-desktop-v1`, and `ops-desktop-v1` instead of legacy mockup IDs.
+- [x] The live routes are now re-reviewed against the package mockups rather than against deleted wireframe or legacy mockup names.
+- [x] Release-gate and browser-review notes now reference `launch-desktop-v1`, `studio-desktop-v1`, `arrangement-desktop-v1`, `shared-review-desktop-v1`, and `ops-desktop-v1` instead of legacy mockup IDs.
 
 ## 18. Foundation Hygiene
 

@@ -14,7 +14,6 @@
 | `PAGE-LAUNCH` | recent row | selectable row | last workspace route | route push | n/a |
 | `PAGE-LAUNCH` | recent row `⋯` | popover trigger | `POPOVER-LAUNCH-RECENT-ACTIONS` | popover open | click outside / esc |
 | `PAGE-LAUNCH` | 박자 | form dropdown | `DROPDOWN-LAUNCH-TIME-SIGNATURE` | dropdown open | click outside / esc |
-| `PAGE-LAUNCH` | 작업 목적 | form dropdown | `DROPDOWN-LAUNCH-PROJECT-GOAL` | dropdown open | click outside / esc |
 | `PAGE-LAUNCH` | 스튜디오 열기 | submit button | `PAGE-STUDIO` | create project then route push | n/a |
 | `PAGE-LAUNCH` | 검토 열기 | submit button | `PAGE-REVIEW` | parse token then route push | n/a |
 | `PAGE-LAUNCH` | 붙여넣기 | secondary button | clipboard paste | immediate action | n/a |

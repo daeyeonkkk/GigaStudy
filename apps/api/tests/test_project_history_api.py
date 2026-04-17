@@ -131,6 +131,44 @@ def test_share_link_creates_snapshot_and_serves_public_read_only_payload(client:
     assert "latest_device_profile" not in payload
 
 
+def test_share_link_can_clone_a_selected_version_with_filtered_artifacts(client: TestClient) -> None:
+    project_id = seed_project_snapshot(client)
+    version_response = client.post(
+        f"/api/projects/{project_id}/versions",
+        json={"label": "Ready for review"},
+    )
+    assert version_response.status_code == 201
+    base_version_id = version_response.json()["version_id"]
+
+    create_response = client.post(
+        f"/api/projects/{project_id}/share-links",
+        json={
+            "label": "Take only",
+            "expires_in_days": 5,
+            "version_id": base_version_id,
+            "included_artifacts": ["takes"],
+        },
+    )
+
+    assert create_response.status_code == 201
+    share_link = create_response.json()
+    assert share_link["version_id"] != base_version_id
+
+    token = share_link["share_url"].rstrip("/").split("/")[-1]
+    public_response = client.get(f"/api/shared/{token}")
+
+    assert public_response.status_code == 200
+    payload = public_response.json()
+    assert payload["snapshot_summary"]["has_guide"] is False
+    assert payload["guide"] is None
+    assert payload["snapshot_summary"]["take_count"] == 1
+    assert len(payload["takes"]) == 1
+    assert payload["snapshot_summary"]["has_mixdown"] is False
+    assert payload["mixdown"] is None
+    assert payload["snapshot_summary"]["arrangement_count"] == 0
+    assert payload["arrangements"] == []
+
+
 def test_deactivating_share_link_blocks_further_public_access(client: TestClient) -> None:
     project_id = seed_project_snapshot(client)
     share_link = client.post(

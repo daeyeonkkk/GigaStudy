@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -47,10 +48,16 @@ class ProjectVersionListResponse(BaseModel):
     items: list[ProjectVersionResponse] = Field(default_factory=list)
 
 
+ShareArtifactKey = Literal["guide", "takes", "mixdown", "arrangements"]
+
+
 class ShareLinkCreateRequest(BaseModel):
     label: str | None = Field(default=None, max_length=120)
     expires_in_days: int = Field(default=7, ge=1, le=90)
     version_id: UUID | None = None
+    included_artifacts: list[ShareArtifactKey] = Field(
+        default_factory=lambda: ["guide", "takes", "mixdown", "arrangements"]
+    )
 
     @field_validator("label")
     @classmethod
@@ -60,6 +67,15 @@ class ShareLinkCreateRequest(BaseModel):
 
         normalized = value.strip()
         return normalized or None
+
+    @field_validator("included_artifacts")
+    @classmethod
+    def normalize_included_artifacts(cls, value: list[ShareArtifactKey]) -> list[ShareArtifactKey]:
+        deduped: list[ShareArtifactKey] = []
+        for item in value:
+            if item not in deduped:
+                deduped.append(item)
+        return deduped
 
 
 class ShareLinkResponse(BaseModel):

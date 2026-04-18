@@ -1,6 +1,7 @@
 import { ManagedAudioPlayer } from '../../components/ManagedAudioPlayer'
 import { WaveformPreview } from '../../components/WaveformPreview'
 import type { AudioPreviewData } from '../../lib/audioPreview'
+import { useStudioCompactViewport } from './useStudioCompactViewport'
 
 type StatusTone = 'error' | 'loading' | 'ready'
 
@@ -29,6 +30,8 @@ export function StudioMixdownPlaybackPanel({
   statusTone,
   updatedAtLabel,
 }: StudioMixdownPlaybackPanelProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
     <article className="panel studio-block">
       <div className="panel-header">
@@ -39,7 +42,10 @@ export function StudioMixdownPlaybackPanel({
         <span className={`status-pill status-pill--${statusTone}`}>{statusLabel}</span>
       </div>
 
-      <details className="studio-mobile-fold studio-mobile-fold--secondary">
+      <details
+        className="studio-mobile-fold studio-mobile-fold--secondary"
+        open={isCompactViewport ? undefined : true}
+      >
         <summary className="studio-mobile-fold__summary">
           <span>저장 요약</span>
           <strong>{playbackSummaryLabel}</strong>

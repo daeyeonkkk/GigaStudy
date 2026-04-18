@@ -1,4 +1,5 @@
 import { getArrangementPartRoleLabel } from '../../lib/localizedLabels'
+import { useStudioCompactViewport } from './useStudioCompactViewport'
 
 type StatusTone = 'error' | 'loading' | 'ready'
 type MessageTone = 'error' | 'hint'
@@ -54,6 +55,8 @@ export function StudioPlaybackPanel({
   stopButtonDisabled,
   transportMessage,
 }: StudioPlaybackPanelProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
     <article className="panel studio-block" data-testid="playback-panel">
       <div className="panel-header">
@@ -106,7 +109,10 @@ export function StudioPlaybackPanel({
       </p>
 
       {hasSelectedArrangement ? (
-        <details className="studio-mobile-fold studio-mobile-fold--secondary">
+        <details
+          className="studio-mobile-fold studio-mobile-fold--secondary"
+          open={isCompactViewport ? undefined : true}
+        >
           <summary className="studio-mobile-fold__summary">
             <span>파트 믹스</span>
             <strong>{mixSummaryLabel}</strong>

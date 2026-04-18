@@ -55,6 +55,7 @@ Date: 2026-04-18
 - `apps/web/src/pages/studio/studioWorkbenchViewModels.ts`
 - `apps/web/src/pages/studio/StudioWorkbenchSection.tsx`
 - `apps/web/src/pages/studio/StudioWorkbenchTabs.tsx`
+- `apps/web/src/pages/studio/useStudioCompactViewport.ts`
 - `apps/web/src/pages/ArrangementPage.tsx`
 - `apps/web/src/pages/ArrangementPage.css`
 - `apps/web/src/pages/SharedProjectPage.tsx`
@@ -349,6 +350,15 @@ Date: 2026-04-18
   summary, and inspector now all read selected-take label / score and `can open` gating from
   `apps/web/src/pages/studio/studioWorkbenchViewModels.ts` instead of each surface deriving those
   values separately inside `StudioPage.tsx`.
+- A follow-up Studio runtime-safety pass then fixed one responsive-shell regression caught during
+  local smoke testing: the extracted `details`-based mobile shells (`rail`, `inspector`,
+  `track-list`, and lower workbench secondary folds) now default open again on desktop while
+  staying collapsed by default on compact mobile through
+  `apps/web/src/pages/studio/useStudioCompactViewport.ts`. A local empty-state + populated-state
+  browser smoke was re-run against the e2e API stack, with fresh evidence captured as
+  `output/playwright/studio-empty-smoke-desktop.png`,
+  `output/playwright/studio-populated-smoke-desktop.png`, and
+  `output/playwright/studio-populated-smoke-mobile.png`.
 - A later arrangement truth pass replaced the dark hero/card workspace with a flat notation-first
   shell that now matches the fixed package much more closely:
   compact candidate top bar, left constraints rail, dominant center score paper, right playback /

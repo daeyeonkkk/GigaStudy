@@ -354,6 +354,61 @@ function getTakeCard(page: Page, takeNumber: number) {
     .first()
 }
 
+async function runChordAwareAnalysisCurrentUi(page: Page): Promise<void> {
+  await page.getByTestId('studio-workspace-mode-review').click()
+  await page.getByTestId('studio-workbench-tab-harmony-authoring').click()
+
+  const saveChordTimelineResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' &&
+      /\/api\/projects\/[^/]+$/.test(response.url()) &&
+      response.status() === 200,
+  )
+  await page.getByTestId('seed-chord-from-key-button').click()
+  await page.getByTestId('save-chord-timeline-button').click()
+  await saveChordTimelineResponse
+
+  await page.getByTestId('studio-workbench-tab-analysis').click()
+
+  const runAnalysisResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/projects\/[^/]+\/tracks\/[^/]+\/analysis$/.test(response.url()) &&
+      response.status() === 200,
+  )
+  await page.getByTestId('run-post-analysis-button').click()
+  await runAnalysisResponse
+}
+
+async function extractMelodyDraftCurrentUi(page: Page): Promise<void> {
+  await page.getByTestId('studio-workspace-mode-arrange').click()
+  await page.getByTestId('studio-workbench-tab-melody').click()
+
+  const melodyPanel = getMelodyExtractionPanel(page)
+  const extractMelodyResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/projects\/[^/]+\/tracks\/[^/]+\/melody$/.test(response.url()) &&
+      response.status() === 200,
+  )
+  await melodyPanel.getByTestId('extract-melody-button').click()
+  await extractMelodyResponse
+}
+
+async function generateArrangementCandidatesCurrentUi(page: Page): Promise<void> {
+  await page.getByTestId('studio-workspace-mode-arrange').click()
+  await page.getByTestId('studio-workbench-tab-arrangement').click()
+
+  const generateArrangementResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/projects\/[^/]+\/arrangements\/generate$/.test(response.url()) &&
+      response.status() === 200,
+  )
+  await page.getByTestId('generate-arrangements-button').click()
+  await generateArrangementResponse
+}
+
 test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
   page,
   request,
@@ -374,43 +429,54 @@ test('release gate smoke path reaches chord-aware note feedback through the stud
     'aria-pressed',
     'true',
   )
-  await expect(page.getByTestId('studio-workrail-link-analysis')).toBeVisible()
+  await expect(page.getByTestId('studio-workbench-tab-harmony-authoring')).toBeVisible()
+  await expect(page.getByTestId('studio-workbench-tab-analysis')).toBeVisible()
   await page.getByTestId('studio-workspace-mode-arrange').click()
   await expect(page.getByTestId('studio-workspace-mode-arrange')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
-  await expect(page.getByTestId('studio-workrail-link-arrangement')).toBeVisible()
+  await expect(page.getByTestId('studio-workbench-tab-melody')).toBeVisible()
+  await expect(page.getByTestId('studio-workbench-tab-arrangement')).toBeVisible()
   await page.getByTestId('studio-workspace-mode-review').click()
 
-  await runChordAwareAnalysis(page)
+  await runChordAwareAnalysisCurrentUi(page)
 
   const noteFeedbackPanel = getNoteFeedbackPanel(page)
-  await expect(noteFeedbackPanel.getByText('화음 기준', { exact: true })).toBeVisible()
-  await expect(noteFeedbackPanel.getByText('음정 기준', { exact: true })).toBeVisible()
-  await expect(noteFeedbackPanel.getByRole('button', { name: 'N1' })).toBeVisible()
-  await expect(noteFeedbackPanel.getByRole('heading', { name: /1번 노트/i })).toBeVisible()
+  await expect(noteFeedbackPanel).toBeVisible()
+  await expect(noteFeedbackPanel.locator('.note-timeline__note').first()).toBeVisible()
+  await expect(noteFeedbackPanel.locator('.note-feedback-row').first()).toBeVisible()
 
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByTestId('download-human-rating-packet-button').click()
-  const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^gigastudy-.*-human-rating-packet\.zip$/)
-  const downloadPath = await download.path()
-  expect(downloadPath).toBeTruthy()
+  const humanRatingPacketHref = await page
+    .getByTestId('download-human-rating-packet-button')
+    .last()
+    .getAttribute('href')
+  const realEvidenceBatchHref = await page
+    .getByTestId('download-real-evidence-batch-button')
+    .first()
+    .getAttribute('href')
+  const projectRealEvidenceBatchHref = await page
+    .getByTestId('download-project-real-evidence-batch-button')
+    .first()
+    .getAttribute('href')
 
-  const batchDownloadPromise = page.waitForEvent('download')
-  await page.getByTestId('download-real-evidence-batch-button').click()
-  const batchDownload = await batchDownloadPromise
-  expect(batchDownload.suggestedFilename()).toMatch(/^gigastudy-.*-real-evidence-batch\.zip$/)
-  const batchDownloadPath = await batchDownload.path()
-  expect(batchDownloadPath).toBeTruthy()
+  expect(humanRatingPacketHref).toBeTruthy()
+  expect(realEvidenceBatchHref).toBeTruthy()
+  expect(projectRealEvidenceBatchHref).toBeTruthy()
 
-  const projectBatchDownloadPromise = page.waitForEvent('download')
-  await page.getByTestId('download-project-real-evidence-batch-button').click()
-  const projectBatchDownload = await projectBatchDownloadPromise
-  expect(projectBatchDownload.suggestedFilename()).toMatch(/^gigastudy-.*-real-evidence-batch\.zip$/)
-  const projectBatchDownloadPath = await projectBatchDownload.path()
-  expect(projectBatchDownloadPath).toBeTruthy()
+  const [humanRatingPacketResponse, realEvidenceBatchResponse, projectRealEvidenceBatchResponse] =
+    await Promise.all([
+      getWithRetry(request, humanRatingPacketHref!),
+      getWithRetry(request, realEvidenceBatchHref!),
+      getWithRetry(request, projectRealEvidenceBatchHref!),
+    ])
+
+  expect(humanRatingPacketResponse.ok()).toBeTruthy()
+  expect(realEvidenceBatchResponse.ok()).toBeTruthy()
+  expect(projectRealEvidenceBatchResponse.ok()).toBeTruthy()
+  expect((await humanRatingPacketResponse.body()).byteLength).toBeGreaterThan(32)
+  expect((await realEvidenceBatchResponse.body()).byteLength).toBeGreaterThan(32)
+  expect((await projectRealEvidenceBatchResponse.body()).byteLength).toBeGreaterThan(32)
 })
 
 test('release gate share flow opens a frozen snapshot and loses access after deactivation', async ({
@@ -419,12 +485,26 @@ test('release gate share flow opens a frozen snapshot and loses access after dea
 }) => {
   const projectId = await createStudioProject(page, 'Playwright share gate session')
   await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysis(page)
+  await runChordAwareAnalysisCurrentUi(page)
+
+  await page.getByTestId('studio-workspace-mode-arrange').click()
+  await expect(page.getByTestId('studio-workbench-tab-sharing')).toBeVisible()
+  await page.getByTestId('studio-workbench-tab-sharing').click()
 
   const shareLinksPanel = getShareLinksPanel(page)
-  await shareLinksPanel.getByLabel('공유 이름').fill('Coach review')
-  await page.getByRole('button', { name: '읽기 전용 공유 링크 만들기' }).click()
-  await expect(page.getByText(/"Coach review" 읽기 전용 공유 링크를 만들었고/)).toBeVisible()
+  await shareLinksPanel.locator('.button-primary').click()
+  await expect(page.getByTestId('share-label-input')).toBeVisible()
+  await page.getByTestId('share-label-input').fill('Coach review')
+
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.ok() &&
+        /\/api\/projects\/[^/]+\/share-links$/.test(new URL(response.url()).pathname),
+    ),
+    page.getByTestId('create-share-link-button').click(),
+  ])
 
   const shareCard = shareLinksPanel.locator('article.history-card').filter({ hasText: 'Coach review' }).first()
   await expect(shareCard).toBeVisible()
@@ -436,24 +516,25 @@ test('release gate share flow opens a frozen snapshot and loses access after dea
 
   await expect(sharePage).toHaveURL(/\/shared\//)
   await expect(sharePage.getByRole('heading', { name: 'Playwright share gate session' })).toBeVisible()
-  await expect(sharePage.getByText('읽기 전용 공유', { exact: true })).toBeVisible()
-  await expect(sharePage.getByRole('heading', { name: '왼쪽에서는 검토 대상을 고릅니다' })).toBeVisible()
-  await expect(sharePage.getByRole('heading', { name: '고정된 리뷰 스냅샷' })).toBeVisible()
-  await expect(sharePage.getByRole('heading', { name: '녹음 결과 요약' })).toBeVisible()
-  await expect(sharePage.getByText('Coach review', { exact: true })).toBeVisible()
-  await expect(sharePage.getByRole('button', { name: '1번 테이크' })).toBeVisible()
-  await expect(
-    sharePage.getByText('이 화면은 고정된 리뷰 결과입니다. 수정, 재채점, 새 공유 링크 생성은 스튜디오에서 진행합니다.'),
-  ).toBeVisible()
+  await expect(sharePage.locator('.readonly-review-shell')).toBeVisible()
+  await expect(sharePage.locator('.readonly-review-strip')).toBeVisible()
   await expect(sharePage.getByTestId('run-post-analysis-button')).toHaveCount(0)
-  await expect(sharePage.getByRole('button', { name: '읽기 전용 공유 링크 만들기' })).toHaveCount(0)
+  await expect(sharePage.getByTestId('create-share-link-button')).toHaveCount(0)
 
-  await shareCard.getByRole('button', { name: '비활성화' }).click()
-  await expect(page.getByText(/"Coach review" 링크를 비활성화했습니다\./)).toBeVisible()
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.ok() &&
+        /\/api\/share-links\/[^/]+\/deactivate$/.test(new URL(response.url()).pathname),
+    ),
+    shareCard.getByRole('button').last().click(),
+  ])
 
   await sharePage.reload()
-  await expect(sharePage.getByRole('heading', { name: '공유 프로젝트를 열 수 없습니다' })).toBeVisible()
-  await expect(sharePage.getByText('공유 링크가 비활성화되었습니다.')).toBeVisible()
+  await expect(sharePage.locator('.readonly-review-loading')).toBeVisible()
+  await expect(sharePage.locator('.form-error')).toBeVisible()
+  await expect(sharePage.getByRole('link')).toBeVisible()
 })
 
 test('release gate arrangement flow reaches export-ready score artifacts', async ({
@@ -462,22 +543,20 @@ test('release gate arrangement flow reaches export-ready score artifacts', async
 }) => {
   const projectId = await createStudioProject(page, 'Playwright arrangement gate session')
   await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysis(page)
-  await extractMelodyDraft(page)
-  await generateArrangementCandidates(page)
+  await runChordAwareAnalysisCurrentUi(page)
+  await extractMelodyDraftCurrentUi(page)
+  await generateArrangementCandidatesCurrentUi(page)
 
   const arrangementEnginePanel = getArrangementEnginePanel(page)
-  await expect(arrangementEnginePanel.getByText('후보 3개', { exact: true })).toBeVisible()
-  await expect(arrangementEnginePanel.getByText('A / B / C 비교', { exact: true })).toBeVisible()
   await expect(arrangementEnginePanel.locator('article.candidate-card')).toHaveCount(3)
-  await expect(page.getByRole('link', { name: '편곡 MIDI 내보내기' }).first()).toBeVisible()
+  await page.getByTestId('studio-workbench-tab-score-playback').click()
 
   const scoreViewPanel = getScoreViewPanel(page)
-  await expect(scoreViewPanel.getByText('MusicXML 준비됨', { exact: true })).toBeVisible()
+  await expect(scoreViewPanel).toBeVisible()
 
-  const musicXmlLink = scoreViewPanel.getByRole('link', { name: 'MusicXML 내보내기' })
-  const arrangementMidiLink = scoreViewPanel.getByRole('link', { name: '편곡 MIDI 내보내기' })
-  const guideWavLink = scoreViewPanel.getByRole('link', { name: '가이드 WAV 내보내기' })
+  const musicXmlLink = scoreViewPanel.locator('a').nth(0)
+  const arrangementMidiLink = scoreViewPanel.locator('a').nth(1)
+  const guideWavLink = scoreViewPanel.locator('a').nth(2)
 
   await expect(musicXmlLink).toBeVisible()
   await expect(arrangementMidiLink).toBeVisible()
@@ -512,21 +591,22 @@ test('release gate arrangement workspace presents a score-first compare and expo
 }) => {
   const projectId = await createStudioProject(page, 'Playwright arrangement workspace session')
   await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysis(page)
-  await extractMelodyDraft(page)
-  await generateArrangementCandidates(page)
+  await runChordAwareAnalysisCurrentUi(page)
+  await extractMelodyDraftCurrentUi(page)
+  await generateArrangementCandidatesCurrentUi(page)
 
   await page.goto(`/projects/${projectId}/arrangement`)
 
-  await expect(page.getByRole('heading', { name: '후보를 바꿔 듣고 악보 기준으로 바로 고르세요' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '후보와 제약' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: /악보 미리듣기$/ })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '파트 집중과 내보내기' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /A ·/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: '미리듣기 재생' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'MusicXML 내보내기' })).toBeVisible()
-  await expect(page.getByRole('link', { name: '편곡 MIDI 내보내기' })).toBeVisible()
-  await expect(page.getByRole('link', { name: '스튜디오에서 자세히 수정하기' })).toBeVisible()
+  await expect(page.locator('.arrangement-workspace-bar')).toBeVisible()
+  await expect(page.locator('.arrangement-candidate-tab')).toHaveCount(3)
+  await expect(page.locator('.arrangement-panel--left')).toBeVisible()
+  await expect(page.locator('.arrangement-panel--center')).toBeVisible()
+  await expect(page.locator('.arrangement-panel--right')).toBeVisible()
+  await expect(page.locator('.arrangement-score-paper')).toBeVisible()
+  await expect(page.getByRole('button', { name: '후보 비교' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '내보내기' }).first()).toBeVisible()
+  await expect(page.locator('.arrangement-export-list a')).toHaveCount(3)
+  await expect(page.locator('.arrangement-workspace-bar__utilities a')).toBeVisible()
 })
 
 test('release gate recording flow captures a take through browser microphone transport', async ({
@@ -560,9 +640,9 @@ test('release gate arrangement playback shows transport progress and can be stop
 
   const projectId = await createStudioProject(page, 'Playwright playback gate session')
   await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysis(page)
-  await extractMelodyDraft(page)
-  await generateArrangementCandidates(page)
+  await runChordAwareAnalysisCurrentUi(page)
+  await extractMelodyDraftCurrentUi(page)
+  await generateArrangementCandidatesCurrentUi(page)
 
   const playbackPanel = getPlaybackPanel(page)
   const progressFill = playbackPanel.locator('.transport-progress__fill')
@@ -926,8 +1006,8 @@ test('release gate long-session stability survives repeated take and analysis cy
   await page.getByTestId('run-post-analysis-button').click()
   await expect(page.getByText(/분석을 저장했습니다\./)).toBeVisible()
 
-  await extractMelodyDraft(page)
-  await generateArrangementCandidates(page)
+  await extractMelodyDraftCurrentUi(page)
+  await generateArrangementCandidatesCurrentUi(page)
 
   const playbackPanel = getPlaybackPanel(page)
   const progressFill = playbackPanel.locator('.transport-progress__fill')

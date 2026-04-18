@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 
+import { useStudioCompactViewport } from './useStudioCompactViewport'
+
 type StatusTone = 'error' | 'loading' | 'ready'
 
 type SelectOption = {
@@ -92,6 +94,8 @@ export function StudioArrangementEnginePanel({
   styleOptions,
   voiceRangeOptions,
 }: StudioArrangementEnginePanelProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
     <article className="panel studio-block" data-testid="arrangement-engine-panel">
       <div className="panel-header">
@@ -169,7 +173,10 @@ export function StudioArrangementEnginePanel({
         </label>
       </div>
 
-      <details className="studio-mobile-fold studio-mobile-fold--secondary">
+      <details
+        className="studio-mobile-fold studio-mobile-fold--secondary"
+        open={isCompactViewport ? undefined : true}
+      >
         <summary className="studio-mobile-fold__summary">
           <span>프리셋 요약</span>
           <strong>{presetSummaryLabel}</strong>

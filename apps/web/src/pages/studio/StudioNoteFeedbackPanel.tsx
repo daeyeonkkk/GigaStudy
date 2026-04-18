@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react'
 
+import { useStudioCompactViewport } from './useStudioCompactViewport'
+
 type Tone = 'alert' | 'good' | 'neutral' | 'warn'
 
 type SegmentFeedbackItem = {
@@ -93,6 +95,8 @@ export function StudioNoteFeedbackPanel({
   selectedTakeNoteFeedback,
   selectedTakeScore,
 }: StudioNoteFeedbackPanelProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
           <article className="panel studio-block" data-testid="note-feedback-panel">
             <div className="panel-header">
@@ -166,7 +170,10 @@ export function StudioNoteFeedbackPanel({
 
                 {selectedTakeNoteFeedback.length > 0 ? (
                   <>
-                    <details className="studio-mobile-fold studio-mobile-fold--secondary">
+                    <details
+                      className="studio-mobile-fold studio-mobile-fold--secondary"
+                      open={isCompactViewport ? undefined : true}
+                    >
                       <summary className="studio-mobile-fold__summary">
                         <span>교정 타임라인</span>
                         <strong>{noteFeedbackDetailSummaryLabel}</strong>
@@ -338,7 +345,10 @@ export function StudioNoteFeedbackPanel({
                       </div>
                     </details>
 
-                    <details className="studio-mobile-fold studio-mobile-fold--secondary">
+                    <details
+                      className="studio-mobile-fold studio-mobile-fold--secondary"
+                      open={isCompactViewport ? undefined : true}
+                    >
                       <summary className="studio-mobile-fold__summary">
                         <span>노트 교정 목록</span>
                         <strong>{noteFeedbackSummaryLabel}</strong>
@@ -410,7 +420,10 @@ export function StudioNoteFeedbackPanel({
                 )}
 
                 {selectedTakeScore.feedback_json.length > 0 ? (
-                  <details className="studio-mobile-fold studio-mobile-fold--secondary">
+                    <details
+                      className="studio-mobile-fold studio-mobile-fold--secondary"
+                      open={isCompactViewport ? undefined : true}
+                    >
                     <summary className="studio-mobile-fold__summary">
                       <span>구간 진단</span>
                       <strong>{noteFeedbackSegmentSummaryLabel}</strong>

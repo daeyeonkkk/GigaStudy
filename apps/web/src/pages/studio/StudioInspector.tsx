@@ -1,5 +1,7 @@
 import type { RefObject } from 'react'
 
+import { useStudioCompactViewport } from './useStudioCompactViewport'
+
 type SelectedTake = {
   track_status: string
 }
@@ -95,10 +97,13 @@ export function StudioInspector({
   selectedTakeNoteFeedback,
   selectedTakeScore,
 }: StudioInspectorProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
     <details
             ref={inspectorPanelRef}
             className="studio-wave-editor__inspector-shell studio-mobile-panel studio-mobile-panel--inspector"
+            open={isCompactViewport ? undefined : true}
           >
             <summary className="studio-mobile-panel__summary">
               <span>선택 상태</span>

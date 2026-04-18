@@ -1,3 +1,5 @@
+import { useStudioCompactViewport } from './useStudioCompactViewport'
+
 type StudioRailModeButton = {
   id: string
   label: string
@@ -64,8 +66,13 @@ export function StudioRail({
   takeCount,
   takeItems,
 }: StudioRailProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
-    <details className="studio-wave-editor__rail-shell studio-mobile-panel studio-mobile-panel--rail">
+    <details
+      className="studio-wave-editor__rail-shell studio-mobile-panel studio-mobile-panel--rail"
+      open={isCompactViewport ? undefined : true}
+    >
       <summary className="studio-mobile-panel__summary">
         <span>프로젝트</span>
         <strong>{mobileSummaryLabel}</strong>

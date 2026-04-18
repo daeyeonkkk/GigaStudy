@@ -1,4 +1,5 @@
 import { ManagedAudioPlayer } from '../../components/ManagedAudioPlayer'
+import { useStudioCompactViewport } from './useStudioCompactViewport'
 
 type TimelineMessage = {
   text: string
@@ -49,6 +50,8 @@ export function StudioTimeline({
   rows,
   totalTrackCount,
 }: StudioTimelineProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
     <article className="panel studio-wave-editor__timeline">
       <div className="studio-wave-editor__timeline-header">
@@ -78,7 +81,10 @@ export function StudioTimeline({
         </div>
       ) : null}
 
-      <details className="studio-mobile-fold studio-mobile-fold--take-list">
+      <details
+        className="studio-mobile-fold studio-mobile-fold--take-list"
+        open={isCompactViewport ? undefined : true}
+      >
         <summary className="studio-mobile-fold__summary">
           <span>트랙 목록</span>
           <strong>{mobileSummaryLabel}</strong>

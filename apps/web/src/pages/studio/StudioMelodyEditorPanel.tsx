@@ -1,3 +1,5 @@
+import { useStudioCompactViewport } from './useStudioCompactViewport'
+
 type StatusTone = 'error' | 'loading' | 'ready'
 
 type MelodyNoteEditorRow = {
@@ -30,6 +32,8 @@ export function StudioMelodyEditorPanel({
   statusTone,
   summaryLabel,
 }: StudioMelodyEditorPanelProps) {
+  const isCompactViewport = useStudioCompactViewport()
+
   return (
     <article className="panel studio-block">
       <div className="panel-header">
@@ -41,7 +45,10 @@ export function StudioMelodyEditorPanel({
       </div>
 
       {hasNotes ? (
-        <details className="studio-mobile-fold studio-mobile-fold--secondary">
+        <details
+          className="studio-mobile-fold studio-mobile-fold--secondary"
+          open={isCompactViewport ? undefined : true}
+        >
           <summary className="studio-mobile-fold__summary">
             <span>노트 직접 편집</span>
             <strong>{summaryLabel}</strong>

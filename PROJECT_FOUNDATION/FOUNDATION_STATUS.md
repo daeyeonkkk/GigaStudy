@@ -1,6 +1,6 @@
 # Foundation Status
 
-Date: 2026-04-17
+Date: 2026-04-18
 
 ## Sources Checked
 
@@ -23,6 +23,38 @@ Date: 2026-04-17
 - `apps/web/src/pages/LaunchPage.tsx`
 - `apps/web/src/pages/LaunchPage.css`
 - `apps/web/src/pages/StudioPage.tsx`
+- `apps/web/src/pages/StudioPage.css`
+- `apps/web/src/pages/studio/StudioInspector.tsx`
+- `apps/web/src/pages/studio/StudioAnalysisSummaryPanel.tsx`
+- `apps/web/src/pages/studio/StudioAudioSetupPanel.tsx`
+- `apps/web/src/pages/studio/StudioChordImportPanel.tsx`
+- `apps/web/src/pages/studio/StudioArrangementEnginePanel.tsx`
+- `apps/web/src/pages/studio/StudioArrangementSummaryPanel.tsx`
+- `apps/web/src/pages/studio/StudioGuidePanel.tsx`
+- `apps/web/src/pages/studio/StudioHarmonyTimelinePanel.tsx`
+- `apps/web/src/pages/studio/StudioMelodyPanel.tsx`
+- `apps/web/src/pages/studio/StudioMelodyEditorPanel.tsx`
+- `apps/web/src/pages/studio/StudioMixdownPlaybackPanel.tsx`
+- `apps/web/src/pages/studio/StudioMixdownRenderPanel.tsx`
+- `apps/web/src/pages/studio/StudioNoteFeedbackPanel.tsx`
+- `apps/web/src/pages/studio/StudioPlaybackPanel.tsx`
+- `apps/web/src/pages/studio/StudioProjectSettingsDrawer.tsx`
+- `apps/web/src/pages/studio/StudioRail.tsx`
+- `apps/web/src/pages/studio/StudioRecordingSection.tsx`
+- `apps/web/src/pages/studio/StudioRouteStatePanel.tsx`
+- `apps/web/src/pages/studio/StudioShareLinksPanel.tsx`
+- `apps/web/src/pages/studio/StudioShareModal.tsx`
+- `apps/web/src/pages/studio/StudioScoreViewPanel.tsx`
+- `apps/web/src/pages/studio/StudioStage.tsx`
+- `apps/web/src/pages/studio/StudioTimeline.tsx`
+- `apps/web/src/pages/studio/StudioTopbar.tsx`
+- `apps/web/src/pages/studio/StudioVersionPanel.tsx`
+- `apps/web/src/pages/studio/studioWorkbenchConfig.ts`
+- `apps/web/src/pages/studio/studioWorkbenchNavigation.ts`
+- `apps/web/src/pages/studio/studioWorkbenchRows.ts`
+- `apps/web/src/pages/studio/studioWorkbenchViewModels.ts`
+- `apps/web/src/pages/studio/StudioWorkbenchSection.tsx`
+- `apps/web/src/pages/studio/StudioWorkbenchTabs.tsx`
 - `apps/web/src/pages/ArrangementPage.tsx`
 - `apps/web/src/pages/ArrangementPage.css`
 - `apps/web/src/pages/SharedProjectPage.tsx`
@@ -145,6 +177,178 @@ Date: 2026-04-17
   closely enough for this foundation round.
   Evidence was captured as `output/playwright/studio-live-desktop-audit-v4.png`
   and `output/playwright/studio-live-mobile-audit-v4.png`.
+- A later Studio maintainability pass kept the visible route contract fixed while reducing
+  implementation coupling:
+  obsolete commented Studio JSX was removed, Studio-specific CSS moved out of `App.css` into
+  `apps/web/src/pages/StudioPage.css`, and the top project strip now lives in a page-local
+  component (`apps/web/src/pages/studio/StudioTopbar.tsx`) instead of staying embedded inside one
+  monolithic page file.
+- The same maintainability pass then extracted the left source rail into
+  `apps/web/src/pages/studio/StudioRail.tsx`, keeping the `02_STUDIO_SCREEN_SPEC.md` region split
+  (`topbar / rail / stage / inspector / timeline / workbench`) intact while reducing the amount of
+  page-local JSX that still lives directly in `StudioPage.tsx`.
+- The same structure pass then also extracted the right inspector into
+  `apps/web/src/pages/studio/StudioInspector.tsx`, preserving the live summary, note-detail,
+  chord-context, and next-action surfaces while keeping those `## 6. Right inspector` regions
+  mapped more directly to one dedicated component.
+- A follow-up Studio structure pass then extracted the center waveform stage into
+  `apps/web/src/pages/studio/StudioStage.tsx` and the bottom timeline + track lane into
+  `apps/web/src/pages/studio/StudioTimeline.tsx`, keeping the `02_STUDIO_SCREEN_SPEC.md`
+  region boundaries (`stage / timeline / workbench`) intact while moving the central fixed
+  surfaces out of the monolithic page file.
+- The same pass then also extracted the lower workbench tab rail into
+  `apps/web/src/pages/studio/StudioWorkbenchTabs.tsx`, so the fixed `## 8. Lower workbench`
+  tab contract now maps to one dedicated component before the larger per-tab bodies are split.
+- A follow-up workbench pass then extracted the `## 8.3 녹음 tab` body into
+  `apps/web/src/pages/studio/StudioRecordingSection.tsx`, keeping the live recording toggle,
+  click / count-in controls, live input meter, and take-list retry flow intact while reducing
+  the amount of recording-specific JSX still embedded directly in `StudioPage.tsx`.
+- The next workbench pass then extracted the first `## 8.4 분석 tab` summary / command surface into
+  `apps/web/src/pages/studio/StudioAnalysisSummaryPanel.tsx`, keeping the selected-take summary,
+  score grid, analysis actions, and harmony fallback warning intact while reducing the size of the
+  analysis JSX that still lives directly in `StudioPage.tsx`.
+- The same analysis pass then also extracted the note-list and section-feedback surface into
+  `apps/web/src/pages/studio/StudioNoteFeedbackPanel.tsx`, preserving the mobile summary folds,
+  note timeline selection, note-detail inspection, and segment feedback list while moving the
+  second major analysis body out of `StudioPage.tsx`.
+- The next workbench pass then extracted the first `## 8.5 멜로디 tab` summary / command surface into
+  `apps/web/src/pages/studio/StudioMelodyPanel.tsx`, keeping source-take summary, extraction
+  actions, MIDI download, and save feedback intact while reducing the size of the melody JSX still
+  embedded in `StudioPage.tsx`.
+- The same sweep then extracted the first `## 8.6 편곡 tab` generation surface into
+  `apps/web/src/pages/studio/StudioArrangementEnginePanel.tsx`, preserving preset controls,
+  candidate generation, candidate-card selection, and route jump actions while moving the main
+  arrangement-engine body out of `StudioPage.tsx`.
+- A follow-up playback pass then extracted the first `악보 / 재생` score-view surface into
+  `apps/web/src/pages/studio/StudioScoreViewPanel.tsx`, keeping MusicXML / MIDI / guide export
+  actions and the score-paper rendering surface intact while reducing the amount of read-only
+  score-view JSX still embedded in `StudioPage.tsx`.
+- The next history-surface pass then extracted the lower `버전` tab body into
+  `apps/web/src/pages/studio/StudioVersionPanel.tsx`, keeping the collapsed snapshot metadata
+  inputs, save / refresh actions, and version history cards intact while reducing the amount of
+  version-history JSX still embedded in `StudioPage.tsx`.
+- The same pass then also extracted the lower `공유` tab launcher and history surface into
+  `apps/web/src/pages/studio/StudioShareLinksPanel.tsx`, preserving share-launch readiness,
+  link history actions, and read-only share summaries while keeping authoring controls only in
+  `MODAL-STUDIO-SHARE` as required by `02_STUDIO_SCREEN_SPEC.md`.
+- The next mixdown pass then extracted the first `## 8.7 믹스다운 tab` render-control surface into
+  `apps/web/src/pages/studio/StudioMixdownRenderPanel.tsx`, keeping source summary, render / save
+  actions, and inline preview-status feedback intact while reducing the amount of mixdown-control
+  JSX still embedded in `StudioPage.tsx`.
+- The same mixdown pass then also extracted the saved-output / playback surface into
+  `apps/web/src/pages/studio/StudioMixdownPlaybackPanel.tsx`, preserving the collapsed playback
+  summary, saved-artifact status, local preview player, and waveform preview while moving the
+  second major mixdown card out of `StudioPage.tsx`.
+- The next playback pass then extracted the remaining `악보 / 재생` transport and part-mix surface
+  into `apps/web/src/pages/studio/StudioPlaybackPanel.tsx`, keeping transport progress, guide
+  layering, solo / focus / volume part controls, and inline playback status intact while reducing
+  the amount of arrangement-playback JSX still embedded in `StudioPage.tsx`.
+- The next melody / arrangement pass then extracted the populated `멜로디` note-grid editor into
+  `apps/web/src/pages/studio/StudioMelodyEditorPanel.tsx`, preserving direct note edits, per-row
+  removal, and the compact mobile fold while moving the second melody card out of `StudioPage.tsx`.
+- The same pass then extracted the selected-candidate summary and advanced JSON editor in `편곡`
+  into `apps/web/src/pages/studio/StudioArrangementSummaryPanel.tsx`, keeping title edits,
+  constraint summaries, comparison copy, and advanced-part editing intact while reducing the amount
+  of arrangement-adjustment JSX still embedded in `StudioPage.tsx`.
+- The next connected-surface pass then extracted `DRAWER-STUDIO-PROJECT-SETTINGS` into
+  `apps/web/src/pages/studio/StudioProjectSettingsDrawer.tsx`, keeping the project metadata form,
+  save validation feedback, and drawer footer actions intact while aligning the live route more
+  directly with the fixed connected-surface contract in `02_STUDIO_SCREEN_SPEC.md`.
+- The same pass then extracted `MODAL-STUDIO-SHARE` into
+  `apps/web/src/pages/studio/StudioShareModal.tsx`, preserving snapshot selection, artifact
+  checklist, share-launch validation, and modal footer actions while keeping the lower `공유`
+  tab focused only on launcher summary plus history as required by the spec.
+- The next harmony / guide pass then extracted the editable `코드 타임라인` surface into
+  `apps/web/src/pages/studio/StudioHarmonyTimelinePanel.tsx`, keeping marker rows, seed/import
+  actions, save feedback, and compact chord-timeline editing intact while reducing the amount of
+  harmony-authoring JSX still embedded in `StudioPage.tsx`.
+- The same pass then extracted the advanced chord import surface into
+  `apps/web/src/pages/studio/StudioChordImportPanel.tsx`, preserving the paste-and-review flow
+  while keeping the primary chord editing surface separate from the advanced import path.
+- The same pass then also extracted the `가이드` card into
+  `apps/web/src/pages/studio/StudioGuidePanel.tsx`, preserving file selection, upload status,
+  current guide metadata, and guide playback while reducing the amount of audio-setup JSX still
+  embedded in `StudioPage.tsx`.
+- The next audio-setup pass then extracted the `장치` card into
+  `apps/web/src/pages/studio/StudioAudioSetupPanel.tsx`, preserving permission flow, input/output
+  device selection, constraint toggles, saved-profile summaries, and environment-warning surfaces
+  while reducing the amount of device-setup JSX still embedded in `StudioPage.tsx`.
+- A follow-up Studio shell pass then standardized two remaining repeated route frames into
+  page-local components:
+  `apps/web/src/pages/studio/StudioRouteStatePanel.tsx` now owns the loading / error route shell,
+  and `apps/web/src/pages/studio/StudioWorkbenchSection.tsx` now owns the repeated lower-workbench
+  section header + grid frame, keeping the `02_STUDIO_SCREEN_SPEC.md` tab structure intact while
+  pushing `StudioPage.tsx` further toward orchestration instead of repeated layout scaffolding.
+- The next Studio foundation-alignment pass then moved the fixed workbench / mode contract into
+  `apps/web/src/pages/studio/studioWorkbenchConfig.ts`, so the frozen `02_STUDIO_SCREEN_SPEC.md`
+  section ids, rail labels, mode-to-section mapping, and default tab routing now live in one
+  page-local config module instead of being re-declared inside `StudioPage.tsx`.
+- The same maintainability sweep then replaced several repeated inline draft-update lambdas in
+  `StudioPage.tsx` with typed local helpers for audio-setup constraints and arrangement presets,
+  keeping the live surface unchanged while making the remaining page-level orchestration easier to read.
+- A follow-up workbench view-model pass then moved several pure card / option / chip builders out of
+  `StudioPage.tsx` into `apps/web/src/pages/studio/studioWorkbenchViewModels.ts`, including
+  harmony summary cards, audio-setup device/warning cards, guide status cards, melody mini items,
+  arrangement preset summaries, and analysis score / chip builders.
+- The same view-model sweep then continued with the lower history / sharing surfaces:
+  recording summary cards, version history cards, share-link history cards, project-settings
+  summary cards, share modal summary/options/artifact rows, and share-target labels now also build
+  from `studioWorkbenchViewModels.ts` instead of staying inline in `StudioPage.tsx`.
+- A follow-up Studio row-builder pass then moved the callback-bearing `recording / timeline / rail`
+  row construction out of `StudioPage.tsx` into `apps/web/src/pages/studio/studioWorkbenchRows.ts`,
+  covering recording take items, timeline players, guide/take track rows, and the compact left-rail
+  take buttons while keeping the live interaction flow unchanged.
+- The same interaction pass then also moved the remaining interactive array builders for
+  workbench navigation and editor/playback rows:
+  mode buttons and workbench tabs now build from
+  `apps/web/src/pages/studio/studioWorkbenchNavigation.ts`, while playback part rows and melody
+  editor rows now build from `apps/web/src/pages/studio/studioWorkbenchRows.ts`.
+- A follow-up Studio view-model pass then moved the remaining arrangement-summary and
+  mixdown render/playback copy builders out of `StudioPage.tsx` into
+  `apps/web/src/pages/studio/studioWorkbenchViewModels.ts`, including arrangement status/detail
+  cards, comparison copy, mixdown preview/save feedback messages, source labels, and saved-output
+  metadata labels. `StudioPage.tsx` now reaches those surfaces through page-local view models and a
+  small `ActionState` message helper, keeping the live `02_STUDIO_SCREEN_SPEC.md` contract unchanged
+  while pushing the page further toward orchestration-only assembly.
+- The same orchestration sweep then continued with playback, version history, sharing, and connected
+  utility surfaces: playback status / transport copy, version status + save feedback, share-link
+  status + copy/deactivate/create feedback, project-settings save copy, and share-modal create copy
+  now also build from `apps/web/src/pages/studio/studioWorkbenchViewModels.ts` instead of staying
+  inline inside `StudioPage.tsx`. This keeps the visible `Studio` contract fixed while reducing the
+  amount of status-label branching still owned directly by the page component.
+- The same page-local view-model sweep then continued with the upper `record / review` utility
+  surfaces as well: harmony-timeline status + save feedback, chord-import status, audio-setup
+  permission/save copy, and guide upload/status copy now also build from
+  `apps/web/src/pages/studio/studioWorkbenchViewModels.ts` instead of staying inline in
+  `StudioPage.tsx`. This keeps the `topbar / rail / stage / inspector / timeline / workbench`
+  contract fixed while moving another layer of state-to-copy branching out of the page component.
+- The same orchestration pass then moved the remaining `melody / arrangement / analysis` status
+  copy into page-local view models as well: melody extraction/save status, melody-editor summary,
+  arrangement generation/save status, preset summary copy, and analysis status / action messages
+  now also build from `apps/web/src/pages/studio/studioWorkbenchViewModels.ts` instead of staying
+  inline in `StudioPage.tsx`.
+- A follow-up stage-and-recording pass then moved another set of fixed-surface status labels and
+  helper copy into the same view-model module: waveform/stage status, stage chip/meta rows,
+  recording meter + metronome preview copy, selected-take field labels, and timeline signal
+  messages now also build outside the page component while keeping the live Studio shell contract
+  unchanged.
+- The same maintainability sweep then moved several remaining pure summary/card builders out of
+  `StudioPage.tsx` as well: analysis mini cards, arrangement candidate-card view models, topbar
+  identity copy, rail/mobile summary labels, and inspector note-summary labels now also build from
+  `apps/web/src/pages/studio/studioWorkbenchViewModels.ts` instead of staying inline in the page
+  component. This keeps the live Studio route contract fixed while reducing the amount of read-only
+  summary mapping still embedded directly in `StudioPage.tsx`.
+- A follow-up Studio shell pass then moved the remaining console / score-playback / recording-flow
+  status copy into the same page-local view-model layer: console mic/chord/alignment chips,
+  recording toggle + lock state, live-input meter tone, and score-view / playback summary labels now
+  also build from `apps/web/src/pages/studio/studioWorkbenchViewModels.ts` instead of being derived
+  inline in `StudioPage.tsx`. This keeps the visible Studio contract unchanged while pushing the
+  page component further toward orchestration-only assembly.
+- The same closing maintainability pass then moved the remaining cross-surface selected-take summary
+  and action-availability state into that same view-model layer as well: the left rail, shell
+  summary, and inspector now all read selected-take label / score and `can open` gating from
+  `apps/web/src/pages/studio/studioWorkbenchViewModels.ts` instead of each surface deriving those
+  values separately inside `StudioPage.tsx`.
 - A later arrangement truth pass replaced the dark hero/card workspace with a flat notation-first
   shell that now matches the fixed package much more closely:
   compact candidate top bar, left constraints rail, dominant center score paper, right playback /

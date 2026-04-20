@@ -1,0 +1,886 @@
+import base64
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from gigastudy_api.config import get_settings
+from gigastudy_api.main import create_app
+from gigastudy_api.services.engine.omr import OmrUnavailableError
+from gigastudy_api.services import studio_repository
+
+
+MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>5</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+THREE_FOUR_MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>3</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+MULTI_TRACK_MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+    <score-part id="P2"><part-name>Alto</part-name></score-part>
+    <score-part id="P3"><part-name>Bass</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration></note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration></note>
+    </measure>
+  </part>
+  <part id="P3">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+PDF_UPLOAD_BYTES = b"%PDF-1.4\n% GigaStudy test PDF\n"
+
+
+def fake_audiveris_omr(
+    *,
+    input_path: Path,
+    output_dir: Path,
+    audiveris_bin: str | None,
+    timeout_seconds: int,
+) -> Path:
+    assert input_path.suffix.lower() == ".pdf"
+    assert timeout_seconds > 0
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "audiveris-output.musicxml"
+    output_path.write_text(MUSICXML_UPLOAD, encoding="utf-8")
+    return output_path
+
+
+def fake_multi_track_audiveris_omr(
+    *,
+    input_path: Path,
+    output_dir: Path,
+    audiveris_bin: str | None,
+    timeout_seconds: int,
+) -> Path:
+    assert input_path.suffix.lower() == ".pdf"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "audiveris-multi-track.musicxml"
+    output_path.write_text(MULTI_TRACK_MUSICXML_UPLOAD, encoding="utf-8")
+    return output_path
+
+
+def build_client(tmp_path: Path, monkeypatch) -> TestClient:
+    monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    studio_repository._repository = None
+    return TestClient(create_app())
+
+
+def test_blank_studio_has_six_empty_tracks(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "월요일 아카펠라",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "월요일 아카펠라"
+    assert payload["bpm"] == 92
+    assert payload["time_signature_numerator"] == 4
+    assert payload["time_signature_denominator"] == 4
+    assert [track["name"] for track in payload["tracks"]] == [
+        "Soprano",
+        "Alto",
+        "Tenor",
+        "Baritone",
+        "Bass",
+        "Percussion",
+    ]
+    assert all(track["status"] == "empty" for track in payload["tracks"])
+
+
+def test_blank_studio_can_start_with_custom_time_signature(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "Three four",
+            "bpm": 92,
+            "time_signature_numerator": 3,
+            "time_signature_denominator": 4,
+            "start_mode": "blank",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["time_signature_numerator"] == 3
+    assert payload["time_signature_denominator"] == 4
+
+
+def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "SATB 연습",
+            "bpm": 104,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    recording_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
+    assert recording_response.status_code == 200
+    assert recording_response.json()["tracks"][0]["status"] == "registered"
+
+    generate_response = client.post(
+        f"/api/studios/{studio_id}/tracks/6/generate",
+        json={"context_slot_ids": [1]},
+    )
+    assert generate_response.status_code == 200
+    generated_payload = generate_response.json()
+    assert len(
+        [
+            candidate
+            for candidate in generated_payload["candidates"]
+            if candidate["suggested_slot_id"] == 6 and candidate["status"] == "pending"
+        ]
+    ) == 3
+    candidate_id = generated_payload["candidates"][0]["candidate_id"]
+    approve_response = client.post(f"/api/studios/{studio_id}/candidates/{candidate_id}/approve", json={})
+    assert approve_response.status_code == 200
+    percussion = approve_response.json()["tracks"][5]
+    assert percussion["status"] == "registered"
+    assert percussion["source_kind"] == "ai"
+    assert [note["label"] for note in percussion["notes"][:4]] == ["Kick", "Hat", "Snare", "Hat"]
+
+    assert [note["beat"] for note in percussion["notes"][:4]] == [1, 2, 3, 4]
+
+    sync_response = client.patch(
+        f"/api/studios/{studio_id}/tracks/6/sync",
+        json={"sync_offset_seconds": 0.03},
+    )
+    assert sync_response.status_code == 200
+    assert sync_response.json()["tracks"][5]["sync_offset_seconds"] == 0.03
+
+    performance_notes = recording_response.json()["tracks"][0]["notes"]
+    for note in performance_notes:
+        note["onset_seconds"] = round(note["onset_seconds"] + 0.42, 4)
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/score",
+        json={
+            "reference_slot_ids": [6],
+            "include_metronome": True,
+            "performance_notes": performance_notes,
+        },
+    )
+    assert score_response.status_code == 200
+    reports = score_response.json()["reports"]
+    assert len(reports) == 1
+    assert reports[0]["target_track_name"] == "Soprano"
+    assert reports[0]["reference_slot_ids"] == [6]
+    assert reports[0]["alignment_offset_seconds"] == 0.42
+    assert reports[0]["overall_score"] == 100
+
+
+def test_pdf_export_requires_registered_track(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Empty export",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    export_response = client.get(f"/api/studios/{studio_id}/export/pdf")
+
+    assert export_response.status_code == 409
+    assert "registered track" in export_response.json()["detail"]
+
+
+def test_pdf_export_returns_score_pdf_for_registered_tracks(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Export score",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    recording_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
+    assert recording_response.status_code == 200
+
+    export_response = client.get(f"/api/studios/{studio_id}/export/pdf")
+
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"] == "application/pdf"
+    assert export_response.content.startswith(b"%PDF")
+    assert len(export_response.content) > 1000
+
+
+def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Three four percussion",
+            "bpm": 120,
+            "time_signature_numerator": 3,
+            "time_signature_denominator": 4,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
+    assert seed_response.status_code == 200
+
+    generate_response = client.post(
+        f"/api/studios/{studio_id}/tracks/6/generate",
+        json={"context_slot_ids": [1]},
+    )
+
+    assert generate_response.status_code == 200
+    generated_payload = generate_response.json()
+    assert [candidate["variant_label"] for candidate in generated_payload["candidates"][:3]] == [
+        "Candidate 1",
+        "Candidate 2",
+        "Candidate 3",
+    ]
+    approve_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{generated_payload['candidates'][0]['candidate_id']}/approve",
+        json={},
+    )
+    assert approve_response.status_code == 200
+    percussion_notes = approve_response.json()["tracks"][5]["notes"]
+    assert [note["beat"] for note in percussion_notes[:6]] == [1, 2, 3, 4, 5, 6]
+    assert [note["label"] for note in percussion_notes[:6]] == [
+        "Kick",
+        "Snare",
+        "Hat",
+        "Kick",
+        "Snare",
+        "Hat",
+    ]
+    assert percussion_notes[3]["measure_index"] == 2
+    assert percussion_notes[3]["beat_in_measure"] == 1
+
+
+def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "MusicXML import",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    soprano = upload_response.json()["tracks"][0]
+    assert soprano["status"] == "registered"
+    assert soprano["source_kind"] == "score"
+    assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
+    assert soprano["notes"][0]["source"] == "musicxml"
+    assert soprano["notes"][0]["pitch_midi"] == 72
+
+
+def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "MusicXML 3/4 import",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(THREE_FOUR_MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "three-four.musicxml",
+            "content_base64": encoded,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    payload = upload_response.json()
+    assert payload["time_signature_numerator"] == 3
+    assert payload["time_signature_denominator"] == 4
+    soprano_notes = payload["tracks"][0]["notes"]
+    assert soprano_notes[3]["label"] == "F5"
+    assert soprano_notes[3]["measure_index"] == 2
+    assert soprano_notes[3]["beat"] == 4
+    assert soprano_notes[3]["beat_in_measure"] == 1
+
+
+def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Direct upload overwrite",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
+    assert seed_response.status_code == 200
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    blocked_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+        },
+    )
+    assert blocked_response.status_code == 409
+
+    overwrite_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+            "allow_overwrite": True,
+        },
+    )
+    assert overwrite_response.status_code == 200
+    assert [note["label"] for note in overwrite_response.json()["tracks"][0]["notes"]] == ["C5", "G5"]
+
+
+def test_upload_musicxml_can_wait_for_candidate_approval(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Candidate approval",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    payload = upload_response.json()
+    assert payload["tracks"][0]["status"] == "needs_review"
+    assert payload["tracks"][0]["notes"] == []
+    assert len(payload["candidates"]) == 1
+    candidate = payload["candidates"][0]
+    assert candidate["status"] == "pending"
+    assert candidate["suggested_slot_id"] == 1
+    assert [note["label"] for note in candidate["notes"]] == ["C5", "G5"]
+
+    approve_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{candidate['candidate_id']}/approve",
+        json={},
+    )
+
+    assert approve_response.status_code == 200
+    approved_payload = approve_response.json()
+    assert approved_payload["tracks"][0]["status"] == "registered"
+    assert [note["label"] for note in approved_payload["tracks"][0]["notes"]] == ["C5", "G5"]
+    assert approved_payload["candidates"][0]["status"] == "approved"
+
+
+def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "PDF OMR upload",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.pdf",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    assert upload_response.json()["jobs"][0]["source_label"] == "soprano.pdf"
+
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "needs_review"
+    assert payload["jobs"][0]["output_path"].endswith("audiveris-output.musicxml")
+    assert payload["tracks"][0]["status"] == "needs_review"
+    assert len(payload["candidates"]) == 1
+    candidate = payload["candidates"][0]
+    assert candidate["job_id"] == payload["jobs"][0]["job_id"]
+    assert candidate["method"] == "audiveris_omr_review"
+    assert candidate["notes"][0]["source"] == "omr"
+    assert candidate["notes"][0]["extraction_method"] == "audiveris_omr_v0"
+
+    approve_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{candidate['candidate_id']}/approve",
+        json={},
+    )
+
+    assert approve_response.status_code == 200
+    soprano = approve_response.json()["tracks"][0]
+    assert soprano["status"] == "registered"
+    assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
+
+
+def test_upload_pdf_can_register_omr_candidates_into_each_suggested_track(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.run_audiveris_omr",
+        fake_multi_track_audiveris_omr,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Full score OMR",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "satb.pdf",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    job_id = payload["jobs"][0]["job_id"]
+    assert payload["jobs"][0]["status"] == "needs_review"
+    assert [(candidate["suggested_slot_id"], candidate["notes"][0]["label"]) for candidate in payload["candidates"]] == [
+        (1, "C5"),
+        (2, "A4"),
+        (5, "C3"),
+    ]
+
+    approve_response = client.post(
+        f"/api/studios/{studio_id}/jobs/{job_id}/approve-candidates",
+        json={},
+    )
+
+    assert approve_response.status_code == 200
+    approved_payload = approve_response.json()
+    assert approved_payload["jobs"][0]["status"] == "completed"
+    assert approved_payload["tracks"][0]["status"] == "registered"
+    assert approved_payload["tracks"][1]["status"] == "registered"
+    assert approved_payload["tracks"][4]["status"] == "registered"
+    assert approved_payload["tracks"][0]["notes"][0]["source"] == "omr"
+    assert approved_payload["tracks"][1]["notes"][0]["label"] == "A4"
+    assert approved_payload["tracks"][4]["notes"][0]["label"] == "C3"
+    assert all(candidate["status"] == "approved" for candidate in approved_payload["candidates"])
+
+
+def test_omr_job_bulk_approval_requires_overwrite_confirmation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.run_audiveris_omr",
+        fake_multi_track_audiveris_omr,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Full score OMR overwrite",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
+    assert seed_response.status_code == 200
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "satb.pdf",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    job_id = client.get(f"/api/studios/{studio_id}").json()["jobs"][0]["job_id"]
+
+    blocked_response = client.post(
+        f"/api/studios/{studio_id}/jobs/{job_id}/approve-candidates",
+        json={},
+    )
+    assert blocked_response.status_code == 409
+
+    overwrite_response = client.post(
+        f"/api/studios/{studio_id}/jobs/{job_id}/approve-candidates",
+        json={"allow_overwrite": True},
+    )
+    assert overwrite_response.status_code == 200
+    assert overwrite_response.json()["tracks"][0]["notes"][0]["label"] == "C5"
+
+
+def test_create_studio_with_pdf_starts_omr_without_fixture_registration(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "PDF start",
+            "bpm": 120,
+            "start_mode": "upload",
+            "source_kind": "score",
+            "source_filename": "full-score.pdf",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert create_response.status_code == 200
+    studio_id = create_response.json()["studio_id"]
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "needs_review"
+    assert payload["tracks"][0]["status"] == "needs_review"
+    assert all(track["status"] != "registered" for track in payload["tracks"])
+    assert len(payload["candidates"]) == 1
+    assert payload["candidates"][0]["notes"][0]["source"] == "omr"
+
+
+def test_upload_pdf_marks_omr_job_failed_when_audiveris_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_omr(
+        *,
+        input_path: Path,
+        output_dir: Path,
+        audiveris_bin: str | None,
+        timeout_seconds: int,
+    ) -> Path:
+        raise OmrUnavailableError("Audiveris missing")
+
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "PDF OMR failure",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "broken.pdf",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "failed"
+    assert payload["jobs"][0]["message"] == "Audiveris missing"
+    assert payload["tracks"][0]["status"] == "failed"
+    assert payload["candidates"] == []
+
+
+def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Candidate retarget",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+    candidate_id = upload_response.json()["candidates"][0]["candidate_id"]
+
+    approve_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{candidate_id}/approve",
+        json={"target_slot_id": 2},
+    )
+
+    assert approve_response.status_code == 200
+    payload = approve_response.json()
+    assert payload["tracks"][0]["status"] == "empty"
+    assert payload["tracks"][1]["status"] == "registered"
+    assert [note["label"] for note in payload["tracks"][1]["notes"]] == ["C5", "G5"]
+
+
+def test_candidate_approval_requires_overwrite_confirmation(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Candidate overwrite",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+    seed_response = client.post(f"/api/studios/{studio_id}/tracks/2/recording/complete")
+    assert seed_response.status_code == 200
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+    candidate_id = upload_response.json()["candidates"][0]["candidate_id"]
+
+    blocked_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{candidate_id}/approve",
+        json={"target_slot_id": 2},
+    )
+    assert blocked_response.status_code == 409
+
+    approve_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{candidate_id}/approve",
+        json={"target_slot_id": 2, "allow_overwrite": True},
+    )
+
+    assert approve_response.status_code == 200
+    payload = approve_response.json()
+    assert payload["tracks"][0]["status"] == "empty"
+    assert payload["tracks"][1]["status"] == "registered"
+    assert [note["label"] for note in payload["tracks"][1]["notes"]] == ["C5", "G5"]
+    assert payload["candidates"][0]["status"] == "approved"
+
+
+def test_reject_candidate_keeps_track_empty(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Candidate rejection",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+            "review_before_register": True,
+        },
+    )
+    candidate_id = upload_response.json()["candidates"][0]["candidate_id"]
+
+    reject_response = client.post(f"/api/studios/{studio_id}/candidates/{candidate_id}/reject")
+
+    assert reject_response.status_code == 200
+    payload = reject_response.json()
+    assert payload["tracks"][0]["status"] == "empty"
+    assert payload["tracks"][0]["notes"] == []
+    assert payload["candidates"][0]["status"] == "rejected"
+
+
+def test_ai_generation_creates_candidates_and_approval_requires_overwrite_confirmation(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "AI overwrite",
+            "bpm": 104,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
+    assert seed_response.status_code == 200
+    first_generate_response = client.post(
+        f"/api/studios/{studio_id}/tracks/2/generate",
+        json={"context_slot_ids": [1]},
+    )
+    assert first_generate_response.status_code == 200
+    first_payload = first_generate_response.json()
+    alto_candidates = [
+        candidate
+        for candidate in first_payload["candidates"]
+        if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
+    ]
+    assert len(alto_candidates) == 3
+    first_group_id = alto_candidates[0]["candidate_group_id"]
+    assert first_group_id is not None
+    approve_first_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{alto_candidates[0]['candidate_id']}/approve",
+        json={},
+    )
+    assert approve_first_response.status_code == 200
+    first_approved_payload = approve_first_response.json()
+    assert first_approved_payload["tracks"][1]["status"] == "registered"
+    assert all(
+        candidate["status"] != "pending"
+        for candidate in first_approved_payload["candidates"]
+        if candidate["candidate_group_id"] == first_group_id
+    )
+
+    second_generate_response = client.post(
+        f"/api/studios/{studio_id}/tracks/2/generate",
+        json={"context_slot_ids": [1]},
+    )
+    assert second_generate_response.status_code == 200
+    second_candidates = [
+        candidate
+        for candidate in second_generate_response.json()["candidates"]
+        if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
+    ]
+    assert len(second_candidates) == 3
+
+    blocked_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{second_candidates[0]['candidate_id']}/approve",
+        json={},
+    )
+    assert blocked_response.status_code == 409
+
+    overwrite_response = client.post(
+        f"/api/studios/{studio_id}/candidates/{second_candidates[0]['candidate_id']}/approve",
+        json={"allow_overwrite": True},
+    )
+    assert overwrite_response.status_code == 200
+    assert overwrite_response.json()["tracks"][1]["status"] == "registered"

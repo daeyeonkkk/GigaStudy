@@ -1,21 +1,13 @@
 [project]
 name = "gigastudy-api"
 version = "0.1.0"
-description = "FastAPI backend bootstrap for GigaStudy."
+description = "Six-track a cappella studio API for GigaStudy."
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "alembic>=1.16,<2.0",
-  "av>=16.0,<17.0",
-  "boto3>=1.39,<2.0",
   "fastapi>=0.115,<1.0",
-  "librosa>=0.11,<1.0",
-  "numpy>=2.3,<3.0",
   "pydantic-settings>=2.7,<3.0",
-  "psycopg[binary]>=3.2,<4.0",
-  "sqlalchemy>=2.0,<3.0",
+  "reportlab>=4.2,<5.0",
   "uvicorn[standard]>=0.34,<1.0",
-  "note-seq>=0.0.5",
-  "music21>=9.9.1",
 ]
 
 [dependency-groups]

@@ -1,4 +1,0 @@
-case_id,note_index,rater_id,attack_direction,sustain_direction,acceptability_label,notes
-replace-with-real-vocal-case,0,평가자-a,높음,정확,양호,"시작이 살짝 높지만 sustain는 안정적입니다."
-replace-with-real-vocal-case,0,평가자-b,높음,정확,양호,"첫 진입은 높게 들리지만 유지음은 잘 맞습니다."
-replace-with-real-vocal-case,0,평가자-c,높음,정확,검토,"시작음은 분명히 높고, 유지음은 대체로 괜찮습니다."

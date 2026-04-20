@@ -1,1 +1,1 @@
-
+"""Six-track API schemas."""

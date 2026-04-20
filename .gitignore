@@ -13,9 +13,8 @@ __pycache__/
 .env
 .env.*
 !.env.example
-!apps/api/.env.production.example
-!apps/api/.env.alpha.example
-!apps/web/.env.alpha.example
+!apps/api/.env.example
+!apps/web/.env.example
 
 .DS_Store
 Thumbs.db
@@ -28,11 +27,4 @@ Thumbs.db
 apps/api/storage/
 playwright-report/
 test-results/
-apps/api/.e2e/
-apps/api/.e2e-storage/
-apps/api/calibration/*.generated.json
-apps/api/calibration/output/*
-!apps/api/calibration/output/README.md
-apps/api/environment_validation/*.generated.json
-apps/api/output/evidence_rounds/
-output/playwright/
+output/

@@ -1,16 +1,11 @@
-from fastapi import APIRouter, Depends
-
-from gigastudy_api import __version__
-from gigastudy_api.config import Settings, get_settings
+from fastapi import APIRouter
 
 router = APIRouter()
 
 
 @router.get("/health")
-def read_health(settings: Settings = Depends(get_settings)) -> dict[str, str]:
+def read_health() -> dict[str, str]:
     return {
-        "service": "gigastudy-api",
         "status": "ok",
-        "env": settings.app_env,
-        "version": __version__,
+        "service": "gigastudy-six-track-api",
     }

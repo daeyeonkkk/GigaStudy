@@ -6,39 +6,9 @@ from fastapi.responses import JSONResponse
 
 from gigastudy_api import __version__
 from gigastudy_api.api.router import api_router
-from gigastudy_api.api.schemas.runtime_events import RuntimeEventCreateRequest
 from gigastudy_api.config import get_settings
-from gigastudy_api.db.session import get_session_factory
-from gigastudy_api.services.runtime_events import create_runtime_event
 
 REQUEST_ID_HEADER = "X-Request-ID"
-
-
-def _record_server_exception(request: Request, exc: Exception) -> None:
-    try:
-        session = get_session_factory()()
-        try:
-            create_runtime_event(
-                session,
-                RuntimeEventCreateRequest(
-                    source="server",
-                    severity="error",
-                    event_type="server_exception",
-                    surface="api",
-                    route_path=str(request.url.path),
-                    request_id=getattr(request.state, "request_id", None),
-                    request_method=request.method,
-                    request_path=str(request.url),
-                    message=str(exc) or exc.__class__.__name__,
-                    user_agent=request.headers.get("user-agent"),
-                    details={"exception_type": exc.__class__.__name__},
-                ),
-                request_id=getattr(request.state, "request_id", None),
-            )
-        finally:
-            session.close()
-    except Exception:
-        return
 
 
 def create_app() -> FastAPI:
@@ -47,7 +17,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=__version__,
-        summary="Bootstrap API for the GigaStudy studio stack.",
+        summary="Six-track a cappella studio API for GigaStudy.",
     )
 
     app.add_middleware(
@@ -66,11 +36,10 @@ def create_app() -> FastAPI:
         try:
             response = await call_next(request)
         except Exception as exc:
-            _record_server_exception(request, exc)
             response = JSONResponse(
                 status_code=500,
                 content={
-                    "detail": "예상하지 못한 오류가 발생했습니다.",
+                    "detail": str(exc) or exc.__class__.__name__,
                     "request_id": request_id,
                 },
             )
@@ -83,7 +52,7 @@ def create_app() -> FastAPI:
     @app.get("/", tags=["meta"])
     def read_root() -> dict[str, str]:
         return {
-            "service": "gigastudy-api",
+            "service": "gigastudy-six-track-api",
             "status": "ok",
             "version": __version__,
         }

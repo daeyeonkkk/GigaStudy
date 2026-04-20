@@ -1,128 +1,136 @@
-# Project Foundation
+# GigaStudy Project Foundation
 
-Date: 2026-04-09
+Date: 2026-04-20
 
-This folder is the product and delivery source of truth for GigaStudy.
-It defines the MVP boundary, implementation order, release gate, and the checklist we use to decide what is actually done.
+This folder is the source of truth for the new GigaStudy product direction.
 
-## Root Contract
+GigaStudy is no longer defined as a generic guide-recording, melody-extraction,
+arrangement, sharing, or ops workspace. The product is now defined as a
+six-track a cappella practice studio.
 
-Only canonical core documents should live at the root of `PROJECT_FOUNDATION`:
+## Product Definition
 
-- `README.md`
-- `GigaStudy_master_plan.md`
-- `ROADMAP.md`
-- `GigaStudy_check_list.md`
-- `FOUNDATION_STATUS.md`
+GigaStudy lets a user create a studio, fill six vocal/percussion tracks by
+upload, recording, or AI generation, synchronize those tracks, play them as an
+ensemble, and score a vocal attempt against the target track's registered
+answer notes while selected references play as context.
 
-All supporting material must live under a categorized subfolder instead of being dropped into the root.
-Screenshots, scratch notes, one-off exports, and generated evidence files do not belong at the root.
+Canonical track slots:
 
-## Folder Structure
+1. Soprano
+2. Alto
+3. Tenor
+4. Baritone
+5. Bass
+6. Percussion
 
-- `BACKLOGS/`
-  Execution backlogs and implementation ticket breakdowns.
-- `DESIGN/`
-  Fixed screen specs, interaction contracts, and frozen mockup exports.
-- `QUALITY/`
-  Intonation assessment, calibration evidence, and human-rating workflow material.
-- `OPERATIONS/`
-  Operational validation protocols and working rules.
+## Core User Flows
 
-## Read In This Order
+### 1. Studio Creation And Track Seeding
 
-1. `GigaStudy_master_plan.md`
-2. `ROADMAP.md`
-3. `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
-4. `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
-5. `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_ROOT_LAUNCH_SCREEN_SPEC.md`
-6. `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_STUDIO_SCREEN_SPEC.md`
-7. `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_ARRANGEMENT_SCREEN_SPEC.md`
-8. `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SHARED_REVIEW_SCREEN_SPEC.md`
-9. `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_OPS_SCREEN_SPEC.md`
-10. `DESIGN/UI_SCREEN_SPEC_PACKAGE/06_INTERACTION_CONNECTION_MATRIX.md`
-11. `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
-12. `QUALITY/INTONATION_CALIBRATION_REPORT.md`
-13. `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-14. `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
-15. `BACKLOGS/PHASE1_BACKLOG.md`
-16. `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
-17. `GigaStudy_check_list.md`
-18. `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-19. `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
-20. `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
-21. `FOUNDATION_STATUS.md`
-22. `OPERATIONS/WORKING_PRINCIPLES.md`
+The user starts from the home screen.
 
-## What Each Document Does
+They enter a project name, BPM, and time signature, then choose one of two
+starts:
 
-- `GigaStudy_master_plan.md`
-  Product definition, MVP scope, stack target, architecture, risks, and release cut line.
-- `ROADMAP.md`
-  Phase-by-phase execution order and completion criteria.
-- `GigaStudy_check_list.md`
-  Live checklist for scope control, implementation readiness, and release gating. Check marks should map only to verified implementation, not to intent.
-- `FOUNDATION_STATUS.md`
-  Current implementation audit against the foundation docs, including verified coverage and remaining gaps.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
-  Entry point for the canonical UI package.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
-  Global typography, spacing, color, button, modal, and interaction rules.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_ROOT_LAUNCH_SCREEN_SPEC.md`
-  Fixed contract for the `/` entry surface, which is now a launch screen rather than a marketing landing page.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_STUDIO_SCREEN_SPEC.md`
-  Fixed contract for the Studio workspace.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_ARRANGEMENT_SCREEN_SPEC.md`
-  Fixed contract for the Arrangement workspace.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SHARED_REVIEW_SCREEN_SPEC.md`
-  Fixed contract for the read-only shared review workspace.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_OPS_SCREEN_SPEC.md`
-  Fixed contract for the operator and release-desk workspace.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/06_INTERACTION_CONNECTION_MATRIX.md`
-  Single source of truth for page, modal, drawer, popover, and dropdown connections.
-- `DESIGN/UI_SCREEN_SPEC_PACKAGE/MOCKUPS/`
-  Frozen SVG and PNG mockup exports for `Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`.
-- `BACKLOGS/PHASE1_BACKLOG.md`
-  Build backlog for the recording pipeline and studio foundation slice.
-- `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
-  Execution backlog for the note-level intonation quality track.
-- `QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md`
-  Evaluation of the current scoring engine and the accepted critique.
-- `QUALITY/INTONATION_CALIBRATION_REPORT.md`
-  Current calibration evidence, provisional threshold bands, and claim gate.
-- `QUALITY/HUMAN_RATING_CALIBRATION_WORKFLOW.md`
-  Workflow for future real-vocal and human-rating evidence, including intake templates, corpus inventory, consensus building, threshold-fit reporting, claim-gate evaluation, and evidence-bundle packaging.
-- `QUALITY/REAL_EVIDENCE_BATCH_PLAN.md`
-  One-shot collection plan for the later real-data sprint, combining human-rating and browser-hardware evidence under one evidence round.
-- `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md`
-  Native browser and hardware validation protocol built on top of the ops diagnostics baseline, including round-local packet and claim-gate preview, intake/import, ops-side CSV preview, environment validation packet, claim-gate, and release-note draft workflows.
-  Both workflows now start from the shared external evidence-round scaffold so real-world artifacts stay out of `PROJECT_FOUNDATION`.
-- `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
-  Reviewed recommendation for the low-cost alpha hosting stack, including official vendor constraints and the current repo-specific deployment gaps.
-- `OPERATIONS/ALPHA_STAGING_RUNBOOK.md`
-  Practical operator runbook for the remaining real-cloud staging steps, including what the user must prepare and what should happen before the last alpha checklist item can close.
-- `OPERATIONS/WORKING_PRINCIPLES.md`
-  Project working rules, storage conventions, and foundation hygiene discipline.
+- Upload and start (`업로드 후 시작`)
+- Start blank (`새로 시작`)
 
-## Placement Rule
+If the user uploads a score, GigaStudy extracts track material:
 
-If a new file is:
+- A cappella score: register every identifiable part into the matching six
+  tracks.
+- Non-a cappella score: register the main melody into the most appropriate
+  track.
 
-- a canonical product plan, roadmap, checklist, or audit
-  it may live at the root
-- a design aid, mockup, or visual source file
-  it belongs under `DESIGN/`
-- a backlog or execution ticket breakdown
-  it belongs under `BACKLOGS/`
-- a calibration, scoring, or evidence workflow
-  it belongs under `QUALITY/`
-- an operational protocol or maintenance rule
-  it belongs under `OPERATIONS/`
+If the user uploads music, GigaStudy extracts every usable part and registers
+those into the six tracks where possible.
 
-If a file is temporary, generated, or only useful for one local verification pass,
-it should stay outside `PROJECT_FOUNDATION` or be ignored rather than promoted into the foundation tree.
+If the user starts blank, all six tracks are empty.
 
-If implementation, backlog, or UI behavior drifts from these foundation docs, update the foundation first or in the same change.
+### 2. Six-Track Studio Assembly And Sync
 
-Legacy UI direction docs, reference reviews, wireframes, editable-source artboards, and old mockup-track files were intentionally removed after the screen-spec package reset.
-Do not reintroduce them as canonical references.
+The main studio is centered on the six tracks.
+
+Each track can be filled by:
+
+- Recording
+- Uploading
+- AI generation, once at least one track already exists
+
+Each registered track has score display, playback controls, stop, scoring
+(`채점`), and 0.01 second sync adjustment. The top transport plays, pauses, and
+stops the whole six-track ensemble while preserving each track's sync offset.
+
+### 3. Scoring Session And Report
+
+The user scores a recorded attempt from a registered track.
+
+When scoring starts, the user chooses which reference tracks and metronome to
+hear. Selected references play together while the microphone records. When the
+user stops, GigaStudy extracts the performance into TrackNote data, aligns the
+take offline to compensate latency, then checks pitch and rhythm at 0.01 second
+resolution.
+
+Reports appear at the bottom of the studio as compact title/date history items.
+Clicking a report opens a separate detail page with quantitative pitch, rhythm,
+sync, missing, and extra-note data.
+
+## Support Layers
+
+The following are supporting capabilities only when they directly serve the
+three core flows:
+
+- File import and extraction
+- Pitch and rhythm analysis
+- Score rendering
+- Audio playback and sync
+- AI part generation as symbolic TrackNote generation
+- Report history
+- Basic project persistence
+
+Anything that does not directly support the three core flows is out of the
+foundation for now.
+
+## Removed From The Foundation
+
+The previous foundation contained documents for guide-based recording,
+standalone arrangement workspaces, shared review, ops screens, deployment
+tracks, calibration evidence rounds, and legacy mockups. Those are no longer
+canonical for the product definition and have been removed.
+
+They may still exist in application code until implementation catches up, but
+they should not drive new product or UI decisions.
+
+## Canonical Documents
+
+Read in this order:
+
+1. `WORKING_PROTOCOL.md`
+2. `GigaStudy_master_plan.md`
+3. `ENGINE_ARCHITECTURE.md`
+4. `ROADMAP.md`
+5. `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
+6. `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
+7. `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_HOME_SCREEN_SPEC.md`
+8. `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_MAIN_STUDIO_SCREEN_SPEC.md`
+9. `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_TRACK_REGISTRATION_SPEC.md`
+10. `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SCORING_REPORT_SPEC.md`
+11. `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_INTERACTION_MATRIX.md`
+12. `GigaStudy_check_list.md`
+13. `FOUNDATION_STATUS.md`
+
+## Foundation Rule
+
+If a requirement does not help a user create a six-track studio, fill/sync/play
+the six tracks, or score a recorded attempt with a useful report, it does not belong
+in the current foundation.
+
+If engine work changes the TrackNote contract, extraction strategy, AI
+generation strategy, or scoring alignment rules, update
+`ENGINE_ARCHITECTURE.md` in the same work.
+
+Every task must follow `WORKING_PROTOCOL.md`: check the relevant foundation
+documents before implementation and update foundation in the same task whenever
+product behavior, engine contracts, UI flow, roadmap state, or checklist state
+changes.

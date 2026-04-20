@@ -1,438 +1,275 @@
-# GigaStudy 로드맵
+# GigaStudy Roadmap
+
+Date: 2026-04-20
+
+This roadmap replaces the previous guide-recording, arrangement, sharing, ops,
+and calibration roadmap.
+
+Engine decisions are tracked in `ENGINE_ARCHITECTURE.md` and should be updated
+with any implementation change that affects TrackNote, extraction, AI
+generation, OMR, or scoring alignment.
+
+## Current Baseline
+
+The current implementation has a working vertical slice for:
+
+- Six-track studio creation
+- BPM and time-signature studio metadata
+- Main six-track studio shell
+- TrackNote schema
+- MusicXML/MXL/XML and MIDI parsing
+- MusicXML/MIDI source time-signature preservation
+- Local WAV single-voice extraction MVP with dynamic thresholding and
+  median-based note segmentation
+- Browser microphone recording to WAV TrackNote registration
+- Browser recording metronome playback and input level feedback
+- Audiveris OMR job adapter
+- PDF/image score upload is treated as asynchronous OMR input, not as fixture
+  registration.
+- Home-screen PDF score start queues OMR instead of seeding placeholder notes.
+- Studio UI polls active OMR jobs and exposes their queued/running/review/failed
+  state.
+- OMR job review can register all mapped candidates into their suggested tracks
+  in one operation.
+- Extraction candidate queue with approve/reject registration
+- Candidate target override, compact preview, and overwrite guard
+- AI generation produces multiple reviewable candidates and rejects sibling
+  candidates when one is approved
+- Rule-based symbolic vocal harmony generation with key estimation, chord
+  candidate scoring, phrase-aware cadence bias, weak-beat scale connectors,
+  voice range/spacing constraints, beam-search voice leading, and
+  parallel-perfect penalties
+- AI generation writes multiple reviewable candidates before registration
+- Rule-based symbolic percussion generation
+- Ensemble playback from TrackNote data
+- Scoring playback honors the scoring checklist's metronome selection
+- Answer-sheet scoring with offline sync alignment
+- Horizontally scrollable measure-based track score rendering with fixed
+  measure lines and sync-shifted note layers
+- Compact report feed with separate quantitative report detail pages
+- Registered score PDF export from the main studio toolbar
+
+## Phase 0: Foundation Reset
+
+Goal: lock the product definition around the six-track studio.
+
+Done when:
+
+- The foundation documents describe only the new six-track a cappella direction.
+- Legacy screen specs and mockups are removed.
+- The implementation gap is explicitly acknowledged.
+
+## Phase 1: Home Studio Creation
+
+Goal: make the home screen create the correct studio shape.
+
+Required:
+
+- Project name input
+- BPM input
+- Time signature input, defaulting to 4/4
+- Upload and start
+- Start blank
+- Score upload path
+- Music upload path
+- Blank six-track studio creation
+- Home-screen PDF score start queues the OMR workflow instead of seeding
+  placeholder notes.
+- Import status and failure messaging
+
+Cut line:
+
+- The user can create a studio with six empty tracks.
+- The user can start an upload import and see whether it registered tracks or
+  failed.
+
+## Phase 2: Six-Track Main Studio Shell
+
+Goal: replace the old studio mental model with the six fixed tracks.
+
+Required:
+
+- Central six-track layout
+- Track names: Soprano, Alto, Tenor, Baritone, Bass, Percussion
+- Empty track state
+- Registered track state
+- Top global Play/Pause
+- Top global Stop
+- Top metronome toggle
+- Metronome clicks follow the studio meter and accent each measure downbeat
+- Per-track sync controls in 0.01 second steps
+
+Cut line:
+
+- The six tracks are the primary visible workspace.
+- Stop returns to the synced 0 second point without clearing sync offsets.
+
+## Phase 3: Track Registration
+
+Goal: let each track be filled by user action.
+
+Required:
+
+- Per-track recording
+- Recording metronome playback and input level feedback
+- Per-track upload
+- Canonical TrackNote persistence
+- MusicXML/MXL/XML parser
+- MIDI parser
+- Symbolic parser preserves source time signature when available
+- Single voice WAV extraction path
+- Audiveris OMR job path for PDF/image score input
+- Studio UI polls active OMR jobs until they become review candidates or fail.
+- Supported format validation
+- Audio/MIDI/score extraction pipeline
+- Review candidate state for uncertain or user-confirmed extraction
+- Approve/reject actions that register only approved candidates
+- Candidate target override across the six track slots
+- Explicit overwrite confirmation for candidate approval into occupied tracks
+- Explicit overwrite confirmation for recording, direct upload, and generation
+  into already registered tracks
+- AI Generate disabled until at least one track exists
+- AI Generate creates review candidates for the selected target track
 
-기준일: 2026-04-07
+Cut line:
 
-## 0. 목적
+- A user can fill any one track by at least one reliable method.
+- Overwrite is explicit and predictable.
 
-이 문서는 GigaStudy를 실제 제품으로 만들기 위한 실행 순서와 단계별 완료 기준을 고정한다.
+## Phase 4: AI Part Generation
 
-핵심 원칙은 기능을 넓게 벌리는 것이 아니라, 녹음 안정화에서 출발해 분석 신뢰도와 편곡 활용성을 순서대로 닫는 것이다.
+Goal: make missing tracks creatable from existing tracks.
 
-## 1. 최상위 추진 원칙
+Required:
 
-- 1차 출시는 “실시간 천재 기능”보다 “녹음 후 신뢰도 높은 분석”에 집중한다.
-- 악보 렌더링과 재생 엔진은 처음부터 분리한다.
-- 오디오 입력은 MVP에서 단선율 보컬 또는 개별 파트 단위로 제한한다.
-- 편곡 엔진은 생성형 모델보다 룰 기반 후보 생성기를 먼저 완성한다.
-- 각 단계는 데모가 아니라 다음 단계의 입력이 되는 산출물까지 닫혀야 완료로 본다.
+- Existing-track context selection
+- Vocal part generation for tracks 1-5
+- Vocal generation uses TrackNote-only symbolic output, not generated voice
+  audio.
+- Vocal generation preserves known context slot ids so it can avoid crossing
+  and obvious SATB-style voice-leading errors.
+- Percussion rhythm generation for track 6
+- Meter-aware percussion downbeats for non-4/4 studios
+- Clear generation status
+- Generated TrackNote candidates can be approved into the target track
+- Approving one candidate rejects sibling candidates from the same generation
+  run
 
-## 2. 병렬 작업 축
+Cut line:
 
-### 2.1 제품 / UX 축
+- With one registered track, AI generation can create a plausible second track.
+- Percussion generation follows BPM and meter rather than harmony-note
+  behavior.
+- Natural voice audio generation is not required.
 
-- 한국어 중심 용어 체계 정리
-- 사용자에게 노출되는 기본 UI 문구는 한국어를 우선하고, 영어는 관용적인 기술 용어만 제한적으로 남긴다.
-- canonical UI source of truth를 `DESIGN/UI_SCREEN_SPEC_PACKAGE/`로 고정
-- `/`는 marketing home이 아니라 `Root Launch` 작업 진입 화면으로 유지
-- 오디오 설정, 정렬 상태, 저신뢰도 상태를 설명 가능한 UI로 노출
-- 재녹음과 후보 비교 흐름을 최소 클릭으로 유지
+## Phase 5: Ensemble Playback And Sync
 
-### 2.2 프론트엔드 스튜디오 축
+Goal: make the six-track studio usable as an ensemble desk.
 
-- 오디오 입력 제어
-- take 관리
-- waveform / contour 프리뷰
-- 스튜디오 믹서 및 편곡실 UI
+Required:
 
-### 2.3 분석 / 편곡 백엔드 축
+- Simultaneous playback of registered tracks
+- Per-track playback/pause
+- Per-track stop
+- Global stop
+- Sync offset applied to global and per-track playback
+- Stable visual timing feedback
+- Measure-based horizontal score rendering per track on the studio
+  time-signature grid
+- Dense note runs expand the score timeline instead of overlapping.
+- Sync changes move notes across the fixed grid without moving barlines.
+- Soprano/Alto/Tenor use treble staff anchoring, Baritone/Bass use bass staff
+  anchoring, and rendered note positions stay inside the score viewport.
+- Inferred key-signature marks render beside the clef.
 
-- 정렬 파이프라인
-- 채점 엔진
-- 오디오→MIDI 변환
-- 룰 기반 편곡
-- 아티팩트 생성
+Cut line:
 
-### 2.4 데이터 / 운영 축
+- The user can align tracks by ear using 0.01 second sync changes.
 
-- DeviceProfile 중심 스키마
-- job 상태 추적
-- 모델 버전 기록
-- 재시도와 오류 로그
+## Phase 6: Scoring Session
 
-### 2.5 시각 산출물 축
+Goal: let the user sing one target part while hearing selected references.
 
-- canonical screen-spec source of truth를 `DESIGN/UI_SCREEN_SPEC_PACKAGE/`로 고정
-- 각 core screen은 fixed spec + interaction matrix + frozen mockup export를 함께 가진다
-- 1차 canonical screen set은 `Launch`, `Studio`, `Arrangement`, `Shared Review`, `Ops`다
-- 구현 화면은 임의 해석보다 해당 화면 spec과 frozen mockup 버전을 우선 기준으로 삼는다
+Required:
 
-## 3. 단계별 로드맵
+- Scoring enabled only for registered tracks
+- Checklist with Track 1-6 and Metronome
+- Start/Cancel actions
+- Selected references play together
+- Checked metronome plays, including when no reference tracks are selected
+- Microphone recording starts with the session
+- Stop starts analysis
+- Target track's registered TrackNotes are the answer sheet
+- Selected references and metronome are playback context only
+- Performance input is converted to TrackNote data
 
-### Phase 0. 프로젝트 기반 확정
+Cut line:
 
-목표:
+- The scoring flow is understandable without reading documentation.
+- Scoring refuses to behave as if other voices alone define the answer.
 
-- MVP 정의, 비목표, 기술 스택, 데이터 모델, 문서 기준을 고정한다.
+## Phase 7: Report Feed
 
-주요 작업:
+Goal: make analysis useful for practice.
 
-- 마스터 플랜 확정
-- 로드맵과 체크리스트 작성
-- repo bootstrap 기준 결정
-- 개발 환경, 저장 구조, 분석 job 단위 정의
+Required:
 
-산출물:
+- Pitch drift results
+- Rhythm drift results
+- 0.01 second sync alignment and timing references
+- Detected global sync offset
+- Matched, missing, and extra-note counts
+- Issue rows with expected/actual note labels, timing error, and pitch error
+- Compact report links appended to the bottom of the studio
+- Separate full report detail page
+- Reports remain associated with target track and scoring context
 
-- 기준 문서 세트
-- 초기 폴더 구조안
-- 공통 용어집 초안
+Cut line:
 
-완료 기준:
+- The user can read a report and know where pitch/rhythm diverged without
+  relying on LLM-written coaching text.
 
-- “무엇을 1차 출시에서 하지 않을지”가 문서로 명확하다.
-- Phase 1 착수에 필요한 기술 선택이 더 이상 흔들리지 않는다.
+## Phase 7.5: Score Export
 
-### Phase 1. 녹음 파이프라인과 DeviceProfile
+Goal: let the user export the registered six-track score.
 
-목표:
+Required:
 
-- 사용자가 웹에서 프로젝트를 만들고, 장치를 고르고, take를 녹음하고 저장할 수 있게 한다.
+- PDF export action from the main studio.
+- Server-side PDF generation from registered TrackNote data.
+- Export includes studio title, BPM, time signature, track names, staff-like
+  note timelines, and measure markers.
+- Empty studios cannot export misleading blank PDFs.
 
-주요 작업:
+Cut line:
 
-- 프로젝트 생성
-- 가이드 트랙 업로드 또는 선택
-- 마이크 입력 권한 요청과 장치 선택
-- 실제 `getSettings()` 값 저장
-- take 녹음, 업로드, 목록 표시
-- count-in, metronome, mute / solo / volume 기본 믹서
+- A user with at least one registered track can download a readable PDF score.
 
-산출물:
+## Phase 8: Extraction Quality Hardening
 
-- 기본 스튜디오 화면
-- 녹음 업로드 API
-- DeviceProfile 저장 모델
+Goal: improve extraction quality without changing the product model.
 
-완료 기준:
+Required:
 
-- 가이드 트랙이 있는 프로젝트를 만들 수 있다.
-- take를 두 번 이상 녹음하고 다시 선택할 수 있다.
-- 실제 sampleRate / latency / noise 처리 설정값이 저장된다.
+- Harden browser microphone recording beyond the current level meter and
+  metronome loop with clearer failed-extraction recovery.
+- Add audio decoding beyond local WAV if those formats remain accepted.
+- Harden OMR review with score-image-aware visual preview and page/part
+  confidence indicators.
+- Add mixed-audio fallback behavior that does not overpromise SATB separation.
+- Add confidence indicators where extraction is uncertain.
 
-세부 티켓 기준:
+## Deferred Until Needed
 
-- `BACKLOGS/PHASE1_BACKLOG.md`를 단일 실행 백로그로 사용한다.
+These should not be implemented as primary surfaces until the core flows are
+stable:
 
-### Phase 2. 사후 정렬과 점수 엔진
-
-목표:
-
-- 녹음이 끝난 take를 가이드 기준으로 정렬하고, 점수와 구간 피드백을 생성한다.
-
-주요 작업:
-
-- coarse alignment 구현
-- fine alignment 구현
-- `alignment_confidence` 계산
-- `pitch_score`, `rhythm_score`, `harmony_fit_score` 산출
-- 피드백 JSON 스키마 정의
-- 분석 job 저장과 상태 업데이트
-
-산출물:
-
-- 정렬 / 채점 워커
-- 분석 결과 API
-- 저신뢰도 상태 노출 규칙
-
-완료 기준:
-
-- take 하나를 넣으면 정렬 결과와 3축 점수가 나온다.
-- 정렬 실패 또는 저신뢰도를 구분해 표시할 수 있다.
-- 결과가 DB에 저장되고 재조회된다.
-
-### Phase 3. 스튜디오 학습 UI
-
-목표:
-
-- 사용자가 왜 점수가 나왔는지 이해하고 바로 재시도할 수 있는 학습 UI를 만든다.
-- 이 단계 이후의 시각 리팩터는 `DESIGN/UI_SCREEN_SPEC_PACKAGE/`의 canonical screen contracts를 기준으로 한다.
-
-주요 작업:
-
-- waveform / contour 시각화
-- 타깃 노트 / 화성 오버레이
-- 점수 패널과 피드백 패널
-- 오답 구간 강조
-- take 비교와 재녹음 동선 정리
-
-산출물:
-
-- 스튜디오 학습 화면
-- 재시도 중심 UX
-
-완료 기준:
-
-- 사용자가 take를 고르고, 문제 구간을 보고, 바로 다시 녹음할 수 있다.
-- 재녹음 동선이 2클릭 이내로 유지된다.
-
-### Phase 4. 오디오→MIDI 멜로디 변환
-
-목표:
-
-- 보컬 take에서 편곡 가능한 멜로디 초안을 만든다.
-
-주요 작업:
-
-- Basic Pitch 초벌 추출
-- 리샘플 파이프라인 정리
-- quantize, phrase split, key estimation
-- note cleanup
-- 수정 가능한 멜로디 에디트 포맷 정의
-
-산출물:
-
-- 멜로디 초안 생성 API
-- 멜로디 검수용 데이터 포맷
-
-완료 기준:
-
-- 단선율 보컬 take에서 MIDI 초벌이 생성된다.
-- 과도한 note fragmentation이 기본적으로 정리된다.
-- 사용자가 다음 단계 편곡 입력으로 쓸 수 있는 멜로디가 확보된다.
-
-### Phase 5. 반자동 편곡 엔진
-
-목표:
-
-- 멜로디 입력에서 4~5성부 후보안을 여러 개 생성한다.
-
-주요 작업:
-
-- 음역 제약 모델링
-- max leap, 병행 5도 / 8도 회피 규칙 구현
-- difficulty preset 연결
-- 후보안 2~3개 생성 로직
-- 템플릿 퍼커션 on / off
-
-산출물:
-
-- 룰 기반 성부 생성기
-- 후보 비교용 arrangement 데이터
-
-완료 기준:
-
-- 멜로디 입력에서 후보안 2개 이상이 생성된다.
-- 음역 제한과 병행 회피가 기본적으로 반영된다.
-- 사용자가 후보를 선택하거나 수정할 수 있는 구조가 된다.
-
-### Phase 6. 악보, 재생, export
-
-목표:
-
-- 편곡 결과를 보고, 듣고, 내보내는 흐름을 닫는다.
-
-주요 작업:
-
-- OSMD 기반 MusicXML 렌더링
-- 재생 엔진 분리 설계
-- playhead 동기화
-- 파트별 color / solo / guide mode
-- MIDI / MusicXML / guide WAV export
-
-산출물:
-
-- 편곡실 화면
-- export 파이프라인
-- 가이드 재생 플로우
-
-완료 기준:
-
-- 편곡 후보를 악보로 볼 수 있다.
-- 파트별 가이드 청취와 solo가 된다.
-- MusicXML, MIDI, guide WAV를 내보낼 수 있다.
-
-### Phase 7. 운영 안정화와 출시 게이트
-
-목표:
-
-- 실패를 설명하고 복구할 수 있는 제품 상태를 만든다.
-
-주요 작업:
-
-- job 재시도
-- 오류 로그와 관리자 확인 화면
-- 모델 버전 기록
-- 분석 timeout 정책
-- 업로드 만료 정책
-- 사용자용 실패 메시지 정리
-
-산출물:
-
-- 운영 대시보드 초안
-- 실패 대응 플로우
-- 출시 판정표
-- 런타임 로그 수집 최소선 구축: client error / fetch failure / server exception + request id
-
-완료 기준:
-
-- 실패한 분석 job을 재처리할 수 있다.
-- 어떤 모델과 설정으로 결과가 나왔는지 추적 가능하다.
-- 사용자에게 무응답 대신 실패 이유를 노출할 수 있다.
-
-### Phase 8. 출시 직후 보강(P1)
-
-목표:
-
-- 코어 흐름은 유지한 채 학습 품질과 사용성을 강화한다.
-
-주요 작업:
-
-- 난이도 프리셋 UI
-- 파트별 음역 프리셋
-- 후보안 A / B / C 비교 개선
-- beatbox 템플릿 추가
-- 프로젝트 버전 히스토리
-- 공유 링크
-- 관리자 잡 모니터링 개선
-
-완료 기준:
-
-- 코어 MVP를 흔들지 않고 P1 기능이 독립적으로 추가된다.
-
-### Phase 9. Intonation Quality Track
-
-목표:
-
-- 현재의 coarse MVP scorer를 note-level intonation analyzer로 끌어올리고, 강한 귀를 가진 사용자도 납득할 수 있는 sharp / flat 피드백을 만든다.
-
-주요 작업:
-
-- preview contour와 scoring source 분리
-- frame-level pitch / note-event artifact 저장
-- `attack / settle / sustain / release` note segmentation
-- signed cents, stability, confidence metric 추가
-- `voiced_prob` + RMS 기반 confidence weighting
-- chord-aware harmony와 key-only fallback labeling
-- human-rating intake sheet와 consensus builder
-- 실제 프로젝트의 canonical guide/take를 evidence round로 export해서 human-rating 수집을 실사용 데이터에서 바로 시작할 수 있게 함
-- export된 real project case에서 neutral note-reference CSV / JSON을 같이 만들어 rater가 note index와 목표 음을 편하게 맞출 수 있게 함
-- export된 analyzed case에서 note-level guide/take clip WAVs를 같이 만들어 rater가 전체 take를 반복 스크럽하지 않고도 노트 단위 판단을 할 수 있게 함
-- export된 analyzed case에서 self-contained review packet HTML을 같이 만들어 rater가 한 페이지에서 full take와 per-note clips를 바로 들을 수 있게 함
-- human-rating review packet과 rating-sheet 입력값을 한국어 우선 기준으로 정리하고, builder가 이를 canonical calibration label로 정규화하게 함
-- studio에서 선택한 테이크를 사람 평가 패킷 zip으로 바로 내려받아, guide / take / 노트 클립 / 리뷰 HTML / 평가 시트를 한 번에 전달할 수 있게 함
-- studio에서 선택한 테이크를 사람 평가 자료와 환경 검증 시작 자료가 함께 들어 있는 one-shot real-evidence batch zip으로도 내려받아, 나중에 실데이터 수집을 한 번에 시작할 수 있게 함
-- studio에서 현재 프로젝트의 준비된 모든 READY 테이크를 project-level real-evidence batch zip으로도 내려받아, 나중에 여러 take를 한 번에 사람 평가 / 환경 검증 round로 넘길 수 있게 함
-- real-vocal corpus inventory / validation report for audio-path and rating coverage sanity checks
-- human-rating corpus manifest와 agreement report workflow
-- threshold-fit report generator for difficulty tiers
-- claim gate evaluator for deciding whether threshold evidence is strong enough to review checklist closure
-- real evidence batch plan that combines the human-rating round and the browser / hardware validation round into one later collection sprint
-- 실제 보컬 fixture와 threshold calibration
-- note-level 피드백 UI와 제품 카피 정합성 점검
-
-산출물:
-
-- `BACKLOGS/PHASE9_INTONATION_BACKLOG.md`
-- note-level analysis schema / API 계약
-- calibration fixture 세트와 품질 리포트
-- note-level 피드백 UI
-
-완료 기준:
-
-- API가 note-level signed cents와 confidence를 반환한다.
-- 피드백이 sharp / flat 방향과 attack / sustain 차이를 구분한다.
-- harmony-fit이 chord-aware인지 key-only fallback인지 명시된다.
-- 실제 보컬 fixture 기반 calibration 기록이 남는다.
-- 이 단계가 닫히기 전에는 제품 카피가 `정밀 음정 판정기`를 주장하지 않는다.
-
-### Phase 10. Browser Environment Validation
-
-목표:
-
-- seeded 브라우저 release gate 위에 native Safari / WebKit와 real hardware recording 검증을 얹어서, 실제 환경 편차를 릴리즈 판단에 반영한다.
-
-주요 작업:
-
-- ops overview의 environment diagnostics report를 기준 산출물로 사용
-- ops overview의 manual validation run log를 실제 검증 기록 저장소로 사용
-- spreadsheet-friendly intake template과 importer로 외부 수집 evidence를 ops에 들여오기
-- browser / hardware claim gate로 checklist-closure review readiness를 반복 가능하게 판정
-- ops overview에서 현재 browser / hardware claim gate 상태를 inline으로 확인하고 바로 release-review blocker를 읽을 수 있게 함
-- external QA or hardware evidence CSV를 ops에서 preview 후 import하는 흐름으로 CLI-only intake bottleneck을 제거
-- ops에서 한국어 기준 환경 검증 시작 묶음(zip)을 바로 내려받아 CSV 템플릿과 안내 README를 함께 전달
-- evidence round refresh로 ops import 이전에도 round-local packet / claim-gate preview를 재생성할 수 있게 함
-- `OPERATIONS/BROWSER_ENVIRONMENT_VALIDATION.md` 기준 matrix 실행
-- native Safari / WebKit recording, permission, playback 검증
-- output route 차이:
-  built-in speaker, wired headphones, Bluetooth output
-- warning flag 변화와 실제 사용자 체감 이슈를 함께 기록
-- release note와 unsupported path 문구 갱신
-
-산출물:
-
-- environment diagnostics report JSON
-- manual validation run entries
-- environment validation packet for release review
-- round-local environment validation packet preview
-- round-local browser / hardware claim-gate preview
-- browser compatibility release-note draft
-- native browser validation run log
-- browser / hardware compatibility notes
-
-완료 기준:
-
-- 최소 1회 이상의 native Safari 또는 WebKit 검증 결과가 남는다.
-- 최소 1회 이상의 real hardware recorder 검증 결과가 남는다.
-- warning flag와 실제 체감 이슈가 함께 기록된다.
-- 릴리즈 노트가 검증된 범위와 미검증 범위를 정직하게 구분한다.
-
-## 4. 단계 간 의존성
-
-1. Phase 1이 닫혀야 Phase 2의 입력 데이터가 안정화된다.
-2. Phase 2가 닫혀야 Phase 3 UI가 신뢰도 있는 피드백을 표시할 수 있다.
-3. Phase 4가 닫혀야 Phase 5 편곡 엔진의 실제 입력이 확보된다.
-4. Phase 5가 닫혀야 Phase 6에서 악보 / 재생 / export를 유의미하게 제공할 수 있다.
-5. Phase 7은 마지막 단계지만, job 메타데이터와 오류 로그 구조는 Phase 2부터 함께 심는다.
-6. Phase 9는 Phase 2 분석 결과를 바탕으로 확장되며, 1차 출시 컷라인 이후에도 독립적으로 진행할 수 있다.
-7. 다만 Phase 9가 닫히기 전에는 채점 엔진을 `human-like intonation judge`로 포장하지 않는다.
-
-## 5. 1차 출시 기준
-
-아래 다섯 가지가 닫히면 1차 출시 기준 충족으로 본다.
-
-1. 가이드 트랙이 있는 프로젝트 생성
-2. 보컬 take 녹음과 저장
-3. 자동 정렬과 3축 점수 반환
-4. 멜로디 추출 후 4~5성부 후보 2개 이상 생성
-5. 악보 보기, guide playback, MIDI / MusicXML export
-
-위 컷라인은 `MVP vocal practice scorer` 기준이다.
-note-level 정밀 음정 판정 품질은 별도 Phase 9 완료 조건으로 관리한다.
-
-## 6. 문서 연결
-
-이 로드맵은 아래 문서와 함께 본다.
-
-1. [GigaStudy_master_plan.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_master_plan.md)
-2. [PHASE1_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/BACKLOGS/PHASE1_BACKLOG.md)
-3. [PHASE9_INTONATION_BACKLOG.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/BACKLOGS/PHASE9_INTONATION_BACKLOG.md)
-4. [INTONATION_ANALYSIS_ASSESSMENT.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/QUALITY/INTONATION_ANALYSIS_ASSESSMENT.md)
-5. [GigaStudy_check_list.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/GigaStudy_check_list.md)
-6. [WORKING_PRINCIPLES.md](/C:/my_project/GigaStudy/PROJECT_FOUNDATION/OPERATIONS/WORKING_PRINCIPLES.md)
-
-## 7. Alpha Deployment Follow-Up
-
-- The reviewed low-cost alpha target is now:
-  Cloudflare Pages + Cloud Run + Neon + R2.
-- Direct browser-to-object-storage upload is now implemented for S3-compatible storage backends, while local development keeps the API upload fallback.
-- The Cloud Run backend container has now been verified locally through `docker build`, runtime Node/Python checks, and an in-container `/api/health` smoke.
-- The alpha path now also has a remote Cloud Run Job fallback for Neon migration, so staging can continue even when the operator machine cannot open outbound PostgreSQL connections.
-- The repo-side staging scaffold now also exists:
-  `apps/api/.env.alpha.example`, `apps/web/.env.alpha.example`, `scripts/migrate_alpha_database.ps1`, `scripts/deploy_alpha_backend.ps1`, `scripts/deploy_alpha_frontend.ps1`, and `apps/web/public/_redirects`.
-- The remaining deployment blocker is:
-  one verified HTTPS staging environment.
-- The detailed assessment for that path now lives in:
-  `OPERATIONS/ALPHA_DEPLOYMENT_TARGET.md`
-
-## 8. Screen-Spec Package Reset
-
-- Legacy UI direction docs, reference reviews, wireframes, editable-source artboards, and old mockup-track files are no longer canonical.
-- The only accepted design source of truth is `DESIGN/UI_SCREEN_SPEC_PACKAGE/`.
-- That package now fixes:
-  `Root Launch`, `Studio`, `Arrangement`, `Shared Review`, and `Ops`, plus one interaction connection matrix and frozen SVG/PNG mockups.
-- The next UI implementation work should follow this order:
-  1. browser-review the live `/` route against the `Root Launch` contract and close the visible gaps,
-  2. re-audit `Studio`, `Arrangement`, `Shared Review`, and `Ops` against their new package specs,
-  3. close checklist items only after browser review against the package mockups.
-- Completion for this track means:
-  the root docs reference only the package, deleted legacy files are no longer cited anywhere in `PROJECT_FOUNDATION`, and the live routes are re-closed against the new `Launch / Studio / Arrangement / Shared Review / Ops` set.
+- Share links
+- Version history
+- Mixdown export
+- Ops dashboards
+- Full deployment/runbook documentation inside `PROJECT_FOUNDATION`
+- Standalone arrangement route
+- Natural human voice audio generation
+- LLM-written scoring reports
+- Mixed choir SATB source separation as a promised MVP feature

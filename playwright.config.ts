@@ -44,7 +44,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'uv run python ../../scripts/run_api_e2e.py',
+      command: 'uv run uvicorn gigastudy_api.main:app --host 127.0.0.1 --port 8000 --app-dir src',
       cwd: 'apps/api',
       port: 8000,
       reuseExistingServer: !process.env.CI,
@@ -52,7 +52,8 @@ export default defineConfig({
       stderr: 'pipe',
     },
     {
-      command: 'npm run dev --workspace @gigastudy/web -- --host 127.0.0.1 --port 5173',
+      command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+      cwd: 'apps/web',
       port: 5173,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',

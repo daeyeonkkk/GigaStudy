@@ -1,0 +1,228 @@
+.report-page {
+  color: #111111;
+}
+
+.report-document {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 1180px);
+  margin-inline: auto;
+  border: 1px solid #aeb8c1;
+  border-radius: 8px;
+  background: #f8fafb;
+  box-shadow: 0 16px 44px rgba(20, 31, 42, 0.14);
+  overflow: hidden;
+}
+
+.report-document__top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #9db0bf;
+  background: #8fbfe8;
+}
+
+.report-document__top h1 {
+  max-width: none;
+  color: #102030;
+  font-size: clamp(1.7rem, 4vw, 3rem);
+  line-height: 1;
+}
+
+.report-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 20px 24px 6px;
+}
+
+.report-hero span,
+.report-hero p {
+  color: #54616c;
+  font-weight: 800;
+}
+
+.report-hero h2 {
+  margin-top: 4px;
+  color: #111111;
+  font-size: clamp(2rem, 5vw, 4.4rem);
+}
+
+.report-hero > strong {
+  min-width: 140px;
+  color: #082fbd;
+  font-size: clamp(2.8rem, 8vw, 6rem);
+  line-height: 0.9;
+  text-align: right;
+}
+
+.report-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 24px;
+  border: 1px solid #c8d1d8;
+  background: #ffffff;
+}
+
+.report-metrics div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 12px 14px;
+  border-right: 1px solid #dce3e8;
+  border-bottom: 1px solid #dce3e8;
+}
+
+.report-metrics div:nth-child(3n) {
+  border-right: 0;
+}
+
+.report-metrics div:nth-last-child(-n + 3) {
+  border-bottom: 0;
+}
+
+.report-metrics span {
+  color: #54616c;
+  font-weight: 900;
+}
+
+.report-metrics strong {
+  color: #082fbd;
+  font-size: 1.05rem;
+}
+
+.report-issues {
+  display: grid;
+  gap: 12px;
+  padding: 4px 24px 24px;
+}
+
+.report-issues header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: end;
+  padding-top: 12px;
+  border-top: 1px solid #c8d1d8;
+}
+
+.report-issues h2 {
+  color: #111111;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+}
+
+.report-issues ol {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.report-issue {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid #dce3e8;
+  border-left: 4px solid #7a8790;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.report-issue--pitch,
+.report-issue--pitch_rhythm {
+  border-left-color: #082fbd;
+}
+
+.report-issue--rhythm {
+  border-left-color: #b56b00;
+}
+
+.report-issue--missing {
+  border-left-color: #c2362d;
+}
+
+.report-issue--extra {
+  border-left-color: #5960b7;
+}
+
+.report-issue > strong {
+  color: #111111;
+  font-size: 1rem;
+}
+
+.report-issue span {
+  color: #111111;
+  font-weight: 900;
+}
+
+.report-issue p,
+.report-issues__empty p,
+.report-route-state p {
+  color: #54616c;
+  font-weight: 700;
+}
+
+.report-issues__empty {
+  display: grid;
+  gap: 4px;
+  min-height: 140px;
+  place-content: center;
+  border: 1px dashed #aeb8c1;
+  border-radius: 6px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.report-route-state {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+}
+
+.report-route-state h1 {
+  max-width: 12ch;
+}
+
+.report-route-state .app-button {
+  width: fit-content;
+}
+
+@media (max-width: 760px) {
+  .report-document__top,
+  .report-hero,
+  .report-issue {
+    grid-template-columns: 1fr;
+  }
+
+  .report-document__top {
+    align-items: start;
+  }
+
+  .report-hero > strong {
+    text-align: left;
+  }
+
+  .report-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .report-metrics div,
+  .report-metrics div:nth-child(3n),
+  .report-metrics div:nth-last-child(-n + 3) {
+    border-right: 0;
+    border-bottom: 1px solid #dce3e8;
+  }
+
+  .report-metrics div:last-child {
+    border-bottom: 0;
+  }
+}

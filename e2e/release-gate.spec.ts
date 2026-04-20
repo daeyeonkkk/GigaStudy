@@ -1,1040 +1,191 @@
-import { readFile } from 'node:fs/promises'
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
-const apiBaseUrl = 'http://127.0.0.1:8000'
-const sampleRate = 32_000
-const durationMs = 1_200
+const musicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>5</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+`
 
-function buildMonoWavBuffer({
-  frequencyHz,
-  amplitude = 0.2,
-}: {
-  frequencyHz: number
-  amplitude?: number
-}): Buffer {
-  const frameCount = Math.max(1, Math.round(sampleRate * (durationMs / 1000)))
-  const bytesPerSample = 2
-  const channelCount = 1
-  const dataSize = frameCount * bytesPerSample * channelCount
-  const buffer = Buffer.alloc(44 + dataSize)
+const threeFourMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>3</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration></note>
+    </measure>
+  </part>
+</score-partwise>
+`
 
-  buffer.write('RIFF', 0)
-  buffer.writeUInt32LE(36 + dataSize, 4)
-  buffer.write('WAVE', 8)
-  buffer.write('fmt ', 12)
-  buffer.writeUInt32LE(16, 16)
-  buffer.writeUInt16LE(1, 20)
-  buffer.writeUInt16LE(channelCount, 22)
-  buffer.writeUInt32LE(sampleRate, 24)
-  buffer.writeUInt32LE(sampleRate * channelCount * bytesPerSample, 28)
-  buffer.writeUInt16LE(channelCount * bytesPerSample, 32)
-  buffer.writeUInt16LE(bytesPerSample * 8, 34)
-  buffer.write('data', 36)
-  buffer.writeUInt32LE(dataSize, 40)
-
-  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-    const sample = Math.sin((2 * Math.PI * frequencyHz * frameIndex) / sampleRate)
-    const pcm = Math.max(-1, Math.min(1, sample * amplitude)) * 32767
-    buffer.writeInt16LE(Math.round(pcm), 44 + frameIndex * 2)
-  }
-
-  return buffer
-}
-
-async function uploadGuide(
-  request: APIRequestContext,
-  projectId: string,
-  wavBuffer: Buffer,
-): Promise<void> {
-  const initResponse = await request.post(`${apiBaseUrl}/api/projects/${projectId}/guide/upload-url`, {
-    data: {
-      filename: 'guide.wav',
-      content_type: 'audio/wav',
-    },
-  })
-  expect(initResponse.ok()).toBeTruthy()
-  const initPayload = (await initResponse.json()) as {
-    track_id: string
-    upload_url: string
-  }
-
-  const uploadResponse = await request.put(initPayload.upload_url, {
-    data: wavBuffer,
-    headers: {
-      'Content-Type': 'audio/wav',
-    },
-  })
-  expect(uploadResponse.ok()).toBeTruthy()
-
-  const completeResponse = await request.post(`${apiBaseUrl}/api/projects/${projectId}/guide/complete`, {
-    data: {
-      track_id: initPayload.track_id,
-      source_format: 'audio/wav',
-      duration_ms: durationMs,
-      actual_sample_rate: sampleRate,
-    },
-  })
-  expect(completeResponse.ok()).toBeTruthy()
-}
-
-async function uploadTake(
-  request: APIRequestContext,
-  projectId: string,
-  wavBuffer: Buffer,
-): Promise<void> {
-  const createResponse = await request.post(`${apiBaseUrl}/api/projects/${projectId}/tracks`, {
-    data: {
-      part_type: 'LEAD',
-    },
-  })
-  expect(createResponse.ok()).toBeTruthy()
-  const createPayload = (await createResponse.json()) as { track_id: string }
-
-  const initResponse = await request.post(`${apiBaseUrl}/api/tracks/${createPayload.track_id}/upload-url`, {
-    data: {
-      filename: 'take.wav',
-      content_type: 'audio/wav',
-    },
-  })
-  expect(initResponse.ok()).toBeTruthy()
-  const initPayload = (await initResponse.json()) as { upload_url: string }
-
-  const uploadResponse = await request.put(initPayload.upload_url, {
-    data: wavBuffer,
-    headers: {
-      'Content-Type': 'audio/wav',
-    },
-  })
-  expect(uploadResponse.ok()).toBeTruthy()
-
-  const completeResponse = await request.post(`${apiBaseUrl}/api/tracks/${createPayload.track_id}/complete`, {
-    data: {
-      source_format: 'audio/wav',
-      duration_ms: durationMs,
-      actual_sample_rate: sampleRate,
-    },
-  })
-  expect(completeResponse.ok()).toBeTruthy()
-}
-
-async function getWithRetry(
-  request: APIRequestContext,
-  url: string,
-  attempts = 3,
-): Promise<Awaited<ReturnType<APIRequestContext['get']>>> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      return await request.get(url)
-    } catch (error) {
-      lastError = error
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error(`Unable to fetch ${url}`)
-}
-
-async function saveDeviceProfileFixture(
-  request: APIRequestContext,
-  suffix: string,
-): Promise<void> {
-  const response = await request.post(`${apiBaseUrl}/api/device-profiles`, {
-    data: {
-      browser: 'Safari',
-      os: 'macOS',
-      input_device_hash: `fixture-mic-${suffix}`,
-      output_route: 'bluetooth-output',
-      browser_user_agent: `Playwright Safari fixture ${suffix}`,
-      requested_constraints: {
-        echoCancellation: false,
-        autoGainControl: false,
-        noiseSuppression: false,
-        channelCount: 1,
-      },
-      applied_settings: {
-        sampleRate: 48000,
-        channelCount: 1,
-      },
-      capabilities: {
-        secure_context: true,
-        media_devices: {
-          get_user_media: true,
-          enumerate_devices: true,
-          get_supported_constraints: true,
-          supported_constraints: ['channelCount', 'echoCancellation'],
-        },
-        permissions: {
-          api_supported: true,
-          microphone: 'prompt',
-        },
-        web_audio: {
-          audio_context: true,
-          audio_context_mode: 'webkit',
-          offline_audio_context: false,
-          offline_audio_context_mode: 'unavailable',
-          output_latency_supported: false,
-        },
-        media_recorder: {
-          supported: true,
-          supported_mime_types: ['audio/mp4'],
-          selected_mime_type: null,
-        },
-        audio_playback: {
-          wav: 'probably',
-          webm: 'unsupported',
-          mp4: 'maybe',
-          ogg: 'unsupported',
-        },
-      },
-      diagnostic_flags: ['legacy_webkit_audio_context_only', 'missing_offline_audio_context'],
-      actual_sample_rate: 48000,
-      channel_count: 1,
-      base_latency: 0.018,
-      output_latency: 0.041,
-    },
-  })
-  expect(response.ok()).toBeTruthy()
-}
-
-async function saveValidationRunFixture(request: APIRequestContext): Promise<void> {
-  const response = await request.post(`${apiBaseUrl}/api/admin/environment-validations`, {
-    data: {
-      label: '실기기 Safari 기준 실행',
-      tester: 'Playwright 점검',
-      device_name: 'MacBook Pro 14',
-      os: 'macOS 15.4',
-      browser: 'Safari 18',
-      input_device: 'Built-in Microphone',
-      output_route: 'AirPods Bluetooth',
-      outcome: 'WARN',
-      secure_context: true,
-      microphone_permission_before: 'prompt',
-      microphone_permission_after: 'granted',
-      recording_mime_type: null,
-      audio_context_mode: 'webkit',
-      offline_audio_context_mode: 'unavailable',
-      actual_sample_rate: 48000,
-      base_latency: 0.018,
-      output_latency: 0.041,
-      warning_flags: ['legacy_webkit_audio_context_only', 'missing_offline_audio_context'],
-      take_recording_succeeded: true,
-      analysis_succeeded: true,
-      playback_succeeded: false,
-      follow_up: 'Safari 재생 대체 경로를 실기기에서 다시 확인합니다.',
-      notes: '녹음 경로는 통과했지만 재생은 이 환경에서 제한되었습니다.',
-      validated_at: new Date().toISOString(),
-    },
-  })
-  expect(response.ok()).toBeTruthy()
-}
-
-async function createStudioProject(page: Page, title: string): Promise<string> {
+async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.goto('/')
-  await page.getByTestId('project-title-input').fill(title)
-  await page.getByTestId('base-key-input').fill('A')
-  await page.getByTestId('open-studio-button').click()
-  await expect(page).toHaveURL(/\/projects\/[^/]+\/studio$/)
-
-  const projectIdMatch = page.url().match(/\/projects\/([^/]+)\/studio$/)
-  expect(projectIdMatch).not.toBeNull()
-  const projectId = projectIdMatch?.[1]
-  if (!projectId) {
-    throw new Error('Expected project id in studio URL.')
-  }
-
-  return projectId
+  await page.getByTestId('studio-title-input').fill(title)
+  await page.getByTestId('studio-bpm-input').fill(bpm)
+  await page.getByTestId('start-blank-button').click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
+  await expect(page.getByRole('heading', { name: title })).toBeVisible()
+  await expect(page.getByTestId('track-card-1')).toBeVisible()
 }
 
-async function seedGuideAndTake(
-  page: Page,
-  request: APIRequestContext,
-  projectId: string,
-): Promise<void> {
-  const guideBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
-  const takeBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
-
-  await uploadGuide(request, projectId, guideBuffer)
-  await uploadTake(request, projectId, takeBuffer)
-
-  await page.reload()
-  await expect(page.getByRole('heading', { name: '1번 테이크' })).toBeVisible()
-}
-
-async function seedGuideOnly(
-  page: Page,
-  request: APIRequestContext,
-  projectId: string,
-): Promise<void> {
-  const guideBuffer = buildMonoWavBuffer({ frequencyHz: 440 })
-  await uploadGuide(request, projectId, guideBuffer)
-  await page.reload()
-}
-
-async function prepareBrowserRecording(page: Page): Promise<void> {
-  await page.getByTestId('request-microphone-button').click()
-  await expect(page.getByText(/마이크 권한을 허용했습니다\./)).toBeVisible()
-
-  await page.getByTestId('save-device-profile-button').click()
-  await expect(
-    page.getByText(/장치 기록을 저장했고, 요청한 입력 설정과 실제 적용 결과도 함께 남겼습니다\./),
-  ).toBeVisible()
-
-  await page.getByTestId('count-in-select').selectOption('0')
-  await page.getByTestId('metronome-recording-checkbox').uncheck()
-}
-
-async function recordBrowserTake(page: Page, takeNumber: number): Promise<void> {
-  await page.getByTestId('start-take-button').click()
-  await expect(page.getByText('녹음 중입니다. 테이크가 끝나면 중지해 주세요.', { exact: true })).toBeVisible()
-  await expect(page.getByText('입력 표시가 켜졌습니다.', { exact: true })).toBeVisible()
-  await page.waitForTimeout(1400)
-  await page.getByTestId('stop-take-button').click()
-  await expect(page.getByText(new RegExp(`${takeNumber}번 테이크 업로드가 완료되었습니다\\.`))).toBeVisible({
-    timeout: 20000,
+async function uploadSopranoMusicXml(page: Page, xml: string, name: string) {
+  await page.locator('[data-testid="track-card-1"] input[type="file"]').setInputFiles({
+    name,
+    mimeType: 'application/vnd.recordare.musicxml+xml',
+    buffer: Buffer.from(xml, 'utf-8'),
   })
-  await expect(page.getByRole('heading', { name: `${takeNumber}번 테이크` })).toBeVisible()
+  await expect(page.getByTestId('candidate-review')).toContainText('Soprano')
 }
 
-async function runChordAwareAnalysis(page: Page): Promise<void> {
-  await page.getByTestId('seed-chord-from-key-button').click()
-  await page.getByTestId('save-chord-timeline-button').click()
-  await expect(page.getByText(/코드 마커 1개를 저장했습니다\./)).toBeVisible()
-
-  await page.getByTestId('run-post-analysis-button').click()
-  await expect(page.getByText(/분석을 저장했습니다\./)).toBeVisible()
+async function approveFirstCandidate(page: Page) {
+  await page.getByTestId('candidate-review').locator('button').first().click()
+  await expect(page.getByTestId('candidate-review')).toBeHidden()
 }
 
-async function extractMelodyDraft(page: Page): Promise<void> {
-  const melodyPanel = getMelodyExtractionPanel(page)
-  await melodyPanel.getByTestId('extract-melody-button').click()
-  await expect(melodyPanel.getByText(/멜로디 초안을 저장했습니다\./)).toBeVisible({
-    timeout: 20000,
-  })
-}
-
-async function generateArrangementCandidates(page: Page): Promise<void> {
-  await page.getByTestId('generate-arrangements-button').click()
-  await expect(page.getByText(/비교할 편곡 후보 \d+개를 준비했습니다\./)).toBeVisible({
-    timeout: 20000,
-  })
-}
-
-function getNoteFeedbackPanel(page: Page) {
-  return page.getByTestId('note-feedback-panel')
-}
-
-function getShareLinksPanel(page: Page) {
-  return page.getByTestId('share-links-panel')
-}
-
-function getArrangementEnginePanel(page: Page) {
-  return page.getByTestId('arrangement-engine-panel')
-}
-
-function getMelodyExtractionPanel(page: Page) {
-  return page.getByTestId('melody-panel')
-}
-
-function getScoreViewPanel(page: Page) {
-  return page.getByTestId('score-view-panel')
-}
-
-function getRecorderPanel(page: Page) {
-  return page.getByTestId('recorder-panel')
-}
-
-function getPlaybackPanel(page: Page) {
-  return page.getByTestId('playback-panel')
-}
-
-function getTakeCard(page: Page, takeNumber: number) {
-  return page
-    .locator('article.take-card')
-    .filter({ has: page.getByRole('heading', { name: `${takeNumber}번 테이크` }) })
-    .first()
-}
-
-async function runChordAwareAnalysisCurrentUi(page: Page): Promise<void> {
-  await page.getByTestId('studio-workspace-mode-review').click()
-  await page.getByTestId('studio-workbench-tab-harmony-authoring').click()
-
-  const saveChordTimelineResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'PATCH' &&
-      /\/api\/projects\/[^/]+$/.test(response.url()) &&
-      response.status() === 200,
-  )
-  await page.getByTestId('seed-chord-from-key-button').click()
-  await page.getByTestId('save-chord-timeline-button').click()
-  await saveChordTimelineResponse
-
-  await page.getByTestId('studio-workbench-tab-analysis').click()
-
-  const runAnalysisResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      /\/api\/projects\/[^/]+\/tracks\/[^/]+\/analysis$/.test(response.url()) &&
-      response.status() === 200,
-  )
-  await page.getByTestId('run-post-analysis-button').click()
-  await runAnalysisResponse
-}
-
-async function extractMelodyDraftCurrentUi(page: Page): Promise<void> {
-  await page.getByTestId('studio-workspace-mode-arrange').click()
-  await page.getByTestId('studio-workbench-tab-melody').click()
-
-  const melodyPanel = getMelodyExtractionPanel(page)
-  const extractMelodyResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      /\/api\/projects\/[^/]+\/tracks\/[^/]+\/melody$/.test(response.url()) &&
-      response.status() === 200,
-  )
-  await melodyPanel.getByTestId('extract-melody-button').click()
-  await extractMelodyResponse
-}
-
-async function generateArrangementCandidatesCurrentUi(page: Page): Promise<void> {
-  await page.getByTestId('studio-workspace-mode-arrange').click()
-  await page.getByTestId('studio-workbench-tab-arrangement').click()
-
-  const generateArrangementResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      /\/api\/projects\/[^/]+\/arrangements\/generate$/.test(response.url()) &&
-      response.status() === 200,
-  )
-  await page.getByTestId('generate-arrangements-button').click()
-  await generateArrangementResponse
-}
-
-test('release gate smoke path reaches chord-aware note feedback through the studio', async ({
-  page,
-  request,
-}) => {
-  const projectId = await createStudioProject(page, 'Playwright release gate session')
-  await seedGuideAndTake(page, request, projectId)
-  await expect(page.getByText('스토리지 키', { exact: true })).toHaveCount(0)
-  await expect(page.getByText('체크섬', { exact: true })).toHaveCount(0)
-
-  const workspaceModes = page.getByTestId('studio-workspace-modes')
-  await expect(workspaceModes).toBeVisible()
-  await expect(page.getByTestId('studio-workspace-mode-record')).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await page.getByTestId('studio-workspace-mode-review').click()
-  await expect(page.getByTestId('studio-workspace-mode-review')).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await expect(page.getByTestId('studio-workbench-tab-harmony-authoring')).toBeVisible()
-  await expect(page.getByTestId('studio-workbench-tab-analysis')).toBeVisible()
-  await page.getByTestId('studio-workspace-mode-arrange').click()
-  await expect(page.getByTestId('studio-workspace-mode-arrange')).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await expect(page.getByTestId('studio-workbench-tab-melody')).toBeVisible()
-  await expect(page.getByTestId('studio-workbench-tab-arrangement')).toBeVisible()
-  await page.getByTestId('studio-workspace-mode-review').click()
-
-  await runChordAwareAnalysisCurrentUi(page)
-
-  const noteFeedbackPanel = getNoteFeedbackPanel(page)
-  await expect(noteFeedbackPanel).toBeVisible()
-  await expect(noteFeedbackPanel.locator('.note-timeline__note').first()).toBeVisible()
-  await expect(noteFeedbackPanel.locator('.note-feedback-row').first()).toBeVisible()
-
-  const humanRatingPacketHref = await page
-    .getByTestId('download-human-rating-packet-button')
-    .last()
-    .getAttribute('href')
-  const realEvidenceBatchHref = await page
-    .getByTestId('download-real-evidence-batch-button')
-    .first()
-    .getAttribute('href')
-  const projectRealEvidenceBatchHref = await page
-    .getByTestId('download-project-real-evidence-batch-button')
-    .first()
-    .getAttribute('href')
-
-  expect(humanRatingPacketHref).toBeTruthy()
-  expect(realEvidenceBatchHref).toBeTruthy()
-  expect(projectRealEvidenceBatchHref).toBeTruthy()
-
-  const [humanRatingPacketResponse, realEvidenceBatchResponse, projectRealEvidenceBatchResponse] =
-    await Promise.all([
-      getWithRetry(request, humanRatingPacketHref!),
-      getWithRetry(request, realEvidenceBatchHref!),
-      getWithRetry(request, projectRealEvidenceBatchHref!),
-    ])
-
-  expect(humanRatingPacketResponse.ok()).toBeTruthy()
-  expect(realEvidenceBatchResponse.ok()).toBeTruthy()
-  expect(projectRealEvidenceBatchResponse.ok()).toBeTruthy()
-  expect((await humanRatingPacketResponse.body()).byteLength).toBeGreaterThan(32)
-  expect((await realEvidenceBatchResponse.body()).byteLength).toBeGreaterThan(32)
-  expect((await projectRealEvidenceBatchResponse.body()).byteLength).toBeGreaterThan(32)
-})
-
-test('release gate share flow opens a frozen snapshot and loses access after deactivation', async ({
-  page,
-  request,
-}) => {
-  const projectId = await createStudioProject(page, 'Playwright share gate session')
-  await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysisCurrentUi(page)
-
-  await page.getByTestId('studio-workspace-mode-arrange').click()
-  await expect(page.getByTestId('studio-workbench-tab-sharing')).toBeVisible()
-  await page.getByTestId('studio-workbench-tab-sharing').click()
-
-  const shareLinksPanel = getShareLinksPanel(page)
-  await shareLinksPanel.locator('.button-primary').click()
-  await expect(page.getByTestId('share-label-input')).toBeVisible()
-  await page.getByTestId('share-label-input').fill('Coach review')
-
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.ok() &&
-        /\/api\/projects\/[^/]+\/share-links$/.test(new URL(response.url()).pathname),
-    ),
-    page.getByTestId('create-share-link-button').click(),
-  ])
-
-  const shareCard = shareLinksPanel.locator('article.history-card').filter({ hasText: 'Coach review' }).first()
-  await expect(shareCard).toBeVisible()
-
-  const popupPromise = page.waitForEvent('popup')
-  await shareCard.getByRole('link', { name: '공유 화면 열기' }).click()
-  const sharePage = await popupPromise
-  await sharePage.waitForLoadState('domcontentloaded')
-
-  await expect(sharePage).toHaveURL(/\/shared\//)
-  await expect(sharePage.getByRole('heading', { name: 'Playwright share gate session' })).toBeVisible()
-  await expect(sharePage.locator('.readonly-review-shell')).toBeVisible()
-  await expect(sharePage.locator('.readonly-review-strip')).toBeVisible()
-  await expect(sharePage.getByTestId('run-post-analysis-button')).toHaveCount(0)
-  await expect(sharePage.getByTestId('create-share-link-button')).toHaveCount(0)
-
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.ok() &&
-        /\/api\/share-links\/[^/]+\/deactivate$/.test(new URL(response.url()).pathname),
-    ),
-    shareCard.getByRole('button').last().click(),
-  ])
-
-  await sharePage.reload()
-  await expect(sharePage.locator('.readonly-review-loading')).toBeVisible()
-  await expect(sharePage.locator('.form-error')).toBeVisible()
-  await expect(sharePage.getByRole('link')).toBeVisible()
-})
-
-test('release gate arrangement flow reaches export-ready score artifacts', async ({
-  page,
-  request,
-}) => {
-  const projectId = await createStudioProject(page, 'Playwright arrangement gate session')
-  await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysisCurrentUi(page)
-  await extractMelodyDraftCurrentUi(page)
-  await generateArrangementCandidatesCurrentUi(page)
-
-  const arrangementEnginePanel = getArrangementEnginePanel(page)
-  await expect(arrangementEnginePanel.locator('article.candidate-card')).toHaveCount(3)
-  await page.getByTestId('studio-workbench-tab-score-playback').click()
-
-  const scoreViewPanel = getScoreViewPanel(page)
-  await expect(scoreViewPanel).toBeVisible()
-
-  const musicXmlLink = scoreViewPanel.locator('a').nth(0)
-  const arrangementMidiLink = scoreViewPanel.locator('a').nth(1)
-  const guideWavLink = scoreViewPanel.locator('a').nth(2)
-
-  await expect(musicXmlLink).toBeVisible()
-  await expect(arrangementMidiLink).toBeVisible()
-  await expect(guideWavLink).toBeVisible()
-
-  const musicXmlHref = await musicXmlLink.getAttribute('href')
-  const arrangementMidiHref = await arrangementMidiLink.getAttribute('href')
-  const guideWavHref = await guideWavLink.getAttribute('href')
-
-  expect(musicXmlHref).toBeTruthy()
-  expect(arrangementMidiHref).toBeTruthy()
-  expect(guideWavHref).toBeTruthy()
-
-  const [musicXmlResponse, arrangementMidiResponse, guideWavResponse] = await Promise.all([
-    getWithRetry(request, musicXmlHref!),
-    getWithRetry(request, arrangementMidiHref!),
-    getWithRetry(request, guideWavHref!),
-  ])
-
-  expect(musicXmlResponse.ok()).toBeTruthy()
-  expect(arrangementMidiResponse.ok()).toBeTruthy()
-  expect(guideWavResponse.ok()).toBeTruthy()
-
-  expect((await musicXmlResponse.text()).includes('<score-partwise')).toBeTruthy()
-  expect((await arrangementMidiResponse.body()).byteLength).toBeGreaterThan(32)
-  expect((await guideWavResponse.body()).byteLength).toBeGreaterThan(32)
-})
-
-test('release gate arrangement workspace presents a score-first compare and export screen', async ({
-  page,
-  request,
-}) => {
-  const projectId = await createStudioProject(page, 'Playwright arrangement workspace session')
-  await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysisCurrentUi(page)
-  await extractMelodyDraftCurrentUi(page)
-  await generateArrangementCandidatesCurrentUi(page)
-
-  await page.goto(`/projects/${projectId}/arrangement`)
-
-  await expect(page.locator('.arrangement-workspace-bar')).toBeVisible()
-  await expect(page.locator('.arrangement-candidate-tab')).toHaveCount(3)
-  await expect(page.locator('.arrangement-panel--left')).toBeVisible()
-  await expect(page.locator('.arrangement-panel--center')).toBeVisible()
-  await expect(page.locator('.arrangement-panel--right')).toBeVisible()
-  await expect(page.locator('.arrangement-score-paper')).toBeVisible()
-  await expect(page.getByRole('button', { name: '후보 비교' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '내보내기' }).first()).toBeVisible()
-  await expect(page.locator('.arrangement-export-list a')).toHaveCount(3)
-  await expect(page.locator('.arrangement-workspace-bar__utilities a')).toBeVisible()
-})
-
-test('release gate recording flow captures a take through browser microphone transport', async ({
-  page,
-  request,
-  browserName,
-}) => {
-  test.skip(browserName !== 'chromium', 'Fake microphone transport is currently Chromium-only.')
-
-  const projectId = await createStudioProject(page, 'Playwright recording gate session')
-  await seedGuideOnly(page, request, projectId)
-  await prepareBrowserRecording(page)
-
-  const recorderPanel = getRecorderPanel(page)
-  await expect(recorderPanel.getByText('테이크 수', { exact: true })).toBeVisible()
-  await expect(recorderPanel.getByText('아직 테이크가 없습니다.', { exact: true })).toBeVisible()
-
-  await recordBrowserTake(page, 1)
-  await expect(recorderPanel.getByText('가장 최근 준비 완료 테이크', { exact: true })).toBeVisible()
-  const waveformPreview = page.locator('.waveform-preview').first()
-  await expect(waveformPreview.getByTestId('waveform-preview-pipeline')).toBeVisible()
-  await expect(waveformPreview.getByText('브라우저 빠른 계산', { exact: true })).toBeVisible()
-})
-
-test('release gate arrangement playback shows transport progress and can be stopped cleanly', async ({
-  page,
-  request,
-  browserName,
-}) => {
-  test.skip(browserName === 'webkit', 'Playwright WebKit on Windows does not expose Web Audio playback yet.')
-
-  const projectId = await createStudioProject(page, 'Playwright playback gate session')
-  await seedGuideAndTake(page, request, projectId)
-  await runChordAwareAnalysisCurrentUi(page)
-  await extractMelodyDraftCurrentUi(page)
-  await generateArrangementCandidatesCurrentUi(page)
-
-  const playbackPanel = getPlaybackPanel(page)
-  const progressFill = playbackPanel.locator('.transport-progress__fill')
-  const stopButton = playbackPanel.getByRole('button', { name: '재생 중지' })
-  const guideModeCheckbox = playbackPanel.getByLabel('가이드 겹치기')
-
-  await expect(playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true })).toBeVisible()
-  await expect(stopButton).toBeDisabled()
-
-  await guideModeCheckbox.check()
-  await expect(guideModeCheckbox).toBeChecked()
-
-  await playbackPanel.getByRole('button', { name: '편곡 미리듣기 재생' }).click()
-  await expect(stopButton).toBeEnabled()
-
-  await expect
-    .poll(
-      async () => {
-        const style = await progressFill.getAttribute('style')
-        return style ?? ''
-      },
-      { timeout: 5000 },
-    )
-    .not.toContain('width: 0%')
-
-  await stopButton.click()
-  await expect(playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true })).toBeVisible()
-  await expect(
-    playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true }),
-  ).toBeVisible()
-})
-
-test('release gate ops overview can export the environment diagnostics report', async ({
-  page,
-  request,
-  browserName,
-}) => {
-  await saveDeviceProfileFixture(request, `diagnostics-${browserName}`)
-
-  await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
-  await expect(page.getByTestId('ops-workspace-mode-triage')).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByTestId('ops-workspace-mode-validation')).toBeVisible()
-  await expect(page.getByTestId('ops-workspace-mode-recovery')).toBeVisible()
-  await expect(page.getByRole('heading', { name: '브라우저 오디오 편차를 지원 이슈가 되기 전에 추적합니다' })).toBeVisible()
-
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: '환경 리포트 내려받기' }).click()
-  await expect(
-    page.getByText(
-      '환경 진단 리포트를 내려받았습니다. 실기기 하드웨어 검증의 기준선으로 사용하세요.',
-      { exact: true },
-    ),
-  ).toBeVisible()
-
-  const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^gigastudy-environment-diagnostics-\d{4}-\d{2}-\d{2}\.json$/)
-
-  const downloadPath = await download.path()
-  expect(downloadPath).toBeTruthy()
-  const reportText = await readFile(downloadPath!, 'utf8')
-  const report = JSON.parse(reportText) as {
-    exported_at: string
-    environment_diagnostics: {
-      recent_profiles: Array<{
-        browser: string
-        warning_flags: string[]
-      }>
-      warning_flags: Array<{
-        flag: string
-      }>
+test('six-track studio supports create, register, generate, sync, play, and score', async ({ page }) => {
+  await createBlankStudio(page, 'Playwright six-track session', '104')
+
+  await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')
+  await expect(page.getByTestId('candidate-review')).toContainText('Preview: C5@1')
+  await approveFirstCandidate(page)
+  await expect(page.getByTestId('track-card-1')).toContainText('C5')
+  await expect(page.getByTestId('track-generate-1')).toBeDisabled()
+
+  const pdfDownloadPromise = page.waitForEvent('download')
+  await page.getByTestId('export-pdf-button').click()
+  const pdfDownload = await pdfDownloadPromise
+  expect(pdfDownload.suggestedFilename()).toContain('score.pdf')
+  expect(await pdfDownload.failure()).toBeNull()
+
+  const sopranoOverflow = await page.getByTestId('track-score-strip-1').evaluate((strip) => {
+    const scoreViewport = strip.parentElement
+    return {
+      clientWidth: scoreViewport?.clientWidth ?? 0,
+      scrollWidth: scoreViewport?.scrollWidth ?? 0,
     }
-  }
-
-  expect(report.exported_at).toBeTruthy()
-  expect(
-    report.environment_diagnostics.recent_profiles.some(
-      (profile) =>
-        profile.browser === 'Safari' &&
-        profile.warning_flags.includes('missing_offline_audio_context'),
-    ),
-  ).toBeTruthy()
-  expect(
-    report.environment_diagnostics.warning_flags.some(
-      (warning) => warning.flag === 'legacy_webkit_audio_context_only',
-    ),
-  ).toBeTruthy()
-})
-
-test('release gate ops overview can export the environment validation packet', async ({
-  page,
-  request,
-  browserName,
-}) => {
-  await saveDeviceProfileFixture(request, `packet-${browserName}`)
-  await saveValidationRunFixture(request)
-
-  await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
-
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: '검증 패킷 내려받기' }).click()
-  await expect(
-    page.getByText(
-      '환경 검증 패킷을 내려받았습니다. 릴리즈 노트, 호환성 메모, 실기기 브라우저 증거 검토에 사용하세요.',
-      { exact: true },
-    ),
-  ).toBeVisible()
-
-  const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^gigastudy-environment-validation-packet-\d{4}-\d{2}-\d{2}\.json$/)
-
-  const downloadPath = await download.path()
-  expect(downloadPath).toBeTruthy()
-  const reportText = await readFile(downloadPath!, 'utf8')
-  const packet = JSON.parse(reportText) as {
-    generated_from: string
-    summary: {
-      total_validation_runs: number
-      native_safari_run_count: number
-    }
-    required_matrix: Array<{
-      label: string
-      covered: boolean
-    }>
-    compatibility_notes: string[]
-  }
-
-  expect(packet.generated_from).toBe('ops_environment_validation_packet')
-  expect(packet.summary.total_validation_runs).toBeGreaterThanOrEqual(1)
-  expect(packet.summary.native_safari_run_count).toBeGreaterThanOrEqual(1)
-  expect(
-    packet.required_matrix.some(
-      (item) => item.label === 'macOS + Safari + Bluetooth output' && item.covered,
-    ),
-  ).toBeTruthy()
-  expect(
-    packet.compatibility_notes.some((item) => item.includes('legacy WebKit audio contexts')),
-  ).toBeTruthy()
-})
-
-test('release gate ops overview can export browser compatibility release notes', async ({
-  page,
-  request,
-  browserName,
-}) => {
-  await saveDeviceProfileFixture(request, `notes-${browserName}`)
-  await saveValidationRunFixture(request)
-
-  await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
-
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: '호환성 노트 내려받기' }).click()
-  await expect(
-    page.getByText(
-      '브라우저 호환성 릴리즈 노트 초안을 내려받았습니다. 지원 문구를 공개하기 전에 미검증 경로를 먼저 확인하세요.',
-      { exact: true },
-    ),
-  ).toBeVisible()
-
-  const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^gigastudy-browser-compatibility-notes-\d{4}-\d{2}-\d{2}\.md$/)
-
-  const downloadPath = await download.path()
-  expect(downloadPath).toBeTruthy()
-  const markdown = await readFile(downloadPath!, 'utf8')
-
-  expect(markdown).toContain('# Browser Environment Release Notes Draft')
-  expect(markdown).toContain('## Compatibility Notes')
-  expect(markdown).toContain('## Unsupported Or Not Yet Validated Paths')
-  expect(markdown).toContain('실기기 Safari 기준 실행')
-})
-
-test('release gate ops overview can export the browser environment claim gate', async ({
-  page,
-  request,
-  browserName,
-}) => {
-  await saveDeviceProfileFixture(request, `claim-${browserName}`)
-  await saveValidationRunFixture(request)
-
-  await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: '운영 개요와 릴리즈 게이트' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '클레임 게이트' })).toBeVisible()
-  await expect(
-    page.getByText(
-      '실기기 브라우저와 하드웨어 증거가 체크리스트 종료 검토를 시작할 만큼 충분한지 확인합니다.',
-      { exact: true },
-    ),
-  ).toBeVisible()
-
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByTestId('download-claim-gate-button').click()
-  await expect(
-    page.getByText(/브라우저 환경 클레임 게이트를 내려받았습니다\./),
-  ).toBeVisible()
-
-  const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^gigastudy-browser-environment-claim-gate-\d{4}-\d{2}-\d{2}\.md$/)
-
-  const downloadPath = await download.path()
-  expect(downloadPath).toBeTruthy()
-  const markdown = await readFile(downloadPath!, 'utf8')
-
-  expect(markdown).toContain('# Browser Environment Claim Gate')
-  expect(markdown).toContain('Release claim ready:')
-  expect(markdown).toContain('native_safari_run_count')
-})
-
-test('release gate ops overview can store a manual environment validation run', async ({
-  page,
-  request,
-}) => {
-  await page.goto('/ops')
-  await expect(page.getByRole('heading', { name: '실기기 브라우저 또는 하드웨어 검증 실행을 기록합니다' })).toBeVisible()
-
-  await page.getByLabel('실행 이름').fill('실기기 Safari 수동 점검')
-  await page.getByLabel('테스터').fill('브라우저 QA')
-  await page.getByLabel('기기 이름').fill('MacBook Pro 14')
-  await page.getByLabel('운영체제').fill('macOS 15.4')
-  await page.getByLabel('브라우저', { exact: true }).fill('Safari 18')
-  await page.getByLabel('입력 장치').fill('Built-in Microphone')
-  await page.getByLabel('출력 경로').fill('Built-in Speakers')
-  await page.getByLabel('경고 플래그').fill(
-    'legacy_webkit_audio_context_only, missing_offline_audio_context',
-  )
-  await page.getByLabel('레코더 MIME').fill('audio/mp4')
-  await page.getByLabel('기본 재생 경로').fill('webkit')
-  await page.getByLabel('합치기 미리듣기 경로').fill('unavailable')
-  await page.getByLabel('샘플레이트 (Hz)').fill('48000')
-  await page.getByLabel('기본 지연 (ms)').fill('17')
-  await page.getByLabel('출력 지연 (ms)').fill('39')
-  await page.getByLabel('재생 성공').uncheck()
-  await page.getByLabel('후속 작업').fill(
-    'Safari 재생 대체 경로를 실기기에서 다시 확인합니다.',
-  )
-  await page.getByLabel('메모').fill(
-    '녹음 경로는 통과했지만 재생은 이 환경에서 제한되었습니다.',
-  )
-
-  await page.getByRole('button', { name: '검증 실행 저장' }).click()
-  await expect(
-    page.getByText(
-      '환경 검증 실행 기록을 저장했습니다. 운영 개요에 최신 수동 브라우저 점검이 반영되었습니다.',
-      { exact: true },
-    ),
-  ).toBeVisible()
-
-  const validationRunsResponse = await request.get(`${apiBaseUrl}/api/admin/environment-validations`)
-  expect(validationRunsResponse.ok()).toBeTruthy()
-  const validationRunsPayload = (await validationRunsResponse.json()) as {
-    items: Array<{
-      label: string
-      tester: string | null
-      outcome: 'PASS' | 'WARN' | 'FAIL'
-      follow_up: string | null
-    }>
-  }
-
-  expect(
-    validationRunsPayload.items.some(
-      (item) =>
-        item.label === '실기기 Safari 수동 점검' &&
-        item.tester === '브라우저 QA' &&
-        item.outcome === 'WARN' &&
-        item.follow_up === 'Safari 재생 대체 경로를 실기기에서 다시 확인합니다.',
-    ),
-  ).toBeTruthy()
-})
-
-test('release gate ops overview can download an environment validation starter pack', async ({
-  page,
-}) => {
-  await page.goto('/ops')
-  const importPanel = page.getByTestId('validation-import-panel')
-  await expect(importPanel).toBeVisible()
-
-  const downloadPromise = page.waitForEvent('download')
-  await importPanel.getByTestId('download-validation-template-button').click()
-  const download = await downloadPromise
-  expect(download.suggestedFilename()).toBe('gigastudy-environment-validation-starter-pack.zip')
-  const downloadPath = await download.path()
-  expect(downloadPath).toBeTruthy()
-})
-
-test('release gate ops overview can preview and import validation CSV intake', async ({
-  page,
-  request,
-}) => {
-  const csvText = [
-    'label,tester,device_name,os,browser,input_device,output_route,outcome,secure_context,microphone_permission_before,microphone_permission_after,recording_mime_type,audio_context_mode,offline_audio_context_mode,actual_sample_rate,base_latency_ms,output_latency_ms,warning_flags,take_recording_succeeded,analysis_succeeded,playback_succeeded,audible_issues,permission_issues,unexpected_warnings,follow_up,notes,validated_at',
-    '가져온 Safari CSV 실행,QA 리드,MacBook Pro 14,macOS 15.4,Safari 18,Built-in Microphone,AirPods Bluetooth,WARN,TRUE,prompt,granted,,webkit,unavailable,48000,18,41,"legacy_webkit_audio_context_only, missing_offline_audio_context",TRUE,TRUE,FALSE,재생 저하,권한 재확인 필요,missing_offline_audio_context,Safari 재생 재확인,시트에서 가져온 기록,2026-04-09T12:10:00Z',
-    '가져온 Chrome CSV 실행,QA 리드,USB rig,Windows 11,Chrome 136,USB microphone,Wired headphones,PASS,TRUE,prompt,granted,audio/webm,standard,standard,48000,12,21,,TRUE,TRUE,TRUE,,,,,2026-04-09T12:20:00Z',
-  ].join('\n')
-
-  await page.goto('/ops')
-  const importPanel = page
-    .locator('article')
-    .filter({ has: page.getByRole('heading', { name: '외부 검증 시트를 미리 보고 가져옵니다' }) })
-    .first()
-  await expect(importPanel).toBeVisible()
-
-  await importPanel.getByRole('textbox', { name: '환경 검증 CSV' }).fill(csvText)
-  await importPanel.getByRole('button', { name: '가져오기 미리보기' }).click()
-  await expect(
-    page.getByText('검증 실행 2건의 미리보기를 준비했습니다. 가져오기 전에 행을 확인해 주세요.', {
-      exact: true,
-    }),
-  ).toBeVisible()
-  await expect(importPanel.getByText('가져온 Safari CSV 실행', { exact: true }).first()).toBeVisible()
-  await expect(importPanel.getByText('가져온 Chrome CSV 실행', { exact: true }).first()).toBeVisible()
-
-  await importPanel.getByRole('button', { name: '미리 본 실행 가져오기' }).click()
-  await expect(
-    page.getByText('외부 CSV에서 검증 실행 2건을 ops로 가져왔습니다.', {
-      exact: true,
-    }),
-  ).toBeVisible()
-
-  const validationRunsResponse = await request.get(`${apiBaseUrl}/api/admin/environment-validations`)
-  expect(validationRunsResponse.ok()).toBeTruthy()
-  const validationRunsPayload = (await validationRunsResponse.json()) as {
-    items: Array<{ label: string }>
-  }
-
-  expect(validationRunsPayload.items.some((item) => item.label === '가져온 Safari CSV 실행')).toBeTruthy()
-  expect(validationRunsPayload.items.some((item) => item.label === '가져온 Chrome CSV 실행')).toBeTruthy()
-})
-
-test('release gate long-session stability survives repeated take and analysis cycles', async ({
-  page,
-  request,
-  browserName,
-}) => {
-  test.skip(browserName !== 'chromium', 'Session endurance currently depends on Chromium fake-mic transport.')
-
-  const pageErrors: string[] = []
-  page.on('pageerror', (error) => {
-    pageErrors.push(error.message)
   })
+  expect(sopranoOverflow.scrollWidth).toBeGreaterThan(sopranoOverflow.clientWidth)
 
-  const projectId = await createStudioProject(page, 'Playwright endurance gate session')
-  await seedGuideOnly(page, request, projectId)
-  await prepareBrowserRecording(page)
+  await expect(page.getByTestId('track-generate-2')).toBeEnabled()
+  await page.getByTestId('track-generate-2').click()
+  await expect(page.getByTestId('candidate-review')).toContainText('Candidate 1')
+  await expect(page.getByTestId('candidate-review')).toContainText('Candidate 3')
+  await approveFirstCandidate(page)
+  await expect(page.getByTestId('track-card-2')).toContainText('Voice-leading harmony score')
+  await expect(page.locator('[data-testid="track-score-strip-2"] .track-card__measure-note')).toHaveCount(2)
 
-  const recorderPanel = getRecorderPanel(page)
-  await recordBrowserTake(page, 1)
-  await recordBrowserTake(page, 2)
+  const altoFirstNoteBeforeSync = await page
+    .locator('[data-testid="track-score-strip-2"] .track-card__measure-note')
+    .first()
+    .boundingBox()
+  const altoFirstBarBeforeSync = await page
+    .locator('[data-testid="track-score-strip-2"] .track-card__beat-line--measure')
+    .first()
+    .boundingBox()
+  await page.getByTestId('track-sync-later-2').click()
+  await expect(page.getByTestId('track-card-2')).toContainText('sync +0.01s')
+  const altoFirstNoteAfterSync = await page
+    .locator('[data-testid="track-score-strip-2"] .track-card__measure-note')
+    .first()
+    .boundingBox()
+  const altoFirstBarAfterSync = await page
+    .locator('[data-testid="track-score-strip-2"] .track-card__beat-line--measure')
+    .first()
+    .boundingBox()
+  expect(altoFirstNoteBeforeSync).not.toBeNull()
+  expect(altoFirstNoteAfterSync).not.toBeNull()
+  expect(altoFirstBarBeforeSync).not.toBeNull()
+  expect(altoFirstBarAfterSync).not.toBeNull()
+  expect(altoFirstNoteAfterSync!.x).toBeGreaterThan(altoFirstNoteBeforeSync!.x + 1)
+  expect(Math.abs(altoFirstBarAfterSync!.x - altoFirstBarBeforeSync!.x)).toBeLessThan(0.5)
 
-  await expect(getTakeCard(page, 1)).toBeVisible()
-  await expect(getTakeCard(page, 2)).toBeVisible()
-  await expect(recorderPanel.getByRole('heading', { name: '1번 테이크' })).toBeVisible()
-  await expect(recorderPanel.getByRole('heading', { name: '2번 테이크' })).toBeVisible()
+  await page.getByTestId('global-play-button').click()
+  await expect(page.getByTestId('global-stop-button')).toBeEnabled()
+  await page.getByTestId('global-stop-button').click()
 
-  await getTakeCard(page, 1).getByRole('button', { name: '선택' }).click()
-  await page.getByTestId('run-post-analysis-button').click()
-  await expect(page.getByText(/분석을 저장했습니다\./)).toBeVisible()
+  await page.getByTestId('track-score-1').click()
+  await expect(page.getByTestId('score-start-button')).toBeVisible()
+  await page.getByTestId('score-start-button').click()
+  await page.getByTestId('score-stop-button').click()
 
-  await getTakeCard(page, 2).getByRole('button', { name: '선택' }).click()
-  await page.getByTestId('run-post-analysis-button').click()
-  await expect(page.getByText(/분석을 저장했습니다\./)).toBeVisible()
+  await expect(page.getByTestId('report-feed')).toContainText('Soprano')
+  const reportLink = page.locator('[data-testid^="report-open-"]').first()
+  await expect(reportLink).toBeVisible()
+  await expect(page.getByTestId('report-feed')).not.toContainText('Overall')
 
-  await extractMelodyDraftCurrentUi(page)
-  await generateArrangementCandidatesCurrentUi(page)
+  await reportLink.click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/reports\/[a-f0-9]+$/)
+  await expect(page.getByTestId('report-detail')).toContainText('Soprano')
+  await expect(page.getByTestId('report-detail')).toContainText('Pitch')
+  await expect(page.getByTestId('report-detail')).toContainText('Auto Sync')
+  await expect(page.getByTestId('report-issues')).toBeVisible()
+})
 
-  const playbackPanel = getPlaybackPanel(page)
-  const progressFill = playbackPanel.locator('.transport-progress__fill')
-  const stopButton = playbackPanel.getByRole('button', { name: '재생 중지' })
-  await playbackPanel.getByRole('button', { name: '편곡 미리듣기 재생' }).click()
-  await expect
-    .poll(
-      async () => {
-        const style = await progressFill.getAttribute('style')
-        return style ?? ''
-      },
-      { timeout: 10000 },
-    )
-    .not.toContain('width: 0%')
+test('track upload can create and approve an extraction candidate', async ({ page }) => {
+  await createBlankStudio(page, 'Candidate review session')
 
-  if (await stopButton.isEnabled()) {
-    await stopButton.click()
-  }
-  await expect(playbackPanel.getByText('편곡 미리듣기를 시작할 수 있습니다.', { exact: true })).toBeVisible()
+  await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')
+  await expect(page.getByTestId('candidate-review')).toContainText('Preview: C5@1')
+  await page.locator('[data-testid^="candidate-target-"]').selectOption('2')
+  await approveFirstCandidate(page)
 
-  const shareLinksPanel = getShareLinksPanel(page)
-  await shareLinksPanel.getByLabel('공유 이름').fill('Session endurance review')
-  await page.getByRole('button', { name: '읽기 전용 공유 링크 만들기' }).click()
-  await expect(page.getByText(/"Session endurance review" 읽기 전용 공유 링크를 만들었고/)).toBeVisible()
-  await expect(
-    shareLinksPanel.locator('article.history-card').filter({ hasText: 'Session endurance review' }).first(),
-  ).toBeVisible()
+  await expect(page.getByTestId('track-card-2')).toContainText('C5')
+  await expect(page.getByTestId('track-card-2')).toContainText('G5')
+})
 
-  expect(pageErrors).toEqual([])
+test('symbolic upload drives the studio time-signature score grid', async ({ page }) => {
+  await createBlankStudio(page, 'Three four grid session')
+
+  await uploadSopranoMusicXml(page, threeFourMusicXmlUpload, 'three-four.musicxml')
+  await approveFirstCandidate(page)
+
+  await expect(page.locator('.composer-score-heading')).toContainText('3/4')
+  await expect(page.getByTestId('track-card-1')).toContainText('F5')
+
+  const beatLabels = await page
+    .locator('[data-testid="track-score-strip-1"] .track-card__measure-note small')
+    .evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim()))
+  expect(beatLabels.slice(0, 4)).toEqual(['1', '2', '3', '1'])
+
+  const measureLineXs = await page
+    .locator('[data-testid="track-score-strip-1"] .track-card__beat-line--measure')
+    .evaluateAll((nodes) => nodes.slice(0, 3).map((node) => node.getBoundingClientRect().x))
+  const beatLineXs = await page
+    .locator('[data-testid="track-score-strip-1"] .track-card__beat-line:not(.track-card__beat-line--measure)')
+    .evaluateAll((nodes) => nodes.slice(0, 2).map((node) => node.getBoundingClientRect().x))
+  expect(measureLineXs).toHaveLength(3)
+  expect(beatLineXs).toHaveLength(2)
+  const beatGap = beatLineXs[1] - beatLineXs[0]
+  const measureGap = measureLineXs[1] - measureLineXs[0]
+  expect(Math.abs(measureGap - beatGap * 3)).toBeLessThan(1)
 })

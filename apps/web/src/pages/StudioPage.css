@@ -6,6 +6,7 @@
 
 .composer-window {
   display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
   min-height: calc(100svh - 48px);
   border: 1px solid #7f8e9a;
   border-radius: 8px;

@@ -206,7 +206,8 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   await createBlankStudio(page, 'Playwright six-track session', '104')
 
   await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')
-  await expect(page.getByTestId('candidate-review')).toContainText('Preview: C5@1')
+  await expect(page.getByTestId('candidate-review')).toContainText('C5@1')
+  await expect(page.getByTestId('candidate-review')).toContainText('선택 기준')
   await approveFirstCandidate(page)
   await expect(page.getByTestId('track-card-1')).toContainText('C5')
   await expect(page.getByTestId('track-generate-1')).toBeDisabled()
@@ -230,6 +231,7 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   await page.getByTestId('track-generate-2').click()
   await expect(page.getByTestId('candidate-review')).toContainText('Candidate 1')
   await expect(page.getByTestId('candidate-review')).toContainText('Candidate 3')
+  await expect(page.getByTestId('candidate-review')).toContainText('움직임')
   await approveFirstCandidate(page)
   await expect(page.getByTestId('track-card-2')).toContainText('Voice-leading harmony score')
   await expect(page.locator('[data-testid="track-score-strip-2"] .track-card__measure-note')).toHaveCount(2)
@@ -285,7 +287,7 @@ test('track upload can create and approve an extraction candidate', async ({ pag
   await createBlankStudio(page, 'Candidate review session')
 
   await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')
-  await expect(page.getByTestId('candidate-review')).toContainText('Preview: C5@1')
+  await expect(page.getByTestId('candidate-review')).toContainText('C5@1')
   await page.locator('[data-testid^="candidate-target-"]').selectOption('2')
   await approveFirstCandidate(page)
 

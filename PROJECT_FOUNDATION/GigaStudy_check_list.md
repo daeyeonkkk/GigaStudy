@@ -108,7 +108,10 @@ This checklist tracks the new six-track studio foundation only.
   track.
 - [x] Candidate approval into an occupied target requires overwrite
   confirmation.
-- [x] Candidate review shows compact note preview data.
+- [x] Candidate review shows decision-oriented musical summaries instead of
+  only method/confidence system fields.
+- [x] Candidate review shows compact note preview data and contour-style flow
+  cues when pitch data is available.
 - [x] Pending extraction candidates can be rejected without registering notes.
 - [x] Upload into an occupied track overwrites intentionally.
 - [x] AI generation uses registered tracks as context.

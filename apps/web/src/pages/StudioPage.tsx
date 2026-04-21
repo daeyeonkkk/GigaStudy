@@ -970,6 +970,7 @@ export function StudioPage() {
             />
 
             <CandidateReviewPanel
+              beatsPerMeasure={studioBeatsPerMeasure}
               candidateOverwriteApprovals={candidateOverwriteApprovals}
               candidates={pendingCandidates}
               tracks={studio.tracks}

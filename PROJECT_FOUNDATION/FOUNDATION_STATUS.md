@@ -98,8 +98,9 @@ The current implementation has a working six-track vertical slice:
   actions, playback/recording state, and API orchestration.
 - Extraction results can be held as pending candidates and approved or rejected
   before registration.
-- Candidate review supports target-track override, compact note preview, and
-  explicit overwrite confirmation for occupied targets.
+- Candidate review supports target-track override, musical decision summaries
+  (range, register fit, movement, rhythm density, start/end, confidence,
+  contour preview), and explicit overwrite confirmation for occupied targets.
 - Recording, direct upload, candidate approval, and AI generation have explicit
   overwrite guards for occupied tracks.
 - AI generation is rule-based symbolic harmony/percussion generation.
@@ -130,7 +131,7 @@ not legacy product surfaces.
 
 ## Next Required Work
 
-1. Add richer visual preview to candidate review, especially for OMR output.
+1. Add score-image-aware OMR preview and page/part confidence indicators.
 2. Add clearer failed-extraction recovery for browser recording.
 3. Improve browser and PDF score rendering notation fidelity while preserving
    TrackNote as the source of truth.

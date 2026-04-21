@@ -264,7 +264,9 @@ Required:
 - Harden OMR review with score-image-aware visual preview and page/part
   confidence indicators.
 - Add mixed-audio fallback behavior that does not overpromise SATB separation.
-- Add confidence indicators where extraction is uncertain.
+- Keep candidate review decision-first: musical character, confidence,
+  register fit, movement, rhythm density, and contour should stay more
+  prominent than raw engine method names.
 - Add NWC parsing only after a reliable NWC-to-TrackNote conversion path is
   chosen.
 

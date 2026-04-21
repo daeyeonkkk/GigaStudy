@@ -1,8 +1,8 @@
+import type { CSSProperties } from 'react'
+
 import {
-  formatDurationSeconds,
-  formatPercent,
-  getCandidateDurationSeconds,
-  getCandidatePitchRange,
+  getCandidateContourPoints,
+  getCandidateDecisionSummary,
   getCandidatePreviewText,
   sourceLabels,
   statusLabels,
@@ -10,6 +10,7 @@ import {
 import type { ExtractionCandidate, TrackSlot } from '../../types/studio'
 
 type CandidateReviewPanelProps = {
+  beatsPerMeasure: number
   candidateOverwriteApprovals: Record<string, boolean>
   candidates: ExtractionCandidate[]
   tracks: TrackSlot[]
@@ -22,6 +23,7 @@ type CandidateReviewPanelProps = {
 }
 
 export function CandidateReviewPanel({
+  beatsPerMeasure,
   candidateOverwriteApprovals,
   candidates,
   tracks,
@@ -53,39 +55,55 @@ export function CandidateReviewPanel({
           const targetTrack = tracks.find((track) => track.slot_id === selectedSlotId) ?? suggestedTrack
           const wouldOverwrite = candidateWouldOverwrite(candidate)
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
+          const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
+          const contourPoints = getCandidateContourPoints(candidate)
 
           return (
             <article className="candidate-review__item" key={candidate.candidate_id}>
-              <div>
-                <span>{sourceLabels[candidate.source_kind]}</span>
-                <h3>
-                  {suggestedTrack?.name ?? `Track ${candidate.suggested_slot_id}`} 후보
-                  {candidate.variant_label ? ` - ${candidate.variant_label}` : ''}
-                </h3>
-                <p>{candidate.source_label}</p>
+              <div className="candidate-review__identity">
+                <span>
+                  {sourceLabels[candidate.source_kind]}
+                  {candidate.variant_label ? ` · ${candidate.variant_label}` : ''}
+                </span>
+                <h3>{suggestedTrack?.name ?? `Track ${candidate.suggested_slot_id}`} 후보</h3>
+                <strong>{decisionSummary.title}</strong>
+                <p>{decisionSummary.headline}</p>
+                <ul aria-label="후보 특징">
+                  {decisionSummary.tags.map((tag) => (
+                    <li key={`${candidate.candidate_id}-${tag}`}>{tag}</li>
+                  ))}
+                </ul>
               </div>
-              <dl>
-                <div>
-                  <dt>method</dt>
-                  <dd>{candidate.method}</dd>
+
+              <div className="candidate-review__decision" data-testid={`candidate-insight-${candidate.candidate_id}`}>
+                <span>선택 기준</span>
+                <p>{decisionSummary.support}</p>
+                <div className="candidate-review__contour" aria-label="선율 흐름">
+                  {contourPoints.map((point, index) => (
+                    <i
+                      aria-label={point.label}
+                      key={`${candidate.candidate_id}-contour-${index}`}
+                      style={
+                        {
+                          '--candidate-x': `${Math.max(0, Math.min(100, point.x))}%`,
+                          '--candidate-y': `${Math.max(0, Math.min(100, point.y))}%`,
+                        } as CSSProperties
+                      }
+                      title={point.label}
+                    />
+                  ))}
                 </div>
-                <div>
-                  <dt>confidence</dt>
-                  <dd>{formatPercent(candidate.confidence)}</dd>
-                </div>
-                <div>
-                  <dt>notes</dt>
-                  <dd>{candidate.notes.length}</dd>
-                </div>
-                <div>
-                  <dt>duration</dt>
-                  <dd>{formatDurationSeconds(getCandidateDurationSeconds(candidate))}</dd>
-                </div>
-                <div>
-                  <dt>range</dt>
-                  <dd>{getCandidatePitchRange(candidate)}</dd>
-                </div>
+              </div>
+
+              <dl className="candidate-review__metrics">
+                {decisionSummary.metrics.map((metric) => (
+                  <div key={`${candidate.candidate_id}-${metric.label}`}>
+                    <dt>{metric.label}</dt>
+                    <dd>{metric.value}</dd>
+                  </div>
+                ))}
               </dl>
+
               <div className="candidate-review__target">
                 <label>
                   <span>대상 트랙</span>
@@ -113,8 +131,26 @@ export function CandidateReviewPanel({
                   </label>
                 ) : null}
               </div>
-              <p className="candidate-review__preview">Preview: {getCandidatePreviewText(candidate)}</p>
+
+              <div className="candidate-review__preview">
+                <span>흐름</span>
+                <strong>{decisionSummary.phrasePreview}</strong>
+                <small>위치: {getCandidatePreviewText(candidate)}</small>
+              </div>
+
               {candidate.message ? <p>{candidate.message}</p> : null}
+              <details className="candidate-review__technical">
+                <summary>엔진 정보</summary>
+                <dl>
+                  {decisionSummary.technical.map((metric) => (
+                    <div key={`${candidate.candidate_id}-technical-${metric.label}`}>
+                      <dt>{metric.label}</dt>
+                      <dd>{metric.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+
               <div className="candidate-review__actions">
                 <button
                   className="app-button"

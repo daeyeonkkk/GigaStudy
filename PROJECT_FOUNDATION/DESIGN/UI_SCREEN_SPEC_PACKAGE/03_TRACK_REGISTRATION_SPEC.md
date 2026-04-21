@@ -73,10 +73,14 @@ After upload:
 When an extraction candidate is created:
 
 - The suggested track enters a review-needed state.
-- The candidate shows source, method, confidence, note count, and suggested
-  target track.
-- The candidate shows a compact symbolic preview, including duration, pitch
-  range, and first note/beat events.
+- The candidate prioritizes user-decision information over engine log fields:
+  source type, musical character, pitch range, register fit, melodic movement,
+  rhythm density, start/end notes, confidence, and suggested target track.
+- Engine method and raw source details remain available as secondary technical
+  details, not as the primary comparison surface.
+- The candidate shows a compact symbolic preview, including phrase flow,
+  duration, pitch range, first note/beat events, and a contour-style visual
+  cue when pitch data is available.
 - The user can change the approval target to any of the six tracks.
 - If the chosen target already has content, approval requires an explicit
   overwrite confirmation.

@@ -14,10 +14,36 @@ import {
   uploadTrack,
 } from '../lib/api'
 import {
-  AUDIO_UPLOAD_EXTENSIONS,
-  isAudioUploadFile,
   prepareAudioFileForUpload,
 } from '../lib/audioUpload'
+import { getBrowserAudioContextConstructor } from '../lib/browserAudio'
+import {
+  createTone,
+  disposePlaybackSession,
+  scheduleMetronomeClicks,
+  startLoopingMetronomeSession,
+  type PlaybackNode,
+  type PlaybackSession,
+} from '../lib/scorePlayback'
+import {
+  getRecordingLevelPercent,
+  startScoreRecorder,
+  stopScoreRecorder,
+  type ScoreRecorder,
+} from '../lib/scoreRecorder'
+import {
+  DEFAULT_METER,
+  formatBeatInMeasure,
+  getDisplayBeat,
+  getMeasureIndexFromBeat,
+  getStudioMeter,
+  isMeasureDownbeat,
+} from '../lib/studioTiming'
+import {
+  TRACK_UPLOAD_ACCEPT,
+  detectUploadKind,
+  isOmrUpload,
+} from '../lib/studioUploads'
 import type {
   ExtractionCandidate,
   ReportIssue,
@@ -47,8 +73,6 @@ type ScoreSession = {
   includeMetronome: boolean
   phase: 'ready' | 'listening' | 'analyzing'
 }
-
-type UploadKind = 'audio' | 'midi' | 'score'
 
 type TrackRenderNote = {
   note: ScoreNote
@@ -81,34 +105,6 @@ type KeySignatureMark = {
   top: number
 }
 
-type PlaybackNode = {
-  oscillator: OscillatorNode
-  gain: GainNode
-}
-
-type PlaybackSession = {
-  context?: AudioContext
-  nodes: PlaybackNode[]
-  timeoutIds: number[]
-}
-
-type MeterContext = {
-  beatsPerMeasure: number
-  pulseQuarterBeats: number
-}
-
-type ScoreRecorder = {
-  context: AudioContext
-  source: MediaStreamAudioSourceNode
-  processor: ScriptProcessorNode
-  stream: MediaStream
-  chunks: Float32Array[]
-  sampleRate: number
-  startedAt: number
-  rmsLevel: number
-  peakLevel: number
-}
-
 const noteSemitones: Record<string, number> = {
   C: 0,
   D: 2,
@@ -129,11 +125,6 @@ const noteSteps: Record<string, number> = {
   B: 6,
 }
 
-const DEFAULT_BEATS_PER_MEASURE = 4
-const DEFAULT_METER: MeterContext = {
-  beatsPerMeasure: DEFAULT_BEATS_PER_MEASURE,
-  pulseQuarterBeats: 1,
-}
 const SCORE_CLEF_GUTTER_PX = 126
 const SCORE_END_PADDING_PX = 48
 const MIN_SCORE_PX_PER_BEAT = 170
@@ -218,27 +209,6 @@ const FLAT_KEY_STEPS: Record<'treble' | 'bass', Array<[string, number]>> = {
   ],
 }
 
-const SCORE_UPLOAD_EXTENSIONS = [
-  '.musicxml',
-  '.mxl',
-  '.xml',
-  '.pdf',
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.webp',
-  '.bmp',
-  '.tif',
-  '.tiff',
-  '.nwc',
-] as const
-const TRACK_UPLOAD_ACCEPT = [
-  ...AUDIO_UPLOAD_EXTENSIONS,
-  '.mid',
-  '.midi',
-  ...SCORE_UPLOAD_EXTENSIONS,
-].join(',')
-
 const statusLabels: Record<TrackSlot['status'], string> = {
   empty: '공란',
   recording: '녹음 중',
@@ -257,47 +227,6 @@ const sourceLabels: Record<SourceKind, string> = {
   score: '악보',
   music: '음악',
   ai: 'AI 생성',
-}
-
-function detectUploadKind(file: File): UploadKind | null {
-  const name = file.name.toLowerCase()
-  if (name.endsWith('.mid') || name.endsWith('.midi')) {
-    return 'midi'
-  }
-  if (
-    name.endsWith('.musicxml') ||
-    name.endsWith('.mxl') ||
-    name.endsWith('.xml') ||
-    name.endsWith('.pdf') ||
-    name.endsWith('.png') ||
-    name.endsWith('.jpg') ||
-    name.endsWith('.jpeg') ||
-    name.endsWith('.webp') ||
-    name.endsWith('.bmp') ||
-    name.endsWith('.tif') ||
-    name.endsWith('.tiff') ||
-    name.endsWith('.nwc')
-  ) {
-    return 'score'
-  }
-  if (isAudioUploadFile(file)) {
-    return 'audio'
-  }
-  return null
-}
-
-function isOmrUpload(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return (
-    name.endsWith('.pdf') ||
-    name.endsWith('.png') ||
-    name.endsWith('.jpg') ||
-    name.endsWith('.jpeg') ||
-    name.endsWith('.webp') ||
-    name.endsWith('.bmp') ||
-    name.endsWith('.tif') ||
-    name.endsWith('.tiff')
-  )
 }
 
 function getJobStatusLabel(status: TrackExtractionJob['status']): string {
@@ -323,10 +252,6 @@ function formatSeconds(seconds: number): string {
 
 function formatDurationSeconds(seconds: number): string {
   return `${Math.max(0, seconds).toFixed(2)}s`
-}
-
-function getRecordingLevelPercent(level: number): number {
-  return Math.round(Math.max(0, Math.min(1, level * 12)) * 100)
 }
 
 function getDiatonicStep(noteName: string, octave: number): number {
@@ -490,243 +415,6 @@ function getKeySignatureMarks(slotId: number, signature: KeySignature): KeySigna
   }))
 }
 
-function getBrowserAudioContextConstructor(): typeof AudioContext | null {
-  const browserWindow = window as Window & { webkitAudioContext?: typeof AudioContext }
-  return typeof AudioContext === 'undefined'
-    ? browserWindow.webkitAudioContext ?? null
-    : AudioContext
-}
-
-function createTone(
-  context: AudioContext,
-  startTime: number,
-  duration: number,
-  frequency: number,
-  volume: number,
-  type: OscillatorType,
-): PlaybackNode {
-  const oscillator = context.createOscillator()
-  const gain = context.createGain()
-  const attackTime = Math.min(0.025, duration / 3)
-
-  oscillator.type = type
-  oscillator.frequency.setValueAtTime(frequency, startTime)
-  gain.gain.setValueAtTime(0.0001, startTime)
-  gain.gain.linearRampToValueAtTime(volume, startTime + attackTime)
-  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
-
-  oscillator.connect(gain)
-  gain.connect(context.destination)
-  oscillator.start(startTime)
-  oscillator.stop(startTime + duration + 0.03)
-
-  return { oscillator, gain }
-}
-
-function startLoopingMetronomeSession(bpm: number, meter: MeterContext = DEFAULT_METER): PlaybackSession | null {
-  const AudioContextConstructor = getBrowserAudioContextConstructor()
-  if (!AudioContextConstructor) {
-    return null
-  }
-
-  let context: AudioContext
-  try {
-    context = new AudioContextConstructor()
-  } catch {
-    return null
-  }
-
-  const beatSeconds = getBeatSeconds(bpm)
-  const pulseSeconds = Math.max(0.04, beatSeconds * meter.pulseQuarterBeats)
-  const lookaheadMilliseconds = 25
-  const scheduleAheadSeconds = 0.12
-  const session: PlaybackSession = { context, nodes: [], timeoutIds: [] }
-  let pulseIndex = 0
-  let nextClickTime = context.currentTime + 0.04
-
-  const scheduleClicks = () => {
-    if (context.state === 'closed') {
-      return
-    }
-
-    try {
-      void context.resume().catch(() => undefined)
-      while (nextClickTime < context.currentTime + scheduleAheadSeconds) {
-        const quarterBeatOffset = pulseIndex * meter.pulseQuarterBeats
-        const isDownbeat = isMeasureDownbeat(quarterBeatOffset, meter.beatsPerMeasure)
-        session.nodes.push(
-          createTone(
-            context,
-            nextClickTime,
-            0.045,
-            isDownbeat ? 1040 : 760,
-            isDownbeat ? 0.052 : 0.038,
-            'square',
-          ),
-        )
-        pulseIndex += 1
-        nextClickTime += pulseSeconds
-      }
-      const timeoutId = window.setTimeout(scheduleClicks, lookaheadMilliseconds)
-      session.timeoutIds.push(timeoutId)
-    } catch {
-      disposePlaybackSession(session)
-    }
-  }
-
-  scheduleClicks()
-  return session
-}
-
-function disposePlaybackSession(session: PlaybackSession | null) {
-  if (!session) {
-    return
-  }
-
-  session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ oscillator, gain }) => {
-    try {
-      gain.gain.cancelScheduledValues(0)
-      gain.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
-      oscillator.stop()
-      oscillator.disconnect()
-      gain.disconnect()
-    } catch {
-      return
-    }
-  })
-
-  if (session.context && session.context.state !== 'closed') {
-    void session.context.close().catch(() => undefined)
-  }
-}
-
-async function startScoreRecorder(): Promise<ScoreRecorder | null> {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    return null
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const AudioContextConstructor = getBrowserAudioContextConstructor()
-    if (!AudioContextConstructor) {
-      stream.getTracks().forEach((track) => track.stop())
-      return null
-    }
-
-    const context = new AudioContextConstructor()
-    const source = context.createMediaStreamSource(stream)
-    const processor = context.createScriptProcessor(4096, 1, 1)
-    const chunks: Float32Array[] = []
-    const recorder: ScoreRecorder = {
-      context,
-      source,
-      processor,
-      stream,
-      chunks,
-      sampleRate: context.sampleRate,
-      startedAt: performance.now(),
-      rmsLevel: 0,
-      peakLevel: 0,
-    }
-
-    processor.onaudioprocess = (event) => {
-      const input = event.inputBuffer.getChannelData(0)
-      chunks.push(new Float32Array(input))
-
-      let peak = 0
-      let squareTotal = 0
-      for (let index = 0; index < input.length; index += 1) {
-        const absoluteSample = Math.abs(input[index])
-        peak = Math.max(peak, absoluteSample)
-        squareTotal += input[index] * input[index]
-      }
-      recorder.peakLevel = peak
-      recorder.rmsLevel = Math.sqrt(squareTotal / input.length)
-    }
-
-    source.connect(processor)
-    processor.connect(context.destination)
-    void context.resume().catch(() => undefined)
-
-    return recorder
-  } catch {
-    return null
-  }
-}
-
-async function stopScoreRecorder(recorder: ScoreRecorder | null): Promise<string | null> {
-  if (!recorder) {
-    return null
-  }
-
-  recorder.processor.disconnect()
-  recorder.source.disconnect()
-  recorder.stream.getTracks().forEach((track) => track.stop())
-  if (recorder.context.state !== 'closed') {
-    await recorder.context.close().catch(() => undefined)
-  }
-
-  if (recorder.chunks.length === 0) {
-    return null
-  }
-
-  return encodeWavDataUrl(recorder.chunks, recorder.sampleRate)
-}
-
-function encodeWavDataUrl(chunks: Float32Array[], sampleRate: number): string {
-  const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0)
-  const bytesPerSample = 2
-  const buffer = new ArrayBuffer(44 + sampleCount * bytesPerSample)
-  const view = new DataView(buffer)
-  let offset = 0
-
-  function writeString(value: string) {
-    for (let index = 0; index < value.length; index += 1) {
-      view.setUint8(offset, value.charCodeAt(index))
-      offset += 1
-    }
-  }
-
-  writeString('RIFF')
-  view.setUint32(offset, 36 + sampleCount * bytesPerSample, true)
-  offset += 4
-  writeString('WAVE')
-  writeString('fmt ')
-  view.setUint32(offset, 16, true)
-  offset += 4
-  view.setUint16(offset, 1, true)
-  offset += 2
-  view.setUint16(offset, 1, true)
-  offset += 2
-  view.setUint32(offset, sampleRate, true)
-  offset += 4
-  view.setUint32(offset, sampleRate * bytesPerSample, true)
-  offset += 4
-  view.setUint16(offset, bytesPerSample, true)
-  offset += 2
-  view.setUint16(offset, 16, true)
-  offset += 2
-  writeString('data')
-  view.setUint32(offset, sampleCount * bytesPerSample, true)
-  offset += 4
-
-  chunks.forEach((chunk) => {
-    chunk.forEach((sample) => {
-      const clampedSample = Math.max(-1, Math.min(1, sample))
-      view.setInt16(offset, clampedSample < 0 ? clampedSample * 0x8000 : clampedSample * 0x7fff, true)
-      offset += 2
-    })
-  })
-
-  let binary = ''
-  const bytes = new Uint8Array(buffer)
-  for (let index = 0; index < bytes.length; index += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
-  }
-  return `data:audio/wav;base64,${btoa(binary)}`
-}
-
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('ko-KR', {
     month: '2-digit',
@@ -812,51 +500,6 @@ function getIssueLabel(issue: ReportIssue): string {
     return 'Pitch + Rhythm'
   }
   return issue.issue_type.charAt(0).toUpperCase() + issue.issue_type.slice(1)
-}
-
-function getBeatSeconds(bpm: number): number {
-  return 60 / Math.max(1, bpm)
-}
-
-function getQuarterBeatsPerMeasure(numerator: number, denominator: number): number {
-  return Math.max(0.25, numerator * (4 / Math.max(1, denominator)))
-}
-
-function getPulseQuarterBeats(denominator: number): number {
-  return Math.max(0.125, 4 / Math.max(1, denominator))
-}
-
-function getStudioBeatsPerMeasure(studio: Studio): number {
-  return getQuarterBeatsPerMeasure(studio.time_signature_numerator ?? 4, studio.time_signature_denominator ?? 4)
-}
-
-function getStudioMeter(studio: Studio): MeterContext {
-  return {
-    beatsPerMeasure: getStudioBeatsPerMeasure(studio),
-    pulseQuarterBeats: getPulseQuarterBeats(studio.time_signature_denominator ?? 4),
-  }
-}
-
-function isMeasureDownbeat(quarterBeatOffset: number, beatsPerMeasure: number): boolean {
-  const quotient = quarterBeatOffset / Math.max(0.25, beatsPerMeasure)
-  return Math.abs(quotient - Math.round(quotient)) < 0.001
-}
-
-function getDisplayBeat(note: ScoreNote, syncOffsetSeconds: number, bpm: number): number {
-  return note.beat + syncOffsetSeconds / getBeatSeconds(bpm)
-}
-
-function getMeasureIndexFromBeat(beat: number, beatsPerMeasure: number): number {
-  return Math.floor((Math.max(1, beat) - 1) / beatsPerMeasure) + 1
-}
-
-function getBeatInMeasureFromBeat(beat: number, beatsPerMeasure: number): number {
-  return ((Math.max(1, beat) - 1) % beatsPerMeasure) + 1
-}
-
-function formatBeatInMeasure(beat: number, beatsPerMeasure: number): string {
-  const rounded = Math.round(getBeatInMeasureFromBeat(beat, beatsPerMeasure) * 100) / 100
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0$/u, '')
 }
 
 function getClefSymbol(slotId: number): string {
@@ -989,30 +632,6 @@ function getTimelineNoteStyle(slotId: number, renderNote: TrackRenderNote, model
     '--note-top': `${getNoteTopPx(slotId, renderNote.note)}px`,
     '--note-left': `${Math.round(left)}px`,
   } as CSSProperties
-}
-
-function scheduleMetronomeClicks(
-  context: AudioContext,
-  nodes: PlaybackNode[],
-  scheduledStart: number,
-  maxBeat: number,
-  bpm: number,
-  meter: MeterContext,
-  volume: number,
-): number {
-  const beatSeconds = getBeatSeconds(bpm)
-  let latestStop = 0
-  for (
-    let quarterBeatOffset = 0;
-    quarterBeatOffset <= Math.max(0, maxBeat - 1) + 0.001;
-    quarterBeatOffset += meter.pulseQuarterBeats
-  ) {
-    const clickStart = quarterBeatOffset * beatSeconds
-    const frequency = isMeasureDownbeat(quarterBeatOffset, meter.beatsPerMeasure) ? 960 : 720
-    nodes.push(createTone(context, scheduledStart + clickStart, 0.045, frequency, volume, 'square'))
-    latestStop = Math.max(latestStop, clickStart + 0.045)
-  }
-  return latestStop
 }
 
 export function StudioPage() {

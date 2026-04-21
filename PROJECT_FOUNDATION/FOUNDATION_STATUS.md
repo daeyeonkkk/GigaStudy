@@ -79,6 +79,10 @@ The current implementation has a working six-track vertical slice:
   registers TrackNotes through the voice extraction path.
 - Per-track browser recording plays the metronome when enabled and shows
   elapsed-time/input-level feedback while recording.
+- Web studio responsibilities are split so upload detection, browser audio
+  access, WAV encoding, recorder lifecycle, timing/meter math, and playback
+  scheduling live in focused `apps/web/src/lib/*` modules instead of being
+  embedded in `StudioPage.tsx`.
 - Extraction results can be held as pending candidates and approved or rejected
   before registration.
 - Candidate review supports target-track override, compact note preview, and

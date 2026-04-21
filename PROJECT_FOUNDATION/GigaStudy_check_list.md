@@ -146,6 +146,19 @@ This checklist tracks the new six-track studio foundation only.
 - [x] PDF export uses registered TrackNote data, studio BPM, and studio meter.
 - [x] PDF export refuses empty studios instead of generating a misleading file.
 
+## Implementation Structure
+
+- [x] Studio upload file-type routing is isolated from the page component.
+- [x] Browser AudioContext access is isolated from upload, recording, and
+  playback features.
+- [x] WAV encoding is shared by browser upload normalization and microphone
+  recording.
+- [x] Microphone recording lifecycle is isolated from studio UI state.
+- [x] Studio BPM/meter timing helpers are isolated from rendering and playback
+  callers.
+- [x] TrackNote playback and metronome scheduling are isolated from studio UI
+  state.
+
 ## Out Of Scope Until The Core Works
 
 - [x] No standalone arrangement workspace is treated as a core requirement.

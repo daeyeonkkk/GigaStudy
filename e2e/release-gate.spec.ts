@@ -50,8 +50,13 @@ const threeFourMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
 
 async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.goto('/')
-  await page.getByTestId('studio-title-input').fill(title)
-  await page.getByTestId('studio-bpm-input').fill(bpm)
+  const titleInput = page.getByTestId('studio-title-input')
+  const bpmInput = page.getByTestId('studio-bpm-input')
+  await titleInput.fill(title)
+  await expect(titleInput).toHaveValue(title)
+  await bpmInput.fill(bpm)
+  await expect(bpmInput).toHaveValue(bpm)
+  await expect(page.getByTestId('start-blank-button')).toBeEnabled()
   await page.getByTestId('start-blank-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
   await expect(page.getByRole('heading', { name: title })).toBeVisible()
@@ -65,6 +70,54 @@ async function uploadSopranoMusicXml(page: Page, xml: string, name: string) {
     buffer: Buffer.from(xml, 'utf-8'),
   })
   await expect(page.getByTestId('candidate-review')).toContainText('Soprano')
+}
+
+async function installDecodedAudioUploadStub(page: Page) {
+  await page.addInitScript(() => {
+    class FakeAudioContext {
+      state = 'running'
+
+      async decodeAudioData() {
+        const sampleRate = 16_000
+        const length = sampleRate * 2
+        const samples = new Float32Array(length)
+        const events: Array<[number, number, number]> = [
+          [0.25, 0.65, 523.251],
+          [1.0, 0.65, 659.255],
+        ]
+        for (const [startSeconds, durationSeconds, frequency] of events) {
+          const start = Math.floor(startSeconds * sampleRate)
+          const end = Math.min(length, Math.floor((startSeconds + durationSeconds) * sampleRate))
+          for (let index = start; index < end; index += 1) {
+            const phase = (2 * Math.PI * frequency * (index - start)) / sampleRate
+            samples[index] = Math.sin(phase) * 0.28
+          }
+        }
+        return {
+          sampleRate,
+          length,
+          duration: length / sampleRate,
+          numberOfChannels: 1,
+          getChannelData: () => samples,
+        }
+      }
+
+      async close() {
+        this.state = 'closed'
+      }
+    }
+
+    Object.defineProperty(window, 'AudioContext', {
+      configurable: true,
+      value: FakeAudioContext,
+      writable: true,
+    })
+    Object.defineProperty(window, 'webkitAudioContext', {
+      configurable: true,
+      value: FakeAudioContext,
+      writable: true,
+    })
+  })
 }
 
 async function approveFirstCandidate(page: Page) {
@@ -99,6 +152,22 @@ test('home keeps upload and blank start flows separate', async ({ page }) => {
   await page.getByTestId('upload-and-start-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
   await expect(page.getByTestId('track-card-1')).toContainText('C5')
+})
+
+test('home music upload decodes MP3-like input to WAV before analysis', async ({ page }) => {
+  await installDecodedAudioUploadStub(page)
+  await page.goto('/')
+  await page.getByTestId('studio-title-input').fill('Home decoded audio upload')
+  await page.getByTestId('studio-source-input').setInputFiles({
+    name: 'home-voice.mp3',
+    mimeType: 'audio/mpeg',
+    buffer: Buffer.from('browser decodes this fixture through a stub', 'utf-8'),
+  })
+
+  await page.getByTestId('upload-and-start-button').click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/, { timeout: 45_000 })
+  await expect(page.getByTestId('candidate-review')).toContainText('home-voice.wav')
+  await expect(page.getByTestId('candidate-review')).toContainText('C5')
 })
 
 test('six-track studio supports create, register, generate, sync, play, and score', async ({ page }) => {

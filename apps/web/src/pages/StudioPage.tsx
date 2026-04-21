@@ -13,6 +13,11 @@ import {
   updateTrackSync,
   uploadTrack,
 } from '../lib/api'
+import {
+  AUDIO_UPLOAD_EXTENSIONS,
+  isAudioUploadFile,
+  prepareAudioFileForUpload,
+} from '../lib/audioUpload'
 import type {
   ExtractionCandidate,
   ReportIssue,
@@ -213,6 +218,27 @@ const FLAT_KEY_STEPS: Record<'treble' | 'bass', Array<[string, number]>> = {
   ],
 }
 
+const SCORE_UPLOAD_EXTENSIONS = [
+  '.musicxml',
+  '.mxl',
+  '.xml',
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.bmp',
+  '.tif',
+  '.tiff',
+  '.nwc',
+] as const
+const TRACK_UPLOAD_ACCEPT = [
+  ...AUDIO_UPLOAD_EXTENSIONS,
+  '.mid',
+  '.midi',
+  ...SCORE_UPLOAD_EXTENSIONS,
+].join(',')
+
 const statusLabels: Record<TrackSlot['status'], string> = {
   empty: '공란',
   recording: '녹음 중',
@@ -245,11 +271,16 @@ function detectUploadKind(file: File): UploadKind | null {
     name.endsWith('.pdf') ||
     name.endsWith('.png') ||
     name.endsWith('.jpg') ||
-    name.endsWith('.jpeg')
+    name.endsWith('.jpeg') ||
+    name.endsWith('.webp') ||
+    name.endsWith('.bmp') ||
+    name.endsWith('.tif') ||
+    name.endsWith('.tiff') ||
+    name.endsWith('.nwc')
   ) {
     return 'score'
   }
-  if (name.endsWith('.wav')) {
+  if (isAudioUploadFile(file)) {
     return 'audio'
   }
   return null
@@ -261,7 +292,11 @@ function isOmrUpload(file: File): boolean {
     name.endsWith('.pdf') ||
     name.endsWith('.png') ||
     name.endsWith('.jpg') ||
-    name.endsWith('.jpeg')
+    name.endsWith('.jpeg') ||
+    name.endsWith('.webp') ||
+    name.endsWith('.bmp') ||
+    name.endsWith('.tif') ||
+    name.endsWith('.tiff')
   )
 }
 
@@ -1592,11 +1627,17 @@ export function StudioPage() {
 
     const uploadSucceeded = await runStudioAction(
       async () => {
-        const contentBase64 = await readFileAsDataUrl(file)
+        const preparedUpload =
+          sourceKind === 'audio'
+            ? await prepareAudioFileForUpload(file)
+            : {
+                filename: file.name,
+                contentBase64: await readFileAsDataUrl(file),
+              }
         return uploadTrack(studio.studio_id, track.slot_id, {
           source_kind: sourceKind,
-          filename: file.name,
-          content_base64: contentBase64,
+          filename: preparedUpload.filename,
+          content_base64: preparedUpload.contentBase64,
           review_before_register: true,
         })
       },
@@ -2098,7 +2139,7 @@ export function StudioPage() {
                             <span aria-hidden="true">↥</span>
                             업로드
                             <input
-                              accept=".wav,.mid,.midi,.musicxml,.mxl,.xml,.pdf,.png,.jpg,.jpeg"
+                              accept={TRACK_UPLOAD_ACCEPT}
                               aria-label={`${track.name} 업로드`}
                               type="file"
                               onChange={(event) => {

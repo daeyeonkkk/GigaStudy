@@ -73,6 +73,8 @@ The current implementation has a working six-track vertical slice:
   staff-like note placement.
 - Single voice extraction exists as a local WAV MVP with dynamic voice
   thresholding, normalized autocorrelation, and median segment grouping.
+- Browser upload normalizes browser-decodable MP3/M4A/OGG/FLAC audio into mono
+  16-bit PCM WAV before sending it to the existing voice extraction path.
 - Per-track browser recording captures microphone audio, encodes WAV, and
   registers TrackNotes through the voice extraction path.
 - Per-track browser recording plays the metronome when enabled and shows
@@ -110,13 +112,11 @@ not legacy product surfaces.
 
 1. Add richer visual preview to candidate review, especially for OMR output.
 2. Add clearer failed-extraction recovery for browser recording.
-3. Add audio decoding beyond WAV only if non-WAV audio formats remain a product
-   requirement.
-4. Improve browser and PDF score rendering notation fidelity while preserving
+3. Improve browser and PDF score rendering notation fidelity while preserving
    TrackNote as the source of truth.
-5. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
+4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
    is available.
-6. Add persistence/version boundaries only where they support the core flows.
+5. Add persistence/version boundaries only where they support the core flows.
 
 ## Status Summary
 

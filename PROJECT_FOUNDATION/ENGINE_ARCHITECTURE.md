@@ -103,20 +103,22 @@ Single-track voice input is supported as an extraction problem:
 3. Quantize note onsets and durations.
 4. Produce `TrackNote` objects.
 
-The current MVP path is browser microphone capture or uploaded local WAV
-transcription. The browser captures PCM audio, encodes a WAV data URL, and sends
-it through the same upload/transcription path. During browser recording, the UI
-may play a metronome loop and show input level feedback, but the persisted track
-content remains symbolic `TrackNote` data.
+The current MVP path is browser microphone capture or browser-normalized audio
+upload into local WAV transcription. The browser captures PCM audio or decodes
+browser-supported MP3/M4A/OGG/FLAC input, encodes a mono 16-bit PCM WAV data URL,
+and sends it through the same upload/transcription path. During browser
+recording, the UI may play a metronome loop and show input level feedback, but
+the persisted track content remains symbolic `TrackNote` data.
 
 The local WAV engine uses dynamic voice activity thresholding, normalized
 autocorrelation pitch tracking, and median-based segment grouping. This is still
 a single-voice MVP, but it is expected to handle leading silence, quiet takes,
 and short note gaps better than a fixed-threshold frame detector.
 
-Other audio formats should be accepted only when a real decoder/transcriber path
-exists. Track upload UI should not advertise MP3/M4A/OGG/FLAC until that decoder
-path is implemented.
+The server-side voice engine still expects WAV input. Non-WAV audio support is a
+browser decode/normalize path, not a server MP3 decoder. If a browser cannot
+decode a selected audio file, the upload must fail before sending unusable bytes
+to the API.
 
 ### OMR
 
@@ -343,7 +345,11 @@ These code paths currently implement the contract:
 - API schema: `apps/api/src/gigastudy_api/api/schemas/studios.py`
 - Symbolic import: `apps/api/src/gigastudy_api/services/engine/symbolic.py`
 - Voice extraction: `apps/api/src/gigastudy_api/services/engine/voice.py`
-- Browser recording and WAV upload:
+- Browser recording and audio-to-WAV upload normalization:
+  `apps/web/src/lib/audioUpload.ts`
+- Home upload flow:
+  `apps/web/src/pages/LaunchPage.tsx`
+- Studio track recording and upload orchestration:
   `apps/web/src/pages/StudioPage.tsx`
 - Rule-based generation: `apps/api/src/gigastudy_api/services/engine/harmony.py`
 - OMR adapter: `apps/api/src/gigastudy_api/services/engine/omr.py`

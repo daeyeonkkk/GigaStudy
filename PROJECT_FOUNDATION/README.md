@@ -30,11 +30,13 @@ Canonical track slots:
 
 The user starts from the home screen.
 
-They enter a project name, BPM, and time signature, then choose one of two
-starts:
+They enter a project name, then choose one of two starts:
 
 - Upload and start (`업로드 후 시작`)
 - Start blank (`새로 시작`)
+
+Upload and start appears only after a score or music source is selected. BPM and
+time signature are requested only for Start blank.
 
 If the user uploads a score, GigaStudy extracts track material:
 
@@ -44,7 +46,9 @@ If the user uploads a score, GigaStudy extracts track material:
   track.
 
 If the user uploads music, GigaStudy extracts every usable part and registers
-those into the six tracks where possible.
+those into the six tracks where possible. Browser-decodable MP3/M4A/OGG/FLAC
+input is normalized to WAV before the symbolic pitch/rhythm extraction engine
+runs.
 
 If the user starts blank, all six tracks are empty.
 

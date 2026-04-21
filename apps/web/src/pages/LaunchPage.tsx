@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { createStudio, listStudios, readFileAsDataUrl } from '../lib/api'
+import {
+  AUDIO_UPLOAD_EXTENSIONS,
+  getFileExtension,
+  isAudioUploadFile,
+  prepareAudioFileForUpload,
+} from '../lib/audioUpload'
 import type { StudioListItem } from '../types/studio'
 import './LaunchPage.css'
 
@@ -26,24 +32,18 @@ const SCORE_SOURCE_EXTENSIONS = new Set([
   '.tif',
   '.tiff',
 ])
-const MUSIC_SOURCE_EXTENSIONS = new Set(['.wav', '.mp3', '.m4a', '.ogg', '.flac'])
 const SUPPORTED_SOURCE_ACCEPT = [
   ...SCORE_SOURCE_EXTENSIONS,
-  ...MUSIC_SOURCE_EXTENSIONS,
+  ...AUDIO_UPLOAD_EXTENSIONS,
 ].join(',')
 
-function sourceExtension(file: File): string {
-  const dotIndex = file.name.lastIndexOf('.')
-  return dotIndex >= 0 ? file.name.slice(dotIndex).toLowerCase() : ''
-}
-
 function isSupportedSourceFile(file: File): boolean {
-  const extension = sourceExtension(file)
-  return SCORE_SOURCE_EXTENSIONS.has(extension) || MUSIC_SOURCE_EXTENSIONS.has(extension)
+  const extension = getFileExtension(file.name)
+  return SCORE_SOURCE_EXTENSIONS.has(extension) || isAudioUploadFile(file)
 }
 
 function detectSourceKind(file: File): 'score' | 'music' {
-  const extension = sourceExtension(file)
+  const extension = getFileExtension(file.name)
   if (SCORE_SOURCE_EXTENSIONS.has(extension)) {
     return 'score'
   }
@@ -147,13 +147,19 @@ export function LaunchPage() {
     const sourceKind = sourceKindOverride === 'auto' ? detectSourceKind(sourceFile) : sourceKindOverride
     setSubmitState({ phase: 'submitting', label: '업로드 분석 중' })
     try {
-      const sourceContentBase64 = await readFileAsDataUrl(sourceFile)
+      const preparedSource =
+        sourceKind === 'music' && isAudioUploadFile(sourceFile)
+          ? await prepareAudioFileForUpload(sourceFile)
+          : {
+              filename: sourceFile.name,
+              contentBase64: await readFileAsDataUrl(sourceFile),
+            }
       const studio = await createStudio({
         title: title.trim(),
         start_mode: 'upload',
         source_kind: sourceKind,
-        source_filename: sourceFile.name,
-        source_content_base64: sourceContentBase64,
+        source_filename: preparedSource.filename,
+        source_content_base64: preparedSource.contentBase64,
       })
       navigate(`/studios/${studio.studio_id}`)
     } catch (error) {

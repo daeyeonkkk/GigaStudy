@@ -144,9 +144,9 @@ Track fill actions:
   into a registered TrackNote track. When the metronome is enabled, recording
   plays a click track and shows elapsed-time/input-level feedback.
 - Upload accepts supported audio, MIDI, or score formats and converts them into
-  registered track material or reviewable extraction candidates. In the current
-  local MVP, track-level voice audio means WAV only; non-WAV audio should not be
-  advertised until a decoder path exists.
+  registered track material or reviewable extraction candidates. Browser-
+  decodable MP3/M4A/OGG/FLAC audio is normalized to WAV before the local
+  TrackNote extraction engine runs.
 - A pending extraction candidate becomes track content only after the user
   approves it.
 - Candidate approval can be retargeted to another track, and occupied targets

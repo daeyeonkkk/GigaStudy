@@ -77,9 +77,10 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Upload accepts a local WAV single-voice extraction path.
 - [x] Local WAV extraction handles quiet takes, leading silence, and separated
   notes with short gaps.
-- [x] Track upload UI advertises WAV as the only production-ready local audio
-  input.
-- [ ] Upload supports every advertised audio extension with real decoding.
+- [x] Browser upload decodes supported MP3/M4A/OGG/FLAC audio and normalizes it
+  to WAV before server-side voice extraction.
+- [x] Upload supports every advertised browser-decodable audio extension with a
+  real decode path before extraction.
 - [x] Upload accepts supported MIDI formats.
 - [x] Upload accepts supported score formats.
 - [x] PDF/image score upload is fully covered by OMR job tests.

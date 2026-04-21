@@ -160,6 +160,9 @@ This checklist tracks the new six-track studio foundation only.
   state.
 - [x] Browser audio infrastructure and studio-domain helpers are grouped under
   separate `lib/audio` and `lib/studio` module boundaries.
+- [x] Studio page presentation is split into dedicated toolbar, track board,
+  OMR queue, candidate review, report feed, and scoring drawer components.
+- [x] Score rendering math is isolated from the page component.
 
 ## Out Of Scope Until The Core Works
 

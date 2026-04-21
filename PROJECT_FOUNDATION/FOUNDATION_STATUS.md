@@ -84,6 +84,10 @@ The current implementation has a working six-track vertical slice:
   scheduling live in focused `apps/web/src/lib/audio/*` and
   `apps/web/src/lib/studio/*` modules instead of being
   embedded in `StudioPage.tsx`.
+- Studio UI presentation is split into dedicated components for the composer
+  toolbar, track board, OMR job queue, candidate review queue, report feed, and
+  scoring drawer. `StudioPage.tsx` now mainly coordinates data loading, user
+  actions, playback/recording state, and API orchestration.
 - Extraction results can be held as pending candidates and approved or rejected
   before registration.
 - Candidate review supports target-track override, compact note preview, and

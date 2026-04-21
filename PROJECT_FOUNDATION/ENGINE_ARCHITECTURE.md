@@ -359,10 +359,14 @@ These code paths currently implement the contract:
   `apps/web/src/lib/studio/timing.ts`
 - Browser TrackNote playback and metronome scheduling:
   `apps/web/src/lib/studio/playback.ts`
+- Browser TrackNote score rendering math:
+  `apps/web/src/lib/studio/scoreRendering.ts`
 - Home upload flow:
   `apps/web/src/pages/LaunchPage.tsx`
-- Studio track recording and upload orchestration:
+- Studio orchestration:
   `apps/web/src/pages/StudioPage.tsx`
+- Studio presentation components:
+  `apps/web/src/components/studio/*`
 - Rule-based generation: `apps/api/src/gigastudy_api/services/engine/harmony.py`
 - OMR adapter: `apps/api/src/gigastudy_api/services/engine/omr.py`
 - Scoring and offline alignment:

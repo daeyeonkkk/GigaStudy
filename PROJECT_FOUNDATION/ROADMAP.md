@@ -20,8 +20,8 @@ The current implementation has a working vertical slice for:
 - TrackNote schema
 - MusicXML/MXL/XML and MIDI parsing
 - MusicXML/MIDI source time-signature preservation
-- Local WAV single-voice extraction MVP with dynamic thresholding and
-  median-based note segmentation
+- Local WAV single-voice extraction MVP with adaptive thresholding, noisy-frame
+  rejection, stable-pitch filtering, and median-based note segmentation
 - Browser MP3/M4A/OGG/FLAC audio normalization to WAV before voice extraction
 - Browser microphone recording to WAV TrackNote registration
 - Browser recording metronome playback and input level feedback
@@ -265,6 +265,9 @@ Required:
 
 - Harden browser microphone recording beyond the current level meter and
   metronome loop with clearer failed-extraction recovery.
+- Continue improving noisy-room voice extraction, especially for distinguishing
+  sustained singing from speech, breath, keyboard clicks, and other unstable
+  room noise.
 - Harden browser audio decoding failure messages for codec-specific failures.
 - Harden OMR review with score-image-aware visual preview and page/part
   confidence indicators.

@@ -91,6 +91,11 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Upload accepts a local WAV single-voice extraction path.
 - [x] Local WAV extraction handles quiet takes, leading silence, and separated
   notes with short gaps.
+- [x] Voice extraction filters noisy frames with adaptive RMS thresholding,
+  high zero-crossing rejection, autocorrelation confidence, pitch stability,
+  and minimum segment duration.
+- [x] Noise-only or non-singing recordings fail as recoverable extraction
+  errors instead of registering dense false notes.
 - [x] Browser upload decodes supported MP3/M4A/OGG/FLAC audio and normalizes it
   to WAV before server-side voice extraction.
 - [x] Upload supports every advertised browser-decodable audio extension with a

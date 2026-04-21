@@ -303,7 +303,7 @@ function getDisplaySegments(note: ScoreNote, displayBeat: number, beatsPerMeasur
   return segments.map((segment) => ({
     ...segment,
     segmentCount,
-    tieStart: segment.segmentIndex < segmentCount - 1 || note.is_tied === true,
+    tieStart: segment.segmentIndex < segmentCount - 1,
     tieStop: segment.segmentIndex > 0,
     clusterIndex: 0,
     clusterSize: 1,
@@ -311,24 +311,35 @@ function getDisplaySegments(note: ScoreNote, displayBeat: number, beatsPerMeasur
 }
 
 function markExplicitTieContinuations(segments: TrackRenderNote[]): TrackRenderNote[] {
-  return segments.map((segment, index) => {
-    if (segment.tieStop || segment.note.is_tied !== true || index === 0) {
-      return segment
+  const marked = segments.map((segment) => ({ ...segment }))
+  marked.forEach((segment, index) => {
+    if (index === 0 || segment.tieStop) {
+      return
     }
 
-    const previous = [...segments]
+    const previousIndex = [...marked]
       .slice(0, index)
+      .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
       .reverse()
-      .find((candidate) => {
+      .find(({ candidate }) => {
         const candidateEnd = candidate.displayBeat + candidate.displayDurationBeats
         return (
           pitchIdentity(candidate.note) === pitchIdentity(segment.note) &&
           Math.abs(candidateEnd - segment.displayBeat) <= 0.06
         )
-      })
+      })?.candidateIndex
 
-    return previous ? { ...segment, tieStop: true } : segment
+    if (previousIndex === undefined) {
+      return
+    }
+    const previous = marked[previousIndex]
+    if (previous.note.is_tied !== true && segment.note.is_tied !== true) {
+      return
+    }
+    marked[previousIndex] = { ...previous, tieStart: true }
+    marked[index] = { ...segment, tieStop: true }
   })
+  return marked
 }
 
 function getClusteredRenderNotes(

@@ -75,8 +75,11 @@ The current implementation has a working six-track vertical slice:
 - Registered TrackNote scores can be exported as a PDF from the studio toolbar.
   The export includes title, BPM, meter, track names, measure markers, and
   staff-like note placement.
-- Single voice extraction exists as a local WAV MVP with dynamic voice
-  thresholding, normalized autocorrelation, and median segment grouping.
+- Single voice extraction exists as a local WAV MVP with adaptive voice
+  thresholding, high zero-crossing rejection, normalized autocorrelation,
+  confidence filtering, pitch-stability filtering, and median segment grouping.
+- Noise-only or non-singing recordings are rejected instead of being registered
+  as dense false notes.
 - Browser upload normalizes browser-decodable MP3/M4A/OGG/FLAC audio into mono
   16-bit PCM WAV before sending it to the existing voice extraction path.
 - NWC is not advertised as an accepted upload format until an NWC-to-TrackNote
@@ -112,8 +115,9 @@ The current implementation has a working six-track vertical slice:
   studio time-signature grid, with dense runs expanding the score width instead
   of overlapping.
 - Browser score rendering now reflects symbolic note duration classes from
-  `duration_beats` and shows tie arcs for display-split long notes or explicit
-  tied notes.
+  `duration_beats` and shows tie arcs for display-split long notes. Explicit
+  `is_tied` metadata renders a tie only when adjacent same-pitch timing supports
+  a real continuation.
 - The score renderer gives each measure inner notation padding and clamps note
   centers inside their owning measure, so sync and same-onset clustering cannot
   push notes outside barlines.

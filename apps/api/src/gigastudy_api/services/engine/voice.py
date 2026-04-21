@@ -33,6 +33,8 @@ class VoiceSegment:
     duration_seconds: float
     midi_float: float
     confidence: float
+    frame_count: int
+    pitch_std: float
 
 
 def transcribe_voice_file(
@@ -76,9 +78,13 @@ def transcribe_voice_file(
     for start, frame, rms in frame_candidates:
         if rms < voice_threshold:
             continue
+        if _zero_crossing_rate(frame) > 0.24:
+            continue
 
         frequency, confidence = _estimate_frequency(frame, sample_rate, fmin=fmin, fmax=fmax)
         if frequency is None:
+            continue
+        if confidence < 0.42:
             continue
         midi_float = 69 + 12 * math.log2(frequency / 440)
         midi_note = frequency_to_midi(frequency)
@@ -115,8 +121,9 @@ def _dynamic_voice_threshold(rms_values: list[float]) -> float:
     sorted_values = sorted(rms_values)
     noise_floor = _percentile(sorted_values, 0.25)
     peak = max(sorted_values)
-    adaptive_threshold = max(noise_floor * 3.0, peak * 0.1)
-    return max(0.004, min(0.022, adaptive_threshold))
+    active_floor = _percentile(sorted_values, 0.7)
+    adaptive_threshold = max(noise_floor * 4.5, active_floor * 0.7, peak * 0.16)
+    return max(0.004, min(0.035, adaptive_threshold))
 
 
 def _percentile(sorted_values: list[float], ratio: float) -> float:
@@ -189,10 +196,22 @@ def _estimate_frequency(
             best_score = normalized_score
             best_lag = lag
 
-    if best_score < 0.22:
+    if best_score < 0.38:
         return None, best_score
     refined_lag = _parabolic_lag(best_lag, scores)
     return sample_rate / refined_lag, best_score
+
+
+def _zero_crossing_rate(frame: list[float]) -> float:
+    if len(frame) < 2:
+        return 0.0
+    crossings = 0
+    previous = frame[0]
+    for sample in frame[1:]:
+        if (previous < 0 <= sample) or (previous >= 0 > sample):
+            crossings += 1
+        previous = sample
+    return crossings / (len(frame) - 1)
 
 
 def _parabolic_lag(best_lag: int, scores: dict[int, float]) -> float:
@@ -242,7 +261,7 @@ def _frames_to_notes(
         confidence_values = [frame.confidence]
 
     segments.append(_build_segment(current_start, previous_time, midi_values, confidence_values, hop_seconds))
-    segments = _clean_segments(segments, min_segment_seconds=max(0.07, hop_seconds * 2))
+    segments = _clean_segments(segments, min_segment_seconds=max(0.15, hop_seconds * 3.5))
     if not segments:
         raise VoiceTranscriptionError("No stable voiced note was detected.")
 
@@ -251,7 +270,7 @@ def _frames_to_notes(
     for segment in segments:
         midi_note = round(segment.midi_float)
         beat = quantize(segment.onset_seconds / beat_seconds + 1, 0.25)
-        duration_beats = max(0.25, quantize(segment.duration_seconds / beat_seconds, 0.25))
+        duration_beats = max(0.5, quantize(segment.duration_seconds / beat_seconds, 0.25))
         notes.append(
             note_from_pitch(
                 beat=beat,
@@ -282,13 +301,21 @@ def _build_segment(
         duration_seconds=max(0.08, previous_time - current_start + hop_seconds),
         midi_float=median(midi_values),
         confidence=sum(confidence_values) / len(confidence_values),
+        frame_count=len(midi_values),
+        pitch_std=_pitch_std(midi_values),
     )
 
 
 def _clean_segments(segments: list[VoiceSegment], *, min_segment_seconds: float) -> list[VoiceSegment]:
     cleaned: list[VoiceSegment] = []
     for segment in segments:
-        if segment.duration_seconds < min_segment_seconds and segment.confidence < 0.5:
+        if segment.frame_count < 3:
+            continue
+        if segment.duration_seconds < min_segment_seconds:
+            continue
+        if segment.confidence < 0.46:
+            continue
+        if segment.pitch_std > 0.65:
             continue
         if cleaned:
             previous = cleaned[-1]
@@ -305,7 +332,17 @@ def _clean_segments(segments: list[VoiceSegment], *, min_segment_seconds: float)
                     ),
                     midi_float=median([previous.midi_float, segment.midi_float]),
                     confidence=(previous.confidence + segment.confidence) / 2,
+                    frame_count=previous.frame_count + segment.frame_count,
+                    pitch_std=max(previous.pitch_std, segment.pitch_std),
                 )
                 continue
         cleaned.append(segment)
     return cleaned
+
+
+def _pitch_std(midi_values: list[float]) -> float:
+    if len(midi_values) < 2:
+        return 0.0
+    average = sum(midi_values) / len(midi_values)
+    variance = sum((value - average) ** 2 for value in midi_values) / len(midi_values)
+    return math.sqrt(variance)

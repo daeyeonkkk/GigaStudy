@@ -111,10 +111,16 @@ and sends it through the same upload/transcription path. During browser
 recording, the UI may play a metronome loop and show input level feedback, but
 the persisted track content remains symbolic `TrackNote` data.
 
-The local WAV engine uses dynamic voice activity thresholding, normalized
-autocorrelation pitch tracking, and median-based segment grouping. This is still
-a single-voice MVP, but it is expected to handle leading silence, quiet takes,
-and short note gaps better than a fixed-threshold frame detector.
+The local WAV engine uses adaptive RMS voice activity thresholding, high
+zero-crossing rejection, normalized autocorrelation pitch tracking, confidence
+flooring, stable-pitch segment filtering, and median-based segment grouping.
+This is still a single-voice MVP, but it is expected to handle leading silence,
+quiet takes, moderate room noise, and short note gaps better than a
+fixed-threshold frame detector.
+
+Noise-only or non-singing recordings must fail with a recoverable extraction
+error instead of registering dense false notes. A track should be registered
+from voice only when the engine finds sustained, stable voiced pitch segments.
 
 The server-side voice engine still expects WAV input. Non-WAV audio support is a
 browser decode/normalize path, not a server MP3 decoder. If a browser cannot

@@ -32,9 +32,17 @@ When Stop is clicked:
 - Recording stops.
 - The captured browser audio is encoded as WAV.
 - The WAV is sent through the single-voice extraction path.
-- Usable voice material is extracted.
+- Usable voice material is extracted only when sustained, stable voiced pitch is
+  detected.
 - TrackNote material is generated.
 - The result is registered into the selected track.
+
+If the take contains only room noise, breath, handling noise, or other unstable
+non-singing material:
+
+- Keep existing track content unchanged.
+- Show a recoverable extraction failure instead of registering dense false
+  notes.
 
 If the track already had content:
 
@@ -61,8 +69,9 @@ After upload:
 - Detect file type.
 - Reject unsupported formats.
 - Extract required TrackNote material.
-- For WAV voice input, use the single-voice transcription path with dynamic
-  thresholding and note segmentation.
+- For WAV voice input, use the single-voice transcription path with adaptive
+  thresholding, noisy-frame rejection, stable-pitch filtering, and note
+  segmentation.
 - For PDF/image score input, save the source, queue an Audiveris OMR job, poll
   job state in the studio UI, and turn successful OMR MusicXML output into
   reviewable `source="omr"` TrackNote candidates.

@@ -1,4 +1,5 @@
 import math
+import random
 import struct
 import wave
 from pathlib import Path
@@ -13,8 +14,10 @@ def _write_mono_wav(
     path: Path,
     events: list[tuple[float, int | None, float]],
     *,
+    noise_amplitude: float = 0,
     sample_rate: int = 16_000,
 ) -> None:
+    rng = random.Random(17)
     samples: list[int] = []
     for duration_seconds, midi_note, amplitude in events:
         frame_count = round(duration_seconds * sample_rate)
@@ -29,6 +32,8 @@ def _write_mono_wav(
                     math.sin(2 * math.pi * frequency * time_seconds)
                     + 0.18 * math.sin(2 * math.pi * frequency * 2 * time_seconds)
                 )
+            if noise_amplitude > 0:
+                sample += rng.uniform(-noise_amplitude, noise_amplitude)
             samples.append(round(max(-1.0, min(1.0, sample)) * 32767))
 
     with wave.open(str(path), "wb") as wav_file:
@@ -75,6 +80,39 @@ def test_voice_transcription_uses_dynamic_threshold_for_quiet_takes(tmp_path: Pa
 
     assert [note.label for note in notes] == ["A4"]
     assert notes[0].confidence > 0.4
+
+
+def test_voice_transcription_rejects_noise_without_stable_singing(tmp_path: Path) -> None:
+    wav_path = tmp_path / "noisy-room.wav"
+    _write_mono_wav(
+        wav_path,
+        [
+            (1.6, None, 0),
+        ],
+        noise_amplitude=0.18,
+    )
+
+    with pytest.raises(VoiceTranscriptionError, match="No .*voiced|No stable voiced"):
+        transcribe_voice_file(wav_path, bpm=120, slot_id=1)
+
+
+def test_voice_transcription_tracks_singing_under_noise(tmp_path: Path) -> None:
+    wav_path = tmp_path / "noisy-soprano-take.wav"
+    _write_mono_wav(
+        wav_path,
+        [
+            (0.2, None, 0),
+            (0.5, 72, 0.24),
+            (0.12, None, 0),
+            (0.52, 76, 0.22),
+        ],
+        noise_amplitude=0.025,
+    )
+
+    notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1)
+
+    assert [note.label for note in notes] == ["C5", "E5"]
+    assert min(note.confidence for note in notes) > 0.5
 
 
 def test_voice_transcription_rejects_non_wav_input(tmp_path: Path) -> None:

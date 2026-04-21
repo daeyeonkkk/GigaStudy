@@ -81,7 +81,8 @@ The current implementation has a working six-track vertical slice:
   elapsed-time/input-level feedback while recording.
 - Web studio responsibilities are split so upload detection, browser audio
   access, WAV encoding, recorder lifecycle, timing/meter math, and playback
-  scheduling live in focused `apps/web/src/lib/*` modules instead of being
+  scheduling live in focused `apps/web/src/lib/audio/*` and
+  `apps/web/src/lib/studio/*` modules instead of being
   embedded in `StudioPage.tsx`.
 - Extraction results can be held as pending candidates and approved or rejected
   before registration.

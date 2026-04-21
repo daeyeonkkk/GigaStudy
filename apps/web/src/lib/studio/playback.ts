@@ -1,10 +1,10 @@
-import { getBrowserAudioContextConstructor } from './browserAudio'
+import { getBrowserAudioContextConstructor } from '../audio/audioContext'
 import {
   DEFAULT_METER,
   getBeatSeconds,
   isMeasureDownbeat,
   type MeterContext,
-} from './studioTiming'
+} from './timing'
 
 export type PlaybackNode = {
   oscillator: OscillatorNode

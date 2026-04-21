@@ -1,5 +1,5 @@
-import { readFileAsDataUrl } from './api'
-import { getBrowserAudioContextConstructor } from './browserAudio'
+import { readFileAsDataUrl } from '../api'
+import { getBrowserAudioContextConstructor } from './audioContext'
 import { encodeAudioBufferToWavDataUrl } from './wavEncoding'
 
 export const AUDIO_UPLOAD_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.flac'] as const

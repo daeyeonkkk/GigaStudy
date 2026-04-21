@@ -1,4 +1,4 @@
-import type { ScoreNote, Studio } from '../types/studio'
+import type { ScoreNote, Studio } from '../../types/studio'
 
 export type MeterContext = {
   beatsPerMeasure: number

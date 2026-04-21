@@ -7,7 +7,7 @@ import {
   getFileExtension,
   isAudioUploadFile,
   prepareAudioFileForUpload,
-} from '../lib/audioUpload'
+} from '../lib/audio'
 import type { StudioListItem } from '../types/studio'
 import './LaunchPage.css'
 

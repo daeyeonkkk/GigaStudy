@@ -158,6 +158,8 @@ This checklist tracks the new six-track studio foundation only.
   callers.
 - [x] TrackNote playback and metronome scheduling are isolated from studio UI
   state.
+- [x] Browser audio infrastructure and studio-domain helpers are grouped under
+  separate `lib/audio` and `lib/studio` module boundaries.
 
 ## Out Of Scope Until The Core Works
 

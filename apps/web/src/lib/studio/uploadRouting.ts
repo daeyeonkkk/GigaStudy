@@ -1,4 +1,4 @@
-import { AUDIO_UPLOAD_EXTENSIONS, isAudioUploadFile } from './audioUpload'
+import { AUDIO_UPLOAD_EXTENSIONS, isAudioUploadFile } from '../audio/audioUpload'
 
 export type UploadKind = 'audio' | 'midi' | 'score'
 

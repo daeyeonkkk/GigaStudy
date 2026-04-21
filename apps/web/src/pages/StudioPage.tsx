@@ -14,36 +14,30 @@ import {
   uploadTrack,
 } from '../lib/api'
 import {
+  getBrowserAudioContextConstructor,
+  getRecordingLevelPercent,
   prepareAudioFileForUpload,
-} from '../lib/audioUpload'
-import { getBrowserAudioContextConstructor } from '../lib/browserAudio'
+  startMicrophoneRecorder,
+  stopMicrophoneRecorder,
+  type MicrophoneRecorder,
+} from '../lib/audio'
 import {
   createTone,
-  disposePlaybackSession,
-  scheduleMetronomeClicks,
-  startLoopingMetronomeSession,
-  type PlaybackNode,
-  type PlaybackSession,
-} from '../lib/scorePlayback'
-import {
-  getRecordingLevelPercent,
-  startScoreRecorder,
-  stopScoreRecorder,
-  type ScoreRecorder,
-} from '../lib/scoreRecorder'
-import {
   DEFAULT_METER,
+  disposePlaybackSession,
   formatBeatInMeasure,
   getDisplayBeat,
   getMeasureIndexFromBeat,
   getStudioMeter,
   isMeasureDownbeat,
-} from '../lib/studioTiming'
-import {
+  scheduleMetronomeClicks,
+  startLoopingMetronomeSession,
   TRACK_UPLOAD_ACCEPT,
   detectUploadKind,
   isOmrUpload,
-} from '../lib/studioUploads'
+  type PlaybackNode,
+  type PlaybackSession,
+} from '../lib/studio'
 import type {
   ExtractionCandidate,
   ReportIssue,
@@ -653,9 +647,9 @@ export function StudioPage() {
   const [jobOverwriteApprovals, setJobOverwriteApprovals] = useState<Record<string, boolean>>({})
   const playbackSessionRef = useRef<PlaybackSession | null>(null)
   const recordingMetronomeSessionRef = useRef<PlaybackSession | null>(null)
-  const trackRecorderRef = useRef<ScoreRecorder | null>(null)
+  const trackRecorderRef = useRef<MicrophoneRecorder | null>(null)
   const trackRecordingAllowOverwriteRef = useRef(false)
-  const scoreRecorderRef = useRef<ScoreRecorder | null>(null)
+  const scoreRecorderRef = useRef<MicrophoneRecorder | null>(null)
   const scoreRunIdRef = useRef(0)
   const studioMeter = useMemo(
     () => (studio ? getStudioMeter(studio) : DEFAULT_METER),
@@ -699,10 +693,10 @@ export function StudioPage() {
       playbackSessionRef.current = null
       disposePlaybackSession(recordingMetronomeSessionRef.current)
       recordingMetronomeSessionRef.current = null
-      void stopScoreRecorder(trackRecorderRef.current)
+      void stopMicrophoneRecorder(trackRecorderRef.current)
       trackRecorderRef.current = null
       trackRecordingAllowOverwriteRef.current = false
-      void stopScoreRecorder(scoreRecorderRef.current)
+      void stopMicrophoneRecorder(scoreRecorderRef.current)
       scoreRecorderRef.current = null
     }
   }, [])
@@ -1170,7 +1164,7 @@ export function StudioPage() {
       setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
       await runStudioAction(
         async () => {
-          const recordedAudioBase64 = await stopScoreRecorder(recorder)
+          const recordedAudioBase64 = await stopMicrophoneRecorder(recorder)
           if (!recordedAudioBase64) {
             throw new Error('녹음된 오디오가 비어 있습니다. 마이크 입력을 확인하고 다시 녹음해 주세요.')
           }
@@ -1212,7 +1206,7 @@ export function StudioPage() {
       return
     }
 
-    const recorder = await startScoreRecorder()
+    const recorder = await startMicrophoneRecorder()
     if (!recorder) {
       setActionState({
         phase: 'error',
@@ -1378,9 +1372,9 @@ export function StudioPage() {
       phase: 'success',
       message: '선택한 기준 트랙을 재생하고 사후 채점 입력을 받습니다.',
     })
-    const recorder = await startScoreRecorder()
+    const recorder = await startMicrophoneRecorder()
     if (scoreRunIdRef.current !== runId) {
-      void stopScoreRecorder(recorder)
+      void stopMicrophoneRecorder(recorder)
       return
     }
     scoreRecorderRef.current = recorder
@@ -1407,7 +1401,7 @@ export function StudioPage() {
     setActionState({ phase: 'busy', message: '0.01s 단위로 박자와 음정을 채점하는 중입니다.' })
     try {
       scoreRunIdRef.current += 1
-      const performanceAudioBase64 = await stopScoreRecorder(scoreRecorderRef.current)
+      const performanceAudioBase64 = await stopMicrophoneRecorder(scoreRecorderRef.current)
       scoreRecorderRef.current = null
       stopPlaybackSession()
       setGlobalPlaying(false)

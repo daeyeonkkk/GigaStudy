@@ -1,7 +1,7 @@
-import { getBrowserAudioContextConstructor } from './browserAudio'
+import { getBrowserAudioContextConstructor } from './audioContext'
 import { encodeAudioChunksToWavDataUrl } from './wavEncoding'
 
-export type ScoreRecorder = {
+export type MicrophoneRecorder = {
   context: AudioContext
   source: MediaStreamAudioSourceNode
   processor: ScriptProcessorNode
@@ -17,7 +17,7 @@ export function getRecordingLevelPercent(level: number): number {
   return Math.round(Math.max(0, Math.min(1, level * 12)) * 100)
 }
 
-export async function startScoreRecorder(): Promise<ScoreRecorder | null> {
+export async function startMicrophoneRecorder(): Promise<MicrophoneRecorder | null> {
   if (!navigator.mediaDevices?.getUserMedia) {
     return null
   }
@@ -34,7 +34,7 @@ export async function startScoreRecorder(): Promise<ScoreRecorder | null> {
     const source = context.createMediaStreamSource(stream)
     const processor = context.createScriptProcessor(4096, 1, 1)
     const chunks: Float32Array[] = []
-    const recorder: ScoreRecorder = {
+    const recorder: MicrophoneRecorder = {
       context,
       source,
       processor,
@@ -71,7 +71,7 @@ export async function startScoreRecorder(): Promise<ScoreRecorder | null> {
   }
 }
 
-export async function stopScoreRecorder(recorder: ScoreRecorder | null): Promise<string | null> {
+export async function stopMicrophoneRecorder(recorder: MicrophoneRecorder | null): Promise<string | null> {
   if (!recorder) {
     return null
   }

@@ -346,19 +346,19 @@ These code paths currently implement the contract:
 - Symbolic import: `apps/api/src/gigastudy_api/services/engine/symbolic.py`
 - Voice extraction: `apps/api/src/gigastudy_api/services/engine/voice.py`
 - Browser audio primitives:
-  `apps/web/src/lib/browserAudio.ts`
+  `apps/web/src/lib/audio/audioContext.ts`
 - Browser WAV encoding:
-  `apps/web/src/lib/wavEncoding.ts`
+  `apps/web/src/lib/audio/wavEncoding.ts`
 - Browser audio-to-WAV upload normalization:
-  `apps/web/src/lib/audioUpload.ts`
+  `apps/web/src/lib/audio/audioUpload.ts`
 - Browser track/scoring recorder lifecycle:
-  `apps/web/src/lib/scoreRecorder.ts`
+  `apps/web/src/lib/audio/microphoneRecorder.ts`
 - Browser upload type routing:
-  `apps/web/src/lib/studioUploads.ts`
+  `apps/web/src/lib/studio/uploadRouting.ts`
 - Browser timing and meter helpers:
-  `apps/web/src/lib/studioTiming.ts`
+  `apps/web/src/lib/studio/timing.ts`
 - Browser TrackNote playback and metronome scheduling:
-  `apps/web/src/lib/scorePlayback.ts`
+  `apps/web/src/lib/studio/playback.ts`
 - Home upload flow:
   `apps/web/src/pages/LaunchPage.tsx`
 - Studio track recording and upload orchestration:

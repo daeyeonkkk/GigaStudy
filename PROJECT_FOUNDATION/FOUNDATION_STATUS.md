@@ -104,6 +104,9 @@ The current implementation has a working six-track vertical slice:
 - Recording, direct upload, candidate approval, and AI generation have explicit
   overwrite guards for occupied tracks.
 - AI generation is rule-based symbolic harmony/percussion generation.
+- AI vocal generation uses multiple voice-leading profiles so the review queue
+  exposes meaningfully different register, motion, and contour options instead
+  of near-duplicate top-N search results.
 - Playback uses TrackNote pitch/rhythm data.
 - Registered tracks render as horizontally scrollable measure strips on the
   studio time-signature grid, with dense runs expanding the score width instead

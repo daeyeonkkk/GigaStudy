@@ -1,4 +1,7 @@
-from gigastudy_api.services.engine.harmony import generate_rule_based_harmony
+from gigastudy_api.services.engine.harmony import (
+    generate_rule_based_harmony,
+    generate_rule_based_harmony_candidates,
+)
 from gigastudy_api.services.engine.music_theory import note_from_pitch
 
 
@@ -153,6 +156,35 @@ def test_vocal_generation_keeps_subbeat_rhythm_and_stepwise_connectors() -> None
     )
 
 
+def test_vocal_generation_candidates_are_distinct_arrangements() -> None:
+    soprano = [
+        _context_note(1, "C5"),
+        _context_note(2, "D5"),
+        _context_note(3, "E5"),
+        _context_note(4, "G5"),
+        _context_note(5, "C6"),
+        _context_note(6, "B5"),
+        _context_note(7, "A5"),
+        _context_note(8, "G5"),
+    ]
+
+    candidates = generate_rule_based_harmony_candidates(
+        target_slot_id=3,
+        context_tracks=soprano,
+        context_notes_by_slot={1: soprano},
+        bpm=120,
+        candidate_count=3,
+    )
+
+    assert len(candidates) == 3
+    sequences = [tuple(note.pitch_midi for note in candidate) for candidate in candidates]
+    assert len(set(sequences)) == 3
+    assert any(
+        _sequence_difference_score(sequences[0], sequence) >= 0.22
+        for sequence in sequences[1:]
+    )
+
+
 def _has_parallel_perfects(first_voice, second_voice) -> bool:
     for index in range(1, min(len(first_voice), len(second_voice))):
         previous_interval = abs(first_voice[index - 1].pitch_midi - second_voice[index - 1].pitch_midi) % 12
@@ -168,3 +200,17 @@ def _has_parallel_perfects(first_voice, second_voice) -> bool:
         ):
             return True
     return False
+
+
+def _sequence_difference_score(first, second) -> float:
+    pair_count = min(len(first), len(second))
+    changed_positions = sum(
+        1
+        for index in range(pair_count)
+        if abs(first[index] - second[index]) >= 3
+    )
+    average_register_delta = abs((sum(first) / len(first)) - (sum(second) / len(second)))
+    return (
+        (changed_positions / pair_count) * 0.7
+        + min(1.0, average_register_delta / 8) * 0.2
+    )

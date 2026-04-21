@@ -43,6 +43,9 @@ The current implementation has a working vertical slice for:
   candidate scoring, phrase-aware cadence bias, weak-beat scale connectors,
   voice range/spacing constraints, beam-search voice leading, and
   parallel-perfect penalties
+- AI vocal candidates are selected from distinct voice-leading profiles so the
+  approval queue contains different register/motion/contour choices rather than
+  near-duplicate top-N search outputs.
 - AI generation writes multiple reviewable candidates before registration
 - Rule-based symbolic percussion generation
 - Ensemble playback from TrackNote data

@@ -228,6 +228,11 @@ pipeline:
 7. Penalize voice crossing, poor spacing, exact pitch duplication, large leaps,
    unresolved leading tones, weak chord-tone coverage, and parallel perfect
    fifth/octave motion against known context voices.
+8. Produce review candidates through distinct voice-leading profiles rather
+   than returning the top-N near-duplicates. The current profiles bias toward
+   balanced voicing, lower support, moving counterline, upper blend, and open
+   voicing, then reject overly similar pitch sequences before exposing them to
+   the user.
 
 This matches the current 2026-04-20 technical decision:
 
@@ -265,11 +270,14 @@ AI generation is candidate-first by default:
 1. The API generates up to three symbolic candidates for the target track.
 2. Each candidate is stored as an `ExtractionCandidate` with `source_kind="ai"`.
 3. Candidates in the same generation run share a candidate group id.
-4. The target track is not overwritten during generation.
-5. Approving one candidate registers it into the selected target track.
-6. Other pending candidates from the same generation group are rejected
+4. Each candidate carries a decision-oriented variant label summarizing
+   register, motion, contour, and average pitch for vocal parts, or groove feel
+   for percussion.
+5. The target track is not overwritten during generation.
+6. Approving one candidate registers it into the selected target track.
+7. Other pending candidates from the same generation group are rejected
    automatically.
-7. If the selected target track already has content, approval requires explicit
+8. If the selected target track already has content, approval requires explicit
    overwrite confirmation.
 
 Direct AI registration is still allowed only when an API caller sets

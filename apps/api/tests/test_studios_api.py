@@ -384,11 +384,9 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
 
     assert generate_response.status_code == 200
     generated_payload = generate_response.json()
-    assert [candidate["variant_label"] for candidate in generated_payload["candidates"][:3]] == [
-        "Candidate 1",
-        "Candidate 2",
-        "Candidate 3",
-    ]
+    variant_labels = [candidate["variant_label"] for candidate in generated_payload["candidates"][:3]]
+    assert all(label.startswith("Groove ") for label in variant_labels)
+    assert all("Candidate " not in label for label in variant_labels)
     approve_response = client.post(
         f"/api/studios/{studio_id}/candidates/{generated_payload['candidates'][0]['candidate_id']}/approve",
         json={},
@@ -942,6 +940,8 @@ def test_ai_generation_creates_candidates_and_approval_requires_overwrite_confir
         if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
     ]
     assert len(alto_candidates) == 3
+    assert all("Candidate " not in candidate["variant_label"] for candidate in alto_candidates)
+    assert all("avg " in candidate["variant_label"] for candidate in alto_candidates)
     first_group_id = alto_candidates[0]["candidate_group_id"]
     assert first_group_id is not None
     approve_first_response = client.post(

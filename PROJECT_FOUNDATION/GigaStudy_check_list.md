@@ -128,6 +128,10 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Vocal AI generation has phrase-aware cadence bias and weak-beat scale
   connector support so generated lines are less mechanically chord-only.
 - [x] AI generation creates multiple pending candidates by default.
+- [x] Vocal AI generation uses distinct voice-leading profiles and similarity
+  filtering so generated candidates differ by register, motion, and contour.
+- [x] AI generation candidate labels summarize musical choice information
+  instead of generic Candidate 1/2/3 labels.
 - [x] Approving one AI candidate registers it and rejects sibling candidates
   from the same generation run.
 - [x] AI candidate approval into an occupied track requires overwrite

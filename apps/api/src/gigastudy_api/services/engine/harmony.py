@@ -58,6 +58,7 @@ VOICE_COMFORT_CENTER = {
 }
 
 BEAM_SIZE = 10
+DIVERSE_PATH_DIFFERENCE_THRESHOLD = 0.22
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,61 @@ class HarmonyPath:
     previous_pitch: int | None = None
     previous_leap: int = 0
     previous_move: int = 0
+
+
+@dataclass(frozen=True)
+class VoiceLeadingProfile:
+    name: str
+    center_shift: int = 0
+    register_focus: float = 1.0
+    stepwise_bonus: float = 0.0
+    contrary_motion_bonus: float = 0.0
+    passing_tone_delta: float = 0.0
+    root_delta: float = 0.0
+    third_delta: float = 0.0
+    fifth_delta: float = 0.0
+
+
+DEFAULT_VOICE_LEADING_PROFILE = VoiceLeadingProfile(
+    name="balanced",
+    third_delta=-0.04,
+    contrary_motion_bonus=0.08,
+)
+
+VOICE_LEADING_PROFILES: tuple[VoiceLeadingProfile, ...] = (
+    DEFAULT_VOICE_LEADING_PROFILE,
+    VoiceLeadingProfile(
+        name="lower_support",
+        center_shift=-8,
+        register_focus=3.0,
+        stepwise_bonus=0.04,
+        root_delta=-0.24,
+        fifth_delta=-0.02,
+    ),
+    VoiceLeadingProfile(
+        name="moving_counterline",
+        center_shift=2,
+        stepwise_bonus=0.18,
+        contrary_motion_bonus=0.34,
+        passing_tone_delta=-0.18,
+        third_delta=-0.08,
+    ),
+    VoiceLeadingProfile(
+        name="upper_blend",
+        center_shift=5,
+        register_focus=2.4,
+        stepwise_bonus=0.08,
+        contrary_motion_bonus=0.16,
+        third_delta=-0.18,
+    ),
+    VoiceLeadingProfile(
+        name="open_voicing",
+        center_shift=-8,
+        register_focus=2.2,
+        root_delta=-0.08,
+        fifth_delta=-0.1,
+    ),
+)
 
 
 def generate_rule_based_harmony(
@@ -164,13 +220,13 @@ def generate_rule_based_harmony_candidates(
         return []
 
     key = _estimate_key(events)
-    paths = _search_voice_leading_paths(
+    selected_paths = _select_voice_leading_paths(
         target_slot_id=target_slot_id,
         events=events,
         key=key,
-        max_paths=resolved_candidate_count,
+        candidate_count=resolved_candidate_count,
     )
-    if not paths:
+    if not selected_paths:
         return []
 
     return [
@@ -190,7 +246,7 @@ def generate_rule_based_harmony_candidates(
             )
             for event, pitch in zip(events, path.pitches, strict=False)
         ]
-        for path in paths
+        for path in selected_paths
     ]
 
 
@@ -467,16 +523,114 @@ def _structural_chord_cost(
     return cost
 
 
+def _select_voice_leading_paths(
+    *,
+    target_slot_id: int,
+    events: list[HarmonyEvent],
+    key: KeyEstimate,
+    candidate_count: int,
+) -> list[HarmonyPath]:
+    selected: list[HarmonyPath] = []
+    profiles = _voice_leading_profiles_for_count(candidate_count)
+    pool_size = max(8, candidate_count * 4)
+
+    for profile in profiles:
+        profile_paths = _search_voice_leading_paths(
+            target_slot_id=target_slot_id,
+            events=events,
+            key=key,
+            max_paths=pool_size,
+            profile=profile,
+        )
+        path = _pick_distinct_path(profile_paths, selected)
+        if path is not None:
+            selected.append(path)
+        if len(selected) >= candidate_count:
+            return selected
+
+    fallback_paths = _search_voice_leading_paths(
+        target_slot_id=target_slot_id,
+        events=events,
+        key=key,
+        max_paths=max(pool_size, candidate_count * 8),
+        profile=DEFAULT_VOICE_LEADING_PROFILE,
+    )
+    for path in fallback_paths:
+        distinct_path = _pick_distinct_path([path], selected)
+        if distinct_path is not None:
+            selected.append(distinct_path)
+        if len(selected) >= candidate_count:
+            break
+
+    return selected
+
+
+def _voice_leading_profiles_for_count(candidate_count: int) -> tuple[VoiceLeadingProfile, ...]:
+    if candidate_count <= len(VOICE_LEADING_PROFILES):
+        return VOICE_LEADING_PROFILES[:candidate_count]
+    extra_count = candidate_count - len(VOICE_LEADING_PROFILES)
+    return VOICE_LEADING_PROFILES + VOICE_LEADING_PROFILES[:extra_count]
+
+
+def _pick_distinct_path(paths: list[HarmonyPath], selected: list[HarmonyPath]) -> HarmonyPath | None:
+    for path in paths:
+        is_distinct = all(
+            _path_difference_score(path.pitches, current.pitches) >= DIVERSE_PATH_DIFFERENCE_THRESHOLD
+            for current in selected
+        )
+        if is_distinct:
+            return path
+
+    for path in paths:
+        if all(path.pitches != current.pitches for current in selected):
+            return path
+    return None
+
+
+def _path_difference_score(first: tuple[int, ...], second: tuple[int, ...]) -> float:
+    if not first or not second:
+        return 1.0 if first != second else 0.0
+
+    pair_count = min(len(first), len(second))
+    changed_positions = sum(1 for index in range(pair_count) if abs(first[index] - second[index]) >= 3)
+    average_register_delta = abs((sum(first) / len(first)) - (sum(second) / len(second)))
+    contour_delta = _contour_difference_score(first, second)
+    length_delta = abs(len(first) - len(second)) / max(len(first), len(second))
+    return (
+        (changed_positions / pair_count) * 0.7
+        + min(1.0, average_register_delta / 8) * 0.2
+        + contour_delta * 0.08
+        + length_delta * 0.02
+    )
+
+
+def _contour_difference_score(first: tuple[int, ...], second: tuple[int, ...]) -> float:
+    first_contour = _contour_signature(first)
+    second_contour = _contour_signature(second)
+    if not first_contour or not second_contour:
+        return 0.0
+    pair_count = min(len(first_contour), len(second_contour))
+    return sum(1 for index in range(pair_count) if first_contour[index] != second_contour[index]) / pair_count
+
+
+def _contour_signature(pitches: tuple[int, ...]) -> tuple[int, ...]:
+    return tuple(
+        _motion_direction(pitches[index - 1], pitches[index])
+        for index in range(1, len(pitches))
+    )
+
+
 def _search_voice_leading_paths(
     *,
     target_slot_id: int,
     events: list[HarmonyEvent],
     key: KeyEstimate,
     max_paths: int,
+    profile: VoiceLeadingProfile,
 ) -> list[HarmonyPath]:
     paths = [HarmonyPath(cost=0.0, pitches=(), chords=())]
     previous_event: HarmonyEvent | None = None
-    beam_size = max(BEAM_SIZE, max_paths * 8)
+    beam_size = max(BEAM_SIZE, max_paths * 4)
 
     for event_index, event in enumerate(events):
         next_paths: list[HarmonyPath] = []
@@ -489,6 +643,7 @@ def _search_voice_leading_paths(
                     key=key,
                     event=event,
                     is_final_event=event_index == len(events) - 1,
+                    profile=profile,
                 )
                 for pitch in pitch_candidates:
                     local_cost = _pitch_cost(
@@ -497,6 +652,7 @@ def _search_voice_leading_paths(
                         chord=chord,
                         key=key,
                         event=event,
+                        profile=profile,
                     )
                     if math.isinf(local_cost):
                         continue
@@ -507,6 +663,7 @@ def _search_voice_leading_paths(
                         previous_event=previous_event,
                         event=event,
                         target_slot_id=target_slot_id,
+                        profile=profile,
                     )
                     if math.isinf(transition_cost):
                         continue
@@ -549,6 +706,7 @@ def _candidate_pitches_for_slot(
     key: KeyEstimate,
     event: HarmonyEvent,
     is_final_event: bool,
+    profile: VoiceLeadingProfile,
 ) -> list[int]:
     low, high = SLOT_RANGES[target_slot_id]
     chord_tones = [pitch for pitch in range(low, high + 1) if pitch % 12 in chord.tones]
@@ -567,7 +725,7 @@ def _candidate_pitches_for_slot(
     if not candidates:
         return [max(low, min(high, VOICE_COMFORT_CENTER.get(target_slot_id, (low + high) // 2)))]
 
-    center = VOICE_COMFORT_CENTER.get(target_slot_id, (low + high) // 2)
+    center = _profile_center(target_slot_id, profile)
     return sorted(set(candidates), key=lambda pitch: (abs(pitch - center), pitch))
 
 
@@ -578,19 +736,20 @@ def _pitch_cost(
     chord: ChordCandidate,
     key: KeyEstimate,
     event: HarmonyEvent,
+    profile: VoiceLeadingProfile,
 ) -> float:
     if _crosses_known_voice(target_slot_id, pitch, event):
         return math.inf
 
     cost = 0.0
-    center = VOICE_COMFORT_CENTER.get(target_slot_id, pitch)
-    cost += abs(pitch - center) * 0.055
+    center = _profile_center(target_slot_id, profile)
+    cost += abs(pitch - center) * 0.055 * profile.register_focus
     cost += _spacing_cost(target_slot_id, pitch, event)
 
     target_pitch_class = pitch % 12
     if target_pitch_class not in chord.tones:
         if target_pitch_class in key.scale:
-            cost += 0.52 if event.strength < 0.95 else 1.35
+            cost += (0.52 if event.strength < 0.95 else 1.35) + profile.passing_tone_delta
         else:
             cost += 2.4
 
@@ -598,10 +757,13 @@ def _pitch_cost(
     chord_degree = _tone_degree(target_pitch_class, chord)
     if chord_degree == "third":
         cost -= 0.35 if chord_tone_counts["third"] == 0 else 0.05
+        cost += profile.third_delta
     elif chord_degree == "root":
         cost -= 0.2 if target_slot_id in {4, 5} else 0.08
+        cost += profile.root_delta
     elif chord_degree == "fifth":
         cost += 0.18 if chord_tone_counts["third"] == 0 else 0.02
+        cost += profile.fifth_delta
 
     if target_pitch_class == _leading_tone(key):
         cost += 0.7
@@ -696,6 +858,12 @@ def _duplicates_exact_context_pitch(pitch: int, event: HarmonyEvent) -> bool:
     return any(note.pitch_midi == pitch for note in event.active_notes)
 
 
+def _profile_center(target_slot_id: int, profile: VoiceLeadingProfile) -> int:
+    low, high = SLOT_RANGES[target_slot_id]
+    center = VOICE_COMFORT_CENTER.get(target_slot_id, (low + high) // 2) + profile.center_shift
+    return max(low, min(high, center))
+
+
 def _transition_cost(
     *,
     pitch: int,
@@ -704,6 +872,7 @@ def _transition_cost(
     previous_event: HarmonyEvent | None,
     event: HarmonyEvent,
     target_slot_id: int,
+    profile: VoiceLeadingProfile,
 ) -> tuple[float, int]:
     if path.previous_pitch is None:
         return 0.0, 0
@@ -717,7 +886,7 @@ def _transition_cost(
     if leap == 0:
         cost += 0.08
     elif leap <= 2:
-        cost -= 0.18
+        cost -= 0.18 + profile.stepwise_bonus
     elif leap <= 4:
         cost += 0.05
     elif leap <= 7:
@@ -733,6 +902,13 @@ def _transition_cost(
         cost += 0.85
 
     if previous_event is not None:
+        cost += _contrary_motion_cost(
+            previous_target_pitch=path.previous_pitch,
+            target_pitch=pitch,
+            previous_event=previous_event,
+            event=event,
+            profile=profile,
+        )
         cost += _parallel_perfect_cost(
             previous_target_pitch=path.previous_pitch,
             target_pitch=pitch,
@@ -745,6 +921,48 @@ def _transition_cost(
 
 def _same_direction(current_move: int, previous_move: int) -> bool:
     return current_move != 0 and previous_move != 0 and _motion_direction(0, current_move) == _motion_direction(0, previous_move)
+
+
+def _contrary_motion_cost(
+    *,
+    previous_target_pitch: int,
+    target_pitch: int,
+    previous_event: HarmonyEvent,
+    event: HarmonyEvent,
+    profile: VoiceLeadingProfile,
+) -> float:
+    if profile.contrary_motion_bonus <= 0:
+        return 0.0
+
+    target_motion = _motion_direction(previous_target_pitch, target_pitch)
+    reference_motion = _reference_motion(previous_event, event)
+    if target_motion == 0 or reference_motion == 0:
+        return 0.0
+    if target_motion == -reference_motion:
+        return -profile.contrary_motion_bonus
+    if target_motion == reference_motion:
+        return profile.contrary_motion_bonus * 0.45
+    return 0.0
+
+
+def _reference_motion(previous_event: HarmonyEvent, event: HarmonyEvent) -> int:
+    scored_motions: list[tuple[float, int]] = []
+    for slot_id, current_note in event.active_by_slot.items():
+        if current_note.pitch_midi is None:
+            continue
+        previous_note = previous_event.active_by_slot.get(slot_id)
+        if previous_note is None or previous_note.pitch_midi is None:
+            continue
+        motion = _motion_direction(previous_note.pitch_midi, current_note.pitch_midi)
+        if motion != 0:
+            scored_motions.append((event.strength, motion))
+
+    if scored_motions:
+        return max(scored_motions, key=lambda item: item[0])[1]
+
+    if previous_event.reference.pitch_midi is None or event.reference.pitch_midi is None:
+        return 0
+    return _motion_direction(previous_event.reference.pitch_midi, event.reference.pitch_midi)
 
 
 def _parallel_perfect_cost(

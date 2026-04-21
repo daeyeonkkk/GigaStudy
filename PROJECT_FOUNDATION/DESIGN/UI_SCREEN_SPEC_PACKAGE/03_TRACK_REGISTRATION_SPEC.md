@@ -108,6 +108,12 @@ When clicked on tracks 1-5:
 - Use existing tracks as musical context.
 - Generate the selected vocal part as symbolic TrackNote data.
 - Create multiple review candidates for the selected target track.
+- Vocal candidates should represent meaningfully different choices, such as
+  balanced voicing, lower support, moving counterline, upper blend, or open
+  voicing. Do not expose three near-identical top-N search results as if they
+  were separate user choices.
+- Candidate labels must summarize the musical difference: register, motion,
+  contour, and average pitch for vocal parts; groove feel for percussion.
 - Register only the candidate the user approves.
 
 When clicked on track 6, Percussion:

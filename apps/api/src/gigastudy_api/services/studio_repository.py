@@ -29,8 +29,10 @@ from gigastudy_api.api.schemas.studios import (
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
 from gigastudy_api.services.engine.music_theory import (
+    SLOT_RANGES,
     TRACKS,
     infer_slot_id,
+    midi_to_label,
     track_name,
 )
 from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
@@ -986,7 +988,7 @@ class StudioRepository:
                     source_kind="ai",
                     source_label=source_label,
                     method=method,
-                    variant_label=f"Candidate {index}",
+                    variant_label=_generation_variant_label(index, slot_id, notes),
                     confidence=min((note.confidence for note in notes), default=0.65),
                     notes=notes,
                     message=message,
@@ -1172,6 +1174,67 @@ def _mark_notes_as_omr(mapped_notes: dict[int, list[TrackNote]]) -> dict[int, li
         ]
         for slot_id, notes in mapped_notes.items()
     }
+
+
+def _generation_variant_label(index: int, slot_id: int, notes: list[TrackNote]) -> str:
+    if slot_id == 6:
+        return _percussion_variant_label(index, notes)
+
+    pitched_notes = [
+        note
+        for note in notes
+        if note.pitch_midi is not None and not note.is_rest
+    ]
+    if not pitched_notes:
+        return f"Candidate {index}"
+
+    midi_values = [note.pitch_midi for note in pitched_notes if note.pitch_midi is not None]
+    average_midi = sum(midi_values) / len(midi_values)
+    low, high = SLOT_RANGES.get(slot_id, (min(midi_values), max(midi_values)))
+    slot_center = (low + high) / 2
+    if average_midi < slot_center - 2:
+        register_label = "Lower support"
+    elif average_midi > slot_center + 2:
+        register_label = "Upper blend"
+    else:
+        register_label = "Balanced"
+
+    intervals = [
+        abs(midi_values[index] - midi_values[index - 1])
+        for index in range(1, len(midi_values))
+    ]
+    average_step = sum(intervals) / len(intervals) if intervals else 0
+    leap_count = sum(1 for interval in intervals if interval >= 5)
+    if average_step <= 1.25:
+        motion_label = "stepwise"
+    elif leap_count >= 2:
+        motion_label = "active leaps"
+    else:
+        motion_label = "gentle motion"
+
+    contour_delta = midi_values[-1] - midi_values[0]
+    if contour_delta >= 3:
+        contour_label = "rising"
+    elif contour_delta <= -3:
+        contour_label = "falling"
+    else:
+        contour_label = "level"
+
+    average_label = midi_to_label(round(average_midi))
+    return f"{register_label} {motion_label} · {contour_label} · avg {average_label}"
+
+
+def _percussion_variant_label(index: int, notes: list[TrackNote]) -> str:
+    labels = [note.label for note in notes[:8]]
+    kick_count = labels.count("Kick")
+    snare_count = labels.count("Snare")
+    if kick_count > snare_count:
+        feel = "kick-led"
+    elif snare_count > kick_count:
+        feel = "snare-led"
+    else:
+        feel = "balanced"
+    return f"Groove {index} · {feel}"
 
 
 def _track_has_content(track: TrackSlot) -> bool:

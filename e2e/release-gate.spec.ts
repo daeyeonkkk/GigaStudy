@@ -268,8 +268,11 @@ test('six-track studio supports create, register, generate, sync, play, and scor
 
   await expect(page.getByTestId('track-generate-2')).toBeEnabled()
   await page.getByTestId('track-generate-2').click()
-  await expect(page.getByTestId('candidate-review')).toContainText('Candidate 1')
-  await expect(page.getByTestId('candidate-review')).toContainText('Candidate 3')
+  await expect(page.getByTestId('candidate-review')).toContainText('Balanced')
+  await expect(page.getByTestId('candidate-review')).toContainText('Lower support')
+  await expect(page.getByTestId('candidate-review')).toContainText('Upper blend')
+  await expect(page.getByTestId('candidate-review')).toContainText('avg')
+  await expect(page.getByTestId('candidate-review')).not.toContainText('Candidate 1')
   await expect(page.getByTestId('candidate-review')).toContainText('움직임')
   await approveFirstCandidate(page)
   await expect(page.getByTestId('track-card-2')).toContainText('Voice-leading harmony score')

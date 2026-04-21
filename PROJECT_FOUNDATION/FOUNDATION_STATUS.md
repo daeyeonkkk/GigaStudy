@@ -108,6 +108,9 @@ The current implementation has a working six-track vertical slice:
 - Registered tracks render as horizontally scrollable measure strips on the
   studio time-signature grid, with dense runs expanding the score width instead
   of overlapping.
+- Browser score rendering now reflects symbolic note duration classes from
+  `duration_beats` and shows tie arcs for display-split long notes or explicit
+  tied notes.
 - The score renderer gives each measure inner notation padding and clamps note
   centers inside their owning measure, so sync and same-onset clustering cannot
   push notes outside barlines.

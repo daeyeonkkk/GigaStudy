@@ -129,6 +129,12 @@ Registered track scores should be rendered as a horizontal, measure-based strip:
   reliable spacing and clipping behavior.
 - Notes are positioned by beat within the measure, not simply listed in upload
   order.
+- Notes use `TrackNote.duration_beats` to choose symbolic duration glyphs for
+  whole, half, quarter, eighth, and sixteenth-note classes.
+- Notes that span a measure boundary are split for display only and connected
+  with tie arcs; stored `TrackNote` data remains unchanged.
+- Explicit `TrackNote.is_tied` metadata renders tie arcs between adjacent same
+  pitch notes when available.
 - Each measure reserves an inner notation area, so downbeat notes sit inside
   the barline instead of on or outside it.
 - Note centers must be clamped inside their owning measure; cluster offsets may

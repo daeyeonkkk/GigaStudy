@@ -80,6 +80,45 @@ const denseMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
 </score-partwise>
 `
 
+const durationAndTieMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>8</duration><type>half</type></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>2</duration><type>eighth</type></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration><type>16th</type></note>
+    </measure>
+    <measure number="3">
+      <note>
+        <pitch><step>A</step><octave>5</octave></pitch>
+        <duration>16</duration>
+        <tie type="start" />
+        <notations><tied type="start" /></notations>
+      </note>
+    </measure>
+    <measure number="4">
+      <note>
+        <pitch><step>A</step><octave>5</octave></pitch>
+        <duration>16</duration>
+        <tie type="stop" />
+        <notations><tied type="stop" /></notations>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+`
+
 async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.goto('/')
   const titleInput = page.getByTestId('studio-title-input')
@@ -366,4 +405,20 @@ test('dense score notes stay inside their owning measure', async ({ page }) => {
     expect(center).toBeGreaterThan(layout.firstMeasureStart)
     expect(center).toBeLessThan(layout.firstMeasureEnd)
   }
+})
+
+test('score rendering reflects note duration glyphs and ties', async ({ page }) => {
+  await createBlankStudio(page, 'Duration glyph session')
+
+  await uploadSopranoMusicXml(page, durationAndTieMusicXmlUpload, 'durations.musicxml')
+  await approveFirstCandidate(page)
+
+  const scoreStrip = page.getByTestId('track-score-strip-1')
+  await expect(scoreStrip.locator('[data-duration="whole"]')).toHaveCount(3)
+  await expect(scoreStrip.locator('[data-duration="half"]')).toHaveCount(1)
+  await expect(scoreStrip.locator('[data-duration="quarter"]')).toHaveCount(1)
+  await expect(scoreStrip.locator('[data-duration="eighth"]')).toHaveCount(1)
+  await expect(scoreStrip.locator('[data-duration="sixteenth"]')).toHaveCount(1)
+  await expect(scoreStrip.locator('.track-card__note--tie-start')).toHaveCount(2)
+  await expect(scoreStrip.locator('.track-card__note--tie-stop')).toHaveCount(1)
 })

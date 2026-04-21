@@ -11,6 +11,7 @@ import {
   getScoreMeasureBoundaryStyle,
   getScoreMeasureLabelStyle,
   getScoreTimelineStyle,
+  getTimelineNoteClass,
   getTimelineNoteStyle,
   getTrackRenderModel,
   getTrackSourceLabel,
@@ -90,14 +91,18 @@ function ScoreStrip({
       ))}
       {scoreModel.notes.map((renderNote) => (
         <span
-          className={
-            renderNote.note.is_rest === true
-              ? 'track-card__measure-note track-card__note--rest'
-              : 'track-card__measure-note'
-          }
-          key={renderNote.note.id}
+          aria-label={`${renderNote.note.label} ${renderNote.durationLabel}`}
+          className={getTimelineNoteClass(renderNote)}
+          data-duration={renderNote.durationGlyph}
+          data-testid={`track-note-${track.slot_id}-${renderNote.renderKey}`}
+          key={renderNote.renderKey}
           style={getTimelineNoteStyle(track.slot_id, renderNote, scoreModel)}
+          title={`${renderNote.note.label} · ${renderNote.durationLabel}`}
         >
+          <span className="track-card__note-flag track-card__note-flag--primary" aria-hidden="true" />
+          <span className="track-card__note-flag track-card__note-flag--secondary" aria-hidden="true" />
+          {renderNote.tieStop ? <span className="track-card__note-tie track-card__note-tie--stop" aria-hidden="true" /> : null}
+          {renderNote.tieStart ? <span className="track-card__note-tie track-card__note-tie--start" aria-hidden="true" /> : null}
           <small>{formatBeatInMeasure(renderNote.displayBeat, beatsPerMeasure)}</small>
           <strong>{renderNote.note.label}</strong>
         </span>

@@ -11,9 +11,19 @@ import {
 export type TrackRenderNote = {
   note: ScoreNote
   displayBeat: number
+  displayDurationBeats: number
+  durationGlyph: NoteDurationGlyph
+  durationLabel: string
+  renderKey: string
+  segmentIndex: number
+  segmentCount: number
+  tieStart: boolean
+  tieStop: boolean
   clusterIndex: number
   clusterSize: number
 }
+
+export type NoteDurationGlyph = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
 
 export type TrackRenderModel = {
   beatsPerMeasure: number
@@ -40,6 +50,7 @@ const STAFF_MIDDLE_LINE_Y = 62
 const STAFF_STEP_PX = 5
 const STAFF_NOTE_MIN_TOP = 18
 const STAFF_NOTE_MAX_TOP = 98
+const DURATION_EPSILON_BEATS = 0.001
 
 const noteSemitones: Record<string, number> = {
   C: 0,
@@ -220,26 +231,125 @@ function clampToMeasureInterior(leftPx: number, measureIndex: number, model: Tra
   return Math.max(measureStart + NOTE_CENTER_GUARD_PX, Math.min(measureEnd - NOTE_CENTER_GUARD_PX, leftPx))
 }
 
+function getDurationGlyph(durationBeats: number): NoteDurationGlyph {
+  if (durationBeats >= 3.5) {
+    return 'whole'
+  }
+  if (durationBeats >= 1.5) {
+    return 'half'
+  }
+  if (durationBeats >= 0.75) {
+    return 'quarter'
+  }
+  if (durationBeats >= 0.375) {
+    return 'eighth'
+  }
+  return 'sixteenth'
+}
+
+function getDurationLabel(durationBeats: number): string {
+  const glyph = getDurationGlyph(durationBeats)
+  const labels: Record<NoteDurationGlyph, string> = {
+    whole: '온음표',
+    half: '2분음표',
+    quarter: '4분음표',
+    eighth: '8분음표',
+    sixteenth: '16분음표',
+  }
+  const rounded = Math.round(durationBeats * 100) / 100
+  return `${labels[glyph]} · ${Number.isInteger(rounded) ? rounded : rounded.toFixed(2)}박`
+}
+
+function pitchIdentity(note: ScoreNote): string {
+  if (typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi)) {
+    return `midi:${note.pitch_midi}`
+  }
+  return `label:${note.label}`
+}
+
+function getDisplaySegments(note: ScoreNote, displayBeat: number, beatsPerMeasure: number): TrackRenderNote[] {
+  const safeBeatsPerMeasure = Math.max(0.25, beatsPerMeasure)
+  const durationBeats = Math.max(0.25, note.duration_beats)
+  const displayStart = Math.max(1, displayBeat)
+  const displayEnd = Math.max(displayStart + 0.25, displayBeat + durationBeats)
+  const segments: Array<Pick<
+    TrackRenderNote,
+    'note' | 'displayBeat' | 'displayDurationBeats' | 'durationGlyph' | 'durationLabel' | 'renderKey' | 'segmentIndex' | 'segmentCount' | 'tieStart' | 'tieStop'
+  >> = []
+
+  let cursor = displayStart
+  while (cursor < displayEnd - DURATION_EPSILON_BEATS) {
+    const measureIndex = getMeasureIndexFromDisplayBeat(cursor, safeBeatsPerMeasure)
+    const measureEndBeat = 1 + (measureIndex + 1) * safeBeatsPerMeasure
+    const segmentEnd = Math.min(displayEnd, measureEndBeat)
+    const displayDurationBeats = Math.max(0.25, segmentEnd - cursor)
+    const segmentIndex = segments.length
+    segments.push({
+      note,
+      displayBeat: cursor,
+      displayDurationBeats,
+      durationGlyph: getDurationGlyph(displayDurationBeats),
+      durationLabel: getDurationLabel(displayDurationBeats),
+      renderKey: `${note.id}-${segmentIndex}`,
+      segmentIndex,
+      segmentCount: 1,
+      tieStart: false,
+      tieStop: false,
+    })
+    cursor = segmentEnd
+  }
+
+  const segmentCount = segments.length
+  return segments.map((segment) => ({
+    ...segment,
+    segmentCount,
+    tieStart: segment.segmentIndex < segmentCount - 1 || note.is_tied === true,
+    tieStop: segment.segmentIndex > 0,
+    clusterIndex: 0,
+    clusterSize: 1,
+  }))
+}
+
+function markExplicitTieContinuations(segments: TrackRenderNote[]): TrackRenderNote[] {
+  return segments.map((segment, index) => {
+    if (segment.tieStop || segment.note.is_tied !== true || index === 0) {
+      return segment
+    }
+
+    const previous = [...segments]
+      .slice(0, index)
+      .reverse()
+      .find((candidate) => {
+        const candidateEnd = candidate.displayBeat + candidate.displayDurationBeats
+        return (
+          pitchIdentity(candidate.note) === pitchIdentity(segment.note) &&
+          Math.abs(candidateEnd - segment.displayBeat) <= 0.06
+        )
+      })
+
+    return previous ? { ...segment, tieStop: true } : segment
+  })
+}
+
 function getClusteredRenderNotes(
   notes: ScoreNote[],
   syncOffsetSeconds: number,
   bpm: number,
+  beatsPerMeasure: number,
 ): TrackRenderNote[] {
   const baseNotes = notes
-    .map((note) => ({
-      note,
-      displayBeat: getDisplayBeat(note, syncOffsetSeconds, bpm),
-    }))
-    .sort((left, right) => left.displayBeat - right.displayBeat || left.note.id.localeCompare(right.note.id))
+    .flatMap((note) => getDisplaySegments(note, getDisplayBeat(note, syncOffsetSeconds, bpm), beatsPerMeasure))
+    .sort((left, right) => left.displayBeat - right.displayBeat || left.renderKey.localeCompare(right.renderKey))
+
+  const tiedBaseNotes = markExplicitTieContinuations(baseNotes)
 
   const clustered: TrackRenderNote[] = []
-  let currentCluster: Array<{ note: ScoreNote; displayBeat: number }> = []
+  let currentCluster: TrackRenderNote[] = []
   const flushCluster = () => {
     const clusterSize = currentCluster.length
     currentCluster.forEach((entry, index) => {
       clustered.push({
-        note: entry.note,
-        displayBeat: entry.displayBeat,
+        ...entry,
         clusterIndex: index,
         clusterSize,
       })
@@ -247,7 +357,7 @@ function getClusteredRenderNotes(
     currentCluster = []
   }
 
-  baseNotes.forEach((entry) => {
+  tiedBaseNotes.forEach((entry) => {
     const clusterAnchor = currentCluster[0]
     if (
       clusterAnchor &&
@@ -269,7 +379,7 @@ export function getTrackRenderModel(
 ): TrackRenderModel {
   const displayBeats = track.notes.map((note) => getDisplayBeat(note, track.sync_offset_seconds, bpm))
   const pxPerBeat = getScorePxPerBeat(displayBeats)
-  const notes = getClusteredRenderNotes(track.notes, track.sync_offset_seconds, bpm)
+  const notes = getClusteredRenderNotes(track.notes, track.sync_offset_seconds, bpm, beatsPerMeasure)
   const baseMaxBeatEnd = Math.max(
     beatsPerMeasure,
     ...track.notes.map((note) => note.beat + Math.max(0.25, note.duration_beats) - 0.001),
@@ -342,10 +452,28 @@ export function getTimelineNoteStyle(slotId: number, renderNote: TrackRenderNote
   const clusterOffset = (renderNote.clusterIndex - (renderNote.clusterSize - 1) / 2) * 22
   const rawLeft = getMeasureStartPx(measureIndex, model) + MEASURE_INSET_PX + beatWithinMeasure * model.pxPerBeat + clusterOffset
   const left = clampToMeasureInterior(rawLeft, measureIndex, model)
+  const visualDurationPx = Math.max(28, renderNote.displayDurationBeats * model.pxPerBeat)
   return {
     '--note-top': `${getNoteTopPx(slotId, renderNote.note)}px`,
     '--note-left': `${Math.round(left)}px`,
+    '--note-duration-width': `${Math.round(visualDurationPx)}px`,
+    '--note-tie-width': `${Math.round(Math.max(34, visualDurationPx - 6))}px`,
+    '--note-tie-stop-width': `${Math.round(Math.max(26, visualDurationPx * 0.36))}px`,
   } as CSSProperties
+}
+
+export function getTimelineNoteClass(renderNote: TrackRenderNote): string {
+  const classes = ['track-card__measure-note', `track-card__note--${renderNote.durationGlyph}`]
+  if (renderNote.note.is_rest === true) {
+    classes.push('track-card__note--rest')
+  }
+  if (renderNote.tieStart) {
+    classes.push('track-card__note--tie-start')
+  }
+  if (renderNote.tieStop) {
+    classes.push('track-card__note--tie-stop')
+  }
+  return classes.join(' ')
 }
 
 export { formatBeatInMeasure }

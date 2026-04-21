@@ -50,6 +50,12 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Registered track score display is horizontally scrollable by measure.
 - [x] Registered track notes are positioned from `TrackNote.beat` on the studio
   time-signature grid.
+- [x] Registered track notes render duration-aware glyph classes for whole,
+  half, quarter, eighth, and sixteenth-note values.
+- [x] Long notes that cross measure boundaries render display-only tied
+  segments without mutating the stored TrackNote.
+- [x] Explicit `TrackNote.is_tied` metadata renders tie arcs when adjacent
+  same-pitch timing supports it.
 - [x] Note centers remain inside their owning measure; downbeat notes use
   measure-internal notation padding rather than sitting outside the barline.
 - [x] Soprano through Bass notation uses clef-aware staff anchors so high

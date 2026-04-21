@@ -180,6 +180,8 @@ Required:
 - Stable visual timing feedback
 - Measure-based horizontal score rendering per track on the studio
   time-signature grid
+- Duration-aware browser note glyphs for whole, half, quarter, eighth, and
+  sixteenth-note classes, plus tie arcs for long or explicitly tied notes.
 - Dense note runs expand the score timeline instead of overlapping.
 - Measure strips reserve inner notation padding and clamp note centers inside
   their owning measure.

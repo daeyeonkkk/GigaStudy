@@ -52,7 +52,8 @@ This checklist tracks the new six-track studio foundation only.
   time-signature grid.
 - [x] Soprano through Bass notation uses clef-aware staff anchors so high
   soprano and low bass notes remain inside the score viewport.
-- [x] Score rendering includes inferred key-signature marks next to the clef.
+- [x] Key-signature marks are hidden in the current renderer to avoid clipped
+  or misleading notation until reliable layout support is added.
 - [x] MusicXML/MIDI import can preserve source time signature metadata.
 - [x] Voice extraction and AI generation inherit the studio time signature.
 - [x] Dense note runs expand score width instead of overlapping.

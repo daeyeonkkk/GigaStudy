@@ -109,7 +109,7 @@ export function StudioPage() {
         if (!ignore) {
           setLoadState({
             phase: 'error',
-            message: error instanceof Error ? error.message : '?ㅽ뒠?붿삤瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??',
+            message: error instanceof Error ? error.message : '스튜디오를 불러오지 못했습니다.',
           })
         }
       })
@@ -172,10 +172,6 @@ export function StudioPage() {
   const registeredTracks = useMemo(
     () => studio?.tracks.filter((track) => track.status === 'registered') ?? [],
     [studio],
-  )
-  const registeredScoreNotes = useMemo(
-    () => registeredTracks.flatMap((track) => track.notes),
-    [registeredTracks],
   )
   const registeredSlotIds = useMemo(
     () => registeredTracks.map((track) => track.slot_id),
@@ -244,7 +240,7 @@ export function StudioPage() {
     } catch (error) {
       setActionState({
         phase: 'error',
-        message: error instanceof Error ? error.message : '?붿껌??泥섎━?섏? 紐삵뻽?듬땲??',
+        message: error instanceof Error ? error.message : '요청을 처리하지 못했습니다.',
       })
       return false
     }
@@ -317,14 +313,14 @@ export function StudioPage() {
     if (candidateWouldOverwrite(candidate) && !allowOverwrite) {
       setActionState({
         phase: 'error',
-        message: `${targetTrack?.name ?? '?좏깮???몃옓'}???대? ?깅줉???댁슜???덉뒿?덈떎. ??뼱?곌린 ?뺤씤??泥댄겕?섏꽭??`,
+        message: `${targetTrack?.name ?? '선택한 트랙'}에 이미 등록된 내용이 있습니다. 덮어쓰기 확인을 체크하세요.`,
       })
       return
     }
     await runStudioAction(
       () => approveCandidate(studio.studio_id, candidate.candidate_id, targetSlotId, allowOverwrite),
-      `${targetTrack?.name ?? 'Track'} ?꾨낫瑜??깅줉?섎뒗 以묒엯?덈떎.`,
-      `${targetTrack?.name ?? 'Track'} ?몃옓???좏깮???꾨낫瑜??깅줉?덉뒿?덈떎.`,
+      `${targetTrack?.name ?? 'Track'} 후보를 등록하는 중입니다.`,
+      `${targetTrack?.name ?? 'Track'} 트랙에 선택한 후보를 등록했습니다.`,
     )
   }
 
@@ -335,8 +331,8 @@ export function StudioPage() {
     const targetTrack = studio.tracks.find((track) => track.slot_id === candidate.suggested_slot_id)
     await runStudioAction(
       () => rejectCandidate(studio.studio_id, candidate.candidate_id),
-      `${targetTrack?.name ?? 'Track'} ?꾨낫瑜?嫄곗젅?섎뒗 以묒엯?덈떎.`,
-      `${targetTrack?.name ?? 'Track'} ?꾨낫瑜?嫄곗젅?덉뒿?덈떎.`,
+      `${targetTrack?.name ?? 'Track'} 후보를 거절하는 중입니다.`,
+      `${targetTrack?.name ?? 'Track'} 후보를 거절했습니다.`,
     )
   }
 
@@ -348,14 +344,14 @@ export function StudioPage() {
     if (jobWouldOverwrite(jobId) && !allowOverwrite) {
       setActionState({
         phase: 'error',
-        message: 'OMR 寃곌낵媛 湲곗〈 ?깅줉 ?몃옓????뼱?곷땲?? ??뼱?곌린 ?뺤씤??泥댄겕?섏꽭??',
+        message: 'OMR 결과가 기존 등록 트랙에 덮어씁니다. 덮어쓰기 확인을 체크하세요.',
       })
       return
     }
     await runStudioAction(
       () => approveJobCandidates(studio.studio_id, jobId, allowOverwrite),
-      'OMR 寃곌낵瑜?媛??몃옓???깅줉?섎뒗 以묒엯?덈떎.',
-      'OMR 寃곌낵瑜??쒖븞???몃옓???깅줉?덉뒿?덈떎.',
+      'OMR 결과를 각 트랙에 등록하는 중입니다.',
+      'OMR 결과를 제안된 트랙에 등록했습니다.',
     )
   }
 
@@ -363,7 +359,7 @@ export function StudioPage() {
     if (!studio) {
       return
     }
-    setActionState({ phase: 'busy', message: 'PDF ?낅낫瑜??앹꽦?섎뒗 以묒엯?덈떎.' })
+    setActionState({ phase: 'busy', message: 'PDF 악보를 생성하는 중입니다.' })
     try {
       const pdfBlob = await exportStudioPdf(studio.studio_id)
       const url = URL.createObjectURL(pdfBlob)
@@ -374,11 +370,11 @@ export function StudioPage() {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
-      setActionState({ phase: 'success', message: 'PDF ?낅낫瑜??앹꽦?덉뒿?덈떎.' })
+      setActionState({ phase: 'success', message: 'PDF 악보를 생성했습니다.' })
     } catch (error) {
       setActionState({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'PDF瑜??앹꽦?섏? 紐삵뻽?듬땲??',
+        message: error instanceof Error ? error.message : 'PDF를 생성하지 못했습니다.',
       })
     }
   }
@@ -400,7 +396,7 @@ export function StudioPage() {
       (track) => track.status === 'registered' && track.notes.some((note) => note.is_rest !== true),
     )
     if (playableTracks.length === 0) {
-      setActionState({ phase: 'error', message: '?ъ깮???낅낫媛 ?덈뒗 ?깅줉 ?몃옓???놁뒿?덈떎.' })
+      setActionState({ phase: 'error', message: '재생할 악보가 있는 등록 트랙이 없습니다.' })
       return false
     }
 
@@ -448,7 +444,7 @@ export function StudioPage() {
     try {
       context = new AudioContextConstructor()
     } catch {
-      setActionState({ phase: 'error', message: '?ㅻ뵒???μ튂瑜??댁? 紐삵뻽?듬땲?? 釉뚮씪?곗? 沅뚰븳???뺤씤??二쇱꽭??' })
+      setActionState({ phase: 'error', message: '오디오 장치를 열지 못했습니다. 브라우저 권한을 확인해 주세요.' })
       return false
     }
 
@@ -498,7 +494,7 @@ export function StudioPage() {
       }
     } catch {
       disposePlaybackSession({ context, nodes, timeoutIds: [] })
-      setActionState({ phase: 'error', message: '?ъ깮??以鍮꾪븯??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.' })
+      setActionState({ phase: 'error', message: '재생을 준비하는 중 문제가 발생했습니다.' })
       return false
     }
 
@@ -524,19 +520,19 @@ export function StudioPage() {
       stopPlaybackSession()
       setGlobalPlaying(false)
       setPlayingSlots(new Set())
-      setActionState({ phase: 'success', message: '?꾩껜 ?ъ깮???쇱떆?뺤??덉뒿?덈떎.' })
+      setActionState({ phase: 'success', message: '전체 재생을 일시정지했습니다.' })
       return
     }
 
     if (registeredTracks.length === 0) {
-      setActionState({ phase: 'error', message: '?ъ깮???깅줉 ?몃옓???놁뒿?덈떎.' })
+      setActionState({ phase: 'error', message: '재생할 등록 트랙이 없습니다.' })
       return
     }
 
     if (startPlaybackSession(registeredTracks)) {
       setPlayingSlots(new Set())
       setGlobalPlaying(true)
-      setActionState({ phase: 'success', message: '?깅줉???몃옓 ?꾩껜瑜??꾩옱 ?깊겕 湲곗??쇰줈 ?ъ깮?⑸땲??' })
+      setActionState({ phase: 'success', message: '등록된 트랙 전체를 현재 싱크 기준으로 재생합니다.' })
     }
   }
 
@@ -546,27 +542,27 @@ export function StudioPage() {
     setPlayingSlots(new Set())
     setActionState({
       phase: 'success',
-      message: '?꾩껜 ?몃옓???깊겕媛 諛섏쁺??0s 吏?먯쑝濡??섎룎?몄뒿?덈떎.',
+      message: '전체 트랙이 싱크가 반영된 0s 지점으로 돌아왔습니다.',
     })
   }
 
   function toggleTrackPlayback(track: TrackSlot) {
     if (track.status !== 'registered') {
-      setActionState({ phase: 'error', message: `${track.name} ?몃옓? ?꾩쭅 ?깅줉?섏? ?딆븯?듬땲??` })
+      setActionState({ phase: 'error', message: `${track.name} 트랙은 아직 등록되지 않았습니다.` })
       return
     }
 
     if (playingSlots.has(track.slot_id)) {
       stopPlaybackSession()
       setPlayingSlots(new Set())
-      setActionState({ phase: 'success', message: `${track.name} ?몃옓 ?ъ깮???쇱떆?뺤??덉뒿?덈떎.` })
+      setActionState({ phase: 'success', message: `${track.name} 트랙 재생을 일시정지했습니다.` })
       return
     }
 
     if (startPlaybackSession([track])) {
       setGlobalPlaying(false)
       setPlayingSlots(new Set([track.slot_id]))
-      setActionState({ phase: 'success', message: `${track.name} ?몃옓???ъ깮?⑸땲??` })
+      setActionState({ phase: 'success', message: `${track.name} 트랙을 재생합니다.` })
     }
   }
 
@@ -576,7 +572,7 @@ export function StudioPage() {
     setPlayingSlots(new Set())
     setActionState({
       phase: 'success',
-      message: `${track.name} ?몃옓???깊겕媛 諛섏쁺??0s 吏?먯쑝濡??섎룎?몄뒿?덈떎.`,
+      message: `${track.name} 트랙이 싱크가 반영된 0s 지점으로 돌아왔습니다.`,
     })
   }
 
@@ -598,7 +594,7 @@ export function StudioPage() {
         async () => {
           const recordedAudioBase64 = await stopMicrophoneRecorder(recorder)
           if (!recordedAudioBase64) {
-            throw new Error('?뱀쓬???ㅻ뵒?ㅺ? 鍮꾩뼱 ?덉뒿?덈떎. 留덉씠???낅젰???뺤씤?섍퀬 ?ㅼ떆 ?뱀쓬??二쇱꽭??')
+            throw new Error('녹음된 오디오가 비어 있습니다. 마이크 입력을 확인하고 다시 녹음해 주세요.')
           }
           return uploadTrack(studio.studio_id, track.slot_id, {
             source_kind: 'audio',
@@ -608,8 +604,8 @@ export function StudioPage() {
             allow_overwrite: allowOverwrite,
           })
         },
-        `${track.name} ?뱀쓬???낅낫?뷀븯??以묒엯?덈떎.`,
-        `${track.name} ?몃옓???ㅼ젣 ?뱀쓬 湲곕컲 ?낅낫瑜??깅줉?덉뒿?덈떎.`,
+        `${track.name} 녹음을 악보화하는 중입니다.`,
+        `${track.name} 트랙에 실제 녹음 기반 악보를 등록했습니다.`,
       )
       return
     }
@@ -617,7 +613,7 @@ export function StudioPage() {
     if (recordingSlotId !== null) {
       setActionState({
         phase: 'error',
-        message: '?대? ?뱀쓬 以묒씤 ?몃옓???덉뒿?덈떎. 癒쇱? ?꾩옱 ?뱀쓬??以묒???二쇱꽭??',
+        message: '이미 녹음 중인 트랙이 있습니다. 먼저 현재 녹음을 중지해 주세요.',
       })
       return
     }
@@ -625,14 +621,14 @@ export function StudioPage() {
     if (scoreSession?.phase === 'listening' || scoreSession?.phase === 'analyzing') {
       setActionState({
         phase: 'error',
-        message: '梨꾩젏 ?뱀쓬??吏꾪뻾 以묒엯?덈떎. 癒쇱? 梨꾩젏??以묒??????몃옓 ?뱀쓬???쒖옉??二쇱꽭??',
+        message: '채점 녹음이 진행 중입니다. 먼저 채점을 중지한 뒤 트랙 녹음을 시작해 주세요.',
       })
       return
     }
 
     const wouldOverwrite = track.status === 'registered' || track.notes.length > 0
     const allowOverwrite =
-      !wouldOverwrite || window.confirm(`${track.name} ?몃옓??湲곗〈 ?낅낫瑜????뱀쓬?쇰줈 ??뼱?멸퉴??`)
+      !wouldOverwrite || window.confirm(`${track.name} 트랙의 기존 악보를 새 녹음으로 덮어쓸까요?`)
     if (!allowOverwrite) {
       setActionState({ phase: 'idle' })
       return
@@ -642,7 +638,7 @@ export function StudioPage() {
     if (!recorder) {
       setActionState({
         phase: 'error',
-        message: '留덉씠?щ? ?댁? 紐삵뻽?듬땲?? 釉뚮씪?곗? 留덉씠??沅뚰븳怨??낅젰 ?μ튂瑜??뺤씤??二쇱꽭??',
+        message: '마이크를 열지 못했습니다. 브라우저 마이크 권한과 입력 장치를 확인해 주세요.',
       })
       return
     }
@@ -654,8 +650,8 @@ export function StudioPage() {
     setActionState({
       phase: 'success',
       message: metronomeEnabled
-        ? `${track.name} ?뱀쓬???쒖옉?섏뿀?듬땲?? 硫뷀듃濡쒕냸???④퍡 耳쒖쭛?덈떎.`
-        : `${track.name} ?뱀쓬???쒖옉?섏뿀?듬땲??`,
+        ? `${track.name} 녹음을 시작했습니다. 메트로놈이 함께 켜졌습니다.`
+        : `${track.name} 녹음을 시작했습니다.`,
     })
   }
 
@@ -666,7 +662,7 @@ export function StudioPage() {
 
     const sourceKind = detectUploadKind(file)
     if (!sourceKind) {
-      setActionState({ phase: 'error', message: '吏?먰븯吏 ?딅뒗 ?뚯씪 ?뺤떇?낅땲??' })
+      setActionState({ phase: 'error', message: '지원하지 않는 파일 형식입니다.' })
       return
     }
 
@@ -686,13 +682,13 @@ export function StudioPage() {
           review_before_register: true,
         })
       },
-      `${track.name} ?낅줈?쒕? ?낅낫?뷀븯??以묒엯?덈떎.`,
-      `${track.name} ?몃옓??${file.name} 異붿텧 ?꾨낫瑜?留뚮뱾?덉뒿?덈떎.`,
+      `${track.name} 업로드를 악보화하는 중입니다.`,
+      `${track.name} 트랙에 ${file.name} 추출 후보를 만들었습니다.`,
     )
     if (uploadSucceeded && isOmrUpload(file)) {
       setActionState({
         phase: 'success',
-        message: `${track.name} PDF/image OMR job queued. Review candidates will appear after extraction.`,
+        message: `${track.name} PDF/image OMR 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
       })
     }
   }
@@ -702,7 +698,7 @@ export function StudioPage() {
       return
     }
     if (registeredSlotIds.length === 0) {
-      setActionState({ phase: 'error', message: 'AI ?앹꽦? ?깅줉???몃옓???섎굹 ?댁긽 ?꾩슂?⑸땲??' })
+      setActionState({ phase: 'error', message: 'AI 생성은 등록된 트랙이 하나 이상 필요합니다.' })
       return
     }
 
@@ -711,10 +707,10 @@ export function StudioPage() {
 
     await runStudioAction(
       () => generateTrack(studio.studio_id, track.slot_id, contextSlotIds, false, 3),
-      `${track.name} ?뚰듃 ?꾨낫瑜??앹꽦?섎뒗 以묒엯?덈떎.`,
+      `${track.name} 파트 후보를 생성하는 중입니다.`,
       track.slot_id === 6
-        ? '?쇱빱???몃옓??BPM 湲곕컲 鍮꾪듃 ?꾨낫 3媛쒕? 留뚮뱾?덉뒿?덈떎.'
-        : `${track.name} ?몃옓??李멸퀬 ?몃옓 湲곕컲 ?낅낫 ?꾨낫 3媛쒕? 留뚮뱾?덉뒿?덈떎.`,
+        ? '퍼커션 트랙에 BPM 기반 비트 후보 3개를 만들었습니다.'
+        : `${track.name} 트랙에 참고 트랙 기반 악보 후보 3개를 만들었습니다.`,
     )
   }
 
@@ -725,14 +721,14 @@ export function StudioPage() {
     const roundedOffset = Math.round(nextOffset * 100) / 100
     await runStudioAction(
       () => updateTrackSync(studio.studio_id, track.slot_id, roundedOffset),
-      `${track.name} ?깊겕瑜???ν븯??以묒엯?덈떎.`,
-      `${track.name} ?깊겕瑜?${formatSeconds(roundedOffset)}濡?留욎톬?듬땲??`,
+      `${track.name} 싱크를 저장하는 중입니다.`,
+      `${track.name} 싱크를 ${formatSeconds(roundedOffset)}로 맞췄습니다.`,
     )
   }
 
   function openScoreSession(track: TrackSlot) {
     if (track.status !== 'registered') {
-      setActionState({ phase: 'error', message: '?깅줉???몃옓留?梨꾩젏?????덉뒿?덈떎.' })
+      setActionState({ phase: 'error', message: '등록된 트랙만 채점할 수 있습니다.' })
       return
     }
     const references = registeredSlotIds.filter((slotId) => slotId !== track.slot_id)
@@ -766,12 +762,12 @@ export function StudioPage() {
     if (recordingSlotId !== null) {
       setActionState({
         phase: 'error',
-        message: '?몃옓 ?뱀쓬??吏꾪뻾 以묒엯?덈떎. 癒쇱? ?꾩옱 ?뱀쓬??以묒?????梨꾩젏???쒖옉??二쇱꽭??',
+        message: '트랙 녹음이 진행 중입니다. 먼저 현재 녹음을 중지하고 채점을 시작해 주세요.',
       })
       return
     }
     if (scoreSession.selectedReferenceIds.length === 0 && !scoreSession.includeMetronome) {
-      setActionState({ phase: 'error', message: '湲곗? ?몃옓?대굹 硫뷀듃濡쒕냸???섎굹 ?댁긽 ?좏깮?섏꽭??' })
+      setActionState({ phase: 'error', message: '기준 트랙이나 메트로놈을 하나 이상 선택하세요.' })
       return
     }
     const referenceTracks = studio.tracks.filter((track) =>
@@ -789,7 +785,7 @@ export function StudioPage() {
       if (!metronomeSession) {
         setActionState({
           phase: 'error',
-          message: '硫뷀듃濡쒕냸???ъ깮???ㅻ뵒???μ튂瑜??댁? 紐삵뻽?듬땲??',
+          message: '메트로놈 재생용 오디오 장치를 열지 못했습니다.',
         })
         return
       }
@@ -802,7 +798,7 @@ export function StudioPage() {
     setScoreSession({ ...scoreSession, phase: 'listening' })
     setActionState({
       phase: 'success',
-      message: '?좏깮??湲곗? ?몃옓???ъ깮?섍퀬 ?ы썑 梨꾩젏 ?낅젰??諛쏆뒿?덈떎.',
+      message: '선택한 기준 트랙을 재생하고 이후 채점 입력을 받습니다.',
     })
     const recorder = await startMicrophoneRecorder()
     if (scoreRunIdRef.current !== runId) {
@@ -813,7 +809,7 @@ export function StudioPage() {
     if (!recorder) {
       setActionState({
         phase: 'success',
-        message: '留덉씠???낅젰???댁? 紐삵빐 湲곗? ?ъ깮留??좎??⑸땲?? ?ㅼ젣 梨꾩젏 ?뚯뒪?몄뿉?쒕뒗 釉뚮씪?곗? 留덉씠??沅뚰븳???뺤씤??二쇱꽭??',
+        message: '마이크 입력을 열지 못해 기준 재생만 유지합니다. 실제 채점 테스트에서는 브라우저 마이크 권한을 확인해 주세요.',
       })
     }
   }
@@ -825,12 +821,12 @@ export function StudioPage() {
 
     const session = scoreSession
     if (session.selectedReferenceIds.length === 0 && !session.includeMetronome) {
-      setActionState({ phase: 'error', message: '湲곗? ?몃옓?대굹 硫뷀듃濡쒕냸???섎굹 ?댁긽 ?좏깮?섏꽭??' })
+      setActionState({ phase: 'error', message: '기준 트랙이나 메트로놈을 하나 이상 선택하세요.' })
       return
     }
 
     setScoreSession({ ...session, phase: 'analyzing' })
-    setActionState({ phase: 'busy', message: '0.01s ?⑥쐞濡?諛뺤옄? ?뚯젙??梨꾩젏?섎뒗 以묒엯?덈떎.' })
+    setActionState({ phase: 'busy', message: '0.01s 단위로 박자와 음정을 채점하는 중입니다.' })
     try {
       scoreRunIdRef.current += 1
       const performanceAudioBase64 = await stopMicrophoneRecorder(scoreRecorderRef.current)
@@ -850,12 +846,12 @@ export function StudioPage() {
       })
       setStudio(nextStudio)
       setScoreSession(null)
-      setActionState({ phase: 'success', message: '梨꾩젏 由ы룷?몃? ?섎떒 ?쇰뱶???깅줉?덉뒿?덈떎.' })
+      setActionState({ phase: 'success', message: '채점 리포트를 하단 피드에 등록했습니다.' })
     } catch (error) {
       setScoreSession({ ...session, phase: 'ready' })
       setActionState({
         phase: 'error',
-        message: error instanceof Error ? error.message : '梨꾩젏 由ы룷?몃? 留뚮뱾吏 紐삵뻽?듬땲??',
+        message: error instanceof Error ? error.message : '채점 리포트를 만들지 못했습니다.',
       })
     }
   }
@@ -870,10 +866,10 @@ export function StudioPage() {
         </div>
         <div>
           <p className="eyebrow">Studio error</p>
-          <h1>?ㅽ뒠?붿삤瑜??????놁뒿?덈떎</h1>
-          <p>?ㅽ뒠?붿삤 二쇱냼媛 ?щ컮瑜댁? ?딆뒿?덈떎.</p>
+          <h1>스튜디오를 찾을 수 없습니다</h1>
+          <p>스튜디오 주소가 올바르지 않습니다.</p>
           <Link className="app-button" to="/">
-            ?덉쑝濡?
+            홈으로
           </Link>
         </div>
       </main>
@@ -893,7 +889,7 @@ export function StudioPage() {
         </div>
         <div>
           <p className="eyebrow">Studio loading</p>
-          <h1>?몃옓??遺덈윭?ㅻ뒗 以묒엯?덈떎</h1>
+          <h1>트랙을 불러오는 중입니다</h1>
         </div>
       </main>
     )
@@ -909,10 +905,10 @@ export function StudioPage() {
         </div>
         <div>
           <p className="eyebrow">Studio error</p>
-          <h1>?ㅽ뒠?붿삤瑜??????놁뒿?덈떎</h1>
-          <p>{loadState.phase === 'error' ? loadState.message : '?????녿뒗 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.'}</p>
+          <h1>스튜디오를 찾을 수 없습니다</h1>
+          <p>{loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}</p>
           <Link className="app-button" to="/">
-            ?덉쑝濡?
+            홈으로
           </Link>
         </div>
       </main>
@@ -938,8 +934,8 @@ export function StudioPage() {
             <div className="composer-score-heading">
               <h1>{studio.title}</h1>
               <p>
-                {studio.bpm} BPM 쨌 {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} 쨌 ?깅줉{' '}
-                {registeredTracks.length}/6 쨌 由ы룷??{studio.reports.length}
+                {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}
+                {registeredTracks.length}/6 · 리포트 {studio.reports.length}
               </p>
             </div>
 
@@ -947,7 +943,6 @@ export function StudioPage() {
               beatsPerMeasure={studioBeatsPerMeasure}
               bpm={studio.bpm}
               globalPlaying={globalPlaying}
-              keyContextNotes={registeredScoreNotes}
               metronomeEnabled={metronomeEnabled}
               pendingCandidateCount={pendingCandidates.length}
               playingSlots={playingSlots}
@@ -984,7 +979,8 @@ export function StudioPage() {
               onRejectCandidate={(candidate) => void handleRejectCandidate(candidate)}
               onUpdateCandidateOverwriteApproval={updateCandidateOverwriteApproval}
               onUpdateCandidateTargetSlot={updateCandidateTargetSlot}
-            />          </div>
+            />
+          </div>
         </section>
 
         <footer className="composer-statusbar">
@@ -1010,6 +1006,7 @@ export function StudioPage() {
         onStart={() => void startScoreListening()}
         onStop={() => void stopScoreListening()}
         onToggleReference={toggleScoreReference}
-      />    </main>
+      />
+    </main>
   )
 }

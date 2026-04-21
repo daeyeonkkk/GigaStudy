@@ -16,7 +16,7 @@ import {
   getTrackSourceLabel,
   statusLabels,
 } from '../../lib/studio'
-import type { ScoreNote, TrackSlot } from '../../types/studio'
+import type { TrackSlot } from '../../types/studio'
 
 type TrackRecordingMeter = {
   durationSeconds: number
@@ -27,7 +27,6 @@ type TrackBoardProps = {
   beatsPerMeasure: number
   bpm: number
   globalPlaying: boolean
-  keyContextNotes: ScoreNote[]
   metronomeEnabled: boolean
   pendingCandidateCount: number
   playingSlots: Set<number>
@@ -47,15 +46,13 @@ type TrackBoardProps = {
 function ScoreStrip({
   beatsPerMeasure,
   bpm,
-  keyContextNotes,
   track,
 }: {
   beatsPerMeasure: number
   bpm: number
-  keyContextNotes: ScoreNote[]
   track: TrackSlot
 }) {
-  const scoreModel = getTrackRenderModel(track, bpm, beatsPerMeasure, keyContextNotes)
+  const scoreModel = getTrackRenderModel(track, bpm, beatsPerMeasure)
 
   return (
     <div
@@ -65,26 +62,6 @@ function ScoreStrip({
     >
       <span className="track-card__clef" aria-hidden="true">
         {getClefSymbol(track.slot_id)}
-      </span>
-      <span
-        aria-label={`${scoreModel.keySignature.tonic} key signature`}
-        className="track-card__key-signature"
-        data-testid={`track-key-signature-${track.slot_id}`}
-      >
-        {scoreModel.keySignatureMarks.map((mark, index) => (
-          <span
-            aria-hidden="true"
-            key={`${track.slot_id}-key-signature-${index}`}
-            style={
-              {
-                '--key-mark-left': `${mark.left}px`,
-                '--key-mark-top': `${mark.top}px`,
-              } as CSSProperties
-            }
-          >
-            {mark.symbol}
-          </span>
-        ))}
       </span>
       {scoreModel.beatGuideOffsets.map((beatOffset) => (
         <span
@@ -133,7 +110,6 @@ export function TrackBoard({
   beatsPerMeasure,
   bpm,
   globalPlaying,
-  keyContextNotes,
   metronomeEnabled,
   pendingCandidateCount,
   playingSlots,
@@ -203,7 +179,6 @@ export function TrackBoard({
                   <ScoreStrip
                     beatsPerMeasure={beatsPerMeasure}
                     bpm={bpm}
-                    keyContextNotes={keyContextNotes}
                     track={track}
                   />
                 ) : (

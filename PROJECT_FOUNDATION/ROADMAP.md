@@ -184,7 +184,8 @@ Required:
 - Sync changes move notes across the fixed grid without moving barlines.
 - Soprano/Alto/Tenor use treble staff anchoring, Baritone/Bass use bass staff
   anchoring, and rendered note positions stay inside the score viewport.
-- Inferred key-signature marks render beside the clef.
+- Key-signature marks are hidden until the score renderer can guarantee
+  reliable spacing and clipping behavior.
 
 Cut line:
 

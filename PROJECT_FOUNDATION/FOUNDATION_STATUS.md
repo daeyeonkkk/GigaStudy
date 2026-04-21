@@ -118,9 +118,9 @@ The current implementation has a working six-track vertical slice:
 - AI generation now creates multiple pending candidates first; approving one
   candidate registers it and rejects sibling candidates from the same
   generation group.
-- The score renderer now uses clef-aware staff anchors and inferred key
-  signature marks so Soprano through Bass tracks stay inside the staff viewport
-  more reliably.
+- The score renderer now uses clef-aware staff anchors so Soprano through Bass
+  tracks stay inside the staff viewport more reliably. Key-signature marks are
+  hidden until the notation layout can render them without clipping.
 
 Remaining implementation gaps are now refinements of the six-track direction,
 not legacy product surfaces.

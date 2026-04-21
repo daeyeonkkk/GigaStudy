@@ -21,22 +21,9 @@ export type TrackRenderModel = {
   beatGuideOffsets: number[]
   measureBoundaryOffsets: number[]
   notes: TrackRenderNote[]
-  keySignature: KeySignature
-  keySignatureMarks: KeySignatureMark[]
   pxPerBeat: number
   measureWidth: number
   timelineWidth: number
-}
-
-export type KeySignature = {
-  tonic: string
-  accidentalCount: number
-}
-
-export type KeySignatureMark = {
-  symbol: string
-  left: number
-  top: number
 }
 
 export const SCORE_CLEF_GUTTER_PX = 126
@@ -68,84 +55,6 @@ const noteSteps: Record<string, number> = {
   G: 4,
   A: 5,
   B: 6,
-}
-
-const MAJOR_KEY_SIGNATURES: Record<string, number> = {
-  C: 0,
-  G: 1,
-  D: 2,
-  A: 3,
-  E: 4,
-  B: 5,
-  'F#': 6,
-  'C#': 7,
-  F: -1,
-  Bb: -2,
-  Eb: -3,
-  Ab: -4,
-  Db: -5,
-  Gb: -6,
-  Cb: -7,
-}
-
-const KEY_TONIC_PITCH_CLASS: Record<string, number> = {
-  C: 0,
-  'C#': 1,
-  Db: 1,
-  D: 2,
-  Eb: 3,
-  E: 4,
-  F: 5,
-  'F#': 6,
-  Gb: 6,
-  G: 7,
-  Ab: 8,
-  A: 9,
-  Bb: 10,
-  B: 11,
-  Cb: 11,
-}
-
-const SHARP_KEY_STEPS: Record<'treble' | 'bass', Array<[string, number]>> = {
-  treble: [
-    ['F', 5],
-    ['C', 5],
-    ['G', 5],
-    ['D', 5],
-    ['A', 4],
-    ['E', 5],
-    ['B', 4],
-  ],
-  bass: [
-    ['F', 3],
-    ['C', 3],
-    ['G', 3],
-    ['D', 3],
-    ['A', 2],
-    ['E', 3],
-    ['B', 2],
-  ],
-}
-
-const FLAT_KEY_STEPS: Record<'treble' | 'bass', Array<[string, number]>> = {
-  treble: [
-    ['B', 4],
-    ['E', 5],
-    ['A', 4],
-    ['D', 5],
-    ['G', 4],
-    ['C', 5],
-    ['F', 4],
-  ],
-  bass: [
-    ['B', 2],
-    ['E', 3],
-    ['A', 2],
-    ['D', 3],
-    ['G', 2],
-    ['C', 3],
-    ['F', 2],
-  ],
 }
 
 function getDiatonicStep(noteName: string, octave: number): number {
@@ -259,61 +168,6 @@ function getNoteTopPx(slotId: number, note: ScoreNote): number {
   return STAFF_MIDDLE_LINE_Y
 }
 
-function getMajorScalePitchClasses(tonic: string): number[] {
-  const root = KEY_TONIC_PITCH_CLASS[tonic] ?? 0
-  return [0, 2, 4, 5, 7, 9, 11].map((interval) => (root + interval) % 12)
-}
-
-function getNotePitchClass(note: ScoreNote): number | null {
-  if (typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi)) {
-    return ((note.pitch_midi % 12) + 12) % 12
-  }
-  return parsePitchLabel(note.label)?.semitone ?? null
-}
-
-function estimateKeySignature(notes: ScoreNote[]): KeySignature {
-  const pitchClasses = new Set(
-    notes
-      .filter((note) => note.is_rest !== true)
-      .map(getNotePitchClass)
-      .filter((pitchClass): pitchClass is number => pitchClass !== null),
-  )
-  if (pitchClasses.size === 0) {
-    return { tonic: 'C', accidentalCount: 0 }
-  }
-
-  const scoredKeys = Object.entries(MAJOR_KEY_SIGNATURES)
-    .map(([tonic, accidentalCount]) => {
-      const scale = getMajorScalePitchClasses(tonic)
-      const covered = [...pitchClasses].filter((pitchClass) => scale.includes(pitchClass)).length
-      const misses = pitchClasses.size - covered
-      return {
-        tonic,
-        accidentalCount,
-        score: covered * 3 - misses * 4 - Math.abs(accidentalCount) * 0.32,
-      }
-    })
-    .sort((left, right) => right.score - left.score || Math.abs(left.accidentalCount) - Math.abs(right.accidentalCount))
-
-  const selected = scoredKeys[0] ?? { tonic: 'C', accidentalCount: 0 }
-  return { tonic: selected.tonic, accidentalCount: selected.accidentalCount }
-}
-
-function getKeySignatureMarks(slotId: number, signature: KeySignature): KeySignatureMark[] {
-  const accidentalCount = Math.max(-7, Math.min(7, signature.accidentalCount))
-  if (accidentalCount === 0) {
-    return []
-  }
-  const clef = getStaffClef(slotId)
-  const symbol = accidentalCount > 0 ? '#' : 'b'
-  const steps = accidentalCount > 0 ? SHARP_KEY_STEPS[clef] : FLAT_KEY_STEPS[clef]
-  return steps.slice(0, Math.abs(accidentalCount)).map(([noteName, octave], index) => ({
-    symbol,
-    left: 68 + index * 9,
-    top: getStaffTopFromStep(slotId, getDiatonicStep(noteName, octave)) - 12,
-  }))
-}
-
 export function getClefSymbol(slotId: number): string {
   return String.fromCodePoint(getStaffClef(slotId) === 'bass' ? 0x1d122 : 0x1d11e)
 }
@@ -385,12 +239,10 @@ export function getTrackRenderModel(
   track: TrackSlot,
   bpm: number,
   beatsPerMeasure: number,
-  keyContextNotes: ScoreNote[],
 ): TrackRenderModel {
   const displayBeats = track.notes.map((note) => getDisplayBeat(note, track.sync_offset_seconds, bpm))
   const pxPerBeat = getScorePxPerBeat(displayBeats)
   const notes = getClusteredRenderNotes(track.notes, track.sync_offset_seconds, bpm, pxPerBeat)
-  const keySignature = estimateKeySignature(keyContextNotes.length > 0 ? keyContextNotes : track.notes)
   const baseMaxBeatEnd = Math.max(
     beatsPerMeasure,
     ...track.notes.map((note) => note.beat + Math.max(0.25, note.duration_beats) - 0.001),
@@ -414,8 +266,6 @@ export function getTrackRenderModel(
     beatGuideOffsets,
     measureBoundaryOffsets,
     notes,
-    keySignature,
-    keySignatureMarks: getKeySignatureMarks(track.slot_id, keySignature),
     pxPerBeat,
     measureWidth,
     timelineWidth: SCORE_CLEF_GUTTER_PX + measureCount * measureWidth + SCORE_END_PADDING_PX,

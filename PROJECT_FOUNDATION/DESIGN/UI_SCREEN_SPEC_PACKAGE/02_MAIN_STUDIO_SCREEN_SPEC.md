@@ -125,8 +125,8 @@ Registered track scores should be rendered as a horizontal, measure-based strip:
 - The first measure carries the appropriate clef signal for the track range.
 - Soprano, Alto, and Tenor use treble staff anchoring; Baritone and Bass use
   bass staff anchoring.
-- Inferred key-signature marks appear beside the clef when the current score
-  context implies sharps or flats.
+- Key-signature marks are intentionally hidden until they can be rendered with
+  reliable spacing and clipping behavior.
 - Notes are positioned by beat within the measure, not simply listed in upload
   order.
 - Dense notes expand the visual pixels-per-beat and score width instead of

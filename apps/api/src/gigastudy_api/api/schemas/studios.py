@@ -16,7 +16,7 @@ TrackStatus = Literal[
 SourceKind = Literal["recording", "audio", "midi", "score", "music", "ai"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["score", "music"]
-NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio", "fixture"]
+NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
 ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
@@ -34,7 +34,7 @@ class TrackNote(BaseModel):
     measure_index: int | None = None
     beat_in_measure: float | None = None
     confidence: float = Field(default=1, ge=0, le=1)
-    source: NoteSource = "fixture"
+    source: NoteSource
     extraction_method: str = "unknown"
     is_rest: bool = False
     is_tied: bool = False
@@ -177,7 +177,7 @@ class CreateStudioRequest(BaseModel):
 class UploadTrackRequest(BaseModel):
     source_kind: Literal["audio", "midi", "score"]
     filename: str = Field(min_length=1, max_length=180)
-    content_base64: str | None = None
+    content_base64: str = Field(min_length=1)
     review_before_register: bool = False
     allow_overwrite: bool = False
 

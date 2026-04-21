@@ -4,9 +4,9 @@ from gigastudy_api.services.engine.scoring import build_scoring_report
 
 def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
     answer_notes = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="fixture", extraction_method="test", pitch_midi=72),
-        note_from_pitch(beat=2, duration_beats=1, bpm=120, source="fixture", extraction_method="test", pitch_midi=74),
-        note_from_pitch(beat=3, duration_beats=1, bpm=120, source="fixture", extraction_method="test", pitch_midi=76),
+        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=72),
+        note_from_pitch(beat=2, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=74),
+        note_from_pitch(beat=3, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=76),
     ]
     performance_notes = [
         note_from_pitch(
@@ -41,8 +41,8 @@ def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
 
 def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
     answer_notes = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=100, source="fixture", extraction_method="test", pitch_midi=72),
-        note_from_pitch(beat=2, duration_beats=1, bpm=100, source="fixture", extraction_method="test", pitch_midi=74),
+        note_from_pitch(beat=1, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=72),
+        note_from_pitch(beat=2, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=74),
     ]
     performance_notes = [
         note_from_pitch(

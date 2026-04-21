@@ -9,7 +9,7 @@ export type TrackStatus =
   | 'failed'
 
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'score' | 'music' | 'ai'
-export type NoteSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio' | 'fixture'
+export type NoteSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
 
 export type ScoreNote = {
   id: string

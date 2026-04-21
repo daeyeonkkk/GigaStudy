@@ -151,9 +151,10 @@ Track fill actions:
   approves it.
 - Candidate approval can be retargeted to another track, and occupied targets
   require explicit overwrite confirmation.
-- AI Generate creates or overwrites the selected track using already registered
-  tracks as context, then registers symbolic note material. Occupied tracks
-  require explicit overwrite confirmation before replacement.
+- AI Generate creates reviewable symbolic candidates for the selected track
+  using already registered tracks as context. It does not overwrite the current
+  track during generation. Occupied tracks require explicit overwrite
+  confirmation only when a candidate is approved into that track.
 
 Percussion generation is special:
 

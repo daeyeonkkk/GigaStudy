@@ -30,7 +30,8 @@ Each note event should carry:
 - `duration_beats`
 - Optional measure and beat-in-measure position
 - Confidence
-- Source, such as `musicxml`, `midi`, `voice`, `omr`, `ai`, or `fixture`
+- Source, such as `musicxml`, `midi`, `voice`, `omr`, `ai`, `recording`, or
+  `audio`
 - Extraction method
 - Rest/tie/staff/voice metadata when available
 
@@ -140,6 +141,11 @@ Home-screen PDF/image score start must use the same OMR job path. It must not
 silently fall back to fixture or placeholder notes. Studio-level PDF OMR should
 parse all exported parts when possible; per-track PDF OMR may target the
 selected track.
+
+Public registration APIs must not create fixture note data when no file or
+recording payload is supplied. Test helpers may construct TrackNotes directly,
+but product endpoints must always use uploaded, recorded, OMR, symbolic, or AI
+generated material.
 
 The studio UI should show active OMR jobs and poll them until they become
 review candidates or fail.

@@ -14,7 +14,6 @@ const SCORE_UPLOAD_EXTENSIONS = [
   '.bmp',
   '.tif',
   '.tiff',
-  '.nwc',
 ] as const
 
 export const TRACK_UPLOAD_ACCEPT = [

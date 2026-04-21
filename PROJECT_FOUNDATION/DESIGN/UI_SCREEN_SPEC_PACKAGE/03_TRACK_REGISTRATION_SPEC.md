@@ -47,11 +47,14 @@ Upload opens a file picker or upload dialog.
 
 Supported categories:
 
-- Voice/audio file, currently production-ready only for single-voice WAV in the
-  local MVP path. The track upload UI should not advertise non-WAV audio until
-  decoder support exists.
+- Voice/audio file. Browser-decodable MP3/M4A/OGG/FLAC input is normalized to
+  mono 16-bit PCM WAV before it reaches the server-side single-voice extraction
+  path. Raw server-side voice extraction still expects WAV.
 - MIDI file
 - Score file
+
+NWC score upload is deferred until a parser exists and should not be advertised
+in the upload picker.
 
 After upload:
 

@@ -109,21 +109,13 @@ export function getStudio(studioId: string): Promise<Studio> {
   return requestJson<Studio>(`/api/studios/${studioId}`, {}, '스튜디오를 불러오지 못했습니다.')
 }
 
-export function completeRecording(studioId: string, slotId: number): Promise<Studio> {
-  return requestJson<Studio>(
-    `/api/studios/${studioId}/tracks/${slotId}/recording/complete`,
-    { method: 'POST' },
-    '녹음 결과를 등록하지 못했습니다.',
-  )
-}
-
 export function uploadTrack(
   studioId: string,
   slotId: number,
   payload: {
     source_kind: 'audio' | 'midi' | 'score'
     filename: string
-    content_base64?: string
+    content_base64: string
     review_before_register?: boolean
     allow_overwrite?: boolean
   },

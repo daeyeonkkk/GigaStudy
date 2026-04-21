@@ -5,6 +5,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
+from typing import Any
 from uuid import uuid4
 
 from fastapi import BackgroundTasks, HTTPException
@@ -30,7 +31,6 @@ from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_ca
 from gigastudy_api.services.engine.music_theory import (
     TRACKS,
     infer_slot_id,
-    seed_notes_for_slot,
     track_name,
 )
 from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
@@ -60,7 +60,6 @@ DEFAULT_UPLOAD_BPM = 92
 OMR_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
 AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
-NWC_SOURCE_SUFFIXES = {".nwc"}
 
 
 class StudioRepository:
@@ -176,21 +175,6 @@ class StudioRepository:
         except ScorePdfExportError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
-    def complete_recording(self, studio_id: str, slot_id: int) -> Studio:
-        studio = self.get_studio(studio_id)
-        return self._update_track(
-            studio_id,
-            slot_id,
-            source_kind="recording",
-            source_label="Recorded take",
-            notes=seed_notes_for_slot(
-                slot_id,
-                studio.bpm,
-                time_signature_numerator=studio.time_signature_numerator,
-                time_signature_denominator=studio.time_signature_denominator,
-            ),
-        )
-
     def upload_track(
         self,
         studio_id: str,
@@ -202,7 +186,7 @@ class StudioRepository:
         allowed_suffixes = {
             "audio": tuple(AUDIO_SOURCE_SUFFIXES),
             "midi": (".mid", ".midi"),
-            "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES | NWC_SOURCE_SUFFIXES),
+            "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
         }
         filename = request.filename.strip()
         suffix = Path(filename).suffix.lower()
@@ -210,25 +194,6 @@ class StudioRepository:
             raise HTTPException(status_code=422, detail="Unsupported file type for this upload.")
 
         studio = self.get_studio(studio_id)
-        if request.content_base64 is None:
-            track = self._find_track(studio, slot_id)
-            if _track_has_content(track) and not request.allow_overwrite:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Upload would overwrite an existing registered track.",
-                )
-            return self._update_track(
-                studio_id,
-                slot_id,
-                source_kind=request.source_kind,
-                source_label=filename,
-                notes=seed_notes_for_slot(
-                    slot_id,
-                    studio.bpm,
-                    time_signature_numerator=studio.time_signature_numerator,
-                    time_signature_denominator=studio.time_signature_denominator,
-                ),
-            )
 
         source_path = self._save_upload(
             studio_id=studio_id,
@@ -315,11 +280,6 @@ class StudioRepository:
                     source_path=source_path,
                     background_tasks=background_tasks,
                     parse_all_parts=True,
-                )
-            if request.source_kind == "score" and suffix in NWC_SOURCE_SUFFIXES:
-                raise HTTPException(
-                    status_code=422,
-                    detail="NWC upload is recognized, but the NWC-to-TrackNote parser is not connected yet.",
                 )
         except (SymbolicParseError, VoiceTranscriptionError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -717,37 +677,14 @@ class StudioRepository:
         source_filename: str,
         source_content_base64: str | None,
     ) -> Studio:
-        if source_content_base64 is not None:
-            studio = self._seed_from_upload_content(
-                studio,
-                source_kind=source_kind,
-                source_filename=source_filename,
-                source_content_base64=source_content_base64,
-            )
-            return studio
-
-        timestamp = _now()
-        if source_kind == "score":
-            seed_slots = [1, 2, 3, 4, 5] if "aca" in source_filename.lower() or "satb" in source_filename.lower() else [1]
-        else:
-            seed_slots = [1, 5, 6]
-
-        for slot_id in seed_slots:
-            track = self._find_track(studio, slot_id)
-            track.status = "registered"
-            track.source_kind = source_kind
-            track.source_label = source_filename
-            track.duration_seconds = 8
-            track.notes = seed_notes_for_slot(
-                slot_id,
-                studio.bpm,
-                time_signature_numerator=studio.time_signature_numerator,
-                time_signature_denominator=studio.time_signature_denominator,
-            )
-            track.updated_at = timestamp
-
-        studio.updated_at = timestamp
-        return studio
+        if source_content_base64 is None:
+            raise HTTPException(status_code=422, detail="Upload start requires a source file.")
+        return self._seed_from_upload_content(
+            studio,
+            source_kind=source_kind,
+            source_filename=source_filename,
+            source_content_base64=source_content_base64,
+        )
 
     def _seed_from_upload_content(
         self,
@@ -807,12 +744,6 @@ class StudioRepository:
                 message="Audio upload produced a reviewable track candidate.",
             )
             return studio
-
-        if source_kind == "score" and suffix in NWC_SOURCE_SUFFIXES:
-            raise HTTPException(
-                status_code=422,
-                detail="NWC upload is recognized, but the NWC-to-TrackNote parser is not connected yet.",
-            )
 
         raise HTTPException(status_code=422, detail="Unsupported upload processing path.")
 
@@ -1206,7 +1137,7 @@ class StudioRepository:
             return {}
         raw_payload = json.loads(self._path.read_text(encoding="utf-8"))
         return {
-            studio_id: Studio.model_validate(studio_payload)
+            studio_id: Studio.model_validate(_migrate_legacy_studio_payload(studio_payload))
             for studio_id, studio_payload in raw_payload.items()
         }
 
@@ -1253,6 +1184,40 @@ def _decode_base64(content_base64: str) -> bytes:
         return base64.b64decode(payload, validate=True)
     except ValueError as error:
         raise HTTPException(status_code=422, detail="Invalid base64 upload content.") from error
+
+
+def _migrate_legacy_studio_payload(studio_payload: Any) -> Any:
+    if not isinstance(studio_payload, dict):
+        return studio_payload
+
+    for track in studio_payload.get("tracks", []):
+        if isinstance(track, dict):
+            _replace_legacy_fixture_note_source(track.get("notes", []), track.get("source_kind"))
+
+    for candidate in studio_payload.get("candidates", []):
+        if isinstance(candidate, dict):
+            _replace_legacy_fixture_note_source(candidate.get("notes", []), candidate.get("source_kind"))
+
+    return studio_payload
+
+
+def _replace_legacy_fixture_note_source(notes: Any, source_kind: Any) -> None:
+    if not isinstance(notes, list):
+        return
+    replacement = _note_source_from_source_kind(source_kind)
+    for note in notes:
+        if isinstance(note, dict) and note.get("source") == "fixture":
+            note["source"] = replacement
+
+
+def _note_source_from_source_kind(source_kind: Any) -> str:
+    if source_kind in {"recording", "audio", "midi", "ai"}:
+        return str(source_kind)
+    if source_kind == "music":
+        return "audio"
+    if source_kind in {"score", None}:
+        return "musicxml"
+    return "musicxml"
 
 
 _repository: StudioRepository | None = None

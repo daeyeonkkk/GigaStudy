@@ -127,6 +127,29 @@ def build_client(tmp_path: Path, monkeypatch) -> TestClient:
     return TestClient(create_app())
 
 
+def upload_musicxml_track(
+    client: TestClient,
+    studio_id: str,
+    *,
+    slot_id: int = 1,
+    xml: str = MUSICXML_UPLOAD,
+    filename: str = "soprano.musicxml",
+    allow_overwrite: bool = False,
+):
+    encoded = base64.b64encode(xml.encode("utf-8")).decode("ascii")
+    response = client.post(
+        f"/api/studios/{studio_id}/tracks/{slot_id}/upload",
+        json={
+            "source_kind": "score",
+            "filename": filename,
+            "content_base64": encoded,
+            "allow_overwrite": allow_overwrite,
+        },
+    )
+    assert response.status_code == 200
+    return response
+
+
 def test_blank_studio_has_six_empty_tracks(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
 
@@ -190,6 +213,23 @@ def test_blank_studio_requires_bpm(tmp_path: Path, monkeypatch) -> None:
     assert response.status_code == 422
 
 
+def test_legacy_recording_fixture_endpoint_is_not_exposed(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "No fixture route",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
+
+    assert response.status_code == 404
+
+
 def test_upload_start_does_not_require_bpm_and_maps_symbolic_tracks(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
@@ -224,9 +264,8 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     )
     studio_id = create_response.json()["studio_id"]
 
-    recording_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
-    assert recording_response.status_code == 200
-    assert recording_response.json()["tracks"][0]["status"] == "registered"
+    soprano_response = upload_musicxml_track(client, studio_id)
+    assert soprano_response.json()["tracks"][0]["status"] == "registered"
 
     generate_response = client.post(
         f"/api/studios/{studio_id}/tracks/6/generate",
@@ -258,7 +297,7 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     assert sync_response.status_code == 200
     assert sync_response.json()["tracks"][5]["sync_offset_seconds"] == 0.03
 
-    performance_notes = recording_response.json()["tracks"][0]["notes"]
+    performance_notes = soprano_response.json()["tracks"][0]["notes"]
     for note in performance_notes:
         note["onset_seconds"] = round(note["onset_seconds"] + 0.42, 4)
 
@@ -308,8 +347,7 @@ def test_pdf_export_returns_score_pdf_for_registered_tracks(tmp_path: Path, monk
         },
     )
     studio_id = create_response.json()["studio_id"]
-    recording_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
-    assert recording_response.status_code == 200
+    upload_musicxml_track(client, studio_id)
 
     export_response = client.get(f"/api/studios/{studio_id}/export/pdf")
 
@@ -332,8 +370,12 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
         },
     )
     studio_id = create_response.json()["studio_id"]
-    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
-    assert seed_response.status_code == 200
+    upload_musicxml_track(
+        client,
+        studio_id,
+        xml=THREE_FOUR_MUSICXML_UPLOAD,
+        filename="three-four.musicxml",
+    )
 
     generate_response = client.post(
         f"/api/studios/{studio_id}/tracks/6/generate",
@@ -441,8 +483,7 @@ def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypat
         },
     )
     studio_id = create_response.json()["studio_id"]
-    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
-    assert seed_response.status_code == 200
+    upload_musicxml_track(client, studio_id)
     encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
 
     blocked_response = client.post(
@@ -466,6 +507,29 @@ def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypat
     )
     assert overwrite_response.status_code == 200
     assert [note["label"] for note in overwrite_response.json()["tracks"][0]["notes"]] == ["C5", "G5"]
+
+
+def test_upload_requires_file_content_instead_of_fixture_fallback(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Upload content required",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_upload_musicxml_can_wait_for_candidate_approval(tmp_path: Path, monkeypatch) -> None:
@@ -637,8 +701,7 @@ def test_omr_job_bulk_approval_requires_overwrite_confirmation(
         },
     )
     studio_id = create_response.json()["studio_id"]
-    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
-    assert seed_response.status_code == 200
+    upload_musicxml_track(client, studio_id)
     encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
     upload_response = client.post(
@@ -790,8 +853,7 @@ def test_candidate_approval_requires_overwrite_confirmation(tmp_path: Path, monk
     )
     studio_id = create_response.json()["studio_id"]
     encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
-    seed_response = client.post(f"/api/studios/{studio_id}/tracks/2/recording/complete")
-    assert seed_response.status_code == 200
+    upload_musicxml_track(client, studio_id, slot_id=2, filename="alto-seed.musicxml")
 
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
@@ -867,8 +929,7 @@ def test_ai_generation_creates_candidates_and_approval_requires_overwrite_confir
         },
     )
     studio_id = create_response.json()["studio_id"]
-    seed_response = client.post(f"/api/studios/{studio_id}/tracks/1/recording/complete")
-    assert seed_response.status_code == 200
+    upload_musicxml_track(client, studio_id)
     first_generate_response = client.post(
         f"/api/studios/{studio_id}/tracks/2/generate",
         json={"context_slot_ids": [1]},

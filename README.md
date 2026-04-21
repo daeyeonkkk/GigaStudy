@@ -53,10 +53,13 @@ The API exposes the current product surface only:
 - `GET /api/studios`
 - `POST /api/studios`
 - `GET /api/studios/{studio_id}`
-- `POST /api/studios/{studio_id}/tracks/{slot_id}/recording/complete`
+- `GET /api/studios/{studio_id}/export/pdf`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/upload`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/generate`
 - `PATCH /api/studios/{studio_id}/tracks/{slot_id}/sync`
+- `POST /api/studios/{studio_id}/candidates/{candidate_id}/approve`
+- `POST /api/studios/{studio_id}/candidates/{candidate_id}/reject`
+- `POST /api/studios/{studio_id}/jobs/{job_id}/approve-candidates`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/score`
 
 By default, studio state is persisted under `apps/api/storage`.

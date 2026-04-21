@@ -28,6 +28,8 @@ The current implementation has a working vertical slice for:
 - Audiveris OMR job adapter
 - PDF/image score upload is treated as asynchronous OMR input, not as fixture
   registration.
+- Public registration endpoints reject missing upload content instead of
+  creating fixture note data.
 - Home-screen PDF score start queues OMR instead of seeding placeholder notes.
 - Studio UI polls active OMR jobs and exposes their queued/running/review/failed
   state.
@@ -260,6 +262,8 @@ Required:
   confidence indicators.
 - Add mixed-audio fallback behavior that does not overpromise SATB separation.
 - Add confidence indicators where extraction is uncertain.
+- Add NWC parsing only after a reliable NWC-to-TrackNote conversion path is
+  chosen.
 
 ## Deferred Until Needed
 
@@ -275,3 +279,4 @@ stable:
 - Natural human voice audio generation
 - LLM-written scoring reports
 - Mixed choir SATB source separation as a promised MVP feature
+- NWC upload support before a parser is connected

@@ -24,12 +24,15 @@ This checklist tracks the new six-track studio foundation only.
 - [x] User sees Upload and start only after selecting a source file.
 - [x] User sees Start blank only while no source file is selected.
 - [x] Score upload path exists.
-- [ ] Music upload path is production-grade beyond fixture fallback.
+- [ ] Music upload path is production-grade beyond the current
+  browser-normalized single-line extraction MVP.
 - [x] Blank start creates six empty tracks.
 - [x] Upload import can register track candidates into the six track slots.
 - [x] Import failure is clear and recoverable.
 - [x] Home-screen PDF upload queues real OMR instead of placeholder
   registration.
+- [x] NWC is not advertised as supported until an NWC-to-TrackNote parser is
+  connected.
 
 ## Track Workspace
 
@@ -89,6 +92,10 @@ This checklist tracks the new six-track studio foundation only.
   MusicXML imports.
 - [x] OMR job results can be registered into all suggested tracks at once.
 - [x] Unsupported upload fails without corrupting the track.
+- [x] Public registration APIs reject missing upload content instead of creating
+  fixture notes.
+- [x] Legacy stored fixture note sources are normalized on read rather than
+  remaining part of the current TrackNote source contract.
 - [x] Upload can create pending extraction candidates instead of immediately
   overwriting a track.
 - [x] Pending extraction candidates can be approved into a track.

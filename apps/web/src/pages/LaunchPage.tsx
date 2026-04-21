@@ -23,7 +23,6 @@ const SCORE_SOURCE_EXTENSIONS = new Set([
   '.pdf',
   '.mid',
   '.midi',
-  '.nwc',
   '.jpg',
   '.jpeg',
   '.png',

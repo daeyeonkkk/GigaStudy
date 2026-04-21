@@ -63,15 +63,6 @@ def export_studio_pdf(
     )
 
 
-@router.post("/{studio_id}/tracks/{slot_id}/recording/complete", response_model=Studio)
-def complete_recording(
-    studio_id: str,
-    slot_id: int,
-    repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.complete_recording(studio_id, slot_id)
-
-
 @router.post("/{studio_id}/tracks/{slot_id}/upload", response_model=Studio)
 def upload_track(
     studio_id: str,

@@ -62,6 +62,10 @@ The current implementation has a working six-track vertical slice:
 - MusicXML/MIDI imports preserve source time signature metadata when present.
 - PDF/image OMR is wired as an Audiveris job path.
 - Home-screen PDF score start now queues OMR instead of seeding fixture notes.
+- Public registration endpoints no longer create fixture note data when no file
+  or recording payload is supplied.
+- Existing local JSON records with legacy `source="fixture"` notes are normalized
+  on read so older development data does not block the current schema.
 - Studio PDF/image upload exposes active OMR jobs, polls until completion or
   failure, and turns successful OMR output into reviewable candidates.
 - OMR-generated notes are marked with `source="omr"` and
@@ -75,6 +79,8 @@ The current implementation has a working six-track vertical slice:
   thresholding, normalized autocorrelation, and median segment grouping.
 - Browser upload normalizes browser-decodable MP3/M4A/OGG/FLAC audio into mono
   16-bit PCM WAV before sending it to the existing voice extraction path.
+- NWC is not advertised as an accepted upload format until an NWC-to-TrackNote
+  parser is connected.
 - Per-track browser recording captures microphone audio, encodes WAV, and
   registers TrackNotes through the voice extraction path.
 - Per-track browser recording plays the metronome when enabled and shows

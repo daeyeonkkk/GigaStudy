@@ -41,9 +41,12 @@ The UI must make the user understand that upload is used to seed the six tracks.
 
 Accepted source extensions include:
 
-- Score/symbolic: PDF, MusicXML/XML/MXL, MIDI/MID, NWC, JPG/JPEG, PNG, WEBP,
+- Score/symbolic: PDF, MusicXML/XML/MXL, MIDI/MID, JPG/JPEG, PNG, WEBP,
   BMP, TIF/TIFF
 - Music/audio: WAV, MP3, M4A, OGG, FLAC
+
+NWC is deferred until an NWC-to-TrackNote parser is connected; the UI should not
+advertise it as an accepted upload format before that parser exists.
 
 BPM and time signature are not required UI inputs for upload start. The engine
 uses source metadata when available and otherwise applies an internal fallback

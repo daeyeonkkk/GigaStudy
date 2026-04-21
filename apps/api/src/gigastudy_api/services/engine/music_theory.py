@@ -46,16 +46,6 @@ NOTE_SEMITONES: dict[str, int] = {
 MIDI_LABELS_SHARP = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 DEFAULT_TIME_SIGNATURE = (4, 4)
 
-SEED_PATTERNS: dict[int, list[str]] = {
-    1: ["C5", "D5", "E5", "G5"],
-    2: ["A4", "B4", "C5", "E5"],
-    3: ["E4", "G4", "A4", "C5"],
-    4: ["C4", "E4", "F4", "A4"],
-    5: ["C3", "G3", "C4", "G3"],
-    6: ["Kick", "Hat", "Snare", "Hat"],
-}
-
-
 def track_name(slot_id: int) -> str:
     for candidate_slot_id, name in TRACKS:
         if candidate_slot_id == slot_id:
@@ -233,37 +223,3 @@ def note_from_pitch(
         voice_index=voice_index,
         staff_index=staff_index,
     )
-
-
-def seed_notes_for_slot(
-    slot_id: int,
-    bpm: int,
-    bars: int = 2,
-    *,
-    time_signature_numerator: int = DEFAULT_TIME_SIGNATURE[0],
-    time_signature_denominator: int = DEFAULT_TIME_SIGNATURE[1],
-) -> list[TrackNote]:
-    pattern = SEED_PATTERNS[slot_id]
-    beats_per_measure = quarter_beats_per_measure(
-        time_signature_numerator,
-        time_signature_denominator,
-    )
-    notes_per_measure = max(1, int(round(beats_per_measure)))
-    notes: list[TrackNote] = []
-    for bar_index in range(bars):
-        for note_index, label in enumerate(pattern[:notes_per_measure]):
-            beat = bar_index * beats_per_measure + note_index + 1
-            notes.append(
-                note_from_pitch(
-                    beat=beat,
-                    duration_beats=1,
-                    bpm=bpm,
-                    time_signature_numerator=time_signature_numerator,
-                    time_signature_denominator=time_signature_denominator,
-                    source="fixture",
-                    extraction_method="seed_pattern_v0",
-                    label=label,
-                    confidence=0.35,
-                )
-            )
-    return notes

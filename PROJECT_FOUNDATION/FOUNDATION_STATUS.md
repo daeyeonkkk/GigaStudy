@@ -90,6 +90,8 @@ The current implementation has a working six-track vertical slice:
   scheduling live in focused `apps/web/src/lib/audio/*` and
   `apps/web/src/lib/studio/*` modules instead of being
   embedded in `StudioPage.tsx`.
+- Alpha API deployment is reproducible through `cloudbuild.api.yaml`; the Pages
+  UI and Cloud Run API must expose the same `/api/studios` six-track contract.
 - Studio UI presentation is split into dedicated components for the composer
   toolbar, track board, OMR job queue, candidate review queue, report feed, and
   scoring drawer. `StudioPage.tsx` now mainly coordinates data loading, user

@@ -87,6 +87,28 @@ Browser smoke test:
 npm run test:e2e
 ```
 
+## Alpha API Deploy
+
+The alpha web app calls the Cloud Run API. Rebuild and redeploy the API after
+changing the backend contract:
+
+```bash
+gcloud builds submit . --config cloudbuild.api.yaml
+gcloud run deploy gigastudy-api-alpha \
+  --image asia-northeast3-docker.pkg.dev/gigastudy-alpha-493208/gigastudy-alpha/gigastudy-api:latest \
+  --region asia-northeast3 \
+  --platform managed \
+  --update-env-vars GIGASTUDY_API_APP_ENV=production \
+  --allow-unauthenticated
+```
+
+Smoke-check the deployed API before testing the Pages UI:
+
+```bash
+curl https://gigastudy-api-alpha-ajpmdzbrga-du.a.run.app/api/health
+curl https://gigastudy-api-alpha-ajpmdzbrga-du.a.run.app/api/studios
+```
+
 ## Foundation Docs
 
 - [Master Plan](./PROJECT_FOUNDATION/GigaStudy_master_plan.md)

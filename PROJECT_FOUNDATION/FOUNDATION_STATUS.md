@@ -107,6 +107,9 @@ The current implementation has a working six-track vertical slice:
 - Registered tracks render as horizontally scrollable measure strips on the
   studio time-signature grid, with dense runs expanding the score width instead
   of overlapping.
+- The score renderer gives each measure inner notation padding and clamps note
+  centers inside their owning measure, so sync and same-onset clustering cannot
+  push notes outside barlines.
 - Track sync visually shifts the note layer while measure lines and measure
   labels remain fixed.
 - Scoring reference playback honors the scoring checklist's metronome setting,

@@ -50,6 +50,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Registered track score display is horizontally scrollable by measure.
 - [x] Registered track notes are positioned from `TrackNote.beat` on the studio
   time-signature grid.
+- [x] Note centers remain inside their owning measure; downbeat notes use
+  measure-internal notation padding rather than sitting outside the barline.
 - [x] Soprano through Bass notation uses clef-aware staff anchors so high
   soprano and low bass notes remain inside the score viewport.
 - [x] Key-signature marks are hidden in the current renderer to avoid clipped
@@ -57,6 +59,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] MusicXML/MIDI import can preserve source time signature metadata.
 - [x] Voice extraction and AI generation inherit the studio time signature.
 - [x] Dense note runs expand score width instead of overlapping.
+- [x] Same-onset cluster offsets never move notes outside fixed measure
+  boundaries.
 - [x] Each track has 0.01 second sync adjustment.
 - [x] Sync adjustment keeps measure lines fixed and shifts only the note layer.
 

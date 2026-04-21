@@ -48,6 +48,38 @@ const threeFourMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
 </score-partwise>
 `
 
+const denseMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>A</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>B</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>C</step><octave>6</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>B</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>A</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration></note>
+    </measure>
+  </part>
+</score-partwise>
+`
+
 async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.goto('/')
   const titleInput = page.getByTestId('studio-title-input')
@@ -285,5 +317,51 @@ test('symbolic upload drives the studio time-signature score grid', async ({ pag
   expect(beatLineXs).toHaveLength(2)
   const beatGap = beatLineXs[1] - beatLineXs[0]
   const measureGap = measureLineXs[1] - measureLineXs[0]
-  expect(Math.abs(measureGap - beatGap * 3)).toBeLessThan(1)
+  expect(beatLineXs[0]).toBeGreaterThan(measureLineXs[0])
+  expect(beatLineXs[1]).toBeLessThan(measureLineXs[1])
+  expect(measureGap).toBeGreaterThan(beatGap * 3)
+
+  const noteCenters = await page
+    .locator('[data-testid="track-score-strip-1"] .track-card__measure-note')
+    .evaluateAll((nodes) =>
+      nodes.slice(0, 4).map((node) => {
+        const rect = node.getBoundingClientRect()
+        return rect.x + rect.width / 2
+      }),
+    )
+  expect(noteCenters[0]).toBeGreaterThan(measureLineXs[0])
+  expect(noteCenters[2]).toBeLessThan(measureLineXs[1])
+  expect(noteCenters[3]).toBeGreaterThan(measureLineXs[1])
+  expect(noteCenters[3]).toBeLessThan(measureLineXs[2])
+})
+
+test('dense score notes stay inside their owning measure', async ({ page }) => {
+  await createBlankStudio(page, 'Dense measure layout session')
+
+  await uploadSopranoMusicXml(page, denseMusicXmlUpload, 'dense.musicxml')
+  await approveFirstCandidate(page)
+
+  const layout = await page.getByTestId('track-score-strip-1').evaluate((strip) => {
+    const measureLines = [...strip.querySelectorAll('.track-card__beat-line--measure')].map((node) =>
+      node.getBoundingClientRect().x,
+    )
+    const noteCenters = [...strip.querySelectorAll('.track-card__measure-note')].map((node) => {
+      const rect = node.getBoundingClientRect()
+      return rect.x + rect.width / 2
+    })
+    return {
+      firstMeasureStart: measureLines[0],
+      firstMeasureEnd: measureLines[1],
+      noteCenters,
+      viewportClientWidth: strip.parentElement?.clientWidth ?? 0,
+      viewportScrollWidth: strip.parentElement?.scrollWidth ?? 0,
+    }
+  })
+
+  expect(layout.noteCenters).toHaveLength(16)
+  expect(layout.viewportScrollWidth).toBeGreaterThan(layout.viewportClientWidth)
+  for (const center of layout.noteCenters) {
+    expect(center).toBeGreaterThan(layout.firstMeasureStart)
+    expect(center).toBeLessThan(layout.firstMeasureEnd)
+  }
 })

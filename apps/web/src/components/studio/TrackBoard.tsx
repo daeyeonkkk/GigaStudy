@@ -2,13 +2,13 @@ import type { CSSProperties } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
-  SCORE_CLEF_GUTTER_PX,
   TRACK_UPLOAD_ACCEPT,
   formatBeatInMeasure,
   formatDurationSeconds,
   formatSeconds,
   getClefSymbol,
-  getScoreLineStyle,
+  getScoreBeatLineStyle,
+  getScoreMeasureBoundaryStyle,
   getScoreMeasureLabelStyle,
   getScoreTimelineStyle,
   getTimelineNoteStyle,
@@ -68,7 +68,7 @@ function ScoreStrip({
           aria-hidden="true"
           className="track-card__beat-line"
           key={`${track.slot_id}-beat-line-${beatOffset}`}
-          style={getScoreLineStyle(SCORE_CLEF_GUTTER_PX + beatOffset * scoreModel.pxPerBeat)}
+          style={getScoreBeatLineStyle(beatOffset, scoreModel)}
         />
       ))}
       {scoreModel.measureBoundaryOffsets.map((beatOffset) => (
@@ -76,7 +76,7 @@ function ScoreStrip({
           aria-hidden="true"
           className="track-card__beat-line track-card__beat-line--measure"
           key={`${track.slot_id}-measure-line-${beatOffset}`}
-          style={getScoreLineStyle(SCORE_CLEF_GUTTER_PX + beatOffset * scoreModel.pxPerBeat)}
+          style={getScoreMeasureBoundaryStyle(beatOffset, scoreModel)}
         />
       ))}
       {scoreModel.measures.map((measureIndex) => (

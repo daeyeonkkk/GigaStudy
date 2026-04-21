@@ -181,6 +181,8 @@ Required:
 - Measure-based horizontal score rendering per track on the studio
   time-signature grid
 - Dense note runs expand the score timeline instead of overlapping.
+- Measure strips reserve inner notation padding and clamp note centers inside
+  their owning measure.
 - Sync changes move notes across the fixed grid without moving barlines.
 - Soprano/Alto/Tenor use treble staff anchoring, Baritone/Bass use bass staff
   anchoring, and rendered note positions stay inside the score viewport.

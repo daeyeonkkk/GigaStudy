@@ -16,6 +16,7 @@ export type TrackRenderNote = {
 }
 
 export type TrackRenderModel = {
+  beatsPerMeasure: number
   measureCount: number
   measures: number[]
   beatGuideOffsets: number[]
@@ -29,9 +30,12 @@ export type TrackRenderModel = {
 export const SCORE_CLEF_GUTTER_PX = 126
 
 const SCORE_END_PADDING_PX = 48
-const MIN_SCORE_PX_PER_BEAT = 170
-const MAX_SCORE_PX_PER_BEAT = 360
-const NOTE_COLLISION_WIDTH_PX = 58
+const MEASURE_INSET_PX = 32
+const NOTE_CENTER_GUARD_PX = 28
+const MIN_SCORE_PX_PER_BEAT = 180
+const MAX_SCORE_PX_PER_BEAT = 920
+const NOTE_READABLE_GAP_PX = 64
+const SAME_ONSET_CLUSTER_EPSILON_BEATS = 0.035
 const STAFF_MIDDLE_LINE_Y = 62
 const STAFF_STEP_PX = 5
 const STAFF_NOTE_MIN_TOP = 18
@@ -191,15 +195,35 @@ function getScorePxPerBeat(displayBeats: number[]): number {
     return MIN_SCORE_PX_PER_BEAT
   }
 
-  const densityAwareWidth = NOTE_COLLISION_WIDTH_PX / smallestGap + 18
+  const densityAwareWidth = NOTE_READABLE_GAP_PX / smallestGap + 18
   return Math.round(Math.max(MIN_SCORE_PX_PER_BEAT, Math.min(MAX_SCORE_PX_PER_BEAT, densityAwareWidth)))
+}
+
+function getMeasureStartPx(measureIndex: number, model: TrackRenderModel): number {
+  return SCORE_CLEF_GUTTER_PX + measureIndex * model.measureWidth
+}
+
+function getMeasureIndexFromDisplayBeat(displayBeat: number, beatsPerMeasure: number): number {
+  const normalizedBeat = Math.max(1, displayBeat)
+  return Math.floor((normalizedBeat - 1) / Math.max(0.25, beatsPerMeasure))
+}
+
+function getBeatOffsetWithinMeasure(displayBeat: number, beatsPerMeasure: number): number {
+  const normalizedBeat = Math.max(1, displayBeat)
+  const safeBeatsPerMeasure = Math.max(0.25, beatsPerMeasure)
+  return (normalizedBeat - 1) - getMeasureIndexFromDisplayBeat(normalizedBeat, safeBeatsPerMeasure) * safeBeatsPerMeasure
+}
+
+function clampToMeasureInterior(leftPx: number, measureIndex: number, model: TrackRenderModel): number {
+  const measureStart = getMeasureStartPx(measureIndex, model)
+  const measureEnd = measureStart + model.measureWidth
+  return Math.max(measureStart + NOTE_CENTER_GUARD_PX, Math.min(measureEnd - NOTE_CENTER_GUARD_PX, leftPx))
 }
 
 function getClusteredRenderNotes(
   notes: ScoreNote[],
   syncOffsetSeconds: number,
   bpm: number,
-  pxPerBeat: number,
 ): TrackRenderNote[] {
   const baseNotes = notes
     .map((note) => ({
@@ -224,8 +248,11 @@ function getClusteredRenderNotes(
   }
 
   baseNotes.forEach((entry) => {
-    const previous = currentCluster[currentCluster.length - 1]
-    if (previous && Math.abs(entry.displayBeat - previous.displayBeat) * pxPerBeat > NOTE_COLLISION_WIDTH_PX) {
+    const clusterAnchor = currentCluster[0]
+    if (
+      clusterAnchor &&
+      Math.abs(entry.displayBeat - clusterAnchor.displayBeat) > SAME_ONSET_CLUSTER_EPSILON_BEATS
+    ) {
       flushCluster()
     }
     currentCluster.push(entry)
@@ -242,7 +269,7 @@ export function getTrackRenderModel(
 ): TrackRenderModel {
   const displayBeats = track.notes.map((note) => getDisplayBeat(note, track.sync_offset_seconds, bpm))
   const pxPerBeat = getScorePxPerBeat(displayBeats)
-  const notes = getClusteredRenderNotes(track.notes, track.sync_offset_seconds, bpm, pxPerBeat)
+  const notes = getClusteredRenderNotes(track.notes, track.sync_offset_seconds, bpm)
   const baseMaxBeatEnd = Math.max(
     beatsPerMeasure,
     ...track.notes.map((note) => note.beat + Math.max(0.25, note.duration_beats) - 0.001),
@@ -253,7 +280,7 @@ export function getTrackRenderModel(
   )
   const baseMeasureCount = getMeasureIndexFromBeat(baseMaxBeatEnd, beatsPerMeasure) + 1
   const measureCount = Math.max(1, baseMeasureCount, getMeasureIndexFromBeat(syncedMaxBeatEnd, beatsPerMeasure))
-  const measureWidth = pxPerBeat * beatsPerMeasure
+  const measureWidth = MEASURE_INSET_PX * 2 + pxPerBeat * beatsPerMeasure
   const totalQuarterBeats = measureCount * beatsPerMeasure
   const beatGuideOffsets = Array.from({ length: Math.floor(totalQuarterBeats) + 1 }, (_, index) => index).filter(
     (beatOffset) => !isMeasureDownbeat(beatOffset, beatsPerMeasure),
@@ -261,6 +288,7 @@ export function getTrackRenderModel(
   const measureBoundaryOffsets = Array.from({ length: measureCount + 1 }, (_, index) => index * beatsPerMeasure)
 
   return {
+    beatsPerMeasure,
     measureCount,
     measures: Array.from({ length: measureCount }, (_, index) => index + 1),
     beatGuideOffsets,
@@ -286,6 +314,19 @@ export function getScoreLineStyle(leftPx: number): CSSProperties {
   } as CSSProperties
 }
 
+export function getScoreBeatLineStyle(beatOffset: number, model: TrackRenderModel): CSSProperties {
+  const measureIndex = Math.floor(beatOffset / Math.max(0.25, model.beatsPerMeasure))
+  const beatWithinMeasure = beatOffset - measureIndex * model.beatsPerMeasure
+  return getScoreLineStyle(
+    getMeasureStartPx(measureIndex, model) + MEASURE_INSET_PX + beatWithinMeasure * model.pxPerBeat,
+  )
+}
+
+export function getScoreMeasureBoundaryStyle(beatOffset: number, model: TrackRenderModel): CSSProperties {
+  const measureIndex = Math.round(beatOffset / Math.max(0.25, model.beatsPerMeasure))
+  return getScoreLineStyle(getMeasureStartPx(measureIndex, model))
+}
+
 export function getScoreMeasureLabelStyle(measureIndex: number, model: TrackRenderModel): CSSProperties {
   return {
     '--label-left': `${SCORE_CLEF_GUTTER_PX + (measureIndex - 1) * model.measureWidth + 8}px`,
@@ -293,10 +334,14 @@ export function getScoreMeasureLabelStyle(measureIndex: number, model: TrackRend
 }
 
 export function getTimelineNoteStyle(slotId: number, renderNote: TrackRenderNote, model: TrackRenderModel): CSSProperties {
-  const clusterOffset = (renderNote.clusterIndex - (renderNote.clusterSize - 1) / 2) * 28
-  const rawLeft = SCORE_CLEF_GUTTER_PX + (renderNote.displayBeat - 1) * model.pxPerBeat + clusterOffset
-  const maxLeft = model.timelineWidth - SCORE_END_PADDING_PX
-  const left = Math.max(26, Math.min(maxLeft, rawLeft))
+  const measureIndex = Math.min(
+    model.measureCount - 1,
+    getMeasureIndexFromDisplayBeat(renderNote.displayBeat, model.beatsPerMeasure),
+  )
+  const beatWithinMeasure = getBeatOffsetWithinMeasure(renderNote.displayBeat, model.beatsPerMeasure)
+  const clusterOffset = (renderNote.clusterIndex - (renderNote.clusterSize - 1) / 2) * 22
+  const rawLeft = getMeasureStartPx(measureIndex, model) + MEASURE_INSET_PX + beatWithinMeasure * model.pxPerBeat + clusterOffset
+  const left = clampToMeasureInterior(rawLeft, measureIndex, model)
   return {
     '--note-top': `${getNoteTopPx(slotId, renderNote.note)}px`,
     '--note-left': `${Math.round(left)}px`,

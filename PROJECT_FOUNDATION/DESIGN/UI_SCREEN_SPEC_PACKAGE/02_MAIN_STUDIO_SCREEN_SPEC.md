@@ -129,6 +129,10 @@ Registered track scores should be rendered as a horizontal, measure-based strip:
   reliable spacing and clipping behavior.
 - Notes are positioned by beat within the measure, not simply listed in upload
   order.
+- Each measure reserves an inner notation area, so downbeat notes sit inside
+  the barline instead of on or outside it.
+- Note centers must be clamped inside their owning measure; cluster offsets may
+  separate same-onset notes but must not push notes outside measure boundaries.
 - Dense notes expand the visual pixels-per-beat and score width instead of
   overlapping; horizontal scrolling is preferred over compressed notation.
 

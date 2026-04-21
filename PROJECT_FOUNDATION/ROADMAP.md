@@ -1,6 +1,6 @@
 # GigaStudy Roadmap
 
-Date: 2026-04-20
+Date: 2026-04-21
 
 This roadmap replaces the previous guide-recording, arrangement, sharing, ops,
 and calibration roadmap.
@@ -14,7 +14,8 @@ generation, OMR, or scoring alignment.
 The current implementation has a working vertical slice for:
 
 - Six-track studio creation
-- BPM and time-signature studio metadata
+- BPM and time-signature studio metadata for blank start, with upload start
+  able to rely on source metadata or an internal fallback clock
 - Main six-track studio shell
 - TrackNote schema
 - MusicXML/MXL/XML and MIDI parsing
@@ -66,10 +67,10 @@ Goal: make the home screen create the correct studio shape.
 Required:
 
 - Project name input
-- BPM input
-- Time signature input, defaulting to 4/4
-- Upload and start
-- Start blank
+- BPM input only for blank start
+- Time signature input only for blank start, defaulting to 4/4
+- Upload and start appears only after a source file is selected
+- Start blank appears only while no source file is selected
 - Score upload path
 - Music upload path
 - Blank six-track studio creation

@@ -27,7 +27,12 @@ from gigastudy_api.api.schemas.studios import (
 )
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
-from gigastudy_api.services.engine.music_theory import TRACKS, seed_notes_for_slot, track_name
+from gigastudy_api.services.engine.music_theory import (
+    TRACKS,
+    infer_slot_id,
+    seed_notes_for_slot,
+    track_name,
+)
 from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
 from gigastudy_api.services.engine.pdf_export import ScorePdfExportError, build_studio_score_pdf
 from gigastudy_api.services.engine.scoring import build_scoring_report
@@ -51,7 +56,11 @@ def _empty_tracks(timestamp: str) -> list[TrackSlot]:
     ]
 
 
-OMR_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg"}
+DEFAULT_UPLOAD_BPM = 92
+OMR_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
+AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
+NWC_SOURCE_SUFFIXES = {".nwc"}
 
 
 class StudioRepository:
@@ -87,7 +96,7 @@ class StudioRepository:
         self,
         *,
         title: str,
-        bpm: int,
+        bpm: int | None,
         start_mode: str,
         time_signature_numerator: int = 4,
         time_signature_denominator: int = 4,
@@ -97,10 +106,11 @@ class StudioRepository:
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         timestamp = _now()
+        resolved_bpm = bpm if bpm is not None else DEFAULT_UPLOAD_BPM
         studio = Studio(
             studio_id=uuid4().hex,
             title=title.strip(),
-            bpm=bpm,
+            bpm=resolved_bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
             tracks=_empty_tracks(timestamp),
@@ -190,9 +200,9 @@ class StudioRepository:
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         allowed_suffixes = {
-            "audio": (".wav", ".mp3", ".m4a", ".ogg", ".flac"),
+            "audio": tuple(AUDIO_SOURCE_SUFFIXES),
             "midi": (".mid", ".midi"),
-            "score": (".musicxml", ".xml", ".mxl", ".pdf", ".png", ".jpg", ".jpeg"),
+            "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES | NWC_SOURCE_SUFFIXES),
         }
         filename = request.filename.strip()
         suffix = Path(filename).suffix.lower()
@@ -228,7 +238,8 @@ class StudioRepository:
         )
 
         try:
-            if request.source_kind == "midi" or suffix in {".musicxml", ".xml", ".mxl"}:
+            if request.source_kind == "midi" or suffix in SYMBOLIC_SOURCE_SUFFIXES:
+                registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "score"
                 parsed_symbolic = parse_symbolic_file_with_metadata(
                     source_path,
                     bpm=studio.bpm,
@@ -245,7 +256,7 @@ class StudioRepository:
                     return self._add_extraction_candidates(
                         studio_id,
                         mapped_notes,
-                        source_kind=request.source_kind,
+                        source_kind=registered_source_kind,
                         source_label=filename,
                         method="symbolic_import_review",
                         confidence=0.92,
@@ -259,7 +270,7 @@ class StudioRepository:
                 return self._apply_extracted_tracks(
                     studio_id,
                     mapped_notes,
-                    source_kind=request.source_kind,
+                    source_kind=registered_source_kind,
                     source_label=filename,
                 )
 
@@ -304,6 +315,11 @@ class StudioRepository:
                     source_path=source_path,
                     background_tasks=background_tasks,
                     parse_all_parts=True,
+                )
+            if request.source_kind == "score" and suffix in NWC_SOURCE_SUFFIXES:
+                raise HTTPException(
+                    status_code=422,
+                    detail="NWC upload is recognized, but the NWC-to-TrackNote parser is not connected yet.",
                 )
         except (SymbolicParseError, VoiceTranscriptionError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -749,11 +765,12 @@ class StudioRepository:
         )
         suffix = source_path.suffix.lower()
 
-        if source_kind == "score" and suffix in {".musicxml", ".xml", ".mxl"}:
+        if source_kind == "score" and suffix in SYMBOLIC_SOURCE_SUFFIXES:
             try:
                 parsed_symbolic = parse_symbolic_file_with_metadata(source_path, bpm=studio.bpm)
             except SymbolicParseError as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
+            registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "score"
             if parsed_symbolic.has_time_signature:
                 studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
                 studio.time_signature_denominator = parsed_symbolic.time_signature_denominator
@@ -761,7 +778,7 @@ class StudioRepository:
             for slot_id, notes in parsed_symbolic.mapped_notes.items():
                 track = self._find_track(studio, slot_id)
                 track.status = "registered"
-                track.source_kind = "score"
+                track.source_kind = registered_source_kind
                 track.source_label = source_filename
                 track.duration_seconds = _track_duration_seconds(notes)
                 track.notes = notes
@@ -769,12 +786,96 @@ class StudioRepository:
             studio.updated_at = timestamp
             return studio
 
-        return self._seed_from_upload(
-            studio,
+        if source_kind == "music" and suffix in AUDIO_SOURCE_SUFFIXES:
+            if suffix != ".wav":
+                raise HTTPException(
+                    status_code=422,
+                    detail="Audio analysis currently supports WAV. MP3/M4A/OGG/FLAC upload is accepted by the UI but still needs a decoder path before analysis can run.",
+                )
+            try:
+                suggested_slot_id, notes, confidence = self._extract_home_audio_candidate(studio, source_path)
+            except VoiceTranscriptionError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+            self._append_initial_candidate(
+                studio,
+                suggested_slot_id=suggested_slot_id,
+                source_kind="audio",
+                source_label=source_filename,
+                method="home_voice_transcription_review",
+                confidence=confidence,
+                notes=notes,
+                message="Audio upload produced a reviewable track candidate.",
+            )
+            return studio
+
+        if source_kind == "score" and suffix in NWC_SOURCE_SUFFIXES:
+            raise HTTPException(
+                status_code=422,
+                detail="NWC upload is recognized, but the NWC-to-TrackNote parser is not connected yet.",
+            )
+
+        raise HTTPException(status_code=422, detail="Unsupported upload processing path.")
+
+    def _extract_home_audio_candidate(self, studio: Studio, source_path: Path) -> tuple[int, list[TrackNote], float]:
+        attempts: list[tuple[int, list[TrackNote], float]] = []
+        errors: list[str] = []
+        for slot_id, _track_name in TRACKS:
+            if slot_id == 6:
+                continue
+            try:
+                notes = transcribe_voice_file(
+                    source_path,
+                    bpm=studio.bpm,
+                    slot_id=slot_id,
+                    time_signature_numerator=studio.time_signature_numerator,
+                    time_signature_denominator=studio.time_signature_denominator,
+                )
+            except VoiceTranscriptionError as error:
+                errors.append(str(error))
+                continue
+            confidence = sum(note.confidence for note in notes) / len(notes)
+            attempts.append((slot_id, notes, confidence))
+
+        if not attempts:
+            detail = errors[0] if errors else "No usable audio notes were extracted."
+            raise VoiceTranscriptionError(detail)
+
+        source_slot_id, notes, confidence = max(attempts, key=lambda attempt: (len(attempt[1]), attempt[2]))
+        suggested_slot_id = infer_slot_id(None, notes, fallback=source_slot_id)
+        return suggested_slot_id, notes, confidence
+
+    def _append_initial_candidate(
+        self,
+        studio: Studio,
+        *,
+        suggested_slot_id: int,
+        source_kind: SourceKind,
+        source_label: str,
+        method: str,
+        confidence: float,
+        notes: list[TrackNote],
+        message: str,
+    ) -> None:
+        timestamp = _now()
+        candidate = ExtractionCandidate(
+            candidate_id=uuid4().hex,
+            suggested_slot_id=suggested_slot_id,
             source_kind=source_kind,
-            source_filename=source_filename,
-            source_content_base64=None,
+            source_label=source_label,
+            method=method,
+            confidence=confidence,
+            notes=notes,
+            message=message,
+            created_at=timestamp,
+            updated_at=timestamp,
         )
+        studio.candidates.append(candidate)
+        track = self._find_track(studio, suggested_slot_id)
+        track.status = "needs_review"
+        track.source_kind = source_kind
+        track.source_label = source_label
+        track.updated_at = timestamp
+        studio.updated_at = timestamp
 
     def _enqueue_omr_job(
         self,

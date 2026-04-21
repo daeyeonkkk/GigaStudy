@@ -72,6 +72,35 @@ async function approveFirstCandidate(page: Page) {
   await expect(page.getByTestId('candidate-review')).toBeHidden()
 }
 
+test('home keeps upload and blank start flows separate', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByTestId('upload-and-start-button')).toBeHidden()
+  await expect(page.getByTestId('start-blank-button')).toBeVisible()
+  await expect(page.getByTestId('studio-bpm-input')).toBeVisible()
+  await expect(page.getByTestId('studio-time-signature-numerator')).toBeVisible()
+
+  await page.getByTestId('studio-title-input').fill('Blank button without upload')
+  await page.getByTestId('start-blank-button').click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
+  await expect(page.getByTestId('track-card-1')).toContainText('공란')
+
+  await page.goto('/')
+  await page.getByTestId('studio-title-input').fill('Home upload no tempo inputs')
+  await page.getByTestId('studio-source-input').setInputFiles({
+    name: 'home-start.musicxml',
+    mimeType: 'application/vnd.recordare.musicxml+xml',
+    buffer: Buffer.from(musicXmlUpload, 'utf-8'),
+  })
+  await expect(page.getByTestId('upload-and-start-button')).toBeVisible()
+  await expect(page.getByTestId('start-blank-button')).toBeHidden()
+  await expect(page.getByTestId('studio-bpm-input')).toHaveCount(0)
+  await expect(page.getByTestId('studio-time-signature-numerator')).toHaveCount(0)
+
+  await page.getByTestId('upload-and-start-button').click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
+  await expect(page.getByTestId('track-card-1')).toContainText('C5')
+})
+
 test('six-track studio supports create, register, generate, sync, play, and score', async ({ page }) => {
   await createBlankStudio(page, 'Playwright six-track session', '104')
 

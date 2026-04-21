@@ -1,6 +1,6 @@
 # Foundation Status
 
-Date: 2026-04-20
+Date: 2026-04-21
 
 ## Current Decision
 
@@ -50,7 +50,11 @@ new core flows.
 
 The current implementation has a working six-track vertical slice:
 
-- Home creates blank or uploaded studios.
+- Home creates blank or uploaded studios, with upload start and blank start
+  treated as mutually exclusive UI flows.
+- BPM and time signature are required only for blank start. Upload start can
+  proceed from the selected source file without user-entered tempo/meter, using
+  source metadata or an internal fallback clock for extraction timing.
 - Studios carry BPM plus a time signature; blank studios default to 4/4 and
   symbolic imports can inherit source meter.
 - Main studio shows six fixed tracks.

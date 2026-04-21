@@ -1,6 +1,6 @@
 # 01 Home Screen Spec
 
-Date: 2026-04-20
+Date: 2026-04-21
 
 Screen ID: `HOME`
 
@@ -12,14 +12,21 @@ blank track set.
 ## Required Inputs
 
 - Project name
-- BPM
-- Time signature, defaulting to 4/4
-- Source method
+- Source file, only for upload start
+- BPM and time signature, only for blank start
 
 Source methods:
 
 - Upload and start (`업로드 후 시작`)
 - Start blank (`새로 시작`)
+
+The two primary actions are mutually exclusive in the UI:
+
+- Before a source file is selected, show Start blank and show BPM/time-signature
+  fields.
+- After a source file is selected, hide Start blank and BPM/time-signature
+  fields, then show Upload and start.
+- Clearing the selected source returns the screen to the blank-start setup.
 
 ## Upload And Start
 
@@ -31,6 +38,16 @@ Supported source categories:
 - Music
 
 The UI must make the user understand that upload is used to seed the six tracks.
+
+Accepted source extensions include:
+
+- Score/symbolic: PDF, MusicXML/XML/MXL, MIDI/MID, NWC, JPG/JPEG, PNG, WEBP,
+  BMP, TIF/TIFF
+- Music/audio: WAV, MP3, M4A, OGG, FLAC
+
+BPM and time signature are not required UI inputs for upload start. The engine
+uses source metadata when available and otherwise applies an internal fallback
+clock only for extraction/preview timing.
 
 ### Score Upload Behavior
 

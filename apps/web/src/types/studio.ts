@@ -140,7 +140,7 @@ export type StudioListItem = {
 
 export type CreateStudioRequest = {
   title: string
-  bpm: number
+  bpm?: number
   time_signature_numerator?: number
   time_signature_denominator?: number
   start_mode: 'blank' | 'upload'

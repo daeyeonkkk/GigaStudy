@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { createStudio, listStudios, readFileAsDataUrl } from '../lib/api'
@@ -10,16 +10,41 @@ type SubmitState =
   | { phase: 'submitting'; label: string }
   | { phase: 'error'; message: string }
 
+const SCORE_SOURCE_EXTENSIONS = new Set([
+  '.musicxml',
+  '.mxl',
+  '.xml',
+  '.pdf',
+  '.mid',
+  '.midi',
+  '.nwc',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.bmp',
+  '.tif',
+  '.tiff',
+])
+const MUSIC_SOURCE_EXTENSIONS = new Set(['.wav', '.mp3', '.m4a', '.ogg', '.flac'])
+const SUPPORTED_SOURCE_ACCEPT = [
+  ...SCORE_SOURCE_EXTENSIONS,
+  ...MUSIC_SOURCE_EXTENSIONS,
+].join(',')
+
+function sourceExtension(file: File): string {
+  const dotIndex = file.name.lastIndexOf('.')
+  return dotIndex >= 0 ? file.name.slice(dotIndex).toLowerCase() : ''
+}
+
+function isSupportedSourceFile(file: File): boolean {
+  const extension = sourceExtension(file)
+  return SCORE_SOURCE_EXTENSIONS.has(extension) || MUSIC_SOURCE_EXTENSIONS.has(extension)
+}
+
 function detectSourceKind(file: File): 'score' | 'music' {
-  const name = file.name.toLowerCase()
-  if (
-    name.endsWith('.musicxml') ||
-    name.endsWith('.mxl') ||
-    name.endsWith('.xml') ||
-    name.endsWith('.pdf') ||
-    name.endsWith('.mid') ||
-    name.endsWith('.midi')
-  ) {
+  const extension = sourceExtension(file)
+  if (SCORE_SOURCE_EXTENSIONS.has(extension)) {
     return 'score'
   }
   return 'music'
@@ -27,11 +52,13 @@ function detectSourceKind(file: File): 'score' | 'music' {
 
 export function LaunchPage() {
   const navigate = useNavigate()
+  const sourceInputRef = useRef<HTMLInputElement | null>(null)
   const [title, setTitle] = useState('')
   const [bpm, setBpm] = useState('92')
   const [timeSignatureNumerator, setTimeSignatureNumerator] = useState('4')
   const [timeSignatureDenominator, setTimeSignatureDenominator] = useState('4')
   const [sourceFile, setSourceFile] = useState<File | null>(null)
+  const [sourceInputKey, setSourceInputKey] = useState(0)
   const [sourceKindOverride, setSourceKindOverride] = useState<'auto' | 'score' | 'music'>('auto')
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
   const [recentStudios, setRecentStudios] = useState<StudioListItem[]>([])
@@ -57,17 +84,34 @@ export function LaunchPage() {
     }
   }, [])
 
-  const canSubmit = useMemo(
+  const hasProjectTitle = title.trim().length > 0
+  const canStartBlank = useMemo(
     () =>
-      title.trim().length > 0 &&
+      sourceFile === null &&
+      hasProjectTitle &&
       Number.isFinite(Number(bpm)) &&
       Number.isFinite(Number(timeSignatureNumerator)) &&
       Number.isFinite(Number(timeSignatureDenominator)),
-    [bpm, timeSignatureDenominator, timeSignatureNumerator, title],
+    [bpm, hasProjectTitle, sourceFile, timeSignatureDenominator, timeSignatureNumerator],
+  )
+  const canUploadStart = useMemo(
+    () => sourceFile !== null && hasProjectTitle,
+    [hasProjectTitle, sourceFile],
   )
 
+  function clearSourceFile() {
+    setSourceFile(null)
+    setSourceKindOverride('auto')
+    setSubmitState({ phase: 'idle' })
+    setSourceInputKey((currentKey) => currentKey + 1)
+  }
+
   async function startBlank() {
-    if (!canSubmit) {
+    if (sourceFile) {
+      setSubmitState({ phase: 'error', message: '파일 선택을 해제한 뒤 새로 시작할 수 있습니다.' })
+      return
+    }
+    if (!canStartBlank) {
       setSubmitState({ phase: 'error', message: '프로젝트명과 BPM을 먼저 입력하세요.' })
       return
     }
@@ -91,11 +135,11 @@ export function LaunchPage() {
   }
 
   async function uploadAndStart() {
-    if (!canSubmit) {
+    if (!sourceFile) {
       setSubmitState({ phase: 'error', message: '프로젝트명과 BPM을 먼저 입력하세요.' })
       return
     }
-    if (!sourceFile) {
+    if (!canUploadStart) {
       setSubmitState({ phase: 'error', message: '악보나 음악 파일을 선택하세요.' })
       return
     }
@@ -106,9 +150,6 @@ export function LaunchPage() {
       const sourceContentBase64 = await readFileAsDataUrl(sourceFile)
       const studio = await createStudio({
         title: title.trim(),
-        bpm: Number(bpm),
-        time_signature_numerator: Number(timeSignatureNumerator),
-        time_signature_denominator: Number(timeSignatureDenominator),
         start_mode: 'upload',
         source_kind: sourceKind,
         source_filename: sourceFile.name,
@@ -140,11 +181,16 @@ export function LaunchPage() {
         </nav>
 
         <div className="launch-toolbar" aria-label="스튜디오 생성 도구">
-          <button className="launch-tool" type="button" onClick={() => void uploadAndStart()}>
+          <button className="launch-tool" type="button" onClick={() => sourceInputRef.current?.click()}>
             <span aria-hidden="true">↥</span>
             Upload
           </button>
-          <button className="launch-tool" type="button" onClick={() => void startBlank()}>
+          <button
+            className="launch-tool"
+            type="button"
+            disabled={Boolean(sourceFile) || submitState.phase === 'submitting'}
+            onClick={() => void startBlank()}
+          >
             <span aria-hidden="true">＋</span>
             New
           </button>
@@ -187,51 +233,74 @@ export function LaunchPage() {
                 />
               </label>
 
-              <label className="launch-field">
-                <span>BPM</span>
-                <input
-                  data-testid="studio-bpm-input"
-                  inputMode="numeric"
-                  value={bpm}
-                  onChange={(event) => setBpm(event.target.value)}
-                />
-              </label>
+              {sourceFile === null ? (
+                <>
+                  <label className="launch-field">
+                    <span>BPM</span>
+                    <input
+                      data-testid="studio-bpm-input"
+                      inputMode="numeric"
+                      value={bpm}
+                      onChange={(event) => setBpm(event.target.value)}
+                    />
+                  </label>
 
-              <div className="launch-field launch-field--time-signature">
-                <span>Time Signature</span>
-                <input
-                  aria-label="time signature numerator"
-                  data-testid="studio-time-signature-numerator"
-                  inputMode="numeric"
-                  value={timeSignatureNumerator}
-                  onChange={(event) => setTimeSignatureNumerator(event.target.value)}
-                />
-                <select
-                  aria-label="time signature denominator"
-                  data-testid="studio-time-signature-denominator"
-                  value={timeSignatureDenominator}
-                  onChange={(event) => setTimeSignatureDenominator(event.target.value)}
-                >
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="4">4</option>
-                  <option value="8">8</option>
-                  <option value="16">16</option>
-                  <option value="32">32</option>
-                </select>
-              </div>
+                  <div className="launch-field launch-field--time-signature">
+                    <span>Time Signature</span>
+                    <input
+                      aria-label="time signature numerator"
+                      data-testid="studio-time-signature-numerator"
+                      inputMode="numeric"
+                      value={timeSignatureNumerator}
+                      onChange={(event) => setTimeSignatureNumerator(event.target.value)}
+                    />
+                    <select
+                      aria-label="time signature denominator"
+                      data-testid="studio-time-signature-denominator"
+                      value={timeSignatureDenominator}
+                      onChange={(event) => setTimeSignatureDenominator(event.target.value)}
+                    >
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="4">4</option>
+                      <option value="8">8</option>
+                      <option value="16">16</option>
+                      <option value="32">32</option>
+                    </select>
+                  </div>
+                </>
+              ) : null}
 
               <label className="launch-field">
                 <span>악보 또는 음악</span>
                 <input
+                  key={sourceInputKey}
+                  ref={sourceInputRef}
                   data-testid="studio-source-input"
                   type="file"
-                  accept=".wav,.mp3,.m4a,.ogg,.flac,.mid,.midi,.musicxml,.mxl,.xml,.pdf"
-                  onChange={(event) => setSourceFile(event.target.files?.[0] ?? null)}
+                  accept={SUPPORTED_SOURCE_ACCEPT}
+                  onChange={(event) => {
+                    const nextFile = event.target.files?.[0] ?? null
+                    if (nextFile !== null && !isSupportedSourceFile(nextFile)) {
+                      setSourceFile(null)
+                      setSubmitState({ phase: 'error', message: '지원하는 파일 형식을 선택하세요.' })
+                      return
+                    }
+                    setSourceFile(nextFile)
+                    setSubmitState({ phase: 'idle' })
+                  }}
                 />
               </label>
+              {sourceFile ? (
+                <div className="launch-source-summary">
+                  <span>{sourceFile.name}</span>
+                  <button type="button" onClick={clearSourceFile}>
+                    선택 해제
+                  </button>
+                </div>
+              ) : null}
 
-              <label className="launch-field">
+              <label className="launch-field" hidden={!sourceFile}>
                 <span>업로드 해석</span>
                 <select
                   value={sourceKindOverride}
@@ -251,7 +320,8 @@ export function LaunchPage() {
                 data-testid="upload-and-start-button"
                 className="app-button"
                 type="button"
-                disabled={submitState.phase === 'submitting'}
+                hidden={!sourceFile}
+                disabled={submitState.phase === 'submitting' || !canUploadStart}
                 onClick={() => void uploadAndStart()}
               >
                 업로드 후 시작
@@ -260,7 +330,8 @@ export function LaunchPage() {
                 data-testid="start-blank-button"
                 className="app-button app-button--secondary"
                 type="button"
-                disabled={submitState.phase === 'submitting'}
+                hidden={Boolean(sourceFile)}
+                disabled={submitState.phase === 'submitting' || !canStartBlank}
                 onClick={() => void startBlank()}
               >
                 새로 시작

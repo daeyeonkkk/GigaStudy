@@ -1,6 +1,6 @@
 # GigaStudy Checklist
 
-Date: 2026-04-20
+Date: 2026-04-21
 
 This checklist tracks the new six-track studio foundation only.
 
@@ -19,10 +19,10 @@ This checklist tracks the new six-track studio foundation only.
 ## Home Screen
 
 - [x] User can enter project name.
-- [x] User can enter BPM.
-- [x] User can enter or inherit a time signature.
-- [x] User can choose Upload and start.
-- [x] User can choose Start blank.
+- [x] User can enter BPM only for blank start.
+- [x] User can enter or inherit a time signature only for blank start.
+- [x] User sees Upload and start only after selecting a source file.
+- [x] User sees Start blank only while no source file is selected.
 - [x] Score upload path exists.
 - [ ] Music upload path is production-grade beyond fixture fallback.
 - [x] Blank start creates six empty tracks.

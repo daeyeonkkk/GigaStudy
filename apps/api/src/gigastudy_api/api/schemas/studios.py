@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 TrackStatus = Literal[
     "empty",
@@ -154,13 +154,24 @@ class StudioListItem(BaseModel):
 
 class CreateStudioRequest(BaseModel):
     title: str = Field(min_length=1, max_length=100)
-    bpm: int = Field(ge=40, le=240)
+    bpm: int | None = Field(default=None, ge=40, le=240)
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
     time_signature_denominator: TimeSignatureDenominator = 4
     start_mode: StartMode
     source_kind: SeedSourceKind | None = None
     source_filename: str | None = Field(default=None, max_length=180)
     source_content_base64: str | None = None
+
+    @model_validator(mode="after")
+    def validate_start_contract(self) -> "CreateStudioRequest":
+        if self.start_mode == "blank" and self.bpm is None:
+            raise ValueError("Blank studio start requires BPM.")
+        if self.start_mode == "upload":
+            if self.source_kind is None:
+                raise ValueError("Upload start requires a source kind.")
+            if not self.source_filename or not self.source_content_base64:
+                raise ValueError("Upload start requires a source file.")
+        return self
 
 
 class UploadTrackRequest(BaseModel):

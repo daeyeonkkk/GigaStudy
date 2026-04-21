@@ -51,6 +51,11 @@ The studio time signature defines the measure grid:
 - `time_signature_denominator`
 - `quarter_beats_per_measure = numerator * (4 / denominator)`
 
+Blank studio creation requires user-entered BPM and meter. Upload-start creation
+does not require BPM or meter in the UI; the engine should preserve source
+metadata when available and otherwise use an internal fallback BPM/meter only so
+TrackNote timing can be normalized.
+
 MusicXML and MIDI import should preserve the source time signature when present.
 Voice extraction and rule-based AI generation inherit the studio time signature.
 Measure numbers and beat-in-measure positions are derived from the same meter

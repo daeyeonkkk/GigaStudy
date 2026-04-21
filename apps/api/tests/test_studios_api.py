@@ -176,6 +176,42 @@ def test_blank_studio_can_start_with_custom_time_signature(tmp_path: Path, monke
     assert payload["time_signature_denominator"] == 4
 
 
+def test_blank_studio_requires_bpm(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "Blank without bpm",
+            "start_mode": "blank",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_upload_start_does_not_require_bpm_and_maps_symbolic_tracks(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "Upload without bpm",
+            "start_mode": "upload",
+            "source_kind": "score",
+            "source_filename": "soprano.musicxml",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["bpm"] == 92
+    assert payload["tracks"][0]["status"] == "registered"
+    assert [note["label"] for note in payload["tracks"][0]["notes"]] == ["C5", "G5"]
+
+
 def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

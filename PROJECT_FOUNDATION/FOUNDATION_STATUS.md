@@ -162,6 +162,10 @@ The current implementation has a working six-track vertical slice:
   embedded in `StudioPage.tsx`.
 - Alpha API deployment is reproducible through `cloudbuild.api.yaml`; the Pages
   UI and Cloud Run API must expose the same `/api/studios` six-track contract.
+- Production web builds default to the live alpha Cloud Run API when
+  `VITE_API_BASE_URL` is not set, while development still defaults to
+  `http://127.0.0.1:8000`. This prevents manual Pages builds from shipping a
+  localhost API URL.
 - Studio UI presentation is split into dedicated components for the composer
   toolbar, track board, OMR job queue, candidate review queue, report feed, and
   scoring drawer. `StudioPage.tsx` now mainly coordinates data loading, user

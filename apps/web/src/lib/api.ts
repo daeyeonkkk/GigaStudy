@@ -8,8 +8,11 @@ import type {
   StudioListItem,
 } from '../types/studio'
 
-export const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:8000'
+const defaultApiBaseUrl = import.meta.env.PROD
+  ? 'https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app'
+  : 'http://127.0.0.1:8000'
+
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
 
 export type AdminCredentials = {
   username: string

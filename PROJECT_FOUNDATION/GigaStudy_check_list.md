@@ -263,6 +263,8 @@ This checklist tracks the new six-track studio foundation only.
   state.
 - [x] Browser audio infrastructure and studio-domain helpers are grouped under
   separate `lib/audio` and `lib/studio` module boundaries.
+- [x] Production web builds default to the live alpha Cloud Run API unless
+  `VITE_API_BASE_URL` explicitly overrides it.
 - [x] Studio page presentation is split into dedicated toolbar, track board,
   OMR queue, candidate review, report feed, and scoring drawer components.
 - [x] Score rendering math is isolated from the page component.

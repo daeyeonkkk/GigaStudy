@@ -46,6 +46,11 @@ npm run dev:web
 The web client expects the API at `http://127.0.0.1:8000` by default.
 Override it with `VITE_API_BASE_URL` if needed.
 
+Production web builds default to the live alpha Cloud Run API
+(`https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app`) unless
+`VITE_API_BASE_URL` is set. This keeps manual Pages builds from accidentally
+shipping a localhost API URL.
+
 ## API
 
 The API exposes the current product surface only:

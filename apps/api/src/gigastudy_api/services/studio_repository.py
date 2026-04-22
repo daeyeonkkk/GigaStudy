@@ -28,6 +28,7 @@ from gigastudy_api.api.schemas.studios import (
     SourceKind,
     Studio,
     StudioListItem,
+    StudioSeedUploadRequest,
     SyncTrackRequest,
     TrackExtractionJob,
     TrackNote,
@@ -82,6 +83,10 @@ TRACK_UPLOAD_SUFFIXES = {
     "midi": (".mid", ".midi"),
     "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
 }
+STUDIO_SEED_UPLOAD_SUFFIXES = {
+    "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
+    "music": tuple(AUDIO_SOURCE_SUFFIXES),
+}
 AUDIO_MIME_TYPES = {
     ".wav": "audio/wav",
     ".mp3": "audio/mpeg",
@@ -129,6 +134,7 @@ class StudioRepository:
         source_kind: SeedSourceKind | None = None,
         source_filename: str | None = None,
         source_content_base64: str | None = None,
+        source_asset_path: str | None = None,
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         timestamp = _now()
@@ -151,17 +157,17 @@ class StudioRepository:
         if start_mode == "upload":
             if source_kind is None:
                 raise HTTPException(status_code=422, detail="Upload start requires a source kind.")
+            source_label = source_filename or f"uploaded-{source_kind}"
             if self._should_start_omr_job(
                 source_kind=source_kind,
-                source_filename=source_filename,
-                source_content_base64=source_content_base64,
+                source_filename=source_label,
             ):
-                source_label = source_filename or "uploaded-score.pdf"
-                source_path = self._save_upload(
-                    studio_id=studio.studio_id,
-                    slot_id=0,
-                    filename=source_label,
-                    content_base64=source_content_base64 or "",
+                source_path = self._prepare_studio_seed_upload(
+                    studio,
+                    source_kind=source_kind,
+                    source_filename=source_label,
+                    source_content_base64=source_content_base64,
+                    source_asset_path=source_asset_path,
                 )
                 with self._lock:
                     self._save_studio(studio)
@@ -177,8 +183,9 @@ class StudioRepository:
             studio = self._seed_from_upload(
                 studio,
                 source_kind=source_kind,
-                source_filename=source_filename or f"uploaded-{source_kind}",
+                source_filename=source_label,
                 source_content_base64=source_content_base64,
+                source_asset_path=source_asset_path,
             )
 
         with self._lock:
@@ -320,6 +327,37 @@ class StudioRepository:
             deleted_bytes=deleted_bytes,
         )
 
+    def create_studio_upload_target(
+        self,
+        request: StudioSeedUploadRequest,
+    ) -> DirectUploadTarget:
+        filename, _suffix = _validated_studio_seed_upload_filename(request.source_kind, request.filename)
+        settings = get_settings()
+        if request.size_bytes > settings.max_upload_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds the configured {settings.max_upload_bytes} byte limit.",
+            )
+        self._ensure_asset_capacity(request.size_bytes)
+        try:
+            upload_info = self._asset_storage.create_staged_upload(
+                filename=filename,
+                content_type=request.content_type,
+                expires_in_seconds=settings.direct_upload_expiration_seconds,
+            )
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+        return DirectUploadTarget(
+            asset_id=self._encode_asset_id(upload_info.relative_path),
+            asset_path=upload_info.relative_path,
+            upload_url=upload_info.upload_url or "",
+            method="PUT",
+            headers=upload_info.headers,
+            expires_at=upload_info.expires_at,
+            max_bytes=settings.max_upload_bytes,
+        )
+
     def create_track_upload_target(
         self,
         studio_id: str,
@@ -360,11 +398,13 @@ class StudioRepository:
     def write_direct_upload_content(self, asset_id: str, content: bytes) -> dict[str, int | str]:
         relative_path = self._decode_asset_id(asset_id)
         upload_owner = _track_upload_owner_from_path(relative_path)
-        if upload_owner is None:
+        is_staged_upload = _is_staged_upload_path(relative_path)
+        if upload_owner is None and not is_staged_upload:
             raise HTTPException(status_code=404, detail="Upload target not found.")
-        studio_id, slot_id = upload_owner
-        studio = self.get_studio(studio_id)
-        self._find_track(studio, slot_id)
+        if upload_owner is not None:
+            studio_id, slot_id = upload_owner
+            studio = self.get_studio(studio_id)
+            self._find_track(studio, slot_id)
         max_upload_bytes = get_settings().max_upload_bytes
         if len(content) > max_upload_bytes:
             raise HTTPException(
@@ -874,9 +914,8 @@ class StudioRepository:
         *,
         source_kind: SeedSourceKind,
         source_filename: str | None,
-        source_content_base64: str | None,
     ) -> bool:
-        if source_kind != "score" or source_content_base64 is None or source_filename is None:
+        if source_kind != "score" or source_filename is None:
             return False
         return Path(source_filename).suffix.lower() in OMR_SOURCE_SUFFIXES
 
@@ -887,29 +926,14 @@ class StudioRepository:
         source_kind: SeedSourceKind,
         source_filename: str,
         source_content_base64: str | None,
+        source_asset_path: str | None,
     ) -> Studio:
-        if source_content_base64 is None:
-            raise HTTPException(status_code=422, detail="Upload start requires a source file.")
-        return self._seed_from_upload_content(
+        source_path = self._prepare_studio_seed_upload(
             studio,
             source_kind=source_kind,
             source_filename=source_filename,
             source_content_base64=source_content_base64,
-        )
-
-    def _seed_from_upload_content(
-        self,
-        studio: Studio,
-        *,
-        source_kind: SeedSourceKind,
-        source_filename: str,
-        source_content_base64: str,
-    ) -> Studio:
-        source_path = self._save_upload(
-            studio_id=studio.studio_id,
-            slot_id=0,
-            filename=source_filename,
-            content_base64=source_content_base64,
+            source_asset_path=source_asset_path,
         )
         suffix = source_path.suffix.lower()
 
@@ -960,6 +984,36 @@ class StudioRepository:
             return studio
 
         raise HTTPException(status_code=422, detail="Unsupported upload processing path.")
+
+    def _prepare_studio_seed_upload(
+        self,
+        studio: Studio,
+        *,
+        source_kind: SeedSourceKind,
+        source_filename: str,
+        source_content_base64: str | None,
+        source_asset_path: str | None,
+    ) -> Path:
+        filename, _suffix = _validated_studio_seed_upload_filename(source_kind, source_filename)
+        has_inline_content = bool(source_content_base64)
+        has_asset_path = bool(source_asset_path)
+        if has_inline_content == has_asset_path:
+            raise HTTPException(status_code=422, detail="Upload start requires exactly one source file.")
+
+        if source_asset_path is not None:
+            return self._promote_staged_seed_asset(
+                studio_id=studio.studio_id,
+                filename=filename,
+                source_kind=source_kind,
+                asset_path=source_asset_path,
+            )
+
+        return self._save_upload(
+            studio_id=studio.studio_id,
+            slot_id=0,
+            filename=filename,
+            content_base64=source_content_base64 or "",
+        )
 
     def _extract_home_audio_candidate(self, studio: Studio, source_path: Path) -> tuple[int, list[TrackNote], float]:
         attempts: list[tuple[int, list[TrackNote], float]] = []
@@ -1682,6 +1736,63 @@ class StudioRepository:
         )
         return source_path
 
+    def _promote_staged_seed_asset(
+        self,
+        *,
+        studio_id: str,
+        filename: str,
+        source_kind: SeedSourceKind,
+        asset_path: str,
+    ) -> Path:
+        filename, _suffix = _validated_studio_seed_upload_filename(source_kind, filename)
+        try:
+            relative_path = self._asset_storage.normalize_reference(asset_path)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Upload target not found.") from error
+
+        if not _is_staged_upload_path(relative_path):
+            raise HTTPException(status_code=404, detail="Upload target not found.")
+
+        try:
+            staged_path = self._asset_storage.resolve_path(relative_path)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Uploaded asset was not found.") from error
+        if not staged_path.exists() or not staged_path.is_file():
+            raise HTTPException(status_code=404, detail="Uploaded asset was not found.")
+
+        size_bytes = staged_path.stat().st_size
+        if size_bytes <= 0:
+            raise HTTPException(status_code=422, detail="Uploaded asset is empty.")
+        max_upload_bytes = get_settings().max_upload_bytes
+        if size_bytes > max_upload_bytes:
+            self._delete_asset_file(relative_path)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds the configured {max_upload_bytes} byte limit.",
+            )
+
+        self._ensure_asset_capacity(size_bytes)
+        try:
+            promoted_path = self._asset_storage.write_upload(
+                studio_id=studio_id,
+                slot_id=0,
+                filename=filename,
+                content=staged_path.read_bytes(),
+            )
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+        promoted_relative_path = self._relative_data_asset_path(promoted_path)
+        self._register_asset(
+            relative_path=promoted_relative_path,
+            kind="upload",
+            filename=filename,
+            size_bytes=size_bytes,
+            content_type=_guess_content_type(filename),
+        )
+        self._delete_asset_file(relative_path)
+        return promoted_path
+
     def _save_temp_upload(
         self,
         *,
@@ -1919,6 +2030,15 @@ def _validated_track_upload_filename(source_kind: str, filename: str) -> tuple[s
     return safe_filename, suffix
 
 
+def _validated_studio_seed_upload_filename(source_kind: str, filename: str) -> tuple[str, str]:
+    safe_filename = Path(filename.strip()).name
+    suffix = Path(safe_filename).suffix.lower()
+    allowed_suffixes = STUDIO_SEED_UPLOAD_SUFFIXES.get(source_kind)
+    if not safe_filename or allowed_suffixes is None or not safe_filename.lower().endswith(allowed_suffixes):
+        raise HTTPException(status_code=422, detail="Unsupported file type for this upload.")
+    return safe_filename, suffix
+
+
 def _decode_base64(content_base64: str) -> bytes:
     payload = content_base64.split(",", 1)[1] if "," in content_base64 else content_base64
     try:
@@ -1970,6 +2090,11 @@ def _track_upload_owner_from_path(relative_path: str) -> tuple[str, int] | None:
     if slot_id < 1 or slot_id > 6:
         return None
     return parts[1], slot_id
+
+
+def _is_staged_upload_path(relative_path: str) -> bool:
+    parts = relative_path.split("/")
+    return len(parts) >= 3 and parts[0] == "staged"
 
 
 def _admin_asset_kind(kind: str) -> str:

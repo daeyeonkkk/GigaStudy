@@ -54,6 +54,15 @@ class AssetStorage(Protocol):
     ) -> DirectUploadInfo:
         ...
 
+    def create_staged_upload(
+        self,
+        *,
+        filename: str,
+        content_type: str | None,
+        expires_in_seconds: int,
+    ) -> DirectUploadInfo:
+        ...
+
     def write_direct_upload(self, *, relative_path: str, content: bytes) -> Path:
         ...
 
@@ -118,6 +127,22 @@ class LocalAssetStorage:
             upload_url=None,
             headers={},
             expires_at=expires_at,
+        )
+
+    def create_staged_upload(
+        self,
+        *,
+        filename: str,
+        content_type: str | None,
+        expires_in_seconds: int,
+    ) -> DirectUploadInfo:
+        del content_type
+        relative_path = _staged_upload_relative_path(filename)
+        return DirectUploadInfo(
+            relative_path=relative_path,
+            upload_url=None,
+            headers={},
+            expires_at=_expires_at(expires_in_seconds),
         )
 
     def write_direct_upload(self, *, relative_path: str, content: bytes) -> Path:
@@ -265,6 +290,20 @@ class S3AssetStorage(LocalAssetStorage):
             expires_at=_expires_at(expires_in_seconds),
         )
 
+    def create_staged_upload(
+        self,
+        *,
+        filename: str,
+        content_type: str | None,
+        expires_in_seconds: int,
+    ) -> DirectUploadInfo:
+        relative_path = _staged_upload_relative_path(filename)
+        return self._create_s3_direct_upload(
+            relative_path=relative_path,
+            content_type=content_type,
+            expires_in_seconds=expires_in_seconds,
+        )
+
     def write_direct_upload(self, *, relative_path: str, content: bytes) -> Path:
         clean_path = _clean_relative_path(relative_path)
         local_path = self._cache_path(clean_path)
@@ -366,6 +405,34 @@ class S3AssetStorage(LocalAssetStorage):
     def _delete_objects(self, objects: list[dict[str, str]]) -> None:
         self._client.delete_objects(Bucket=self._bucket, Delete={"Objects": objects})
 
+    def _create_s3_direct_upload(
+        self,
+        *,
+        relative_path: str,
+        content_type: str | None,
+        expires_in_seconds: int,
+    ) -> DirectUploadInfo:
+        params: dict[str, str] = {
+            "Bucket": self._bucket,
+            "Key": relative_path,
+        }
+        headers: dict[str, str] = {}
+        if content_type:
+            params["ContentType"] = content_type
+            headers["Content-Type"] = content_type
+        upload_url = self._client.generate_presigned_url(
+            "put_object",
+            Params=params,
+            ExpiresIn=expires_in_seconds,
+            HttpMethod="PUT",
+        )
+        return DirectUploadInfo(
+            relative_path=relative_path,
+            upload_url=upload_url,
+            headers=headers,
+            expires_at=_expires_at(expires_in_seconds),
+        )
+
 
 class AssetStorageError(Exception):
     pass
@@ -424,6 +491,11 @@ def _build_s3_client(
 def _upload_relative_path(studio_id: str, slot_id: int, filename: str) -> str:
     safe_filename = Path(filename).name.strip() or "upload.bin"
     return _clean_relative_path(f"uploads/{studio_id}/{slot_id}/{uuid4().hex}-{safe_filename}")
+
+
+def _staged_upload_relative_path(filename: str) -> str:
+    safe_filename = Path(filename).name.strip() or "upload.bin"
+    return _clean_relative_path(f"staged/{uuid4().hex}/{uuid4().hex}-{safe_filename}")
 
 
 def _expires_at(expires_in_seconds: int) -> str:

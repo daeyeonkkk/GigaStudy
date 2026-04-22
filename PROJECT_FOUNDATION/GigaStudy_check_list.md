@@ -218,8 +218,8 @@ This checklist tracks the new six-track studio foundation only.
   with local filesystem storage kept as the development fallback.
 - [x] Per-track uploads can use a signed/direct-upload compatible flow before
   finalizing TrackNote extraction with a stored `asset_path`.
-- [ ] Home-start uploads still need staged direct upload because a studio id
-  does not exist before the source file is accepted.
+- [x] Home-start uploads can use staged direct upload before a studio id exists,
+  then create the studio with `source_asset_path`.
 - [x] R2 bucket CORS is configured to allow browser `PUT` plus `Content-Type`
   from the deployed Pages origin for the presigned upload path.
 - [x] Cloud Run local filesystem is treated as temporary engine/cache space
@@ -242,7 +242,7 @@ This checklist tracks the new six-track studio foundation only.
   admin storage summary against the deployed service.
 - [ ] Durable object storage still needs a lifecycle/retention policy.
 - [x] Browser-to-R2 direct upload/signed URL flow is implemented for existing
-  studio track uploads.
+  studio track uploads and staged home-start uploads.
 - [ ] OMR/voice extraction still needs a durable queue before Cloud Run
   maxScale is raised above one instance.
 

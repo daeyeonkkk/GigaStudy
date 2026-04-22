@@ -167,15 +167,20 @@ class CreateStudioRequest(BaseModel):
     source_kind: SeedSourceKind | None = None
     source_filename: str | None = Field(default=None, max_length=180)
     source_content_base64: str | None = None
+    source_asset_path: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def validate_start_contract(self) -> "CreateStudioRequest":
         if self.start_mode == "blank" and self.bpm is None:
             raise ValueError("Blank studio start requires BPM.")
+        if self.start_mode == "blank" and (self.source_content_base64 or self.source_asset_path):
+            raise ValueError("Blank studio start cannot include a source file.")
         if self.start_mode == "upload":
             if self.source_kind is None:
                 raise ValueError("Upload start requires a source kind.")
-            if not self.source_filename or not self.source_content_base64:
+            has_inline_content = bool(self.source_content_base64)
+            has_asset_path = bool(self.source_asset_path)
+            if not self.source_filename or has_inline_content == has_asset_path:
                 raise ValueError("Upload start requires a source file.")
         return self
 
@@ -199,6 +204,13 @@ class UploadTrackRequest(BaseModel):
 
 class DirectUploadRequest(BaseModel):
     source_kind: Literal["audio", "midi", "score"]
+    filename: str = Field(min_length=1, max_length=180)
+    size_bytes: int = Field(ge=1)
+    content_type: str | None = Field(default=None, max_length=120)
+
+
+class StudioSeedUploadRequest(BaseModel):
+    source_kind: SeedSourceKind
     filename: str = Field(min_length=1, max_length=180)
     size_bytes: int = Field(ge=1)
     content_type: str | None = Field(default=None, max_length=120)

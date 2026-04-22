@@ -71,6 +71,10 @@ The current implementation has a working vertical slice for:
   target, `PUT` the binary to the API proxy in local mode or presigned R2/S3 URL
   in object-storage mode, then finalize extraction/registration with the stored
   `asset_path`.
+- Home-start uploads use the same direct-upload idea with a staged object:
+  request an upload target before the studio exists, `PUT` the binary, then
+  create the studio with `source_asset_path` so the API can promote the object
+  into that studio's upload namespace.
 - Paginated studio/admin metadata reads: studio lists return summary rows,
   studio detail loads one document, admin storage pages studios and limits
   per-studio asset details, and report/candidate payloads are split out as
@@ -313,6 +317,7 @@ Required:
 - Configurable max upload size keeps base64 JSON uploads inside the free-plan
   Cloud Run memory/request envelope.
 - Per-track upload-target API and browser direct upload orchestration.
+- Home-start staged upload-target API and browser orchestration.
 - R2/S3 bucket CORS must allow direct browser `PUT` from the deployed Pages
   origin before the presigned path can carry production traffic without falling
   back to base64.
@@ -347,8 +352,8 @@ Required:
   and local files.
 - Add object lifecycle/retention cleanup before production-scale recording
   tests.
-- Add staged direct upload for home-start sources, where a studio id does not
-  exist until after the selected score/music source is accepted.
+- Add optional direct/temporary handling for larger scoring takes if alpha
+  scoring recordings outgrow the current temporary base64 path.
 
 ## Deferred Until Needed
 

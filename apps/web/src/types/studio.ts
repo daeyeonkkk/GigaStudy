@@ -153,6 +153,7 @@ export type CreateStudioRequest = {
   source_kind?: 'score' | 'music'
   source_filename?: string
   source_content_base64?: string
+  source_asset_path?: string
 }
 
 export type DirectUploadTarget = {

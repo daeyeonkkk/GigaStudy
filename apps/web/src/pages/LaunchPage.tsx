@@ -1,20 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { createStudio, listStudios, readFileAsDataUrl } from '../lib/api'
+import {
+  createStudio,
+  createStudioUploadTarget,
+  listStudios,
+  putDirectUpload,
+  readFileAsDataUrl,
+} from '../lib/api'
 import {
   AUDIO_UPLOAD_EXTENSIONS,
   getFileExtension,
   isAudioUploadFile,
   prepareAudioFileForUpload,
 } from '../lib/audio'
-import type { StudioListItem } from '../types/studio'
+import type { Studio, StudioListItem } from '../types/studio'
 import './LaunchPage.css'
 
 type SubmitState =
   | { phase: 'idle' }
   | { phase: 'submitting'; label: string }
   | { phase: 'error'; message: string }
+
+type PreparedLaunchSource = {
+  filename: string
+  blob: Blob
+  contentType: string
+  contentBase64?: string
+}
 
 const SCORE_SOURCE_EXTENSIONS = new Set([
   '.musicxml',
@@ -146,20 +159,47 @@ export function LaunchPage() {
     const sourceKind = sourceKindOverride === 'auto' ? detectSourceKind(sourceFile) : sourceKindOverride
     setSubmitState({ phase: 'submitting', label: '업로드 분석 중' })
     try {
-      const preparedSource =
+      const preparedSource: PreparedLaunchSource =
         sourceKind === 'music' && isAudioUploadFile(sourceFile)
           ? await prepareAudioFileForUpload(sourceFile)
           : {
               filename: sourceFile.name,
-              contentBase64: await readFileAsDataUrl(sourceFile),
+              blob: sourceFile,
+              contentType: sourceFile.type || 'application/octet-stream',
             }
-      const studio = await createStudio({
-        title: title.trim(),
-        start_mode: 'upload',
-        source_kind: sourceKind,
-        source_filename: preparedSource.filename,
-        source_content_base64: preparedSource.contentBase64,
-      })
+      let studio: Studio | null = null
+      let uploadedAssetPath: string | null = null
+      try {
+        const uploadTarget = await createStudioUploadTarget({
+          source_kind: sourceKind,
+          filename: preparedSource.filename,
+          size_bytes: preparedSource.blob.size,
+          content_type: preparedSource.contentType,
+        })
+        await putDirectUpload(uploadTarget, preparedSource.blob)
+        uploadedAssetPath = uploadTarget.asset_path
+      } catch {
+        const contentBase64 = preparedSource.contentBase64 ?? (await readFileAsDataUrl(sourceFile))
+        studio = await createStudio({
+          title: title.trim(),
+          start_mode: 'upload',
+          source_kind: sourceKind,
+          source_filename: preparedSource.filename,
+          source_content_base64: contentBase64,
+        })
+      }
+      if (uploadedAssetPath) {
+        studio = await createStudio({
+          title: title.trim(),
+          start_mode: 'upload',
+          source_kind: sourceKind,
+          source_filename: preparedSource.filename,
+          source_asset_path: uploadedAssetPath,
+        })
+      }
+      if (!studio) {
+        throw new Error('업로드 후 시작할 수 없습니다.')
+      }
       navigate(`/studios/${studio.studio_id}`)
     } catch (error) {
       setSubmitState({

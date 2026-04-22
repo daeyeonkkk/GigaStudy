@@ -132,10 +132,15 @@ The current implementation has a working six-track vertical slice:
 - The live `gigastudy-alpha` R2 bucket has CORS configured for the deployed
   Pages origin and local dev origins via `ops/r2-cors.gigastudy-alpha.json`,
   allowing browser `PUT` with `Content-Type` for direct track uploads.
-- Home-screen upload start and scoring performance audio still use the smaller
-  existing base64/temporary paths. The next upload architecture step is staged
-  direct upload for pre-studio home sources and direct/temporary handling for
-  larger scoring takes if needed.
+- Home-screen upload start now has a staged direct-upload path:
+  `POST /api/studios/upload-target`, binary `PUT`, then
+  `POST /api/studios` with `source_asset_path`. The API promotes the staged
+  object into `uploads/{studio_id}/0/...` before running the existing symbolic,
+  audio, or OMR pipeline. The browser keeps a base64 fallback if target creation
+  or binary PUT fails.
+- Scoring performance audio still uses the smaller existing base64/temporary
+  path. It is deleted after extraction rather than retained as an admin-listed
+  asset.
 - Free-plan alpha operating limits are configurable and enforced in the API:
   studio soft warning 300, studio hard cap 500, asset warning 7 GiB, asset hard
   cap 8.5 GiB, file upload cap 15 MiB, and one active local engine job at a
@@ -221,8 +226,8 @@ not legacy product surfaces.
    upload/job assets.
 6. Add user ownership or private share boundaries before inviting broader
    traffic; public list/detail endpoints are still alpha-only.
-7. Extend direct-to-object upload beyond per-track uploads: staged home-start
-   uploads before a studio id exists and optional larger scoring-take handling.
+7. Add optional direct/temporary handling for larger scoring takes if alpha
+   scoring recordings become too large for the current base64 path.
 8. Move extraction/OMR execution into a durable queue before raising Cloud Run
    maxScale above the current free-plan alpha shape.
 

@@ -506,6 +506,93 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
     assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
 
 
+def test_upload_start_can_use_staged_direct_uploaded_symbolic_asset(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    content = MUSICXML_UPLOAD.encode("utf-8")
+
+    target_response = client.post(
+        "/api/studios/upload-target",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "size_bytes": len(content),
+            "content_type": "application/vnd.recordare.musicxml+xml",
+        },
+    )
+
+    assert target_response.status_code == 200
+    target = target_response.json()
+    assert target["asset_path"].startswith("staged/")
+
+    put_path = target["upload_url"].removeprefix("http://testserver")
+    put_response = client.put(put_path, content=content)
+    assert put_response.status_code == 200
+
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Staged start",
+            "start_mode": "upload",
+            "source_kind": "score",
+            "source_filename": "soprano.musicxml",
+            "source_asset_path": target["asset_path"],
+        },
+    )
+
+    assert create_response.status_code == 200
+    payload = create_response.json()
+    soprano = payload["tracks"][0]
+    assert soprano["status"] == "registered"
+    assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
+    assert not (tmp_path / "staged").exists()
+
+
+def test_upload_start_can_use_staged_direct_uploaded_pdf_for_omr(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+    client = build_client(tmp_path, monkeypatch)
+
+    target_response = client.post(
+        "/api/studios/upload-target",
+        json={
+            "source_kind": "score",
+            "filename": "full-score.pdf",
+            "size_bytes": len(PDF_UPLOAD_BYTES),
+            "content_type": "application/pdf",
+        },
+    )
+
+    assert target_response.status_code == 200
+    target = target_response.json()
+    assert target["asset_path"].startswith("staged/")
+
+    put_path = target["upload_url"].removeprefix("http://testserver")
+    put_response = client.put(put_path, content=PDF_UPLOAD_BYTES)
+    assert put_response.status_code == 200
+
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Staged PDF start",
+            "start_mode": "upload",
+            "source_kind": "score",
+            "source_filename": "full-score.pdf",
+            "source_asset_path": target["asset_path"],
+        },
+    )
+
+    assert create_response.status_code == 200
+    studio_id = create_response.json()["studio_id"]
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "needs_review"
+    assert payload["tracks"][0]["status"] == "needs_review"
+    assert len(payload["candidates"]) == 1
+    assert payload["candidates"][0]["notes"][0]["source"] == "omr"
+    assert not (tmp_path / "staged").exists()
+
+
 def test_audio_upload_keeps_source_file_for_track_playback(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [

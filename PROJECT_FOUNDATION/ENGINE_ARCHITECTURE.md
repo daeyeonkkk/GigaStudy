@@ -55,6 +55,12 @@ Studio metadata and stored binary assets are separate responsibilities.
   The final upload endpoint remains the only step that registers TrackNotes or
   review candidates. In local development the returned URL may be an API proxy
   endpoint; in S3/R2 deployments it should be a presigned object-store URL.
+- Home-start uploads use a staged variant because the studio id does not exist
+  yet: `POST /api/studios/upload-target`, binary `PUT`, then
+  `POST /api/studios` with `source_asset_path`. The API must promote the staged
+  object into the created studio's upload namespace before parsing, OMR, or
+  voice extraction. Staged objects are not durable studio assets until that
+  promotion succeeds.
 - Object-store direct upload requires bucket CORS that permits the deployed web
   origin to `PUT` with the returned headers, especially `Content-Type`. The live
   alpha bucket policy is tracked in `ops/r2-cors.gigastudy-alpha.json`.
@@ -476,8 +482,9 @@ These code paths currently implement the contract:
   `apps/api/src/gigastudy_api/services/asset_storage.py`
 - Track upload target/finalize API:
   `apps/api/src/gigastudy_api/api/routes/studios.py`
-- Browser direct-upload orchestration:
-  `apps/web/src/lib/api.ts` and `apps/web/src/pages/StudioPage.tsx`
+- Home and track direct-upload orchestration:
+  `apps/web/src/lib/api.ts`, `apps/web/src/pages/LaunchPage.tsx`, and
+  `apps/web/src/pages/StudioPage.tsx`
 - Browser TrackNote score rendering math and hidden layout markers:
   `apps/web/src/lib/studio/scoreRendering.ts`
 - Browser VexFlow SVG engraving:

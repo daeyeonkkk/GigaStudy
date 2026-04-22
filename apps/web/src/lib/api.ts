@@ -125,6 +125,22 @@ export function createStudio(payload: CreateStudioRequest): Promise<Studio> {
   )
 }
 
+export function createStudioUploadTarget(payload: {
+  source_kind: 'score' | 'music'
+  filename: string
+  size_bytes: number
+  content_type?: string
+}): Promise<DirectUploadTarget> {
+  return requestJson<DirectUploadTarget>(
+    '/api/studios/upload-target',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    'Upload target could not be created.',
+  )
+}
+
 export function getStudio(studioId: string): Promise<Studio> {
   return requestJson<Studio>(`/api/studios/${studioId}`, {}, '스튜디오를 불러오지 못했습니다.')
 }

@@ -11,6 +11,7 @@ from gigastudy_api.api.schemas.studios import (
     ScoreTrackRequest,
     Studio,
     StudioListItem,
+    StudioSeedUploadRequest,
     SyncTrackRequest,
     UploadTrackRequest,
 )
@@ -43,6 +44,7 @@ def create_studio(
         source_kind=request.source_kind,
         source_filename=request.source_filename,
         source_content_base64=request.source_content_base64,
+        source_asset_path=request.source_asset_path,
         background_tasks=background_tasks,
     )
 
@@ -86,6 +88,22 @@ async def put_direct_upload(
 ) -> dict[str, int | str]:
     content = await request.body()
     return repository.write_direct_upload_content(asset_id, content)
+
+
+@router.post("/upload-target", response_model=DirectUploadTarget)
+def create_studio_upload_target(
+    request: StudioSeedUploadRequest,
+    http_request: Request,
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> DirectUploadTarget:
+    target = repository.create_studio_upload_target(request)
+    if not target.upload_url:
+        target = target.model_copy(
+            update={
+                "upload_url": str(http_request.url_for("put_direct_upload", asset_id=target.asset_id)),
+            }
+        )
+    return target
 
 
 @router.post("/{studio_id}/tracks/{slot_id}/upload-target", response_model=DirectUploadTarget)

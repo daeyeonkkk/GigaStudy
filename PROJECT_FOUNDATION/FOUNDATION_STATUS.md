@@ -250,8 +250,24 @@ not legacy product surfaces.
    traffic; public list/detail endpoints are still alpha-only.
 7. Add optional direct/temporary handling for larger scoring takes if alpha
    scoring recordings become too large for the current base64 path.
-8. Move extraction/OMR execution into a durable queue before raising Cloud Run
-   maxScale above the current free-plan alpha shape.
+8. Add a scheduler or worker wake-up path for queued extraction jobs before
+   relying on unattended long-running batch processing. The queue itself is
+   durable; the current alpha wake-up path is still request/poll driven.
+
+## Live Test Gate - 2026-04-22
+
+- API regression suite: 63 passed.
+- Web lint: passed.
+- Production web build: passed.
+- Browser E2E release gate: 21 passed.
+- Git state before deployment push: clean `main` aligned with `origin/main`.
+- Current alpha limits remain intentional: 300 studio soft line, 500 studio
+  hard line, 15 MB per file, 7 GiB asset warning line, 8.5 GiB asset hard line,
+  and one active engine job lane by default.
+- Dynamic behavior checked: repository pagination, per-studio reads, sidecar
+  reports/candidates, durable queue replay options, admin storage pagination,
+  configurable limits, and staged upload cleanup all follow settings or
+  storage-backend abstractions rather than fixed in-page assumptions.
 
 ## Status Summary
 

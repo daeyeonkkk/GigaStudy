@@ -259,6 +259,11 @@ This checklist tracks the new six-track studio foundation only.
   objects.
 - [x] OMR/voice extraction has a durable queue before Cloud Run maxScale is
   raised above one instance.
+- [x] 2026-04-22 실사용 테스트 배포 전 게이트를 통과했다: API 63개,
+  웹 lint/build, 브라우저 E2E 21개.
+- [ ] Queued OMR/voice extraction jobs are durable, but unattended queue
+  wake-up still needs a scheduler or worker trigger beyond request/poll-driven
+  alpha processing.
 
 ## Implementation Structure
 

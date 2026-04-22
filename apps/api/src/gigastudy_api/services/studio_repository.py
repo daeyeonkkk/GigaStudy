@@ -303,6 +303,15 @@ class StudioRepository:
             deleted_bytes=deleted_bytes,
         )
 
+    def delete_admin_staged_assets(self) -> AdminDeleteResult:
+        deleted_files, deleted_bytes = self._delete_asset_prefix("staged/")
+        return AdminDeleteResult(
+            deleted=True,
+            message="Abandoned staged upload assets deleted.",
+            deleted_files=deleted_files,
+            deleted_bytes=deleted_bytes,
+        )
+
     def delete_admin_asset(self, asset_id: str) -> AdminDeleteResult:
         relative_path = self._decode_asset_id(asset_id)
         deleted_files, deleted_bytes = self._delete_asset_file(relative_path)

@@ -129,6 +129,38 @@ def test_admin_storage_summary_is_paginated(tmp_path: Path, monkeypatch) -> None
     assert payload["limits"]["studio_hard_limit"] == 500
 
 
+def test_admin_can_delete_abandoned_staged_uploads(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    content = b"%PDF-1.4 staged direct upload"
+    target_response = client.post(
+        "/api/studios/upload-target",
+        json={
+            "source_kind": "score",
+            "filename": "abandoned.pdf",
+            "size_bytes": len(content),
+            "content_type": "application/pdf",
+        },
+    )
+    assert target_response.status_code == 200
+    target = target_response.json()
+    assert target["asset_path"].startswith("staged/")
+
+    put_path = target["upload_url"].removeprefix("http://testserver")
+    put_response = client.put(put_path, content=content)
+    assert put_response.status_code == 200
+    staged_path = tmp_path / Path(*target["asset_path"].split("/"))
+    assert staged_path.exists()
+
+    delete_response = client.delete("/api/admin/staged-assets", headers=ADMIN_HEADERS)
+
+    assert delete_response.status_code == 200
+    payload = delete_response.json()
+    assert payload["deleted"] is True
+    assert payload["deleted_files"] == 1
+    assert payload["deleted_bytes"] == len(content)
+    assert not staged_path.exists()
+
+
 def test_admin_can_list_and_delete_individual_studio_asset(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [

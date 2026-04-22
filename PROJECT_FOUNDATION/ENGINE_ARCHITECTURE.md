@@ -60,7 +60,8 @@ Studio metadata and stored binary assets are separate responsibilities.
   `POST /api/studios` with `source_asset_path`. The API must promote the staged
   object into the created studio's upload namespace before parsing, OMR, or
   voice extraction. Staged objects are not durable studio assets until that
-  promotion succeeds.
+  promotion succeeds. Abandoned staged objects are cleaned manually through
+  `DELETE /api/admin/staged-assets` until bucket lifecycle cleanup is added.
 - Object-store direct upload requires bucket CORS that permits the deployed web
   origin to `PUT` with the returned headers, especially `Content-Type`. The live
   alpha bucket policy is tracked in `ops/r2-cors.gigastudy-alpha.json`.

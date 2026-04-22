@@ -5,7 +5,7 @@
 .admin-window {
   min-height: calc(100svh - 48px);
   display: grid;
-  grid-template-rows: auto auto auto auto auto 1fr auto;
+  grid-template-rows: auto auto auto auto auto auto 1fr auto;
   border: 1px solid #788794;
   background: var(--console-soft);
   box-shadow: var(--shadow);
@@ -215,6 +215,52 @@
 
 .admin-limits--warning {
   background: #fff6ed;
+}
+
+.admin-cleanup {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid #b5bec6;
+  background: #eef1f4;
+}
+
+.admin-cleanup div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-cleanup span {
+  color: var(--warm);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-cleanup strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.admin-cleanup p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.admin-cleanup button {
+  min-height: 36px;
+  border: 1px solid #b54840;
+  border-radius: 3px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #9c2f28;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .admin-studios {
@@ -449,9 +495,15 @@
   .admin-auth,
   .admin-overview,
   .admin-limits,
+  .admin-cleanup,
   .admin-studio-row,
   .admin-asset-row {
     grid-template-columns: 1fr;
+  }
+
+  .admin-cleanup {
+    display: grid;
+    justify-items: start;
   }
 
   .admin-overview {

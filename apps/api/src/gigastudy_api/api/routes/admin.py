@@ -89,6 +89,14 @@ def delete_admin_studio_assets(
     return repository.delete_admin_studio_assets(studio_id)
 
 
+@router.delete("/staged-assets", response_model=AdminDeleteResult)
+def delete_admin_staged_assets(
+    _: None = Depends(require_admin_credentials),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> AdminDeleteResult:
+    return repository.delete_admin_staged_assets()
+
+
 @router.delete("/assets/{asset_id}", response_model=AdminDeleteResult)
 def delete_admin_asset(
     asset_id: str,

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   type AdminCredentials,
   deleteAdminAsset,
+  deleteAdminStagedAssets,
   deleteAdminStudio,
   deleteAdminStudioAssets,
   getAdminStorage,
@@ -192,6 +193,13 @@ export function AdminPage() {
     )
   }
 
+  function handleDeleteStagedAssets() {
+    if (!window.confirm('Delete abandoned staged upload files? Active studio files will remain.')) {
+      return
+    }
+    void runDeletion('staged-assets', () => deleteAdminStagedAssets(activeCredentials))
+  }
+
   return (
     <main className="app-shell admin-page">
       <section className="admin-window" aria-label="GigaStudy admin">
@@ -275,6 +283,22 @@ export function AdminPage() {
             </section>
 
             {summary ? <AdminLimits summary={summary} /> : null}
+
+            <section className="admin-cleanup" aria-label="Cleanup operations">
+              <div>
+                <span>Cleanup</span>
+                <strong>Abandoned staged uploads</strong>
+                <p>Remove upload-start files that were never promoted into a studio.</p>
+              </div>
+              <button
+                className="admin-danger"
+                type="button"
+                disabled={isBusy}
+                onClick={handleDeleteStagedAssets}
+              >
+                Delete Staged Files
+              </button>
+            </section>
 
             <section className="admin-studios" aria-label="Studio list">
               <header className="admin-section-header">

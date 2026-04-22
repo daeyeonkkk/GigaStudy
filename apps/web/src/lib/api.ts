@@ -393,6 +393,19 @@ export function deleteAdminAsset(
   )
 }
 
+export function deleteAdminStagedAssets(
+  credentials: AdminCredentials,
+): Promise<AdminDeleteResult> {
+  return requestJson<AdminDeleteResult>(
+    '/api/admin/staged-assets',
+    {
+      method: 'DELETE',
+      headers: adminHeaders(credentials),
+    },
+    'Staged uploads could not be deleted.',
+  )
+}
+
 export function exportStudioPdf(studioId: string): Promise<Blob> {
   return requestBlob(`/api/studios/${studioId}/export/pdf`, 'PDF를 생성하지 못했습니다.')
 }

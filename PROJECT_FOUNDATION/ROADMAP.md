@@ -318,6 +318,8 @@ Required:
   Cloud Run memory/request envelope.
 - Per-track upload-target API and browser direct upload orchestration.
 - Home-start staged upload-target API and browser orchestration.
+- Admin cleanup operation for staged upload objects that were abandoned before
+  studio creation/promotion.
 - R2/S3 bucket CORS must allow direct browser `PUT` from the deployed Pages
   origin before the presigned path can carry production traffic without falling
   back to base64.

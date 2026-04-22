@@ -94,7 +94,8 @@ The current implementation has a working six-track vertical slice:
   when configured. The page can inspect studio/file usage, delete a whole
   studio, delete all stored files for a studio while keeping normalized
   TrackNote/report data, or delete an individual stored asset and clear its
-  audio/job references.
+  audio/job references. It also has a cleanup operation for abandoned staged
+  direct-upload objects that were never promoted into a studio.
 - Admin password validation also accepts the alpha keyboard aliases
   `eodus123` and `daeyeon123` so an English-keyboard entry does not block
   testers who are trying to enter `대연123`.
@@ -138,6 +139,9 @@ The current implementation has a working six-track vertical slice:
   object into `uploads/{studio_id}/0/...` before running the existing symbolic,
   audio, or OMR pipeline. The browser keeps a base64 fallback if target creation
   or binary PUT fails.
+- Abandoned home-start staged uploads can be removed through
+  `DELETE /api/admin/staged-assets` and the `/admin` cleanup control. Staged
+  objects remain outside normal studio asset listings until promotion succeeds.
 - Scoring performance audio still uses the smaller existing base64/temporary
   path. It is deleted after extraction rather than retained as an admin-listed
   asset.
@@ -223,7 +227,8 @@ not legacy product surfaces.
 4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
    is available.
 5. Add object storage lifecycle cleanup and a retention rule for abandoned
-   upload/job assets.
+   upload/job assets. Manual admin cleanup exists for staged upload objects,
+   but the bucket still needs an automatic lifecycle rule.
 6. Add user ownership or private share boundaries before inviting broader
    traffic; public list/detail endpoints are still alpha-only.
 7. Add optional direct/temporary handling for larger scoring takes if alpha

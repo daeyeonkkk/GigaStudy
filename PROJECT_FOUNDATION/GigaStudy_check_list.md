@@ -202,6 +202,8 @@ This checklist tracks the new six-track studio foundation only.
   normalized TrackNote/report metadata.
 - [x] `/admin` page can delete an individual stored file and clear track,
   candidate, or OMR job references to that file.
+- [x] `/admin` page can delete abandoned staged direct-upload files that were
+  never promoted into a studio.
 - [x] Studio metadata storage can use Postgres/Neon through
   `GIGASTUDY_API_DATABASE_URL`, with local JSON kept as the development
   fallback.
@@ -243,6 +245,7 @@ This checklist tracks the new six-track studio foundation only.
 - [ ] Durable object storage still needs a lifecycle/retention policy.
 - [x] Browser-to-R2 direct upload/signed URL flow is implemented for existing
   studio track uploads and staged home-start uploads.
+- [x] Manual admin cleanup exists for abandoned staged upload objects.
 - [ ] OMR/voice extraction still needs a durable queue before Cloud Run
   maxScale is raised above one instance.
 

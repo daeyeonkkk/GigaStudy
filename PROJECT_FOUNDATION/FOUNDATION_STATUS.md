@@ -129,6 +129,9 @@ The current implementation has a working six-track vertical slice:
   then finalizes registration by passing the stored relative `asset_path` to
   the existing track upload pipeline. Local development receives an API proxy
   upload URL; S3/R2 deployments receive a presigned object-store URL.
+- The live `gigastudy-alpha` R2 bucket has CORS configured for the deployed
+  Pages origin and local dev origins via `ops/r2-cors.gigastudy-alpha.json`,
+  allowing browser `PUT` with `Content-Type` for direct track uploads.
 - Home-screen upload start and scoring performance audio still use the smaller
   existing base64/temporary paths. The next upload architecture step is staged
   direct upload for pre-studio home sources and direct/temporary handling for
@@ -219,8 +222,7 @@ not legacy product surfaces.
 6. Add user ownership or private share boundaries before inviting broader
    traffic; public list/detail endpoints are still alpha-only.
 7. Extend direct-to-object upload beyond per-track uploads: staged home-start
-   uploads before a studio id exists, optional larger scoring-take handling,
-   and R2 bucket CORS allowing `PUT` plus `Content-Type` from the Pages origin.
+   uploads before a studio id exists and optional larger scoring-take handling.
 8. Move extraction/OMR execution into a durable queue before raising Cloud Run
    maxScale above the current free-plan alpha shape.
 

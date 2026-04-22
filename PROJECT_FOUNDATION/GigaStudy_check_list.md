@@ -220,8 +220,8 @@ This checklist tracks the new six-track studio foundation only.
   finalizing TrackNote extraction with a stored `asset_path`.
 - [ ] Home-start uploads still need staged direct upload because a studio id
   does not exist before the source file is accepted.
-- [ ] R2 bucket CORS must be configured to allow browser `PUT` plus
-  `Content-Type` from the deployed Pages origin for the presigned upload path.
+- [x] R2 bucket CORS is configured to allow browser `PUT` plus `Content-Type`
+  from the deployed Pages origin for the presigned upload path.
 - [x] Cloud Run local filesystem is treated as temporary engine/cache space
   when object storage is configured, not as the durable source of truth.
 - [x] Scoring performance audio is temporary extraction input and is deleted

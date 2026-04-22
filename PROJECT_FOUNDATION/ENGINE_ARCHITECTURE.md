@@ -56,7 +56,8 @@ Studio metadata and stored binary assets are separate responsibilities.
   review candidates. In local development the returned URL may be an API proxy
   endpoint; in S3/R2 deployments it should be a presigned object-store URL.
 - Object-store direct upload requires bucket CORS that permits the deployed web
-  origin to `PUT` with the returned headers, especially `Content-Type`.
+  origin to `PUT` with the returned headers, especially `Content-Type`. The live
+  alpha bucket policy is tracked in `ops/r2-cors.gigastudy-alpha.json`.
 - Studio list endpoints must return summary rows with pagination. Studio detail
   endpoints must load only the requested studio id. Admin storage summaries
   must page studio rows and limit per-studio asset details so 1,000+ alpha

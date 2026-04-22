@@ -38,7 +38,9 @@ The current implementation has a working vertical slice for:
 - OMR and per-track voice extraction use a durable engine queue with Postgres
   backing in deployed alpha and local JSON fallback in development. A studio
   reload can reschedule queued or expired running jobs, and failed jobs can be
-  retried while the original input asset remains available.
+  retried while the original input asset remains available. Replay-critical job
+  options are stored on studio metadata so recovery can rebuild a missing queue
+  payload without changing user intent.
 - OMR job review can register all mapped candidates into their suggested tracks
   in one operation.
 - Extraction candidate queue with approve/reject registration

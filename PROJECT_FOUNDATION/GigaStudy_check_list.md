@@ -243,6 +243,8 @@ This checklist tracks the new six-track studio foundation only.
   storage cap.
 - [x] OMR and voice extraction use a durable engine queue with Postgres/Neon
   backing in deployed alpha and local JSON fallback in development.
+- [x] Queued extraction jobs persist replay-critical options in studio metadata
+  so retry/recovery does not rely on a surviving queue payload alone.
 - [x] OMR and voice extraction still honor the free-plan one-active-engine-job
   lane by default.
 - [ ] Studio access is not yet user-owned or private; public studio list/detail

@@ -83,8 +83,11 @@ Studio metadata and stored binary assets are separate responsibilities.
   local JSON queue as the development fallback. Queue records store job type,
   studio id, track slot, input asset key, payload, attempt count, max attempts,
   lock lease, and terminal status. Studio `jobs` expose the user-facing state.
-  A studio reload can reschedule queued or expired running jobs, and failed jobs
-  can be retried from the UI while the original input asset is still retained.
+  Studio `jobs` also persist replay-critical options such as OMR part parsing,
+  review-before-register, overwrite allowance, and audio MIME type. A studio
+  reload can reschedule queued or expired running jobs, and failed jobs can be
+  retried from the UI while the original input asset is still retained, even if
+  the queue record has to be rebuilt from studio metadata.
 - Track audio playback resolves retained audio through the asset storage layer.
   In object-storage mode, a missing local file is downloaded into the local
   cache before `FileResponse` serves it.

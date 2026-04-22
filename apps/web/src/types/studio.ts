@@ -44,6 +44,10 @@ export type TrackExtractionJob = {
   output_path: string | null
   attempt_count: number
   max_attempts: number
+  parse_all_parts: boolean
+  review_before_register: boolean
+  allow_overwrite: boolean
+  audio_mime_type: string | null
   created_at: string
   updated_at: string
 }

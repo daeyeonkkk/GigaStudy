@@ -7,6 +7,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.api.schemas.studios import TrackNote
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.omr import OmrUnavailableError
+from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services import studio_repository
 
 
@@ -1071,6 +1072,80 @@ def test_failed_omr_job_can_be_retried_from_durable_queue(
     assert retry_payload["jobs"][0]["status"] == "needs_review"
     assert retry_payload["jobs"][0]["attempt_count"] == 1
     assert retry_payload["candidates"][0]["notes"][0]["source"] == "omr"
+
+
+def test_voice_retry_rehydrates_direct_register_mode_without_queue_record(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_transcribe_voice_file(*args, **kwargs):
+        raise VoiceTranscriptionError("No stable voiced note detected")
+
+    def pass_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackNote(
+                pitch_midi=72,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                duration_beats=1,
+                beat=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fail_transcribe_voice_file,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Retryable voice",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(b"RIFF\x24\x00\x00\x00WAVEfmt ").decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "voice.wav",
+            "content_base64": encoded,
+            "review_before_register": False,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    failed_payload = client.get(f"/api/studios/{studio_id}").json()
+    job = failed_payload["jobs"][0]
+    assert job["job_type"] == "voice"
+    assert job["status"] == "failed"
+    assert job["review_before_register"] is False
+    assert job["audio_mime_type"] == "audio/wav"
+
+    queue_path = tmp_path / "engine_queue.json"
+    assert queue_path.exists()
+    queue_path.unlink()
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        pass_transcribe_voice_file,
+    )
+    retry_response = client.post(f"/api/studios/{studio_id}/jobs/{job['job_id']}/retry")
+
+    assert retry_response.status_code == 200
+    retry_payload = client.get(f"/api/studios/{studio_id}").json()
+    assert retry_payload["jobs"][0]["status"] == "completed"
+    assert retry_payload["tracks"][0]["status"] == "registered"
+    assert retry_payload["tracks"][0]["notes"][0]["label"] == "C5"
+    assert retry_payload["candidates"] == []
 
 
 def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, monkeypatch) -> None:

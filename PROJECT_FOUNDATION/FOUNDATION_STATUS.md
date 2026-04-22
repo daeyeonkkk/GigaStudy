@@ -72,7 +72,10 @@ The current implementation has a working six-track vertical slice:
   before processing. The queue is Postgres-backed when `GIGASTUDY_API_DATABASE_URL`
   is configured and local-JSON backed in development. Studio reloads can
   reschedule queued or expired running jobs, and failed jobs can be retried from
-  the studio UI while the original input asset remains available.
+  the studio UI while the original input asset remains available. Replay
+  options such as OMR part parsing, review-before-register, overwrite allowance,
+  and audio MIME type are stored on the studio job as well as the queue payload
+  so recovery does not depend on hidden in-memory state.
 - OMR-generated notes are marked with `source="omr"` and
   `extraction_method="audiveris_omr_v0"`.
 - OMR jobs that produce multiple mapped parts can be approved in one operation,

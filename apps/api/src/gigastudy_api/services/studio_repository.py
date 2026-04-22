@@ -1152,6 +1152,7 @@ class StudioRepository:
             method="audiveris_cli",
             input_path=self._relative_data_asset_path(source_path),
             max_attempts=settings.engine_job_max_attempts,
+            parse_all_parts=parse_all_parts,
             created_at=timestamp,
             updated_at=timestamp,
         )
@@ -1209,6 +1210,7 @@ class StudioRepository:
         settings = get_settings()
         timestamp = _now()
         input_path = self._relative_data_asset_path(source_path)
+        audio_mime_type = _guess_audio_mime_type(source_label)
         job = TrackExtractionJob(
             job_id=uuid4().hex,
             job_type="voice",
@@ -1220,6 +1222,9 @@ class StudioRepository:
             message="Voice extraction queued.",
             input_path=input_path,
             max_attempts=settings.engine_job_max_attempts,
+            review_before_register=review_before_register,
+            allow_overwrite=allow_overwrite,
+            audio_mime_type=audio_mime_type,
             created_at=timestamp,
             updated_at=timestamp,
         )
@@ -1251,7 +1256,7 @@ class StudioRepository:
                     "source_label": source_label,
                     "review_before_register": review_before_register,
                     "allow_overwrite": allow_overwrite,
-                    "audio_mime_type": _guess_audio_mime_type(source_label),
+                    "audio_mime_type": audio_mime_type,
                 },
                 attempt_count=0,
                 max_attempts=settings.engine_job_max_attempts,
@@ -1535,14 +1540,14 @@ class StudioRepository:
                 "source_label": job.source_label,
             }
             if job_type == "omr":
-                payload["parse_all_parts"] = True
+                payload["parse_all_parts"] = job.parse_all_parts
             elif job_type == "voice":
                 queue_record = self._engine_queue.get(job_id)
                 if queue_record is not None:
                     payload.update(queue_record.payload)
-                payload.setdefault("review_before_register", True)
-                payload.setdefault("allow_overwrite", False)
-                payload.setdefault("audio_mime_type", _guess_audio_mime_type(job.source_label))
+                payload.setdefault("review_before_register", job.review_before_register)
+                payload.setdefault("allow_overwrite", job.allow_overwrite)
+                payload.setdefault("audio_mime_type", job.audio_mime_type or _guess_audio_mime_type(job.source_label))
             else:
                 raise HTTPException(status_code=409, detail="Unsupported extraction job type.")
             timestamp = _now()

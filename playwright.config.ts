@@ -50,6 +50,12 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
       stderr: 'pipe',
+      env: {
+        ...process.env,
+        GIGASTUDY_API_STORAGE_ROOT: '../../test-results/e2e-api-storage',
+        GIGASTUDY_API_DATABASE_URL: '',
+        GIGASTUDY_API_STORAGE_BACKEND: 'local',
+      },
     },
     {
       command: 'npm run dev -- --host 127.0.0.1 --port 5173',

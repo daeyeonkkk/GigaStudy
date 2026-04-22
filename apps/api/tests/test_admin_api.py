@@ -125,6 +125,8 @@ def test_admin_storage_summary_is_paginated(tmp_path: Path, monkeypatch) -> None
     assert payload["studio_offset"] == 0
     assert payload["has_more_studios"] is True
     assert len(payload["studios"]) == 2
+    assert payload["limits"]["studio_soft_limit"] == 300
+    assert payload["limits"]["studio_hard_limit"] == 500
 
 
 def test_admin_can_list_and_delete_individual_studio_asset(tmp_path: Path, monkeypatch) -> None:
@@ -160,6 +162,8 @@ def test_admin_can_list_and_delete_individual_studio_asset(tmp_path: Path, monke
     summary = summary_response.json()
     assert summary["studio_count"] == 1
     assert summary["asset_count"] == 1
+    assert summary["listed_asset_count"] == 1
+    assert summary["total_asset_bytes"] == len(audio_bytes := b"RIFF....WAVEfmt test admin cleanup audio")
     asset = summary["studios"][0]["assets"][0]
     assert asset["relative_path"] == relative_audio_path
     assert asset["kind"] == "upload"
@@ -175,6 +179,59 @@ def test_admin_can_list_and_delete_individual_studio_asset(tmp_path: Path, monke
     assert studio_after_delete["tracks"][0]["audio_source_path"] is None
     assert studio_after_delete["tracks"][0]["status"] == "registered"
     assert studio_after_delete["tracks"][0]["notes"][0]["label"] == "C5"
+    assert client.get("/api/admin/storage", headers=ADMIN_HEADERS).json()["asset_count"] == 0
+
+
+def test_studio_hard_limit_blocks_creation(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("GIGASTUDY_API_STUDIO_HARD_LIMIT", "2")
+    client = build_client(tmp_path, monkeypatch)
+    for index in range(2):
+        response = client.post(
+            "/api/studios",
+            json={
+                "title": f"Limited studio {index}",
+                "bpm": 92,
+                "start_mode": "blank",
+            },
+        )
+        assert response.status_code == 200
+
+    blocked_response = client.post(
+        "/api/studios",
+        json={
+            "title": "One too many",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+
+    assert blocked_response.status_code == 409
+
+
+def test_asset_hard_limit_blocks_new_upload(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("GIGASTUDY_API_ASSET_HARD_BYTES", "10")
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Asset limited studio",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+    assert create_response.status_code == 200
+    studio_id = create_response.json()["studio_id"]
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "too-large-for-alpha.wav",
+            "content_base64": base64.b64encode(b"RIFF....WAVEfmt over limit").decode("ascii"),
+        },
+    )
+
+    assert upload_response.status_code == 507
 
 
 def test_admin_can_delete_studio_and_its_assets(tmp_path: Path, monkeypatch) -> None:

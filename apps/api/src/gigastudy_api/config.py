@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     s3_secret_access_key: str | None = None
     s3_addressing_style: str = "path"
     max_upload_bytes: int = 15 * 1024 * 1024
+    studio_soft_limit: int = 300
+    studio_hard_limit: int = 500
+    asset_warning_bytes: int = 7 * 1024 * 1024 * 1024
+    asset_hard_bytes: int = int(8.5 * 1024 * 1024 * 1024)
+    max_active_engine_jobs: int = 1
     audiveris_bin: str | None = None
     engine_processing_timeout_seconds: int = 120
     cors_origins: Annotated[list[str], NoDecode] = [

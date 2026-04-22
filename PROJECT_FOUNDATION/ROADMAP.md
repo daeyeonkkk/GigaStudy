@@ -64,12 +64,18 @@ The current implementation has a working vertical slice for:
   S3-compatible bucket such as Cloudflare R2. Local filesystem storage remains
   the development fallback and the Cloud Run filesystem becomes only temporary
   engine/cache space when object storage is enabled.
+- Stored assets are indexed through a registry so admin storage totals,
+  per-studio file pages, cleanup actions, and alpha capacity checks can be
+  handled without scanning every object path on each request.
 - Paginated studio/admin metadata reads: studio lists return summary rows,
   studio detail loads one document, admin storage pages studios and limits
   per-studio asset details, and report/candidate payloads are split out as
   sidecar data so they do not bloat the primary studio row.
 - Scoring performance audio is temporary extraction input and is deleted after
   TrackNote extraction instead of being retained as a stored asset.
+- Alpha free-plan guardrails are enforced: 500 studio hard cap, 8.5 GiB stored
+  asset hard cap, 15 MiB file-upload cap, and one active OMR/voice extraction
+  job at a time.
 
 ## Phase 0: Foundation Reset
 

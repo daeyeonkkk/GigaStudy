@@ -32,6 +32,20 @@ class AdminStudioSummary(BaseModel):
     assets: list[AdminAssetSummary]
 
 
+class AdminLimitSummary(BaseModel):
+    studio_soft_limit: int
+    studio_hard_limit: int
+    asset_warning_bytes: int
+    asset_hard_bytes: int
+    max_upload_bytes: int
+    max_active_engine_jobs: int
+    studio_warning: bool
+    studio_limit_reached: bool
+    asset_warning: bool
+    asset_limit_reached: bool
+    warnings: list[str]
+
+
 class AdminStorageSummary(BaseModel):
     storage_root: str
     studio_count: int
@@ -42,8 +56,11 @@ class AdminStorageSummary(BaseModel):
     asset_limit: int = 25
     asset_offset: int = 0
     asset_count: int
+    listed_asset_count: int = 0
+    total_asset_bytes: int = 0
     total_bytes: int
     metadata_bytes: int
+    limits: AdminLimitSummary
     studios: list[AdminStudioSummary]
 
 

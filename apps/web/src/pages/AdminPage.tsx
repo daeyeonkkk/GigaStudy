@@ -262,9 +262,10 @@ export function AdminPage() {
           <>
             <section className="admin-overview" aria-label="Storage overview">
               <AdminMetric label="Studios" value={summary?.studio_count ?? 0} />
-              <AdminMetric label="Page Files" value={summary?.asset_count ?? 0} />
+              <AdminMetric label="Files" value={summary?.asset_count ?? 0} />
               <AdminMetric label="Storage" value={formatBytes(summary?.total_bytes ?? 0)} />
               <AdminMetric label="Metadata" value={formatBytes(summary?.metadata_bytes ?? 0)} />
+              <AdminMetric label="Upload Max" value={formatBytes(summary?.limits.max_upload_bytes ?? 0)} />
               <AdminMetric label="Page Tracks" value={totalRegisteredTracks} />
             </section>
 
@@ -272,6 +273,8 @@ export function AdminPage() {
               <span>Storage backend</span>
               <strong>{summary?.storage_root ?? '-'}</strong>
             </section>
+
+            {summary ? <AdminLimits summary={summary} /> : null}
 
             <section className="admin-studios" aria-label="Studio list">
               <header className="admin-section-header">
@@ -383,6 +386,33 @@ function AdminMetric({ label, value }: { label: string; value: number | string }
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  )
+}
+
+function AdminLimits({ summary }: { summary: AdminStorageSummary }) {
+  const limits = summary.limits
+  const hasWarning = limits.warnings.length > 0
+  return (
+    <section className={`admin-limits${hasWarning ? ' admin-limits--warning' : ''}`} aria-label="Alpha limits">
+      <div>
+        <span>Alpha operating limits</span>
+        <strong>
+          Studios {summary.studio_count}/{limits.studio_hard_limit} · Assets{' '}
+          {formatBytes(summary.total_asset_bytes)}/{formatBytes(limits.asset_hard_bytes)} · Engine jobs{' '}
+          {limits.max_active_engine_jobs}
+        </strong>
+      </div>
+      <p>
+        Soft line {limits.studio_soft_limit} studios · warning at {formatBytes(limits.asset_warning_bytes)}.
+      </p>
+      {hasWarning ? (
+        <ul>
+          {limits.warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   )
 }
 

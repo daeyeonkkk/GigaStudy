@@ -113,6 +113,9 @@ The current implementation has a working six-track vertical slice:
   development fallback, while `GIGASTUDY_API_STORAGE_BACKEND=s3` enables
   S3-compatible storage such as Cloudflare R2 for upload, recording, and OMR
   job assets.
+- Stored assets are indexed in an asset registry separate from studio
+  documents, so admin totals and deletion state do not depend on scanning every
+  object path on each request.
 - When object storage is configured, the API still writes local temporary files
   for parser/transcription/OMR engines, but durable asset truth is the object
   store and the local Cloud Run filesystem is only a cache/workspace.
@@ -121,6 +124,10 @@ The current implementation has a working six-track vertical slice:
 - Upload payload size is capped by `GIGASTUDY_API_MAX_UPLOAD_BYTES`, defaulting
   to 15 MiB, to keep the current base64 JSON path inside the alpha free-plan
   request and memory envelope.
+- Free-plan alpha operating limits are configurable and enforced in the API:
+  studio soft warning 300, studio hard cap 500, asset warning 7 GiB, asset hard
+  cap 8.5 GiB, file upload cap 15 MiB, and one active local engine job at a
+  time.
 - Per-track browser recording plays the metronome when enabled and shows
   elapsed-time/input-level feedback while recording.
 - Web studio responsibilities are split so upload detection, browser audio
@@ -203,6 +210,8 @@ not legacy product surfaces.
    traffic; public list/detail endpoints are still alpha-only.
 8. Add streaming or direct-to-object upload if the product needs files larger
    than the current base64 JSON envelope.
+9. Move extraction/OMR execution into a durable queue before raising Cloud Run
+   maxScale above the current free-plan alpha shape.
 
 ## Status Summary
 

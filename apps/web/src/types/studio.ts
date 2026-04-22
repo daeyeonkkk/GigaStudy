@@ -181,6 +181,20 @@ export type AdminStudioSummary = {
   assets: AdminAssetSummary[]
 }
 
+export type AdminLimitSummary = {
+  studio_soft_limit: number
+  studio_hard_limit: number
+  asset_warning_bytes: number
+  asset_hard_bytes: number
+  max_upload_bytes: number
+  max_active_engine_jobs: number
+  studio_warning: boolean
+  studio_limit_reached: boolean
+  asset_warning: boolean
+  asset_limit_reached: boolean
+  warnings: string[]
+}
+
 export type AdminStorageSummary = {
   storage_root: string
   studio_count: number
@@ -191,8 +205,11 @@ export type AdminStorageSummary = {
   asset_limit: number
   asset_offset: number
   asset_count: number
+  listed_asset_count: number
+  total_asset_bytes: number
   total_bytes: number
   metadata_bytes: number
+  limits: AdminLimitSummary
   studios: AdminStudioSummary[]
 }
 

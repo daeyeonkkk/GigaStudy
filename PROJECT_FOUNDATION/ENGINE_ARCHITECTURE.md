@@ -32,6 +32,10 @@ Studio metadata and stored binary assets are separate responsibilities.
   rewrite the full studio document.
 - Stored assets contain upload files, retained recording/audio playback files,
   and generated OMR output files.
+- Stored assets must also be tracked in an asset registry keyed by relative
+  object path. The registry records studio id, kind, filename, byte size,
+  update time, and deletion state so admin summary, storage caps, and cleanup
+  operations do not need to list the entire bucket for every request.
 - Local JSON and local filesystem storage are development fallbacks only.
 - In the deployed alpha path, `GIGASTUDY_API_DATABASE_URL` should point metadata
   at Postgres/Neon, and `GIGASTUDY_API_STORAGE_BACKEND=s3` should point assets
@@ -47,6 +51,11 @@ Studio metadata and stored binary assets are separate responsibilities.
   endpoints must load only the requested studio id. Admin storage summaries
   must page studio rows and limit per-studio asset details so 1,000+ alpha
   studios do not require a full metadata scan on every request.
+- Free-plan alpha limits are part of the engine contract until the upload/job
+  architecture changes: 300 studios is the soft warning line, 500 studios is
+  the hard creation cap, 7 GiB of registered assets is the warning line,
+  8.5 GiB is the hard asset cap, individual base64 uploads are capped at
+  15 MiB, and local OMR/voice extraction is serialized to one active engine job.
 - Track audio playback resolves retained audio through the asset storage layer.
   In object-storage mode, a missing local file is downloaded into the local
   cache before `FileResponse` serves it.

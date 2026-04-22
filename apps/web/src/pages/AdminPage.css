@@ -116,7 +116,7 @@
 
 .admin-overview {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
   border-bottom: 1px solid #b5bec6;
   background: #f8fafb;
 }
@@ -168,6 +168,53 @@
   font-size: 0.9rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.admin-limits {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 18px;
+  align-items: center;
+  padding: 10px 18px;
+  border-bottom: 1px solid #b5bec6;
+  background: #f8fafb;
+}
+
+.admin-limits div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-limits span {
+  color: var(--warm);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-limits strong,
+.admin-limits p {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.admin-limits ul {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #8e2822;
+  font-weight: 800;
+}
+
+.admin-limits--warning {
+  background: #fff6ed;
 }
 
 .admin-studios {
@@ -401,6 +448,7 @@
 @media (max-width: 980px) {
   .admin-auth,
   .admin-overview,
+  .admin-limits,
   .admin-studio-row,
   .admin-asset-row {
     grid-template-columns: 1fr;

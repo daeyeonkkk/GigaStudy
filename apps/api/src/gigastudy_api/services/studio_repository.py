@@ -3,7 +3,7 @@
 import base64
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import RLock
+from threading import Lock, RLock
 from typing import Any
 from uuid import uuid4
 
@@ -12,6 +12,7 @@ from fastapi import BackgroundTasks, HTTPException
 from gigastudy_api.api.schemas.admin import (
     AdminAssetSummary,
     AdminDeleteResult,
+    AdminLimitSummary,
     AdminStorageSummary,
     AdminStudioSummary,
 )
@@ -35,9 +36,9 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.services.asset_storage import (
     AssetStorage,
     AssetStorageError,
-    StoredAssetInfo,
     build_asset_storage,
 )
+from gigastudy_api.services.asset_registry import AssetRecord, AssetRegistry, build_asset_registry
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
@@ -81,6 +82,7 @@ AUDIO_MIME_TYPES = {
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
 }
+_engine_execution_lock = Lock()
 
 
 class StudioRepository:
@@ -98,6 +100,10 @@ class StudioRepository:
             )
         except AssetStorageError as error:
             raise RuntimeError(str(error)) from error
+        self._asset_registry: AssetRegistry = build_asset_registry(
+            storage_root=self._root,
+            database_url=settings.database_url,
+        )
         self._lock = RLock()
 
     def list_studios(self, *, limit: int = 50, offset: int = 0) -> list[StudioListItem]:
@@ -119,6 +125,7 @@ class StudioRepository:
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         timestamp = _now()
+        self._ensure_studio_capacity()
         resolved_bpm = bpm if bpm is not None else DEFAULT_UPLOAD_BPM
         studio = Studio(
             studio_id=uuid4().hex,
@@ -220,8 +227,8 @@ class StudioRepository:
             for studio in studios
         ]
         metadata_bytes = self._store.estimate_total_bytes()
-        asset_count = sum(studio.asset_count for studio in studio_summaries)
-        asset_bytes = sum(studio.asset_bytes for studio in studio_summaries)
+        asset_count, asset_bytes = self._asset_registry.summarize_all()
+        listed_asset_count = sum(len(studio.assets) for studio in studio_summaries)
         return AdminStorageSummary(
             storage_root=self._asset_storage.label,
             studio_count=studio_count,
@@ -232,8 +239,14 @@ class StudioRepository:
             asset_limit=asset_limit,
             asset_offset=asset_offset,
             asset_count=asset_count,
+            listed_asset_count=listed_asset_count,
+            total_asset_bytes=asset_bytes,
             total_bytes=metadata_bytes + asset_bytes,
             metadata_bytes=metadata_bytes,
+            limits=self._build_admin_limit_summary(
+                studio_count=studio_count,
+                asset_bytes=asset_bytes,
+            ),
             studios=studio_summaries,
         )
 
@@ -365,7 +378,7 @@ class StudioRepository:
                 )
 
             if request.source_kind == "audio":
-                notes = transcribe_voice_file(
+                notes = self._transcribe_voice_file(
                     source_path,
                     bpm=studio.bpm,
                     slot_id=slot_id,
@@ -719,7 +732,7 @@ class StudioRepository:
             content_base64=content_base64,
         )
         try:
-            return transcribe_voice_file(
+            return self._transcribe_voice_file(
                 source_path,
                 bpm=bpm,
                 slot_id=slot_id,
@@ -889,7 +902,7 @@ class StudioRepository:
             if slot_id == 6:
                 continue
             try:
-                notes = transcribe_voice_file(
+                notes = self._transcribe_voice_file(
                     source_path,
                     bpm=studio.bpm,
                     slot_id=slot_id,
@@ -1012,7 +1025,7 @@ class StudioRepository:
         studio = self.get_studio(studio_id)
         self._mark_job_running(studio_id, job_id)
         try:
-            output_path = run_audiveris_omr(
+            output_path = self._run_audiveris_omr(
                 input_path=source_path,
                 output_dir=self._job_output_dir(studio_id, job_id),
                 audiveris_bin=settings.audiveris_bin,
@@ -1262,9 +1275,20 @@ class StudioRepository:
         asset_limit: int,
         asset_offset: int,
     ) -> AdminStudioSummary:
-        assets = list(self._iter_admin_assets(studio))
-        asset_bytes = sum(asset.size_bytes for asset in assets)
-        listed_assets = assets[asset_offset : asset_offset + asset_limit] if asset_limit > 0 else []
+        asset_count, asset_bytes = self._asset_registry.summarize_studio(studio.studio_id)
+        if asset_count == 0:
+            self._sync_studio_asset_registry(studio.studio_id)
+            asset_count, asset_bytes = self._asset_registry.summarize_studio(studio.studio_id)
+        records = (
+            self._asset_registry.list_studio_assets(
+                studio.studio_id,
+                limit=asset_limit,
+                offset=asset_offset,
+            )
+            if asset_limit > 0
+            else []
+        )
+        referenced_paths = self._referenced_asset_paths(studio)
         return AdminStudioSummary(
             studio_id=studio.studio_id,
             title=studio.title,
@@ -1273,35 +1297,35 @@ class StudioRepository:
             report_count=len(studio.reports),
             candidate_count=len(studio.candidates),
             job_count=len(studio.jobs),
-            asset_count=len(assets),
+            asset_count=asset_count,
             asset_bytes=asset_bytes,
             created_at=studio.created_at,
             updated_at=studio.updated_at,
-            assets=listed_assets,
+            assets=[self._admin_asset_summary_from_record(record, referenced_paths) for record in records],
         )
 
-    def _iter_admin_assets(self, studio: Studio) -> list[AdminAssetSummary]:
-        referenced_paths = self._referenced_asset_paths(studio)
-        assets: list[AdminAssetSummary] = []
+    def _sync_studio_asset_registry(self, studio_id: str) -> None:
         try:
-            stored_assets = self._asset_storage.iter_studio_assets(studio.studio_id)
+            stored_assets = self._asset_storage.iter_studio_assets(studio_id)
         except AssetStorageError as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
+        self._asset_registry.sync_studio_assets(studio_id, stored_assets)
 
-        for asset in sorted(stored_assets, key=lambda item: item.relative_path):
-            assets.append(
-                AdminAssetSummary(
-                    asset_id=self._encode_asset_id(asset.relative_path),
-                    studio_id=studio.studio_id,
-                    kind=_admin_asset_kind(asset),
-                    filename=asset.filename,
-                    relative_path=asset.relative_path,
-                    size_bytes=asset.size_bytes,
-                    updated_at=asset.updated_at,
-                    referenced=asset.relative_path in referenced_paths,
-                )
-            )
-        return assets
+    def _admin_asset_summary_from_record(
+        self,
+        record: AssetRecord,
+        referenced_paths: set[str],
+    ) -> AdminAssetSummary:
+        return AdminAssetSummary(
+            asset_id=record.asset_id,
+            studio_id=record.studio_id or "",
+            kind=_admin_asset_kind(record.kind),
+            filename=record.filename,
+            relative_path=record.relative_path,
+            size_bytes=record.size_bytes,
+            updated_at=record.updated_at,
+            referenced=record.relative_path in referenced_paths,
+        )
 
     def _referenced_asset_paths(self, studio: Studio) -> set[str]:
         references: set[str] = set()
@@ -1372,17 +1396,137 @@ class StudioRepository:
         except AssetStorageError:
             return None
 
+    def _build_admin_limit_summary(self, *, studio_count: int, asset_bytes: int) -> AdminLimitSummary:
+        settings = get_settings()
+        studio_warning = studio_count >= settings.studio_soft_limit
+        studio_limit_reached = studio_count >= settings.studio_hard_limit
+        asset_warning = asset_bytes >= settings.asset_warning_bytes
+        asset_limit_reached = asset_bytes >= settings.asset_hard_bytes
+        warnings: list[str] = []
+        if studio_warning:
+            warnings.append(f"Studio warning line reached: {studio_count}/{settings.studio_soft_limit}.")
+        if studio_limit_reached:
+            warnings.append(f"Studio hard limit reached: {studio_count}/{settings.studio_hard_limit}.")
+        if asset_warning:
+            warnings.append(
+                f"Asset storage warning line reached: {asset_bytes}/{settings.asset_warning_bytes} bytes."
+            )
+        if asset_limit_reached:
+            warnings.append(f"Asset hard limit reached: {asset_bytes}/{settings.asset_hard_bytes} bytes.")
+        return AdminLimitSummary(
+            studio_soft_limit=settings.studio_soft_limit,
+            studio_hard_limit=settings.studio_hard_limit,
+            asset_warning_bytes=settings.asset_warning_bytes,
+            asset_hard_bytes=settings.asset_hard_bytes,
+            max_upload_bytes=settings.max_upload_bytes,
+            max_active_engine_jobs=settings.max_active_engine_jobs,
+            studio_warning=studio_warning,
+            studio_limit_reached=studio_limit_reached,
+            asset_warning=asset_warning,
+            asset_limit_reached=asset_limit_reached,
+            warnings=warnings,
+        )
+
+    def _ensure_studio_capacity(self) -> None:
+        settings = get_settings()
+        if settings.studio_hard_limit <= 0:
+            return
+        with self._lock:
+            studio_count = self._count_studios()
+        if studio_count >= settings.studio_hard_limit:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Studio creation is temporarily capped for the alpha environment "
+                    f"({studio_count}/{settings.studio_hard_limit})."
+                ),
+            )
+
+    def _ensure_asset_capacity(self, incoming_bytes: int) -> None:
+        settings = get_settings()
+        if settings.asset_hard_bytes <= 0:
+            return
+        _asset_count, current_bytes = self._asset_registry.summarize_all()
+        if current_bytes + incoming_bytes > settings.asset_hard_bytes:
+            raise HTTPException(
+                status_code=507,
+                detail=(
+                    "Stored asset capacity is temporarily capped for the alpha environment "
+                    f"({current_bytes + incoming_bytes}/{settings.asset_hard_bytes} bytes)."
+                ),
+            )
+
+    def _register_asset(
+        self,
+        *,
+        relative_path: str,
+        kind: str,
+        filename: str,
+        size_bytes: int,
+        content_type: str | None = None,
+    ) -> None:
+        self._asset_registry.upsert(
+            AssetRecord(
+                relative_path=relative_path,
+                studio_id=_studio_id_from_asset_path(relative_path),
+                kind=kind,
+                filename=Path(filename).name or Path(relative_path).name,
+                size_bytes=size_bytes,
+                updated_at=_now(),
+                content_type=content_type,
+            )
+        )
+
+    def _transcribe_voice_file(
+        self,
+        source_path: Path,
+        *,
+        bpm: int,
+        slot_id: int,
+        time_signature_numerator: int,
+        time_signature_denominator: int,
+    ) -> list[TrackNote]:
+        with _engine_execution_lock:
+            return transcribe_voice_file(
+                source_path,
+                bpm=bpm,
+                slot_id=slot_id,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            )
+
+    def _run_audiveris_omr(
+        self,
+        *,
+        input_path: Path,
+        output_dir: Path,
+        audiveris_bin: str | None,
+        timeout_seconds: int,
+    ) -> Path:
+        with _engine_execution_lock:
+            return run_audiveris_omr(
+                input_path=input_path,
+                output_dir=output_dir,
+                audiveris_bin=audiveris_bin,
+                timeout_seconds=timeout_seconds,
+            )
+
     def _delete_asset_file(self, relative_path: str) -> tuple[int, int]:
         try:
-            return self._asset_storage.delete_file(relative_path)
+            result = self._asset_storage.delete_file(relative_path)
         except AssetStorageError as error:
             raise HTTPException(status_code=404, detail="Asset not found.") from error
+        if result[0] > 0:
+            self._asset_registry.mark_deleted(relative_path)
+        return result
 
     def _delete_asset_prefix(self, relative_prefix: str) -> tuple[int, int]:
         try:
-            return self._asset_storage.delete_prefix(relative_prefix)
+            result = self._asset_storage.delete_prefix(relative_prefix)
         except AssetStorageError as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
+        self._asset_registry.mark_prefix_deleted(relative_prefix)
+        return result
 
     def _encode_asset_id(self, relative_path: str) -> str:
         encoded = base64.urlsafe_b64encode(relative_path.encode("utf-8")).decode("ascii")
@@ -1407,8 +1551,9 @@ class StudioRepository:
         content_base64: str,
     ) -> Path:
         content = _decode_base64(content_base64)
+        self._ensure_asset_capacity(len(content))
         try:
-            return self._asset_storage.write_upload(
+            path = self._asset_storage.write_upload(
                 studio_id=studio_id,
                 slot_id=slot_id,
                 filename=filename,
@@ -1416,6 +1561,19 @@ class StudioRepository:
             )
         except AssetStorageError as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
+        relative_path = self._relative_data_asset_path(path)
+        self._register_asset(
+            relative_path=relative_path,
+            kind="upload",
+            filename=filename,
+            size_bytes=len(content),
+            content_type=(
+                _guess_audio_mime_type(filename)
+                if Path(filename).suffix.lower() in AUDIO_SOURCE_SUFFIXES
+                else None
+            ),
+        )
+        return path
 
     def _save_temp_upload(
         self,
@@ -1450,7 +1608,16 @@ class StudioRepository:
             return
 
     def _persist_generated_asset(self, path: Path) -> str:
-        return self._asset_storage.persist_file(path)
+        size_bytes = path.stat().st_size if path.exists() else 0
+        self._ensure_asset_capacity(size_bytes)
+        relative_path = self._asset_storage.persist_file(path)
+        self._register_asset(
+            relative_path=relative_path,
+            kind="generated",
+            filename=path.name,
+            size_bytes=size_bytes,
+        )
+        return relative_path
 
     def _relative_data_asset_path(self, path: Path) -> str:
         try:
@@ -1655,9 +1822,9 @@ def _guess_audio_mime_type(filename: str) -> str:
     return AUDIO_MIME_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
 
 
-def _admin_asset_kind(asset: StoredAssetInfo) -> str:
-    if asset.kind in {"upload", "generated"}:
-        return asset.kind
+def _admin_asset_kind(kind: str) -> str:
+    if kind in {"upload", "generated"}:
+        return kind
     return "unknown"
 
 

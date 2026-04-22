@@ -222,11 +222,22 @@ This checklist tracks the new six-track studio foundation only.
   after TrackNote extraction instead of being listed as a retained admin asset.
 - [x] API upload payloads have a configurable byte limit for the free-plan
   memory/request envelope.
+- [x] Stored assets are indexed in an asset registry instead of relying on
+  whole-bucket scans for admin totals and cleanup state.
+- [x] Admin storage summary exposes alpha operating limits and warnings.
+- [x] Studio creation is blocked at the configured alpha hard cap.
+- [x] Upload/generated asset writes are blocked at the configured alpha hard
+  storage cap.
+- [x] OMR and voice extraction run through a single local engine execution
+  lane in the alpha build.
 - [ ] Studio access is not yet user-owned or private; public studio list/detail
   endpoints still expose all stored studios in the alpha build.
 - [ ] Live deployment must set the Postgres/R2 environment variables and verify
   admin storage summary against the deployed service.
 - [ ] Durable object storage still needs a lifecycle/retention policy.
+- [ ] Browser-to-R2 direct upload/signed URL flow is not implemented yet.
+- [ ] OMR/voice extraction still needs a durable queue before Cloud Run
+  maxScale is raised above one instance.
 
 ## Implementation Structure
 

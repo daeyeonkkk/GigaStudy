@@ -1,4 +1,4 @@
-# GigaStudy Checklist
+﻿# GigaStudy Checklist
 
 Date: 2026-04-22
 
@@ -186,6 +186,37 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Registered six-track score can be exported as a PDF.
 - [x] PDF export uses registered TrackNote data, studio BPM, and studio meter.
 - [x] PDF export refuses empty studios instead of generating a misleading file.
+
+## Admin / Storage Operations
+
+- [x] `/admin` page uses the lightweight alpha login `admin` / `대연123`.
+- [x] Admin API accepts the configured admin username/password headers.
+- [x] Admin API still accepts `X-GigaStudy-Admin-Token` when
+  `GIGASTUDY_API_ADMIN_TOKEN` is configured.
+- [x] `/admin` page can inspect total metadata/file usage by studio.
+- [x] `/admin` page can delete an entire studio and its stored upload/job
+  asset directories.
+- [x] `/admin` page can delete all stored files for one studio while keeping
+  normalized TrackNote/report metadata.
+- [x] `/admin` page can delete an individual stored file and clear track,
+  candidate, or OMR job references to that file.
+- [x] Studio metadata storage can use Postgres/Neon through
+  `GIGASTUDY_API_DATABASE_URL`, with local JSON kept as the development
+  fallback.
+- [x] Upload, recording, and OMR job assets can use S3-compatible object
+  storage such as Cloudflare R2 through `GIGASTUDY_API_STORAGE_BACKEND=s3`,
+  with local filesystem storage kept as the development fallback.
+- [x] Cloud Run local filesystem is treated as temporary engine/cache space
+  when object storage is configured, not as the durable source of truth.
+- [x] Scoring performance audio is temporary extraction input and is deleted
+  after TrackNote extraction instead of being listed as a retained admin asset.
+- [x] API upload payloads have a configurable byte limit for the free-plan
+  memory/request envelope.
+- [ ] Studio access is not yet user-owned or private; public studio list/detail
+  endpoints still expose all stored studios in the alpha build.
+- [ ] Live deployment must set the Postgres/R2 environment variables and verify
+  admin storage summary against the deployed service.
+- [ ] Durable object storage still needs a lifecycle/retention policy.
 
 ## Implementation Structure
 

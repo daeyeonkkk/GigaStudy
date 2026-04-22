@@ -1,7 +1,6 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
@@ -10,6 +9,12 @@ from uuid import uuid4
 
 from fastapi import BackgroundTasks, HTTPException
 
+from gigastudy_api.api.schemas.admin import (
+    AdminAssetSummary,
+    AdminDeleteResult,
+    AdminStorageSummary,
+    AdminStudioSummary,
+)
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
@@ -27,6 +32,12 @@ from gigastudy_api.api.schemas.studios import (
     UploadTrackRequest,
 )
 from gigastudy_api.config import get_settings
+from gigastudy_api.services.asset_storage import (
+    AssetStorage,
+    AssetStorageError,
+    StoredAssetInfo,
+    build_asset_storage,
+)
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
@@ -40,6 +51,7 @@ from gigastudy_api.services.engine.pdf_export import ScorePdfExportError, build_
 from gigastudy_api.services.engine.scoring import build_scoring_report
 from gigastudy_api.services.engine.symbolic import SymbolicParseError, parse_symbolic_file_with_metadata
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError, transcribe_voice_file
+from gigastudy_api.services.studio_store import StudioStore, build_studio_store
 
 
 def _now() -> str:
@@ -73,8 +85,19 @@ AUDIO_MIME_TYPES = {
 
 class StudioRepository:
     def __init__(self, storage_root: str) -> None:
+        settings = get_settings()
         self._root = Path(storage_root)
-        self._path = self._root / "six_track_studios.json"
+        self._store: StudioStore = build_studio_store(
+            storage_root=self._root,
+            database_url=settings.database_url,
+        )
+        try:
+            self._asset_storage: AssetStorage = build_asset_storage(
+                storage_root=self._root,
+                settings=settings,
+            )
+        except AssetStorageError as error:
+            raise RuntimeError(str(error)) from error
         self._lock = RLock()
 
     def list_studios(self) -> list[StudioListItem]:
@@ -197,6 +220,96 @@ class StudioRepository:
         media_type = track.audio_mime_type or _guess_audio_mime_type(source_path.name)
         filename = track.audio_source_label or track.source_label or source_path.name
         return source_path, media_type, filename
+
+    def get_admin_storage_summary(self) -> AdminStorageSummary:
+        with self._lock:
+            payload = self._load()
+            studios = list(payload.values())
+
+        studio_summaries = [self._build_admin_studio_summary(studio) for studio in studios]
+        metadata_bytes = self._store.estimate_bytes(self._encode_payload(payload))
+        asset_count = sum(studio.asset_count for studio in studio_summaries)
+        asset_bytes = sum(studio.asset_bytes for studio in studio_summaries)
+        return AdminStorageSummary(
+            storage_root=self._asset_storage.label,
+            studio_count=len(studio_summaries),
+            asset_count=asset_count,
+            total_bytes=metadata_bytes + asset_bytes,
+            metadata_bytes=metadata_bytes,
+            studios=sorted(studio_summaries, key=lambda studio: studio.updated_at, reverse=True),
+        )
+
+    def delete_admin_studio(self, studio_id: str) -> AdminDeleteResult:
+        with self._lock:
+            payload = self._load()
+            studio = payload.pop(studio_id, None)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            self._save(payload)
+
+        upload_files, upload_bytes = self._delete_asset_prefix(f"uploads/{studio_id}/")
+        job_files, job_bytes = self._delete_asset_prefix(f"jobs/{studio_id}/")
+        deleted_files = upload_files + job_files
+        deleted_bytes = upload_bytes + job_bytes
+        return AdminDeleteResult(
+            deleted=True,
+            message="Studio and stored assets deleted.",
+            studio_id=studio_id,
+            deleted_files=deleted_files,
+            deleted_bytes=deleted_bytes,
+        )
+
+    def delete_admin_studio_assets(self, studio_id: str) -> AdminDeleteResult:
+        with self._lock:
+            payload = self._load()
+            studio = payload.get(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            timestamp = _now()
+            self._clear_studio_asset_references(studio, timestamp)
+            studio.updated_at = timestamp
+            payload[studio_id] = studio
+            self._save(payload)
+
+        upload_files, upload_bytes = self._delete_asset_prefix(f"uploads/{studio_id}/")
+        job_files, job_bytes = self._delete_asset_prefix(f"jobs/{studio_id}/")
+        deleted_files = upload_files + job_files
+        deleted_bytes = upload_bytes + job_bytes
+        return AdminDeleteResult(
+            deleted=True,
+            message="Studio assets deleted. Normalized track notes and reports were kept.",
+            studio_id=studio_id,
+            deleted_files=deleted_files,
+            deleted_bytes=deleted_bytes,
+        )
+
+    def delete_admin_asset(self, asset_id: str) -> AdminDeleteResult:
+        relative_path = self._decode_asset_id(asset_id)
+        deleted_files, deleted_bytes = self._delete_asset_file(relative_path)
+        if deleted_files == 0:
+            raise HTTPException(status_code=404, detail="Asset not found.")
+
+        with self._lock:
+            payload = self._load()
+            timestamp = _now()
+            changed = False
+            for studio in payload.values():
+                studio_changed = self._clear_asset_references(studio, relative_path, timestamp)
+                if studio_changed:
+                    studio.updated_at = timestamp
+                    changed = True
+            if changed:
+                self._save(payload)
+
+        studio_id = _studio_id_from_asset_path(relative_path)
+        return AdminDeleteResult(
+            deleted=True,
+            message="Asset deleted.",
+            studio_id=studio_id,
+            asset_id=asset_id,
+            deleted_files=deleted_files,
+            deleted_bytes=deleted_bytes,
+        )
 
     def upload_track(
         self,
@@ -622,7 +735,7 @@ class StudioRepository:
         time_signature_numerator: int,
         time_signature_denominator: int,
     ) -> list[TrackNote]:
-        source_path = self._save_upload(
+        source_path = self._save_temp_upload(
             studio_id=studio_id,
             slot_id=slot_id,
             filename=filename,
@@ -638,6 +751,8 @@ class StudioRepository:
             )
         except VoiceTranscriptionError:
             return []
+        finally:
+            self._delete_temp_file(source_path)
 
     def _update_track(
         self,
@@ -880,7 +995,7 @@ class StudioRepository:
             source_label=source_label,
             status="queued",
             method="audiveris_cli",
-            input_path=str(source_path),
+            input_path=self._relative_data_asset_path(source_path),
             created_at=timestamp,
             updated_at=timestamp,
         )
@@ -937,8 +1052,12 @@ class StudioRepository:
                 bpm=studio.bpm,
                 target_slot_id=None if parse_all_parts else self._job_slot_id(studio_id, job_id),
             )
+            output_reference = self._persist_generated_asset(output_path)
             mapped_notes = _mark_notes_as_omr(parsed_symbolic.mapped_notes)
         except (OmrUnavailableError, SymbolicParseError) as error:
+            self._mark_job_failed(studio_id, job_id, message=str(error))
+            return
+        except AssetStorageError as error:
             self._mark_job_failed(studio_id, job_id, message=str(error))
             return
 
@@ -948,7 +1067,7 @@ class StudioRepository:
                 parsed_symbolic.time_signature_numerator,
                 parsed_symbolic.time_signature_denominator,
             )
-        self._mark_job_completed(studio_id, job_id, output_path=output_path)
+        self._mark_job_completed(studio_id, job_id, output_path=output_reference)
         self._add_extraction_candidates(
             studio_id,
             mapped_notes,
@@ -1110,7 +1229,7 @@ class StudioRepository:
             self._save(payload)
         return studio
 
-    def _mark_job_completed(self, studio_id: str, job_id: str, *, output_path: Path) -> None:
+    def _mark_job_completed(self, studio_id: str, job_id: str, *, output_path: str) -> None:
         with self._lock:
             payload = self._load()
             studio = payload.get(studio_id)
@@ -1120,7 +1239,7 @@ class StudioRepository:
             for job in studio.jobs:
                 if job.job_id == job_id:
                     job.status = "completed"
-                    job.output_path = str(output_path)
+                    job.output_path = output_path
                     job.updated_at = timestamp
                     break
             studio.updated_at = timestamp
@@ -1175,6 +1294,142 @@ class StudioRepository:
             track.duration_seconds = 0
         track.updated_at = timestamp
 
+    def _build_admin_studio_summary(self, studio: Studio) -> AdminStudioSummary:
+        assets = list(self._iter_admin_assets(studio))
+        asset_bytes = sum(asset.size_bytes for asset in assets)
+        return AdminStudioSummary(
+            studio_id=studio.studio_id,
+            title=studio.title,
+            bpm=studio.bpm,
+            registered_track_count=sum(1 for track in studio.tracks if track.status == "registered"),
+            report_count=len(studio.reports),
+            candidate_count=len(studio.candidates),
+            job_count=len(studio.jobs),
+            asset_count=len(assets),
+            asset_bytes=asset_bytes,
+            created_at=studio.created_at,
+            updated_at=studio.updated_at,
+            assets=assets,
+        )
+
+    def _iter_admin_assets(self, studio: Studio) -> list[AdminAssetSummary]:
+        referenced_paths = self._referenced_asset_paths(studio)
+        assets: list[AdminAssetSummary] = []
+        try:
+            stored_assets = self._asset_storage.iter_studio_assets(studio.studio_id)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+        for asset in sorted(stored_assets, key=lambda item: item.relative_path):
+            assets.append(
+                AdminAssetSummary(
+                    asset_id=self._encode_asset_id(asset.relative_path),
+                    studio_id=studio.studio_id,
+                    kind=_admin_asset_kind(asset),
+                    filename=asset.filename,
+                    relative_path=asset.relative_path,
+                    size_bytes=asset.size_bytes,
+                    updated_at=asset.updated_at,
+                    referenced=asset.relative_path in referenced_paths,
+                )
+            )
+        return assets
+
+    def _referenced_asset_paths(self, studio: Studio) -> set[str]:
+        references: set[str] = set()
+        for track in studio.tracks:
+            normalized = self._normalize_asset_reference(track.audio_source_path)
+            if normalized is not None:
+                references.add(normalized)
+        for candidate in studio.candidates:
+            normalized = self._normalize_asset_reference(candidate.audio_source_path)
+            if normalized is not None:
+                references.add(normalized)
+        for job in studio.jobs:
+            for job_path in (job.input_path, job.output_path):
+                normalized = self._normalize_asset_reference(job_path)
+                if normalized is not None:
+                    references.add(normalized)
+        return references
+
+    def _clear_studio_asset_references(self, studio: Studio, timestamp: str) -> None:
+        for track in studio.tracks:
+            if track.audio_source_path is not None:
+                track.audio_source_path = None
+                track.audio_source_label = None
+                track.audio_mime_type = None
+                track.updated_at = timestamp
+        for candidate in studio.candidates:
+            candidate.audio_source_path = None
+            candidate.audio_source_label = None
+            candidate.audio_mime_type = None
+            candidate.updated_at = timestamp
+        for job in studio.jobs:
+            job.input_path = None
+            job.output_path = None
+            job.updated_at = timestamp
+
+    def _clear_asset_references(self, studio: Studio, relative_path: str, timestamp: str) -> bool:
+        changed = False
+        for track in studio.tracks:
+            if self._normalize_asset_reference(track.audio_source_path) == relative_path:
+                track.audio_source_path = None
+                track.audio_source_label = None
+                track.audio_mime_type = None
+                track.updated_at = timestamp
+                changed = True
+        for candidate in studio.candidates:
+            if self._normalize_asset_reference(candidate.audio_source_path) == relative_path:
+                candidate.audio_source_path = None
+                candidate.audio_source_label = None
+                candidate.audio_mime_type = None
+                candidate.updated_at = timestamp
+                changed = True
+        for job in studio.jobs:
+            if self._normalize_asset_reference(job.input_path) == relative_path:
+                job.input_path = None
+                job.updated_at = timestamp
+                changed = True
+            if self._normalize_asset_reference(job.output_path) == relative_path:
+                job.output_path = None
+                job.updated_at = timestamp
+                changed = True
+        return changed
+
+    def _normalize_asset_reference(self, asset_path: str | None) -> str | None:
+        if asset_path is None:
+            return None
+        try:
+            return self._asset_storage.normalize_reference(asset_path)
+        except AssetStorageError:
+            return None
+
+    def _delete_asset_file(self, relative_path: str) -> tuple[int, int]:
+        try:
+            return self._asset_storage.delete_file(relative_path)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Asset not found.") from error
+
+    def _delete_asset_prefix(self, relative_prefix: str) -> tuple[int, int]:
+        try:
+            return self._asset_storage.delete_prefix(relative_prefix)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+    def _encode_asset_id(self, relative_path: str) -> str:
+        encoded = base64.urlsafe_b64encode(relative_path.encode("utf-8")).decode("ascii")
+        return encoded.rstrip("=")
+
+    def _decode_asset_id(self, asset_id: str) -> str:
+        padding = "=" * (-len(asset_id) % 4)
+        try:
+            decoded = base64.urlsafe_b64decode(f"{asset_id}{padding}").decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as error:
+            raise HTTPException(status_code=404, detail="Asset not found.") from error
+        if decoded.startswith("/") or decoded.startswith("\\") or ".." in Path(decoded).parts:
+            raise HTTPException(status_code=404, detail="Asset not found.")
+        return decoded
+
     def _save_upload(
         self,
         *,
@@ -1184,50 +1439,81 @@ class StudioRepository:
         content_base64: str,
     ) -> Path:
         content = _decode_base64(content_base64)
-        safe_filename = Path(filename).name
-        upload_dir = self._root / "uploads" / studio_id / str(slot_id)
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        path = upload_dir / f"{uuid4().hex}-{safe_filename}"
+        try:
+            return self._asset_storage.write_upload(
+                studio_id=studio_id,
+                slot_id=slot_id,
+                filename=filename,
+                content=content,
+            )
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+    def _save_temp_upload(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        content_base64: str,
+    ) -> Path:
+        content = _decode_base64(content_base64)
+        safe_filename = Path(filename).name.strip() or "take.wav"
+        temp_dir = self._root / "tmp" / studio_id / str(slot_id)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        path = temp_dir / f"{uuid4().hex}-{safe_filename}"
         path.write_bytes(content)
         return path
 
+    def _delete_temp_file(self, path: Path) -> None:
+        try:
+            resolved = path.resolve()
+            resolved_root = self._root.resolve()
+            if resolved != resolved_root and resolved_root in resolved.parents and resolved.exists():
+                resolved.unlink()
+                current = resolved.parent
+                while current != resolved_root and resolved_root in current.parents:
+                    try:
+                        current.rmdir()
+                    except OSError:
+                        break
+                    current = current.parent
+        except OSError:
+            return
+
+    def _persist_generated_asset(self, path: Path) -> str:
+        return self._asset_storage.persist_file(path)
+
     def _relative_data_asset_path(self, path: Path) -> str:
         try:
-            return path.resolve().relative_to(self._root.resolve()).as_posix()
-        except ValueError as error:
+            return self._asset_storage.relative_path(path)
+        except AssetStorageError as error:
             raise HTTPException(status_code=500, detail="Uploaded asset is outside storage root.") from error
 
     def _resolve_data_asset_path(self, asset_path: str) -> Path:
-        raw_path = Path(asset_path)
-        candidate = raw_path if raw_path.is_absolute() else self._root / raw_path
-        resolved_candidate = candidate.resolve()
-        resolved_root = self._root.resolve()
-        if resolved_candidate != resolved_root and resolved_root not in resolved_candidate.parents:
-            raise HTTPException(status_code=404, detail="Track audio source not found.")
-        return resolved_candidate
+        try:
+            return self._asset_storage.resolve_path(asset_path)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Track audio source not found.") from error
 
     def _job_output_dir(self, studio_id: str, job_id: str) -> Path:
         return self._root / "jobs" / studio_id / job_id
 
     def _load(self) -> dict[str, Studio]:
-        if not self._path.exists():
-            return {}
-        raw_payload = json.loads(self._path.read_text(encoding="utf-8"))
+        raw_payload = self._store.load_raw()
         return {
             studio_id: Studio.model_validate(_migrate_legacy_studio_payload(studio_payload))
             for studio_id, studio_payload in raw_payload.items()
         }
 
     def _save(self, payload: dict[str, Studio]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        encoded = {
+        self._store.save_raw(self._encode_payload(payload))
+
+    def _encode_payload(self, payload: dict[str, Studio]) -> dict[str, Any]:
+        return {
             studio_id: studio.model_dump(mode="json")
             for studio_id, studio in payload.items()
         }
-        self._path.write_text(
-            json.dumps(encoded, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
 
 
 def _track_duration_seconds(notes: list[TrackNote]) -> float:
@@ -1296,7 +1582,7 @@ def _generation_variant_label(index: int, slot_id: int, notes: list[TrackNote]) 
         contour_label = "level"
 
     average_label = midi_to_label(round(average_midi))
-    return f"{register_label} {motion_label} · {contour_label} · avg {average_label}"
+    return f"{register_label} {motion_label} - {contour_label} - avg {average_label}"
 
 
 def _percussion_variant_label(index: int, notes: list[TrackNote]) -> str:
@@ -1309,7 +1595,7 @@ def _percussion_variant_label(index: int, notes: list[TrackNote]) -> str:
         feel = "snare-led"
     else:
         feel = "balanced"
-    return f"Groove {index} · {feel}"
+    return f"Groove {index} - {feel}"
 
 
 def _track_has_content(track: TrackSlot) -> bool:
@@ -1319,13 +1605,33 @@ def _track_has_content(track: TrackSlot) -> bool:
 def _decode_base64(content_base64: str) -> bytes:
     payload = content_base64.split(",", 1)[1] if "," in content_base64 else content_base64
     try:
-        return base64.b64decode(payload, validate=True)
+        content = base64.b64decode(payload, validate=True)
     except ValueError as error:
         raise HTTPException(status_code=422, detail="Invalid base64 upload content.") from error
+    max_upload_bytes = get_settings().max_upload_bytes
+    if len(content) > max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Upload exceeds the configured {max_upload_bytes} byte limit.",
+        )
+    return content
 
 
 def _guess_audio_mime_type(filename: str) -> str:
     return AUDIO_MIME_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
+
+
+def _admin_asset_kind(asset: StoredAssetInfo) -> str:
+    if asset.kind in {"upload", "generated"}:
+        return asset.kind
+    return "unknown"
+
+
+def _studio_id_from_asset_path(relative_path: str) -> str | None:
+    parts = Path(relative_path).parts
+    if len(parts) >= 2 and parts[0] in {"uploads", "jobs"}:
+        return parts[1]
+    return None
 
 
 def _migrate_legacy_studio_payload(studio_payload: Any) -> Any:

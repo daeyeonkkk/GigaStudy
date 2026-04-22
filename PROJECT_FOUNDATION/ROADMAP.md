@@ -1,4 +1,4 @@
-# GigaStudy Roadmap
+﻿# GigaStudy Roadmap
 
 Date: 2026-04-22
 
@@ -57,6 +57,15 @@ The current implementation has a working vertical slice for:
   lines, sync-shifted note markers, and `TrackNote` as the source of truth
 - Compact report feed with separate quantitative report detail pages
 - Registered score PDF export from the main studio toolbar
+- Lightweight alpha admin storage console for inspecting studios/assets and
+  deleting whole studios, all assets for a studio, or individual stored files.
+- Optional durable alpha storage: studio metadata can be stored in
+  Postgres/Neon, while upload/recording/OMR assets can be stored in an
+  S3-compatible bucket such as Cloudflare R2. Local filesystem storage remains
+  the development fallback and the Cloud Run filesystem becomes only temporary
+  engine/cache space when object storage is enabled.
+- Scoring performance audio is temporary extraction input and is deleted after
+  TrackNote extraction instead of being retained as a stored asset.
 
 ## Phase 0: Foundation Reset
 
@@ -265,6 +274,37 @@ Cut line:
 
 - A user with at least one registered track can download a readable PDF score.
 
+## Phase 7.75: Admin Storage Cleanup
+
+Goal: keep alpha storage controllable and move the API away from relying on
+Cloud Run's ephemeral filesystem for durable data.
+
+Required:
+
+- Lightweight `/admin` login with `admin` / `대연123`.
+- Admin API accepts username/password headers and keeps optional token support.
+- Storage summary by studio and stored asset.
+- Delete an entire studio plus its upload/job asset folders.
+- Delete only stored files for a studio while keeping TrackNote/report
+  metadata.
+- Delete one stored file and clear track/candidate/job file references.
+- Metadata repository abstraction with local JSON fallback and Postgres/Neon
+  implementation.
+- Asset repository abstraction with local filesystem fallback and
+  S3/R2-compatible implementation.
+- OMR outputs are persisted through the asset repository after successful
+  extraction.
+- Retained track audio uses the asset repository for playback resolution.
+- Scoring performance audio is treated as temporary extraction input.
+- Configurable max upload size keeps base64 JSON uploads inside the free-plan
+  Cloud Run memory/request envelope.
+
+Cut line:
+
+- An operator can remove accidental or heavy alpha-test data from `/admin`, and
+  a deployed alpha service can preserve metadata/assets across Cloud Run
+  instance restarts when Postgres/R2 environment variables are configured.
+
 ## Phase 8: Extraction Quality Hardening
 
 Goal: improve extraction quality without changing the product model.
@@ -285,6 +325,10 @@ Required:
   prominent than raw engine method names.
 - Add NWC parsing only after a reliable NWC-to-TrackNote conversion path is
   chosen.
+- Verify the live Cloud Run service is using Postgres/R2 instead of local JSON
+  and local files.
+- Add object lifecycle/retention cleanup before production-scale recording
+  tests.
 
 ## Deferred Until Needed
 

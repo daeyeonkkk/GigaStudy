@@ -20,6 +20,31 @@ Recorded or uploaded voice audio may be retained as a track playback asset, but
 it is not the scoring or harmony truth source. The persisted `TrackNote` list
 remains canonical for comparison, generation, notation, and export.
 
+## Persistence And Asset Storage Contract
+
+Studio metadata and stored binary assets are separate responsibilities.
+
+- Studio metadata contains normalized TrackNote data, reports, jobs,
+  candidates, track status, source labels, and relative asset references.
+- Stored assets contain upload files, retained recording/audio playback files,
+  and generated OMR output files.
+- Local JSON and local filesystem storage are development fallbacks only.
+- In the deployed alpha path, `GIGASTUDY_API_DATABASE_URL` should point metadata
+  at Postgres/Neon, and `GIGASTUDY_API_STORAGE_BACKEND=s3` should point assets
+  at an S3-compatible object store such as Cloudflare R2.
+- Cloud Run local filesystem paths are allowed only as temporary parser,
+  transcription, OMR, or object-cache paths. They must not be treated as the
+  durable source of truth because Cloud Run instance files are ephemeral and
+  memory-backed.
+- Asset references stored in tracks, candidates, and OMR jobs should be
+  relative storage keys such as `uploads/{studio_id}/{slot_id}/{file}` or
+  `jobs/{studio_id}/{job_id}/{file}`.
+- Track audio playback resolves retained audio through the asset storage layer.
+  In object-storage mode, a missing local file is downloaded into the local
+  cache before `FileResponse` serves it.
+- Scoring performance audio is not retained by default. It is temporary input
+  for extraction and is deleted after TrackNote conversion.
+
 ## Canonical TrackNote Data
 
 Each note event should carry:
@@ -417,6 +442,10 @@ These code paths currently implement the contract:
   `apps/web/src/lib/studio/playback.ts`
 - Track audio asset endpoint:
   `apps/api/src/gigastudy_api/api/routes/studios.py`
+- Studio metadata persistence:
+  `apps/api/src/gigastudy_api/services/studio_store.py`
+- Stored upload/recording/OMR asset persistence:
+  `apps/api/src/gigastudy_api/services/asset_storage.py`
 - Browser TrackNote score rendering math and hidden layout markers:
   `apps/web/src/lib/studio/scoreRendering.ts`
 - Browser VexFlow SVG engraving:

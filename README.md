@@ -14,7 +14,8 @@ Everything outside those flows is intentionally removed from the current foundat
 - `apps/web`
   React + Vite client for the home screen and main six-track studio.
 - `apps/api`
-  FastAPI service with a local JSON-backed studio repository.
+  FastAPI service with TrackNote engines, optional Postgres metadata
+  persistence, and optional S3-compatible asset persistence.
 - `PROJECT_FOUNDATION`
   Current product foundation for the six-track GigaStudy direction.
 - `e2e`
@@ -61,9 +62,23 @@ The API exposes the current product surface only:
 - `POST /api/studios/{studio_id}/candidates/{candidate_id}/reject`
 - `POST /api/studios/{studio_id}/jobs/{job_id}/approve-candidates`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/score`
+- `GET /api/admin/storage`
+- `DELETE /api/admin/studios/{studio_id}`
+- `DELETE /api/admin/studios/{studio_id}/assets`
+- `DELETE /api/admin/assets/{asset_id}`
 
 By default, studio state is persisted under `apps/api/storage`.
 Set `GIGASTUDY_API_STORAGE_ROOT` to use a different local directory.
+
+For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
+
+- Set `GIGASTUDY_API_DATABASE_URL` to use Postgres/Neon for studio metadata.
+- Set `GIGASTUDY_API_STORAGE_BACKEND=s3` plus the `GIGASTUDY_API_S3_*`
+  settings to use Cloudflare R2 or another S3-compatible object store for
+  uploads, retained recordings, and OMR outputs.
+- Keep `GIGASTUDY_API_STORAGE_ROOT` as temporary engine/cache space only.
+- Use `GIGASTUDY_API_MAX_UPLOAD_BYTES` to keep base64 JSON uploads inside the
+  Cloud Run request and memory envelope.
 
 ## Verification
 

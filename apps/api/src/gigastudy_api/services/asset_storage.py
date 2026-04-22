@@ -1,0 +1,403 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
+from typing import Protocol
+from uuid import uuid4
+
+from botocore.exceptions import ClientError
+
+from gigastudy_api.config import Settings
+
+
+@dataclass(frozen=True)
+class StoredAssetInfo:
+    relative_path: str
+    filename: str
+    kind: str
+    size_bytes: int
+    updated_at: str
+
+
+class AssetStorage(Protocol):
+    @property
+    def label(self) -> str:
+        ...
+
+    def write_upload(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        content: bytes,
+    ) -> Path:
+        ...
+
+    def persist_file(self, path: Path) -> str:
+        ...
+
+    def relative_path(self, path: Path) -> str:
+        ...
+
+    def normalize_reference(self, asset_path: str) -> str:
+        ...
+
+    def resolve_path(self, asset_path: str) -> Path:
+        ...
+
+    def iter_studio_assets(self, studio_id: str) -> list[StoredAssetInfo]:
+        ...
+
+    def delete_file(self, relative_path: str) -> tuple[int, int]:
+        ...
+
+    def delete_prefix(self, relative_prefix: str) -> tuple[int, int]:
+        ...
+
+
+class LocalAssetStorage:
+    def __init__(self, root: Path) -> None:
+        self._root = root
+
+    @property
+    def label(self) -> str:
+        return str(self._root.resolve())
+
+    def write_upload(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        content: bytes,
+    ) -> Path:
+        relative_path = _upload_relative_path(studio_id, slot_id, filename)
+        path = self._cache_path(relative_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        return path
+
+    def persist_file(self, path: Path) -> str:
+        return self.relative_path(path)
+
+    def relative_path(self, path: Path) -> str:
+        resolved_path = path.resolve()
+        try:
+            return resolved_path.relative_to(self._root.resolve()).as_posix()
+        except ValueError as error:
+            raise AssetStorageError("Asset path is outside the storage root.") from error
+
+    def normalize_reference(self, asset_path: str) -> str:
+        return self._relative_path_from_reference(asset_path)
+
+    def resolve_path(self, asset_path: str) -> Path:
+        relative_path = self._relative_path_from_reference(asset_path)
+        return self._cache_path(relative_path)
+
+    def iter_studio_assets(self, studio_id: str) -> list[StoredAssetInfo]:
+        assets: list[StoredAssetInfo] = []
+        for kind, prefix in _studio_prefixes(studio_id):
+            root = self._cache_path(prefix)
+            if not root.exists():
+                continue
+            for path in sorted(root.rglob("*")):
+                if not path.is_file():
+                    continue
+                relative_path = self.relative_path(path)
+                stat = path.stat()
+                assets.append(
+                    StoredAssetInfo(
+                        relative_path=relative_path,
+                        filename=path.name,
+                        kind=kind,
+                        size_bytes=stat.st_size,
+                        updated_at=datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
+                    )
+                )
+        return assets
+
+    def delete_file(self, relative_path: str) -> tuple[int, int]:
+        path = self._cache_path(relative_path)
+        if not path.exists() or not path.is_file():
+            return 0, 0
+        deleted_bytes = path.stat().st_size
+        path.unlink()
+        _prune_empty_dirs(self._root, path.parent)
+        return 1, deleted_bytes
+
+    def delete_prefix(self, relative_prefix: str) -> tuple[int, int]:
+        root = self._cache_path(relative_prefix)
+        return _delete_local_tree(self._root, root)
+
+    def _relative_path_from_reference(self, asset_path: str) -> str:
+        raw_path = Path(asset_path)
+        if raw_path.is_absolute():
+            return self.relative_path(raw_path)
+        return _clean_relative_path(asset_path)
+
+    def _cache_path(self, relative_path: str) -> Path:
+        clean_path = _clean_relative_path(relative_path)
+        candidate = (self._root / Path(*PurePosixPath(clean_path).parts)).resolve()
+        resolved_root = self._root.resolve()
+        if candidate != resolved_root and resolved_root not in candidate.parents:
+            raise AssetStorageError("Asset path is outside the storage root.")
+        return candidate
+
+
+class S3AssetStorage(LocalAssetStorage):
+    def __init__(
+        self,
+        *,
+        root: Path,
+        bucket: str,
+        region: str,
+        endpoint_url: str | None,
+        access_key_id: str,
+        secret_access_key: str,
+        addressing_style: str,
+    ) -> None:
+        super().__init__(root)
+        self._bucket = bucket
+        self._client = _build_s3_client(
+            region=region,
+            endpoint_url=endpoint_url,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+            addressing_style=addressing_style,
+        )
+
+    @property
+    def label(self) -> str:
+        return f"s3://{self._bucket}"
+
+    def write_upload(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        content: bytes,
+    ) -> Path:
+        relative_path = _upload_relative_path(studio_id, slot_id, filename)
+        local_path = self._cache_path(relative_path)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.write_bytes(content)
+        self._client.put_object(Bucket=self._bucket, Key=relative_path, Body=content)
+        return local_path
+
+    def persist_file(self, path: Path) -> str:
+        relative_path = self.relative_path(path)
+        self._client.upload_file(str(path), self._bucket, relative_path)
+        return relative_path
+
+    def resolve_path(self, asset_path: str) -> Path:
+        relative_path = self._relative_path_from_reference(asset_path)
+        local_path = self._cache_path(relative_path)
+        if not local_path.exists():
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                self._client.download_file(self._bucket, relative_path, str(local_path))
+            except ClientError as error:
+                _remove_empty_file(local_path)
+                raise AssetStorageError("Stored asset was not found.") from error
+        return local_path
+
+    def iter_studio_assets(self, studio_id: str) -> list[StoredAssetInfo]:
+        assets: list[StoredAssetInfo] = []
+        for kind, prefix in _studio_prefixes(studio_id):
+            for item in self._list_objects(prefix):
+                relative_path = str(item["Key"])
+                filename = PurePosixPath(relative_path).name
+                updated_at = item.get("LastModified")
+                if isinstance(updated_at, datetime):
+                    updated_at_value = updated_at.astimezone(UTC).isoformat()
+                else:
+                    updated_at_value = datetime.now(UTC).isoformat()
+                assets.append(
+                    StoredAssetInfo(
+                        relative_path=relative_path,
+                        filename=filename,
+                        kind=kind,
+                        size_bytes=int(item.get("Size", 0)),
+                        updated_at=updated_at_value,
+                    )
+                )
+        return assets
+
+    def delete_file(self, relative_path: str) -> tuple[int, int]:
+        clean_path = _clean_relative_path(relative_path)
+        deleted_bytes = self._object_size(clean_path)
+        if deleted_bytes is None:
+            return 0, 0
+        self._client.delete_object(Bucket=self._bucket, Key=clean_path)
+        super().delete_file(clean_path)
+        return 1, deleted_bytes
+
+    def delete_prefix(self, relative_prefix: str) -> tuple[int, int]:
+        clean_prefix = _clean_relative_path(relative_prefix)
+        if clean_prefix and not clean_prefix.endswith("/"):
+            clean_prefix = f"{clean_prefix}/"
+        deleted_files = 0
+        deleted_bytes = 0
+        batch: list[dict[str, str]] = []
+
+        for item in self._list_objects(clean_prefix):
+            key = str(item["Key"])
+            deleted_files += 1
+            deleted_bytes += int(item.get("Size", 0))
+            batch.append({"Key": key})
+            if len(batch) == 1000:
+                self._delete_objects(batch)
+                batch = []
+
+        if batch:
+            self._delete_objects(batch)
+
+        local_root = self._cache_path(clean_prefix) if clean_prefix else self._root
+        _delete_local_tree(self._root, local_root)
+        return deleted_files, deleted_bytes
+
+    def _list_objects(self, prefix: str):
+        paginator = self._client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
+            for item in page.get("Contents", []):
+                if item.get("Key"):
+                    yield item
+
+    def _object_size(self, key: str) -> int | None:
+        try:
+            response = self._client.head_object(Bucket=self._bucket, Key=key)
+        except ClientError as error:
+            if error.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+                return None
+            if error.response.get("Error", {}).get("Code") in {"404", "NoSuchKey"}:
+                return None
+            raise
+        return int(response.get("ContentLength", 0))
+
+    def _delete_objects(self, objects: list[dict[str, str]]) -> None:
+        self._client.delete_objects(Bucket=self._bucket, Delete={"Objects": objects})
+
+
+class AssetStorageError(Exception):
+    pass
+
+
+def build_asset_storage(*, storage_root: Path, settings: Settings) -> AssetStorage:
+    backend = settings.storage_backend.strip().lower()
+    if backend in {"", "local"}:
+        return LocalAssetStorage(storage_root)
+    if backend in {"s3", "r2"}:
+        missing = [
+            name
+            for name, value in {
+                "s3_bucket": settings.s3_bucket,
+                "s3_access_key_id": settings.s3_access_key_id,
+                "s3_secret_access_key": settings.s3_secret_access_key,
+            }.items()
+            if not value
+        ]
+        if missing:
+            joined = ", ".join(missing)
+            raise AssetStorageError(f"S3 asset storage is missing required settings: {joined}.")
+        return S3AssetStorage(
+            root=storage_root,
+            bucket=settings.s3_bucket or "",
+            region=settings.s3_region,
+            endpoint_url=settings.s3_endpoint_url,
+            access_key_id=settings.s3_access_key_id or "",
+            secret_access_key=settings.s3_secret_access_key or "",
+            addressing_style=settings.s3_addressing_style,
+        )
+    raise AssetStorageError(f"Unsupported asset storage backend: {settings.storage_backend}.")
+
+
+def _build_s3_client(
+    *,
+    region: str,
+    endpoint_url: str | None,
+    access_key_id: str,
+    secret_access_key: str,
+    addressing_style: str,
+):
+    import boto3
+    from botocore.config import Config
+
+    return boto3.client(
+        "s3",
+        endpoint_url=endpoint_url,
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+        region_name=region,
+        config=Config(s3={"addressing_style": addressing_style}),
+    )
+
+
+def _upload_relative_path(studio_id: str, slot_id: int, filename: str) -> str:
+    safe_filename = Path(filename).name.strip() or "upload.bin"
+    return _clean_relative_path(f"uploads/{studio_id}/{slot_id}/{uuid4().hex}-{safe_filename}")
+
+
+def _studio_prefixes(studio_id: str) -> list[tuple[str, str]]:
+    return [
+        ("upload", f"uploads/{studio_id}/"),
+        ("generated", f"jobs/{studio_id}/"),
+    ]
+
+
+def _clean_relative_path(relative_path: str) -> str:
+    normalized = relative_path.replace("\\", "/").strip()
+    path = PurePosixPath(normalized)
+    if path.is_absolute() or not normalized:
+        raise AssetStorageError("Asset path is not a relative storage path.")
+    if any(part in {"", ".", ".."} for part in path.parts):
+        raise AssetStorageError("Asset path is not a relative storage path.")
+    return path.as_posix()
+
+
+def _delete_local_tree(root: Path, path: Path) -> tuple[int, int]:
+    resolved = path.resolve()
+    resolved_root = root.resolve()
+    if resolved != resolved_root and resolved_root not in resolved.parents:
+        raise AssetStorageError("Asset path is outside the storage root.")
+    if not resolved.exists():
+        return 0, 0
+    if resolved.is_file():
+        size = resolved.stat().st_size
+        resolved.unlink()
+        _prune_empty_dirs(root, resolved.parent)
+        return 1, size
+
+    deleted_files = 0
+    deleted_bytes = 0
+    for child in sorted(resolved.rglob("*"), key=lambda child: len(child.parts), reverse=True):
+        if child.is_file():
+            deleted_bytes += child.stat().st_size
+            child.unlink()
+            deleted_files += 1
+        elif child.is_dir():
+            child.rmdir()
+    resolved.rmdir()
+    _prune_empty_dirs(root, resolved.parent)
+    return deleted_files, deleted_bytes
+
+
+def _prune_empty_dirs(root: Path, start: Path) -> None:
+    resolved_root = root.resolve()
+    current = start.resolve()
+    while current != resolved_root and resolved_root in current.parents:
+        try:
+            current.rmdir()
+        except OSError:
+            break
+        current = current.parent
+
+
+def _remove_empty_file(path: Path) -> None:
+    try:
+        if path.exists() and path.stat().st_size == 0:
+            path.unlink()
+    except OSError:
+        return

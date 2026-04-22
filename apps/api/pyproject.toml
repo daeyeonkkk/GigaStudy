@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "Six-track a cappella studio API for GigaStudy."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "boto3>=1.35,<2.0",
   "fastapi>=0.115,<1.0",
   "pydantic-settings>=2.7,<3.0",
+  "psycopg[binary]>=3.2,<4.0",
   "reportlab>=4.2,<5.0",
   "uvicorn[standard]>=0.34,<1.0",
 ]

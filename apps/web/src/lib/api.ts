@@ -1,7 +1,19 @@
-import type { CreateStudioRequest, ScoreNote, Studio, StudioListItem } from '../types/studio'
+import type {
+  AdminDeleteResult,
+  AdminStorageSummary,
+  CreateStudioRequest,
+  ScoreNote,
+  Studio,
+  StudioListItem,
+} from '../types/studio'
 
 export const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:8000'
+
+export type AdminCredentials = {
+  username: string
+  password: string
+}
 
 export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -233,6 +245,74 @@ export function scoreTrack(
       body: JSON.stringify(payload),
     },
     '채점 리포트를 만들지 못했습니다.',
+  )
+}
+
+function adminHeaders(credentials: AdminCredentials): HeadersInit {
+  return {
+    'X-GigaStudy-Admin-User': credentials.username,
+    'X-GigaStudy-Admin-Password-B64': encodeUtf8Base64(credentials.password),
+  }
+}
+
+function encodeUtf8Base64(value: string): string {
+  const bytes = new TextEncoder().encode(value)
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+  return btoa(binary)
+}
+
+export function getAdminStorage(credentials: AdminCredentials): Promise<AdminStorageSummary> {
+  return requestJson<AdminStorageSummary>(
+    '/api/admin/storage',
+    {
+      headers: adminHeaders(credentials),
+    },
+    'Admin storage summary could not be loaded.',
+  )
+}
+
+export function deleteAdminStudio(
+  credentials: AdminCredentials,
+  studioId: string,
+): Promise<AdminDeleteResult> {
+  return requestJson<AdminDeleteResult>(
+    `/api/admin/studios/${studioId}`,
+    {
+      method: 'DELETE',
+      headers: adminHeaders(credentials),
+    },
+    'Studio could not be deleted.',
+  )
+}
+
+export function deleteAdminStudioAssets(
+  credentials: AdminCredentials,
+  studioId: string,
+): Promise<AdminDeleteResult> {
+  return requestJson<AdminDeleteResult>(
+    `/api/admin/studios/${studioId}/assets`,
+    {
+      method: 'DELETE',
+      headers: adminHeaders(credentials),
+    },
+    'Studio assets could not be deleted.',
+  )
+}
+
+export function deleteAdminAsset(
+  credentials: AdminCredentials,
+  assetId: string,
+): Promise<AdminDeleteResult> {
+  return requestJson<AdminDeleteResult>(
+    `/api/admin/assets/${assetId}`,
+    {
+      method: 'DELETE',
+      headers: adminHeaders(credentials),
+    },
+    'Asset could not be deleted.',
   )
 }
 

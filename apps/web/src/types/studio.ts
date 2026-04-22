@@ -154,3 +154,47 @@ export type CreateStudioRequest = {
   source_filename?: string
   source_content_base64?: string
 }
+
+export type AdminAssetSummary = {
+  asset_id: string
+  studio_id: string
+  kind: 'upload' | 'generated' | 'unknown'
+  filename: string
+  relative_path: string
+  size_bytes: number
+  updated_at: string
+  referenced: boolean
+}
+
+export type AdminStudioSummary = {
+  studio_id: string
+  title: string
+  bpm: number
+  registered_track_count: number
+  report_count: number
+  candidate_count: number
+  job_count: number
+  asset_count: number
+  asset_bytes: number
+  created_at: string
+  updated_at: string
+  assets: AdminAssetSummary[]
+}
+
+export type AdminStorageSummary = {
+  storage_root: string
+  studio_count: number
+  asset_count: number
+  total_bytes: number
+  metadata_bytes: number
+  studios: AdminStudioSummary[]
+}
+
+export type AdminDeleteResult = {
+  deleted: boolean
+  message: string
+  studio_id: string | null
+  asset_id: string | null
+  deleted_files: number
+  deleted_bytes: number
+}

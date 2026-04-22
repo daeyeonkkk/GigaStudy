@@ -1,4 +1,4 @@
-# Foundation Status
+﻿# Foundation Status
 
 Date: 2026-04-22
 
@@ -89,6 +89,27 @@ The current implementation has a working six-track vertical slice:
 - Registered voice/audio tracks retain their normalized source audio as a
   playback asset while keeping TrackNote data as the canonical scoring and
   generation source.
+- Admin storage controls exist at `/admin` with the lightweight alpha login
+  `admin` / `대연123`; the API also still accepts `GIGASTUDY_API_ADMIN_TOKEN`
+  when configured. The page can inspect studio/file usage, delete a whole
+  studio, delete all stored files for a studio while keeping normalized
+  TrackNote/report data, or delete an individual stored asset and clear its
+  audio/job references.
+- Studio metadata persistence is now abstracted. Local JSON remains the
+  development fallback, while `GIGASTUDY_API_DATABASE_URL` enables a
+  Postgres/Neon-backed `studio_documents` store.
+- Stored asset persistence is now abstracted. Local filesystem remains the
+  development fallback, while `GIGASTUDY_API_STORAGE_BACKEND=s3` enables
+  S3-compatible storage such as Cloudflare R2 for upload, recording, and OMR
+  job assets.
+- When object storage is configured, the API still writes local temporary files
+  for parser/transcription/OMR engines, but durable asset truth is the object
+  store and the local Cloud Run filesystem is only a cache/workspace.
+- Scoring performance audio is now temporary extraction input. It is deleted
+  after TrackNote extraction and is not retained as an admin-listed asset.
+- Upload payload size is capped by `GIGASTUDY_API_MAX_UPLOAD_BYTES`, defaulting
+  to 15 MiB, to keep the current base64 JSON path inside the alpha free-plan
+  request and memory envelope.
 - Per-track browser recording plays the metronome when enabled and shows
   elapsed-time/input-level feedback while recording.
 - Web studio responsibilities are split so upload detection, browser audio
@@ -162,7 +183,15 @@ not legacy product surfaces.
    score display while preserving TrackNote as the source of truth.
 4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
    is available.
-5. Add persistence/version boundaries only where they support the core flows.
+5. Configure and verify the deployed alpha Cloud Run service against the
+   Postgres/R2 environment variables, then confirm `/admin` reports durable
+   storage instead of local instance storage.
+6. Add object storage lifecycle cleanup and a retention rule for abandoned
+   upload/job assets.
+7. Add user ownership or private share boundaries before inviting broader
+   traffic; public list/detail endpoints are still alpha-only.
+8. Add streaming or direct-to-object upload if the product needs files larger
+   than the current base64 JSON envelope.
 
 ## Status Summary
 

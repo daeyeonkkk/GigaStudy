@@ -24,8 +24,12 @@ remains canonical for comparison, generation, notation, and export.
 
 Studio metadata and stored binary assets are separate responsibilities.
 
-- Studio metadata contains normalized TrackNote data, reports, jobs,
-  candidates, track status, source labels, and relative asset references.
+- Studio metadata contains normalized TrackNote data, jobs, track status,
+  source labels, and relative asset references.
+- Large append-heavy metadata, especially scoring reports and extraction or AI
+  candidates, is sidecar data. It is joined back into the API `Studio` response
+  for compatibility, but it must not force every list/admin request to read or
+  rewrite the full studio document.
 - Stored assets contain upload files, retained recording/audio playback files,
   and generated OMR output files.
 - Local JSON and local filesystem storage are development fallbacks only.
@@ -39,6 +43,10 @@ Studio metadata and stored binary assets are separate responsibilities.
 - Asset references stored in tracks, candidates, and OMR jobs should be
   relative storage keys such as `uploads/{studio_id}/{slot_id}/{file}` or
   `jobs/{studio_id}/{job_id}/{file}`.
+- Studio list endpoints must return summary rows with pagination. Studio detail
+  endpoints must load only the requested studio id. Admin storage summaries
+  must page studio rows and limit per-studio asset details so 1,000+ alpha
+  studios do not require a full metadata scan on every request.
 - Track audio playback resolves retained audio through the asset storage layer.
   In object-storage mode, a missing local file is downloaded into the local
   cache before `FileResponse` serves it.

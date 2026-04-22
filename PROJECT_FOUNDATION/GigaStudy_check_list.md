@@ -190,6 +190,8 @@ This checklist tracks the new six-track studio foundation only.
 ## Admin / Storage Operations
 
 - [x] `/admin` page uses the lightweight alpha login `admin` / `대연123`.
+- [x] `/admin` login accepts `대연123` plus alpha keyboard aliases
+  `eodus123` and `daeyeon123`.
 - [x] Admin API accepts the configured admin username/password headers.
 - [x] Admin API still accepts `X-GigaStudy-Admin-Token` when
   `GIGASTUDY_API_ADMIN_TOKEN` is configured.
@@ -203,6 +205,14 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Studio metadata storage can use Postgres/Neon through
   `GIGASTUDY_API_DATABASE_URL`, with local JSON kept as the development
   fallback.
+- [x] Studio list API uses summary-only pagination instead of returning every
+  full studio document.
+- [x] Studio detail API loads one requested studio document instead of reading
+  the entire studio list.
+- [x] Admin storage summary pages studio rows and limits per-studio asset
+  detail rows.
+- [x] Reports and extraction/generation candidates are stored as sidecar data
+  outside the primary studio document while preserving the API response shape.
 - [x] Upload, recording, and OMR job assets can use S3-compatible object
   storage such as Cloudflare R2 through `GIGASTUDY_API_STORAGE_BACKEND=s3`,
   with local filesystem storage kept as the development fallback.

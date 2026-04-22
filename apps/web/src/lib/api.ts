@@ -15,6 +15,13 @@ export type AdminCredentials = {
   password: string
 }
 
+export type AdminStorageQuery = {
+  studioLimit?: number
+  studioOffset?: number
+  assetLimit?: number
+  assetOffset?: number
+}
+
 export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -264,14 +271,35 @@ function encodeUtf8Base64(value: string): string {
   return btoa(binary)
 }
 
-export function getAdminStorage(credentials: AdminCredentials): Promise<AdminStorageSummary> {
+export function getAdminStorage(
+  credentials: AdminCredentials,
+  query: AdminStorageQuery = {},
+): Promise<AdminStorageSummary> {
   return requestJson<AdminStorageSummary>(
-    '/api/admin/storage',
+    buildAdminStoragePath(query),
     {
       headers: adminHeaders(credentials),
     },
     'Admin storage summary could not be loaded.',
   )
+}
+
+function buildAdminStoragePath(query: AdminStorageQuery): string {
+  const params = new URLSearchParams()
+  if (query.studioLimit !== undefined) {
+    params.set('studio_limit', String(query.studioLimit))
+  }
+  if (query.studioOffset !== undefined) {
+    params.set('studio_offset', String(query.studioOffset))
+  }
+  if (query.assetLimit !== undefined) {
+    params.set('asset_limit', String(query.assetLimit))
+  }
+  if (query.assetOffset !== undefined) {
+    params.set('asset_offset', String(query.assetOffset))
+  }
+  const suffix = params.toString()
+  return suffix ? `/api/admin/storage?${suffix}` : '/api/admin/storage'
 }
 
 export function deleteAdminStudio(

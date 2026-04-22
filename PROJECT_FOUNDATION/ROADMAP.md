@@ -64,6 +64,10 @@ The current implementation has a working vertical slice for:
   S3-compatible bucket such as Cloudflare R2. Local filesystem storage remains
   the development fallback and the Cloud Run filesystem becomes only temporary
   engine/cache space when object storage is enabled.
+- Paginated studio/admin metadata reads: studio lists return summary rows,
+  studio detail loads one document, admin storage pages studios and limits
+  per-studio asset details, and report/candidate payloads are split out as
+  sidecar data so they do not bloat the primary studio row.
 - Scoring performance audio is temporary extraction input and is deleted after
   TrackNote extraction instead of being retained as a stored asset.
 

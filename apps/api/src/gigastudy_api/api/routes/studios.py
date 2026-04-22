@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response
 from fastapi.responses import FileResponse
 
 from gigastudy_api.api.schemas.studios import (
@@ -19,9 +19,11 @@ router = APIRouter()
 
 @router.get("", response_model=list[StudioListItem])
 def list_studios(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> list[StudioListItem]:
-    return repository.list_studios()
+    return repository.list_studios(limit=limit, offset=offset)
 
 
 @router.post("", response_model=Studio)

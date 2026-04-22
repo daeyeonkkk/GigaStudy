@@ -184,6 +184,12 @@ export type AdminStudioSummary = {
 export type AdminStorageSummary = {
   storage_root: string
   studio_count: number
+  listed_studio_count: number
+  studio_limit: number
+  studio_offset: number
+  has_more_studios: boolean
+  asset_limit: number
+  asset_offset: number
   asset_count: number
   total_bytes: number
   metadata_bytes: number

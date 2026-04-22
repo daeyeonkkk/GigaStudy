@@ -35,6 +35,12 @@ class AdminStudioSummary(BaseModel):
 class AdminStorageSummary(BaseModel):
     storage_root: str
     studio_count: int
+    listed_studio_count: int = 0
+    studio_limit: int = 50
+    studio_offset: int = 0
+    has_more_studios: bool = False
+    asset_limit: int = 25
+    asset_offset: int = 0
     asset_count: int
     total_bytes: int
     metadata_bytes: int

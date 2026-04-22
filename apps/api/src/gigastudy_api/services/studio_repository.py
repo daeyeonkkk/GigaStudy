@@ -100,28 +100,10 @@ class StudioRepository:
             raise RuntimeError(str(error)) from error
         self._lock = RLock()
 
-    def list_studios(self) -> list[StudioListItem]:
+    def list_studios(self, *, limit: int = 50, offset: int = 0) -> list[StudioListItem]:
         with self._lock:
-            studios = list(self._load().values())
-        return sorted(
-            (
-                StudioListItem(
-                    studio_id=studio.studio_id,
-                    title=studio.title,
-                    bpm=studio.bpm,
-                    time_signature_numerator=studio.time_signature_numerator,
-                    time_signature_denominator=studio.time_signature_denominator,
-                    registered_track_count=sum(
-                        1 for track in studio.tracks if track.status == "registered"
-                    ),
-                    report_count=len(studio.reports),
-                    updated_at=studio.updated_at,
-                )
-                for studio in studios
-            ),
-            key=lambda item: item.updated_at,
-            reverse=True,
-        )
+            rows = self._store.list_summary_raw(limit=limit, offset=offset)
+        return [_studio_list_item_from_payload(studio_id, studio_payload) for studio_id, studio_payload in rows]
 
     def create_studio(
         self,
@@ -168,9 +150,7 @@ class StudioRepository:
                     content_base64=source_content_base64 or "",
                 )
                 with self._lock:
-                    payload = self._load()
-                    payload[studio.studio_id] = studio
-                    self._save(payload)
+                    self._save_studio(studio)
                 return self._enqueue_omr_job(
                     studio.studio_id,
                     1,
@@ -188,14 +168,12 @@ class StudioRepository:
             )
 
         with self._lock:
-            payload = self._load()
-            payload[studio.studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def get_studio(self, studio_id: str) -> Studio:
         with self._lock:
-            studio = self._load().get(studio_id)
+            studio = self._load_studio(studio_id)
         if studio is None:
             raise HTTPException(status_code=404, detail="Studio not found.")
         return studio
@@ -221,31 +199,48 @@ class StudioRepository:
         filename = track.audio_source_label or track.source_label or source_path.name
         return source_path, media_type, filename
 
-    def get_admin_storage_summary(self) -> AdminStorageSummary:
+    def get_admin_storage_summary(
+        self,
+        *,
+        studio_limit: int = 50,
+        studio_offset: int = 0,
+        asset_limit: int = 25,
+        asset_offset: int = 0,
+    ) -> AdminStorageSummary:
         with self._lock:
-            payload = self._load()
-            studios = list(payload.values())
+            studio_count = self._count_studios()
+            studios = self._list_studios(limit=studio_limit, offset=studio_offset)
 
-        studio_summaries = [self._build_admin_studio_summary(studio) for studio in studios]
-        metadata_bytes = self._store.estimate_bytes(self._encode_payload(payload))
+        studio_summaries = [
+            self._build_admin_studio_summary(
+                studio,
+                asset_limit=asset_limit,
+                asset_offset=asset_offset,
+            )
+            for studio in studios
+        ]
+        metadata_bytes = self._store.estimate_total_bytes()
         asset_count = sum(studio.asset_count for studio in studio_summaries)
         asset_bytes = sum(studio.asset_bytes for studio in studio_summaries)
         return AdminStorageSummary(
             storage_root=self._asset_storage.label,
-            studio_count=len(studio_summaries),
+            studio_count=studio_count,
+            listed_studio_count=len(studio_summaries),
+            studio_limit=studio_limit,
+            studio_offset=studio_offset,
+            has_more_studios=studio_offset + len(studio_summaries) < studio_count,
+            asset_limit=asset_limit,
+            asset_offset=asset_offset,
             asset_count=asset_count,
             total_bytes=metadata_bytes + asset_bytes,
             metadata_bytes=metadata_bytes,
-            studios=sorted(studio_summaries, key=lambda studio: studio.updated_at, reverse=True),
+            studios=studio_summaries,
         )
 
     def delete_admin_studio(self, studio_id: str) -> AdminDeleteResult:
         with self._lock:
-            payload = self._load()
-            studio = payload.pop(studio_id, None)
-            if studio is None:
+            if not self._delete_studio(studio_id):
                 raise HTTPException(status_code=404, detail="Studio not found.")
-            self._save(payload)
 
         upload_files, upload_bytes = self._delete_asset_prefix(f"uploads/{studio_id}/")
         job_files, job_bytes = self._delete_asset_prefix(f"jobs/{studio_id}/")
@@ -261,15 +256,13 @@ class StudioRepository:
 
     def delete_admin_studio_assets(self, studio_id: str) -> AdminDeleteResult:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
             self._clear_studio_asset_references(studio, timestamp)
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
 
         upload_files, upload_bytes = self._delete_asset_prefix(f"uploads/{studio_id}/")
         job_files, job_bytes = self._delete_asset_prefix(f"jobs/{studio_id}/")
@@ -290,18 +283,14 @@ class StudioRepository:
             raise HTTPException(status_code=404, detail="Asset not found.")
 
         with self._lock:
-            payload = self._load()
+            studio_id = _studio_id_from_asset_path(relative_path)
             timestamp = _now()
-            changed = False
-            for studio in payload.values():
-                studio_changed = self._clear_asset_references(studio, relative_path, timestamp)
-                if studio_changed:
+            if studio_id is not None:
+                studio = self._load_studio(studio_id)
+                if studio is not None and self._clear_asset_references(studio, relative_path, timestamp):
                     studio.updated_at = timestamp
-                    changed = True
-            if changed:
-                self._save(payload)
+                    self._save_studio(studio)
 
-        studio_id = _studio_id_from_asset_path(relative_path)
         return AdminDeleteResult(
             deleted=True,
             message="Asset deleted.",
@@ -491,8 +480,7 @@ class StudioRepository:
 
     def update_sync(self, studio_id: str, slot_id: int, request: SyncTrackRequest) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -500,8 +488,7 @@ class StudioRepository:
             track.sync_offset_seconds = round(request.sync_offset_seconds, 2)
             track.updated_at = timestamp
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def _update_time_signature(
@@ -511,16 +498,14 @@ class StudioRepository:
         denominator: int,
     ) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
             studio.time_signature_numerator = numerator
             studio.time_signature_denominator = denominator
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def approve_candidate(
@@ -530,8 +515,7 @@ class StudioRepository:
         request: ApproveCandidateRequest,
     ) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -573,14 +557,12 @@ class StudioRepository:
                         sibling.status = "rejected"
                         sibling.updated_at = timestamp
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def reject_candidate(self, studio_id: str, candidate_id: str) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -596,8 +578,7 @@ class StudioRepository:
                 timestamp,
             )
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def approve_job_candidates(
@@ -607,8 +588,7 @@ class StudioRepository:
         request: ApproveJobCandidatesRequest,
     ) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
 
@@ -666,8 +646,7 @@ class StudioRepository:
             job.message = "OMR candidates registered into their suggested tracks."
             job.updated_at = timestamp
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def score_track(self, studio_id: str, slot_id: int, request: ScoreTrackRequest) -> Studio:
@@ -714,14 +693,12 @@ class StudioRepository:
         )
 
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             studio.reports.append(report)
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def _extract_scoring_audio(
@@ -767,8 +744,7 @@ class StudioRepository:
         audio_mime_type: str | None = None,
     ) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -783,8 +759,7 @@ class StudioRepository:
             track.notes = notes
             track.updated_at = timestamp
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def _apply_extracted_tracks(
@@ -796,8 +771,7 @@ class StudioRepository:
         source_label: str,
     ) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -813,8 +787,7 @@ class StudioRepository:
                 track.notes = notes
                 track.updated_at = timestamp
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def _should_start_omr_job(
@@ -1001,8 +974,7 @@ class StudioRepository:
         )
 
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             track = self._find_track(studio, slot_id)
@@ -1013,8 +985,7 @@ class StudioRepository:
                 track.updated_at = timestamp
             studio.jobs.append(job)
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
 
         if background_tasks is None:
             self._process_omr_job(studio_id, job.job_id, source_path, source_label, parse_all_parts)
@@ -1097,8 +1068,7 @@ class StudioRepository:
         audio_mime_type: str | None = None,
     ) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -1135,8 +1105,7 @@ class StudioRepository:
                     job.updated_at = timestamp
                     break
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def _add_generation_candidates(
@@ -1150,8 +1119,7 @@ class StudioRepository:
         message: str,
     ) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -1180,8 +1148,7 @@ class StudioRepository:
                 track.source_label = source_label
                 track.updated_at = timestamp
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def _job_slot_id(self, studio_id: str, job_id: str) -> int:
@@ -1193,8 +1160,7 @@ class StudioRepository:
 
     def _mark_job_running(self, studio_id: str, job_id: str) -> None:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -1204,13 +1170,11 @@ class StudioRepository:
                     job.updated_at = timestamp
                     break
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
 
     def _mark_job_failed(self, studio_id: str, job_id: str, *, message: str) -> Studio:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -1225,14 +1189,12 @@ class StudioRepository:
                         track.updated_at = timestamp
                     break
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
         return studio
 
     def _mark_job_completed(self, studio_id: str, job_id: str, *, output_path: str) -> None:
         with self._lock:
-            payload = self._load()
-            studio = payload.get(studio_id)
+            studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
@@ -1243,8 +1205,7 @@ class StudioRepository:
                     job.updated_at = timestamp
                     break
             studio.updated_at = timestamp
-            payload[studio_id] = studio
-            self._save(payload)
+            self._save_studio(studio)
 
     def _find_track(self, studio: Studio, slot_id: int) -> TrackSlot:
         track_name(slot_id)
@@ -1294,9 +1255,16 @@ class StudioRepository:
             track.duration_seconds = 0
         track.updated_at = timestamp
 
-    def _build_admin_studio_summary(self, studio: Studio) -> AdminStudioSummary:
+    def _build_admin_studio_summary(
+        self,
+        studio: Studio,
+        *,
+        asset_limit: int,
+        asset_offset: int,
+    ) -> AdminStudioSummary:
         assets = list(self._iter_admin_assets(studio))
         asset_bytes = sum(asset.size_bytes for asset in assets)
+        listed_assets = assets[asset_offset : asset_offset + asset_limit] if asset_limit > 0 else []
         return AdminStudioSummary(
             studio_id=studio.studio_id,
             title=studio.title,
@@ -1309,7 +1277,7 @@ class StudioRepository:
             asset_bytes=asset_bytes,
             created_at=studio.created_at,
             updated_at=studio.updated_at,
-            assets=assets,
+            assets=listed_assets,
         )
 
     def _iter_admin_assets(self, studio: Studio) -> list[AdminAssetSummary]:
@@ -1499,6 +1467,28 @@ class StudioRepository:
     def _job_output_dir(self, studio_id: str, job_id: str) -> Path:
         return self._root / "jobs" / studio_id / job_id
 
+    def _list_studios(self, *, limit: int, offset: int) -> list[Studio]:
+        raw_rows = self._store.list_raw(limit=limit, offset=offset)
+        return [
+            Studio.model_validate(_migrate_legacy_studio_payload(studio_payload))
+            for _studio_id, studio_payload in raw_rows
+        ]
+
+    def _count_studios(self) -> int:
+        return self._store.count()
+
+    def _load_studio(self, studio_id: str) -> Studio | None:
+        raw_payload = self._store.load_one_raw(studio_id)
+        if raw_payload is None:
+            return None
+        return Studio.model_validate(_migrate_legacy_studio_payload(raw_payload))
+
+    def _save_studio(self, studio: Studio) -> None:
+        self._store.save_one_raw(studio.studio_id, studio.model_dump(mode="json"))
+
+    def _delete_studio(self, studio_id: str) -> bool:
+        return self._store.delete_one_raw(studio_id)
+
     def _load(self) -> dict[str, Studio]:
         raw_payload = self._store.load_raw()
         return {
@@ -1514,6 +1504,50 @@ class StudioRepository:
             studio_id: studio.model_dump(mode="json")
             for studio_id, studio in payload.items()
         }
+
+
+def _studio_list_item(studio: Studio) -> StudioListItem:
+    return StudioListItem(
+        studio_id=studio.studio_id,
+        title=studio.title,
+        bpm=studio.bpm,
+        time_signature_numerator=studio.time_signature_numerator,
+        time_signature_denominator=studio.time_signature_denominator,
+        registered_track_count=sum(1 for track in studio.tracks if track.status == "registered"),
+        report_count=len(studio.reports),
+        updated_at=studio.updated_at,
+    )
+
+
+def _studio_list_item_from_payload(studio_id: str, studio_payload: Any) -> StudioListItem:
+    migrated_payload = _migrate_legacy_studio_payload(studio_payload)
+    if not isinstance(migrated_payload, dict):
+        raise HTTPException(status_code=500, detail="Stored studio payload is invalid.")
+    shallow_payload = dict(migrated_payload)
+    report_count = _payload_sidecar_count(shallow_payload, "reports")
+    shallow_payload["reports"] = []
+    shallow_payload["candidates"] = []
+    studio = Studio.model_validate(shallow_payload)
+    return StudioListItem(
+        studio_id=studio_id,
+        title=studio.title,
+        bpm=studio.bpm,
+        time_signature_numerator=studio.time_signature_numerator,
+        time_signature_denominator=studio.time_signature_denominator,
+        registered_track_count=sum(1 for track in studio.tracks if track.status == "registered"),
+        report_count=report_count,
+        updated_at=studio.updated_at,
+    )
+
+
+def _payload_sidecar_count(studio_payload: dict[str, Any], key: str) -> int:
+    counts = studio_payload.get("_sidecar_counts")
+    if isinstance(counts, dict):
+        count = counts.get(key)
+        if isinstance(count, int):
+            return count
+    value = studio_payload.get(key)
+    return len(value) if isinstance(value, list) else 0
 
 
 def _track_duration_seconds(notes: list[TrackNote]) -> float:

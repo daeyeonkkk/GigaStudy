@@ -18,15 +18,18 @@ type AdminStatus =
   | { phase: 'success'; message: string }
 
 const DEFAULT_LOGIN_ID = 'admin'
+const ADMIN_STUDIO_PAGE_SIZE = 50
+const ADMIN_ASSET_PAGE_SIZE = 25
 
 export function AdminPage() {
   const [username, setUsername] = useState(DEFAULT_LOGIN_ID)
   const [password, setPassword] = useState('')
   const [credentials, setCredentials] = useState<AdminCredentials | null>(null)
   const [summary, setSummary] = useState<AdminStorageSummary | null>(null)
+  const [studioOffset, setStudioOffset] = useState(0)
   const [status, setStatus] = useState<AdminStatus>({
     phase: 'idle',
-    message: 'admin 계정으로 로그인하세요.',
+    message: 'Log in to manage studios and stored files.',
   })
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [expandedStudios, setExpandedStudios] = useState<Set<string>>(() => new Set())
@@ -40,18 +43,26 @@ export function AdminPage() {
     [summary],
   )
 
+  const pageStart = summary && summary.listed_studio_count > 0 ? summary.studio_offset + 1 : 0
+  const pageEnd = summary ? summary.studio_offset + summary.listed_studio_count : 0
   const isBusy = status.phase === 'loading' || busyKey !== null
   const activeCredentials = credentials ?? {
     username: username.trim(),
     password,
   }
 
-  async function loadSummary(nextCredentials: AdminCredentials) {
-    setStatus({ phase: 'loading', message: '저장 현황을 불러오는 중입니다.' })
-    const nextSummary = await getAdminStorage(nextCredentials)
+  async function loadSummary(nextCredentials: AdminCredentials, nextOffset = studioOffset) {
+    setStatus({ phase: 'loading', message: 'Loading storage summary.' })
+    const nextSummary = await getAdminStorage(nextCredentials, {
+      studioLimit: ADMIN_STUDIO_PAGE_SIZE,
+      studioOffset: nextOffset,
+      assetLimit: ADMIN_ASSET_PAGE_SIZE,
+      assetOffset: 0,
+    })
     setSummary(nextSummary)
     setCredentials(nextCredentials)
-    setStatus({ phase: 'success', message: '저장 현황을 갱신했습니다.' })
+    setStudioOffset(nextSummary.studio_offset)
+    setStatus({ phase: 'success', message: 'Storage summary refreshed.' })
   }
 
   async function login() {
@@ -60,18 +71,19 @@ export function AdminPage() {
       password,
     }
     if (!nextCredentials.username || !nextCredentials.password) {
-      setStatus({ phase: 'error', message: '아이디와 비밀번호를 입력하세요.' })
+      setStatus({ phase: 'error', message: 'Enter both admin ID and password.' })
       return
     }
 
     try {
-      await loadSummary(nextCredentials)
+      setExpandedStudios(new Set())
+      await loadSummary(nextCredentials, 0)
     } catch (error) {
       setCredentials(null)
       setSummary(null)
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '로그인하지 못했습니다.',
+        message: error instanceof Error ? error.message : 'Login failed.',
       })
     }
   }
@@ -83,11 +95,26 @@ export function AdminPage() {
     }
 
     try {
-      await loadSummary(credentials)
+      await loadSummary(credentials, studioOffset)
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '저장 현황을 불러오지 못했습니다.',
+        message: error instanceof Error ? error.message : 'Storage summary could not be loaded.',
+      })
+    }
+  }
+
+  async function goToOffset(nextOffset: number) {
+    if (credentials === null) {
+      return
+    }
+    setExpandedStudios(new Set())
+    try {
+      await loadSummary(credentials, Math.max(0, nextOffset))
+    } catch (error) {
+      setStatus({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Studio page could not be loaded.',
       })
     }
   }
@@ -96,8 +123,9 @@ export function AdminPage() {
     setCredentials(null)
     setSummary(null)
     setPassword('')
+    setStudioOffset(0)
     setExpandedStudios(new Set())
-    setStatus({ phase: 'idle', message: '로그아웃했습니다.' })
+    setStatus({ phase: 'idle', message: 'Logged out.' })
   }
 
   function toggleStudio(studioId: string) {
@@ -114,15 +142,19 @@ export function AdminPage() {
 
   async function runDeletion(key: string, action: () => Promise<unknown>) {
     setBusyKey(key)
-    setStatus({ phase: 'loading', message: '삭제 요청을 처리하는 중입니다.' })
+    setStatus({ phase: 'loading', message: 'Processing deletion.' })
     try {
       await action()
-      await loadSummary(activeCredentials)
-      setStatus({ phase: 'success', message: '삭제가 완료되었습니다.' })
+      const nextOffset =
+        summary?.studios.length === 1 && studioOffset > 0
+          ? Math.max(0, studioOffset - ADMIN_STUDIO_PAGE_SIZE)
+          : studioOffset
+      await loadSummary(activeCredentials, nextOffset)
+      setStatus({ phase: 'success', message: 'Deletion completed.' })
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '삭제하지 못했습니다.',
+        message: error instanceof Error ? error.message : 'Deletion failed.',
       })
     } finally {
       setBusyKey(null)
@@ -130,7 +162,7 @@ export function AdminPage() {
   }
 
   function handleDeleteAsset(asset: AdminAssetSummary) {
-    if (!window.confirm(`${asset.filename} 파일을 삭제할까요? TrackNote와 리포트는 유지됩니다.`)) {
+    if (!window.confirm(`Delete ${asset.filename}? TrackNote and report data will remain.`)) {
       return
     }
     void runDeletion(`asset:${asset.asset_id}`, () =>
@@ -141,7 +173,7 @@ export function AdminPage() {
   function handleDeleteStudioAssets(studio: AdminStudioSummary) {
     if (
       !window.confirm(
-        `${studio.title} 스튜디오의 파일 ${studio.asset_count}개를 모두 삭제할까요? 스튜디오와 TrackNote는 유지됩니다.`,
+        `Delete ${studio.asset_count} stored file(s) for ${studio.title}? Normalized TrackNote data will remain.`,
       )
     ) {
       return
@@ -152,11 +184,7 @@ export function AdminPage() {
   }
 
   function handleDeleteStudio(studio: AdminStudioSummary) {
-    if (
-      !window.confirm(
-        `${studio.title} 스튜디오를 완전히 삭제할까요? 리포트와 저장 파일도 함께 삭제됩니다.`,
-      )
-    ) {
+    if (!window.confirm(`Delete studio ${studio.title} and all stored files?`)) {
       return
     }
     void runDeletion(`studio:${studio.studio_id}`, () =>
@@ -168,22 +196,22 @@ export function AdminPage() {
     <main className="app-shell admin-page">
       <section className="admin-window" aria-label="GigaStudy admin">
         <header className="admin-titlebar">
-          <Link to="/" className="admin-mark" aria-label="홈으로 이동">
+          <Link to="/" className="admin-mark" aria-label="Go home">
             GS
           </Link>
           <span>GigaStudy - Admin</span>
         </header>
 
-        <nav className="admin-menubar" aria-label="관리 메뉴">
+        <nav className="admin-menubar" aria-label="Admin menu">
           <span>Storage</span>
           <span>Studios</span>
           <span>Assets</span>
           <span>Cleanup</span>
         </nav>
 
-        <section className="admin-auth" aria-label="관리자 로그인">
+        <section className="admin-auth" aria-label="Admin login">
           <label>
-            <span>아이디</span>
+            <span>ID</span>
             <input
               value={username}
               autoComplete="username"
@@ -197,7 +225,7 @@ export function AdminPage() {
             />
           </label>
           <label>
-            <span>비밀번호</span>
+            <span>Password</span>
             <input
               type="password"
               value={password}
@@ -213,15 +241,15 @@ export function AdminPage() {
           </label>
           {credentials === null ? (
             <button className="app-button" type="button" disabled={isBusy} onClick={() => void login()}>
-              로그인
+              Login
             </button>
           ) : (
             <div className="admin-auth-actions">
               <button className="app-button" type="button" disabled={isBusy} onClick={() => void refreshSummary()}>
-                새로고침
+                Refresh
               </button>
               <button type="button" disabled={isBusy} onClick={logout}>
-                로그아웃
+                Logout
               </button>
             </div>
           )}
@@ -232,30 +260,48 @@ export function AdminPage() {
 
         {credentials !== null ? (
           <>
-            <section className="admin-overview" aria-label="저장 현황">
+            <section className="admin-overview" aria-label="Storage overview">
               <AdminMetric label="Studios" value={summary?.studio_count ?? 0} />
-              <AdminMetric label="Files" value={summary?.asset_count ?? 0} />
+              <AdminMetric label="Page Files" value={summary?.asset_count ?? 0} />
               <AdminMetric label="Storage" value={formatBytes(summary?.total_bytes ?? 0)} />
               <AdminMetric label="Metadata" value={formatBytes(summary?.metadata_bytes ?? 0)} />
-              <AdminMetric label="Tracks" value={totalRegisteredTracks} />
+              <AdminMetric label="Page Tracks" value={totalRegisteredTracks} />
             </section>
 
-            <section className="admin-storage-path" aria-label="스토리지 백엔드">
+            <section className="admin-storage-path" aria-label="Storage backend">
               <span>Storage backend</span>
               <strong>{summary?.storage_root ?? '-'}</strong>
             </section>
 
-            <section className="admin-studios" aria-label="스튜디오 목록">
+            <section className="admin-studios" aria-label="Studio list">
               <header className="admin-section-header">
                 <div>
                   <p className="eyebrow">Operations</p>
-                  <h1>스튜디오 관리</h1>
+                  <h1>Studio Management</h1>
                 </div>
-                <span>{summary ? `${summary.studios.length} studios` : 'No data'}</span>
+                <div className="admin-pager" aria-label="Studio pagination">
+                  <span>
+                    {summary ? `${pageStart}-${pageEnd} / ${summary.studio_count}` : 'No data'}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isBusy || !summary || summary.studio_offset === 0}
+                    onClick={() => void goToOffset(studioOffset - ADMIN_STUDIO_PAGE_SIZE)}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBusy || !summary?.has_more_studios}
+                    onClick={() => void goToOffset(studioOffset + ADMIN_STUDIO_PAGE_SIZE)}
+                  >
+                    Next
+                  </button>
+                </div>
               </header>
 
               {summary?.studios.length === 0 ? (
-                <p className="admin-empty">저장된 스튜디오가 없습니다.</p>
+                <p className="admin-empty">No studios on this page.</p>
               ) : null}
 
               <div className="admin-studio-list">
@@ -274,23 +320,23 @@ export function AdminPage() {
                       <div className="admin-studio-meta">
                         <span>{maskId(studio.studio_id)}</span>
                         <span>{studio.bpm} BPM</span>
-                        <span>트랙 {studio.registered_track_count}/6</span>
-                        <span>리포트 {studio.report_count}</span>
-                        <span>후보 {studio.candidate_count}</span>
-                        <span>파일 {studio.asset_count}</span>
+                        <span>tracks {studio.registered_track_count}/6</span>
+                        <span>reports {studio.report_count}</span>
+                        <span>candidates {studio.candidate_count}</span>
+                        <span>files {studio.asset_count}</span>
                         <span>{formatBytes(studio.asset_bytes)}</span>
                       </div>
                     </div>
                     <div className="admin-row-actions">
                       <Link className="admin-link-button" to={`/studios/${studio.studio_id}`}>
-                        열기
+                        Open
                       </Link>
                       <button
                         type="button"
                         disabled={isBusy || studio.asset_count === 0}
                         onClick={() => handleDeleteStudioAssets(studio)}
                       >
-                        파일 삭제
+                        Delete Files
                       </button>
                       <button
                         className="admin-danger"
@@ -298,13 +344,14 @@ export function AdminPage() {
                         disabled={isBusy}
                         onClick={() => handleDeleteStudio(studio)}
                       >
-                        스튜디오 삭제
+                        Delete Studio
                       </button>
                     </div>
 
                     {expandedStudios.has(studio.studio_id) ? (
                       <AssetTable
                         assets={studio.assets}
+                        totalAssetCount={studio.asset_count}
                         busyKey={busyKey}
                         onDeleteAsset={handleDeleteAsset}
                       />
@@ -315,9 +362,9 @@ export function AdminPage() {
             </section>
           </>
         ) : (
-          <section className="admin-login-empty" aria-label="로그인 안내">
+          <section className="admin-login-empty" aria-label="Login prompt">
             <h1>Admin</h1>
-            <p>스튜디오와 저장 파일을 삭제하려면 로그인하세요.</p>
+            <p>Log in to delete studios, uploads, recordings, generated files, and OMR outputs.</p>
           </section>
         )}
 
@@ -341,48 +388,57 @@ function AdminMetric({ label, value }: { label: string; value: number | string }
 
 function AssetTable({
   assets,
+  totalAssetCount,
   busyKey,
   onDeleteAsset,
 }: {
   assets: AdminAssetSummary[]
+  totalAssetCount: number
   busyKey: string | null
   onDeleteAsset: (asset: AdminAssetSummary) => void
 }) {
   if (assets.length === 0) {
-    return <p className="admin-empty admin-empty--inline">이 스튜디오에 저장된 파일이 없습니다.</p>
+    return <p className="admin-empty admin-empty--inline">No stored files for this studio.</p>
   }
 
   return (
-    <div className="admin-asset-table" role="table" aria-label="스튜디오 파일 목록">
-      <div className="admin-asset-row admin-asset-row--head" role="row">
-        <span role="columnheader">파일</span>
-        <span role="columnheader">종류</span>
-        <span role="columnheader">크기</span>
-        <span role="columnheader">참조</span>
-        <span role="columnheader">수정</span>
-        <span role="columnheader">관리</span>
-      </div>
-      {assets.map((asset) => (
-        <div className="admin-asset-row" role="row" key={asset.asset_id}>
-          <span role="cell" title={asset.relative_path}>
-            {asset.filename}
-          </span>
-          <span role="cell">{asset.kind}</span>
-          <span role="cell">{formatBytes(asset.size_bytes)}</span>
-          <span role="cell">{asset.referenced ? '사용 중' : '미참조'}</span>
-          <span role="cell">{formatDate(asset.updated_at)}</span>
-          <span role="cell">
-            <button
-              type="button"
-              disabled={busyKey === `asset:${asset.asset_id}`}
-              onClick={() => onDeleteAsset(asset)}
-            >
-              삭제
-            </button>
-          </span>
+    <>
+      <div className="admin-asset-table" role="table" aria-label="Stored files">
+        <div className="admin-asset-row admin-asset-row--head" role="row">
+          <span role="columnheader">File</span>
+          <span role="columnheader">Kind</span>
+          <span role="columnheader">Size</span>
+          <span role="columnheader">Ref</span>
+          <span role="columnheader">Updated</span>
+          <span role="columnheader">Action</span>
         </div>
-      ))}
-    </div>
+        {assets.map((asset) => (
+          <div className="admin-asset-row" role="row" key={asset.asset_id}>
+            <span role="cell" title={asset.relative_path}>
+              {asset.filename}
+            </span>
+            <span role="cell">{asset.kind}</span>
+            <span role="cell">{formatBytes(asset.size_bytes)}</span>
+            <span role="cell">{asset.referenced ? 'in use' : 'orphan'}</span>
+            <span role="cell">{formatDate(asset.updated_at)}</span>
+            <span role="cell">
+              <button
+                type="button"
+                disabled={busyKey === `asset:${asset.asset_id}`}
+                onClick={() => onDeleteAsset(asset)}
+              >
+                Delete
+              </button>
+            </span>
+          </div>
+        ))}
+      </div>
+      {totalAssetCount > assets.length ? (
+        <p className="admin-empty admin-empty--inline">
+          Showing first {assets.length} of {totalAssetCount} files for this studio.
+        </p>
+      ) : null}
+    </>
   )
 }
 

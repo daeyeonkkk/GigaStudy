@@ -194,6 +194,31 @@
   font-weight: 800;
 }
 
+.admin-pager {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.admin-pager button {
+  min-height: 34px;
+  border: 1px solid #9eabb5;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.admin-pager button:disabled {
+  color: #8c98a3;
+  opacity: 0.65;
+}
+
 .admin-studio-list {
   display: grid;
   gap: 0;

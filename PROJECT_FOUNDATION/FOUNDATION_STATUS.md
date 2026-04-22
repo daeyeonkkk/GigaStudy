@@ -95,9 +95,20 @@ The current implementation has a working six-track vertical slice:
   studio, delete all stored files for a studio while keeping normalized
   TrackNote/report data, or delete an individual stored asset and clear its
   audio/job references.
+- Admin password validation also accepts the alpha keyboard aliases
+  `eodus123` and `daeyeon123` so an English-keyboard entry does not block
+  testers who are trying to enter `대연123`.
 - Studio metadata persistence is now abstracted. Local JSON remains the
   development fallback, while `GIGASTUDY_API_DATABASE_URL` enables a
   Postgres/Neon-backed `studio_documents` store.
+- Studio listing and admin storage summary now use paginated repository access.
+  `list_studios` returns summary rows only, `get_studio` loads the requested
+  studio document only, and admin file details are limited per page instead of
+  forcing the API to build every studio/file summary for each request.
+- Report and extraction/generation candidate payloads are stored as sidecar
+  data outside the main studio document. The API still returns the same Studio
+  shape after loading, but large reports/candidate queues no longer grow the
+  primary studio row in the durable store.
 - Stored asset persistence is now abstracted. Local filesystem remains the
   development fallback, while `GIGASTUDY_API_STORAGE_BACKEND=s3` enables
   S3-compatible storage such as Cloudflare R2 for upload, recording, and OMR
@@ -184,8 +195,8 @@ not legacy product surfaces.
 4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
    is available.
 5. Configure and verify the deployed alpha Cloud Run service against the
-   Postgres/R2 environment variables, then confirm `/admin` reports durable
-   storage instead of local instance storage.
+   Postgres/R2 environment variables and paginated admin summary behavior, then
+   confirm `/admin` reports durable storage instead of local instance storage.
 6. Add object storage lifecycle cleanup and a retention rule for abandoned
    upload/job assets.
 7. Add user ownership or private share boundaries before inviting broader

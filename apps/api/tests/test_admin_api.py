@@ -1,4 +1,5 @@
 import base64
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -15,6 +16,13 @@ ADMIN_HEADERS = {
     "X-GigaStudy-Admin-Password-B64": base64.b64encode(ADMIN_PASSWORD.encode("utf-8")).decode("ascii"),
 }
 TOKEN_HEADERS = {"X-GigaStudy-Admin-Token": "secret-token"}
+
+
+def admin_headers(password: str) -> dict[str, str]:
+    return {
+        "X-GigaStudy-Admin-User": "admin",
+        "X-GigaStudy-Admin-Password-B64": base64.b64encode(password.encode("utf-8")).decode("ascii"),
+    }
 
 
 def build_client(tmp_path: Path, monkeypatch, *, admin_token: str | None = None) -> TestClient:
@@ -61,6 +69,14 @@ def test_admin_storage_accepts_default_admin_login(tmp_path: Path, monkeypatch) 
     assert response.status_code == 200
 
 
+def test_admin_storage_accepts_keyboard_alias_for_alpha_login(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+
+    response = client.get("/api/admin/storage", headers=admin_headers("eodus123"))
+
+    assert response.status_code == 200
+
+
 def test_admin_storage_rejects_wrong_login(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
 
@@ -81,6 +97,34 @@ def test_admin_storage_still_accepts_configured_token(tmp_path: Path, monkeypatc
     response = client.get("/api/admin/storage", headers=TOKEN_HEADERS)
 
     assert response.status_code == 200
+
+
+def test_admin_storage_summary_is_paginated(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    for index in range(3):
+        response = client.post(
+            "/api/studios",
+            json={
+                "title": f"Paged studio {index}",
+                "bpm": 92,
+                "start_mode": "blank",
+            },
+        )
+        assert response.status_code == 200
+
+    response = client.get(
+        "/api/admin/storage?studio_limit=2&studio_offset=0&asset_limit=0",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["studio_count"] == 3
+    assert payload["listed_studio_count"] == 2
+    assert payload["studio_limit"] == 2
+    assert payload["studio_offset"] == 0
+    assert payload["has_more_studios"] is True
+    assert len(payload["studios"]) == 2
 
 
 def test_admin_can_list_and_delete_individual_studio_asset(tmp_path: Path, monkeypatch) -> None:
@@ -204,6 +248,9 @@ def test_scoring_audio_is_temporary_and_not_listed_as_admin_asset(tmp_path: Path
     )
 
     assert score_response.status_code == 200
+    base_payload = json.loads((tmp_path / "six_track_studios.json").read_text(encoding="utf-8"))
+    assert base_payload[studio_id]["reports"] == []
+    assert (tmp_path / "studio_sidecars" / studio_id / "reports.json").exists()
     summary = client.get("/api/admin/storage", headers=ADMIN_HEADERS).json()
     assert summary["asset_count"] == 1
     assert not (tmp_path / "tmp").exists()

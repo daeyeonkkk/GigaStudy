@@ -8,6 +8,9 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 
+SIDECAR_KEYS = ("reports", "candidates")
+
+
 class StudioStore(Protocol):
     @property
     def metadata_label(self) -> str:
@@ -16,37 +19,163 @@ class StudioStore(Protocol):
     def load_raw(self) -> dict[str, Any]:
         ...
 
+    def list_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+        ...
+
+    def list_summary_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+        ...
+
+    def count(self) -> int:
+        ...
+
+    def load_one_raw(self, studio_id: str) -> Any | None:
+        ...
+
     def save_raw(self, payload: dict[str, Any]) -> None:
         ...
 
+    def save_one_raw(self, studio_id: str, payload: Any) -> None:
+        ...
+
+    def delete_one_raw(self, studio_id: str) -> bool:
+        ...
+
     def estimate_bytes(self, payload: dict[str, Any]) -> int:
+        ...
+
+    def estimate_total_bytes(self) -> int:
         ...
 
 
 class FileStudioStore:
     def __init__(self, path: Path) -> None:
         self._path = path
+        self._sidecar_root = path.parent / "studio_sidecars"
 
     @property
     def metadata_label(self) -> str:
         return str(self._path.resolve())
 
     def load_raw(self) -> dict[str, Any]:
+        return {
+            studio_id: self._merge_file_sidecars(studio_id, studio_payload)
+            for studio_id, studio_payload in self._read_base_raw().items()
+        }
+
+    def list_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+        payload = self._read_base_raw()
+        rows = sorted(
+            payload.items(),
+            key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
+            reverse=True,
+        )
+        return [
+            (studio_id, self._merge_file_sidecars(studio_id, studio_payload))
+            for studio_id, studio_payload in rows[offset : offset + limit]
+        ]
+
+    def list_summary_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+        payload = self._read_base_raw()
+        rows = sorted(
+            payload.items(),
+            key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
+            reverse=True,
+        )
+        return rows[offset : offset + limit]
+
+    def count(self) -> int:
+        return len(self._read_base_raw())
+
+    def load_one_raw(self, studio_id: str) -> Any | None:
+        studio_payload = self._read_base_raw().get(studio_id)
+        if studio_payload is None:
+            return None
+        return self._merge_file_sidecars(studio_id, studio_payload)
+
+    def save_raw(self, payload: dict[str, Any]) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        existing_ids = set(self._read_base_raw())
+        next_ids = set(payload)
+        base_payload: dict[str, Any] = {}
+        for studio_id, studio_payload in payload.items():
+            base_studio, reports, candidates = _split_sidecars(studio_payload)
+            base_payload[studio_id] = base_studio
+            self._write_file_sidecar(studio_id, "reports", reports)
+            self._write_file_sidecar(studio_id, "candidates", candidates)
+        for stale_id in existing_ids - next_ids:
+            self._delete_file_sidecars(stale_id)
+        self._write_base_raw(base_payload)
+
+    def save_one_raw(self, studio_id: str, payload: Any) -> None:
+        raw_payload = self._read_base_raw()
+        base_studio, reports, candidates = _split_sidecars(payload)
+        raw_payload[studio_id] = base_studio
+        self._write_file_sidecar(studio_id, "reports", reports)
+        self._write_file_sidecar(studio_id, "candidates", candidates)
+        self._write_base_raw(raw_payload)
+
+    def delete_one_raw(self, studio_id: str) -> bool:
+        raw_payload = self._read_base_raw()
+        existed = studio_id in raw_payload
+        if existed:
+            raw_payload.pop(studio_id, None)
+            self._write_base_raw(raw_payload)
+            self._delete_file_sidecars(studio_id)
+        return existed
+
+    def estimate_bytes(self, payload: dict[str, Any]) -> int:
+        return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+    def estimate_total_bytes(self) -> int:
+        total = self._path.stat().st_size if self._path.exists() else 0
+        if self._sidecar_root.exists():
+            total += sum(path.stat().st_size for path in self._sidecar_root.rglob("*.json") if path.is_file())
+        return total
+
+    def _read_base_raw(self) -> dict[str, Any]:
         if not self._path.exists():
             return {}
         return json.loads(self._path.read_text(encoding="utf-8"))
 
-    def save_raw(self, payload: dict[str, Any]) -> None:
+    def _write_base_raw(self, payload: dict[str, Any]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
-    def estimate_bytes(self, payload: dict[str, Any]) -> int:
-        if self._path.exists():
-            return self._path.stat().st_size
-        return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+    def _merge_file_sidecars(self, studio_id: str, studio_payload: Any) -> Any:
+        reports = self._read_file_sidecar(studio_id, "reports")
+        candidates = self._read_file_sidecar(studio_id, "candidates")
+        return _merge_sidecars(studio_payload, reports=reports, candidates=candidates)
+
+    def _read_file_sidecar(self, studio_id: str, key: str) -> list[Any] | None:
+        sidecar_path = self._sidecar_path(studio_id, key)
+        if not sidecar_path.exists():
+            return None
+        return json.loads(sidecar_path.read_text(encoding="utf-8"))
+
+    def _write_file_sidecar(self, studio_id: str, key: str, items: list[Any]) -> None:
+        sidecar_path = self._sidecar_path(studio_id, key)
+        sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+        sidecar_path.write_text(
+            json.dumps(items, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _delete_file_sidecars(self, studio_id: str) -> None:
+        sidecar_dir = self._sidecar_root / studio_id
+        if not sidecar_dir.exists():
+            return
+        for sidecar_path in sidecar_dir.glob("*.json"):
+            sidecar_path.unlink(missing_ok=True)
+        try:
+            sidecar_dir.rmdir()
+        except OSError:
+            pass
+
+    def _sidecar_path(self, studio_id: str, key: str) -> Path:
+        return self._sidecar_root / studio_id / f"{key}.json"
 
 
 class PostgresStudioStore:
@@ -64,7 +193,77 @@ class PostgresStudioStore:
             rows = connection.execute(
                 "SELECT studio_id, payload FROM studio_documents ORDER BY updated_at DESC"
             ).fetchall()
-        return {str(row["studio_id"]): row["payload"] for row in rows}
+            sidecars = self._fetch_sidecars(connection, [str(row["studio_id"]) for row in rows])
+        return {
+            str(row["studio_id"]): _merge_sidecars(
+                row["payload"],
+                reports=sidecars["reports"].get(str(row["studio_id"])),
+                candidates=sidecars["candidates"].get(str(row["studio_id"])),
+            )
+            for row in rows
+        }
+
+    def list_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            rows = connection.execute(
+                """
+                SELECT studio_id, payload
+                FROM studio_documents
+                ORDER BY updated_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (limit, offset),
+            ).fetchall()
+            studio_ids = [str(row["studio_id"]) for row in rows]
+            sidecars = self._fetch_sidecars(connection, studio_ids)
+        return [
+            (
+                str(row["studio_id"]),
+                _merge_sidecars(
+                    row["payload"],
+                    reports=sidecars["reports"].get(str(row["studio_id"])),
+                    candidates=sidecars["candidates"].get(str(row["studio_id"])),
+                ),
+            )
+            for row in rows
+        ]
+
+    def list_summary_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            rows = connection.execute(
+                """
+                SELECT studio_id, payload
+                FROM studio_documents
+                ORDER BY updated_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (limit, offset),
+            ).fetchall()
+        return [(str(row["studio_id"]), row["payload"]) for row in rows]
+
+    def count(self) -> int:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            row = connection.execute("SELECT count(*) AS count FROM studio_documents").fetchone()
+        return int(row["count"] if row is not None else 0)
+
+    def load_one_raw(self, studio_id: str) -> Any | None:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            row = connection.execute(
+                "SELECT payload FROM studio_documents WHERE studio_id = %s",
+                (studio_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            sidecars = self._fetch_sidecars(connection, [studio_id])
+        return _merge_sidecars(
+            row["payload"],
+            reports=sidecars["reports"].get(studio_id),
+            candidates=sidecars["candidates"].get(studio_id),
+        )
 
     def save_raw(self, payload: dict[str, Any]) -> None:
         with self._connect() as connection:
@@ -79,19 +278,114 @@ class PostgresStudioStore:
                     (list(stale_ids),),
                 )
             for studio_id, studio_payload in payload.items():
-                connection.execute(
-                    """
-                    INSERT INTO studio_documents (studio_id, payload, updated_at)
-                    VALUES (%s, %s, now())
-                    ON CONFLICT (studio_id)
-                    DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()
-                    """,
-                    (studio_id, Jsonb(studio_payload)),
-                )
+                self._save_one_raw(connection, studio_id, studio_payload)
             connection.commit()
+
+    def save_one_raw(self, studio_id: str, payload: Any) -> None:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            self._save_one_raw(connection, studio_id, payload)
+            connection.commit()
+
+    def delete_one_raw(self, studio_id: str) -> bool:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            cursor = connection.execute(
+                "DELETE FROM studio_documents WHERE studio_id = %s",
+                (studio_id,),
+            )
+            connection.commit()
+        return int(cursor.rowcount or 0) > 0
 
     def estimate_bytes(self, payload: dict[str, Any]) -> int:
         return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+    def estimate_total_bytes(self) -> int:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            row = connection.execute(
+                """
+                SELECT
+                    (SELECT coalesce(sum(pg_column_size(payload)), 0) FROM studio_documents)
+                  + (SELECT coalesce(sum(pg_column_size(payload)), 0) FROM studio_reports)
+                  + (SELECT coalesce(sum(pg_column_size(payload)), 0) FROM studio_candidates)
+                    AS bytes
+                """
+            ).fetchone()
+        return int(row["bytes"] if row is not None else 0)
+
+    def _save_one_raw(self, connection, studio_id: str, payload: Any) -> None:
+        base_studio, reports, candidates = _split_sidecars(payload)
+        connection.execute(
+            """
+            INSERT INTO studio_documents (studio_id, payload, updated_at)
+            VALUES (%s, %s, now())
+            ON CONFLICT (studio_id)
+            DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()
+            """,
+            (studio_id, Jsonb(base_studio)),
+        )
+        self._replace_sidecar_rows(
+            connection,
+            table_name="studio_reports",
+            id_column="report_id",
+            id_key="report_id",
+            studio_id=studio_id,
+            items=reports,
+        )
+        self._replace_sidecar_rows(
+            connection,
+            table_name="studio_candidates",
+            id_column="candidate_id",
+            id_key="candidate_id",
+            studio_id=studio_id,
+            items=candidates,
+        )
+
+    def _replace_sidecar_rows(
+        self,
+        connection,
+        *,
+        table_name: str,
+        id_column: str,
+        id_key: str,
+        studio_id: str,
+        items: list[Any],
+    ) -> None:
+        connection.execute(f"DELETE FROM {table_name} WHERE studio_id = %s", (studio_id,))
+        for index, item in enumerate(items):
+            item_id = str(item.get(id_key) or f"{index:08d}") if isinstance(item, dict) else f"{index:08d}"
+            connection.execute(
+                f"""
+                INSERT INTO {table_name} (studio_id, {id_column}, ordinal, payload, updated_at)
+                VALUES (%s, %s, %s, %s, now())
+                """,
+                (studio_id, item_id, index, Jsonb(item)),
+            )
+
+    def _fetch_sidecars(self, connection, studio_ids: list[str]) -> dict[str, dict[str, list[Any]]]:
+        sidecars: dict[str, dict[str, list[Any]]] = {
+            "reports": {},
+            "candidates": {},
+        }
+        if not studio_ids:
+            return sidecars
+        for key, table_name in (
+            ("reports", "studio_reports"),
+            ("candidates", "studio_candidates"),
+        ):
+            rows = connection.execute(
+                f"""
+                SELECT studio_id, payload
+                FROM {table_name}
+                WHERE studio_id = ANY(%s)
+                ORDER BY studio_id, ordinal ASC, updated_at ASC
+                """,
+                (studio_ids,),
+            ).fetchall()
+            for row in rows:
+                sidecars[key].setdefault(str(row["studio_id"]), []).append(row["payload"])
+        return sidecars
 
     def _connect(self):
         import psycopg
@@ -110,6 +404,36 @@ class PostgresStudioStore:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS studio_reports (
+                studio_id text NOT NULL REFERENCES studio_documents(studio_id) ON DELETE CASCADE,
+                report_id text NOT NULL,
+                ordinal integer NOT NULL DEFAULT 0,
+                payload jsonb NOT NULL,
+                updated_at timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (studio_id, report_id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS studio_candidates (
+                studio_id text NOT NULL REFERENCES studio_documents(studio_id) ON DELETE CASCADE,
+                candidate_id text NOT NULL,
+                ordinal integer NOT NULL DEFAULT 0,
+                payload jsonb NOT NULL,
+                updated_at timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (studio_id, candidate_id)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_studio_reports_studio_order ON studio_reports (studio_id, ordinal)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_studio_candidates_studio_order ON studio_candidates (studio_id, ordinal)"
+        )
         connection.commit()
         self._initialized = True
 
@@ -118,6 +442,45 @@ def build_studio_store(*, storage_root: Path, database_url: str | None) -> Studi
     if database_url is not None and database_url.strip():
         return PostgresStudioStore(database_url)
     return FileStudioStore(storage_root / "six_track_studios.json")
+
+
+def _split_sidecars(payload: Any) -> tuple[Any, list[Any], list[Any]]:
+    if not isinstance(payload, dict):
+        return payload, [], []
+
+    base_payload = dict(payload)
+    reports = list(base_payload.pop("reports", []) or [])
+    candidates = list(base_payload.pop("candidates", []) or [])
+    base_payload["reports"] = []
+    base_payload["candidates"] = []
+    base_payload["_sidecar_counts"] = {
+        "reports": len(reports),
+        "candidates": len(candidates),
+    }
+    return base_payload, reports, candidates
+
+
+def _merge_sidecars(
+    payload: Any,
+    *,
+    reports: list[Any] | None,
+    candidates: list[Any] | None,
+) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+
+    merged_payload = dict(payload)
+    if reports:
+        merged_payload["reports"] = reports
+    else:
+        merged_payload.setdefault("reports", [])
+
+    if candidates:
+        merged_payload["candidates"] = candidates
+    else:
+        merged_payload.setdefault("candidates", [])
+
+    return merged_payload
 
 
 def _normalize_database_url(database_url: str) -> str:

@@ -180,6 +180,27 @@ def test_blank_studio_has_six_empty_tracks(tmp_path: Path, monkeypatch) -> None:
     assert all(track["status"] == "empty" for track in payload["tracks"])
 
 
+def test_studio_list_is_paginated(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    for index in range(4):
+        response = client.post(
+            "/api/studios",
+            json={
+                "title": f"List page {index}",
+                "bpm": 92,
+                "start_mode": "blank",
+            },
+        )
+        assert response.status_code == 200
+
+    response = client.get("/api/studios?limit=2&offset=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 2
+    assert all("tracks" not in studio for studio in payload)
+
+
 def test_blank_studio_can_start_with_custom_time_signature(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
 

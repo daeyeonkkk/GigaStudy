@@ -128,6 +128,10 @@ The current implementation has a working six-track vertical slice:
   studio soft warning 300, studio hard cap 500, asset warning 7 GiB, asset hard
   cap 8.5 GiB, file upload cap 15 MiB, and one active local engine job at a
   time.
+- Live alpha verification on 2026-04-22 confirmed that Cloud Run is serving the
+  API from Postgres-backed studio metadata and R2-backed stored assets, with
+  `/api/admin/storage` reporting `s3://gigastudy-alpha` and the configured
+  alpha limits.
 - Per-track browser recording plays the metronome when enabled and shows
   elapsed-time/input-level feedback while recording.
 - Web studio responsibilities are split so upload detection, browser audio
@@ -201,16 +205,13 @@ not legacy product surfaces.
    score display while preserving TrackNote as the source of truth.
 4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
    is available.
-5. Configure and verify the deployed alpha Cloud Run service against the
-   Postgres/R2 environment variables and paginated admin summary behavior, then
-   confirm `/admin` reports durable storage instead of local instance storage.
-6. Add object storage lifecycle cleanup and a retention rule for abandoned
+5. Add object storage lifecycle cleanup and a retention rule for abandoned
    upload/job assets.
-7. Add user ownership or private share boundaries before inviting broader
+6. Add user ownership or private share boundaries before inviting broader
    traffic; public list/detail endpoints are still alpha-only.
-8. Add streaming or direct-to-object upload if the product needs files larger
+7. Add streaming or direct-to-object upload if the product needs files larger
    than the current base64 JSON envelope.
-9. Move extraction/OMR execution into a durable queue before raising Cloud Run
+8. Move extraction/OMR execution into a durable queue before raising Cloud Run
    maxScale above the current free-plan alpha shape.
 
 ## Status Summary

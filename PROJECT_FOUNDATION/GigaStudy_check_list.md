@@ -232,7 +232,7 @@ This checklist tracks the new six-track studio foundation only.
   lane in the alpha build.
 - [ ] Studio access is not yet user-owned or private; public studio list/detail
   endpoints still expose all stored studios in the alpha build.
-- [ ] Live deployment must set the Postgres/R2 environment variables and verify
+- [x] Live deployment sets the Postgres/R2 environment variables and verifies
   admin storage summary against the deployed service.
 - [ ] Durable object storage still needs a lifecycle/retention policy.
 - [ ] Browser-to-R2 direct upload/signed URL flow is not implemented yet.

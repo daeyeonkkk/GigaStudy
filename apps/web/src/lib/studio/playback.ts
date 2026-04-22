@@ -7,9 +7,12 @@ import {
 } from './timing'
 
 export type PlaybackNode = {
-  oscillator: OscillatorNode
+  oscillator?: OscillatorNode
+  source?: AudioBufferSourceNode
   gain: GainNode
 }
+
+export type PlaybackSourceMode = 'audio' | 'score'
 
 export type PlaybackSession = {
   context?: AudioContext
@@ -41,6 +44,33 @@ export function createTone(
   oscillator.stop(startTime + duration + 0.03)
 
   return { oscillator, gain }
+}
+
+export function createAudioBufferPlayback(
+  context: AudioContext,
+  buffer: AudioBuffer,
+  startTime: number,
+  offsetSeconds: number,
+  volume: number,
+): PlaybackNode | null {
+  if (offsetSeconds >= buffer.duration) {
+    return null
+  }
+
+  const source = context.createBufferSource()
+  const gain = context.createGain()
+  const safeOffsetSeconds = Math.max(0, offsetSeconds)
+  const duration = Math.max(0, buffer.duration - safeOffsetSeconds)
+
+  source.buffer = buffer
+  gain.gain.setValueAtTime(volume, startTime)
+
+  source.connect(gain)
+  gain.connect(context.destination)
+  source.start(startTime, safeOffsetSeconds, duration)
+  source.stop(startTime + duration + 0.03)
+
+  return { source, gain }
 }
 
 export function startLoopingMetronomeSession(
@@ -107,12 +137,14 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ oscillator, gain }) => {
+  session.nodes.forEach(({ oscillator, source, gain }) => {
     try {
       gain.gain.cancelScheduledValues(0)
       gain.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
-      oscillator.stop()
-      oscillator.disconnect()
+      oscillator?.stop()
+      oscillator?.disconnect()
+      source?.stop()
+      source?.disconnect()
       gain.disconnect()
     } catch {
       return

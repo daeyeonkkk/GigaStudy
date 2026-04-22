@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from gigastudy_api.config import get_settings
+from gigastudy_api.api.schemas.studios import TrackNote
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.omr import OmrUnavailableError
 from gigastudy_api.services import studio_repository
@@ -435,6 +436,64 @@ def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatc
     assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
     assert soprano["notes"][0]["source"] == "musicxml"
     assert soprano["notes"][0]["pitch_midi"] == 72
+
+
+def test_audio_upload_keeps_source_file_for_track_playback(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackNote(
+                pitch_midi=72,
+                pitch_hz=261.63,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Audio playback source",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    audio_bytes = b"RIFF....WAVEfmt test audio"
+    encoded = base64.b64encode(audio_bytes).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "voice.wav",
+            "content_base64": encoded,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    soprano = upload_response.json()["tracks"][0]
+    assert soprano["status"] == "registered"
+    assert soprano["source_kind"] == "audio"
+    assert soprano["audio_source_path"].startswith("uploads/")
+    assert soprano["audio_source_label"] == "voice.wav"
+    assert soprano["audio_mime_type"] == "audio/wav"
+
+    audio_response = client.get(f"/api/studios/{studio_id}/tracks/1/audio")
+
+    assert audio_response.status_code == 200
+    assert audio_response.headers["content-type"].startswith("audio/wav")
+    assert audio_response.content == audio_bytes
 
 
 def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypatch) -> None:

@@ -24,6 +24,8 @@ The current implementation has a working vertical slice for:
   rejection, stable-pitch filtering, and median-based note segmentation
 - Browser MP3/M4A/OGG/FLAC audio normalization to WAV before voice extraction
 - Browser microphone recording to WAV TrackNote registration
+- Retained recording/audio track assets for playback while TrackNote remains
+  canonical for scoring, notation, export, and AI generation
 - Browser recording metronome playback and input level feedback
 - Audiveris OMR job adapter
 - PDF/image score upload is treated as asynchronous OMR input, not as fixture
@@ -48,7 +50,7 @@ The current implementation has a working vertical slice for:
   near-duplicate top-N search outputs.
 - AI generation writes multiple reviewable candidates before registration
 - Rule-based symbolic percussion generation
-- Ensemble playback from TrackNote data
+- Ensemble playback from either retained recording audio or TrackNote synthesis
 - Scoring playback honors the scoring checklist's metronome selection
 - Answer-sheet scoring with offline sync alignment
 - Horizontally scrollable VexFlow SVG track score engraving with fixed measure
@@ -176,6 +178,10 @@ Goal: make the six-track studio usable as an ensemble desk.
 Required:
 
 - Simultaneous playback of registered tracks
+- Playback source toggle between retained recording audio and synthesized score
+  notes
+- Audio-mode playback falls back to score synthesis for tracks without retained
+  audio
 - Per-track playback/pause
 - Per-track stop
 - Global stop
@@ -208,6 +214,8 @@ Required:
 - Checklist with Track 1-6 and Metronome
 - Start/Cancel actions
 - Selected references play together
+- Selected references are audible through the same audio-or-score playback
+  source used by normal studio playback
 - Checked metronome plays, including when no reference tracks are selected
 - Microphone recording starts with the session
 - Stop starts analysis

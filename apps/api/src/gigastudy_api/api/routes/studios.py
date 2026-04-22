@@ -1,4 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Response
+from fastapi.responses import FileResponse
 
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
@@ -61,6 +62,16 @@ def export_studio_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{studio_id}/tracks/{slot_id}/audio")
+def get_track_audio(
+    studio_id: str,
+    slot_id: int,
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> FileResponse:
+    path, media_type, filename = repository.get_track_audio(studio_id, slot_id)
+    return FileResponse(path, media_type=media_type, filename=filename)
 
 
 @router.post("/{studio_id}/tracks/{slot_id}/upload", response_model=Studio)

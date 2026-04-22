@@ -109,6 +109,10 @@ export function getStudio(studioId: string): Promise<Studio> {
   return requestJson<Studio>(`/api/studios/${studioId}`, {}, '스튜디오를 불러오지 못했습니다.')
 }
 
+export function getTrackAudioUrl(studioId: string, slotId: number): string {
+  return new URL(`/api/studios/${studioId}/tracks/${slotId}/audio`, apiBaseUrl).toString()
+}
+
 export function uploadTrack(
   studioId: string,
   slotId: number,

@@ -70,6 +70,9 @@ class ExtractionCandidate(BaseModel):
     confidence: float = Field(default=0.5, ge=0, le=1)
     status: ExtractionCandidateStatus = "pending"
     notes: list[TrackNote] = Field(default_factory=list)
+    audio_source_path: str | None = None
+    audio_source_label: str | None = None
+    audio_mime_type: str | None = None
     job_id: str | None = None
     message: str | None = None
     created_at: str
@@ -83,6 +86,9 @@ class TrackSlot(BaseModel):
     sync_offset_seconds: float = 0
     source_kind: SourceKind | None = None
     source_label: str | None = None
+    audio_source_path: str | None = None
+    audio_source_label: str | None = None
+    audio_mime_type: str | None = None
     duration_seconds: float = 0
     notes: list[TrackNote] = Field(default_factory=list)
     updated_at: str

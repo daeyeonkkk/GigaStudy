@@ -16,6 +16,10 @@ The engine may ingest voice, MIDI, MusicXML, score images, or generated parts,
 but each successful path must end by producing `TrackNote` objects for one or
 more of the six fixed track slots.
 
+Recorded or uploaded voice audio may be retained as a track playback asset, but
+it is not the scoring or harmony truth source. The persisted `TrackNote` list
+remains canonical for comparison, generation, notation, and export.
+
 ## Canonical TrackNote Data
 
 Each note event should carry:
@@ -76,6 +80,19 @@ ties are allowed only when the renderer can connect two concrete notes: either
 measure-split segments of the same stored `TrackNote`, or adjacent same-pitch
 notes whose timing and `is_tied` metadata indicate a true continuation.
 
+Track playback has two user-selectable sources:
+
+- `audio`: play the retained original recording/upload asset when a registered
+  track has one, falling back to symbolic `TrackNote` synthesis for tracks
+  without retained audio.
+- `score`: synthesize the registered `TrackNote` data directly.
+
+Individual playback, full-track playback, and scoring reference playback must
+use the same scheduler so one singer can layer recorded takes and hear checked
+reference parts during practice. Sync offsets shift each track as a whole in
+that scheduler. The offset never changes stored note beats or measure
+boundaries.
+
 Metronome playback follows the same contract. The click interval is the
 time-signature denominator pulse expressed in quarter beats:
 
@@ -118,6 +135,12 @@ browser-supported MP3/M4A/OGG/FLAC input, encodes a mono 16-bit PCM WAV data URL
 and sends it through the same upload/transcription path. During browser
 recording, the UI may play a metronome loop and show input level feedback, but
 the persisted track content remains symbolic `TrackNote` data.
+
+When a voice upload or microphone take successfully registers a track, the
+server also stores a relative pointer to the original normalized audio asset.
+The browser may fetch that asset for playback, while scoring continues to
+compare the extracted `TrackNote` answer sheet against newly extracted
+performance `TrackNote` data.
 
 The local WAV engine uses adaptive RMS voice activity thresholding, high
 zero-crossing rejection, normalized autocorrelation pitch tracking, confidence
@@ -308,6 +331,11 @@ come from user upload, user recording, OMR, MIDI, MusicXML, or AI generation.
 Selected reference tracks and the metronome are playback context only. They are
 not the truth source for judging the target part.
 
+When scoring starts, checked reference tracks must be audible through the same
+playback-source choice used by normal studio playback. In `audio` mode this
+means retained recordings are played where available; in `score` mode the
+symbolic notes are synthesized.
+
 ## Offline Alignment
 
 Scoring is not real-time.
@@ -387,6 +415,8 @@ These code paths currently implement the contract:
   `apps/web/src/lib/studio/timing.ts`
 - Browser TrackNote playback and metronome scheduling:
   `apps/web/src/lib/studio/playback.ts`
+- Track audio asset endpoint:
+  `apps/api/src/gigastudy_api/api/routes/studios.py`
 - Browser TrackNote score rendering math and hidden layout markers:
   `apps/web/src/lib/studio/scoreRendering.ts`
 - Browser VexFlow SVG engraving:

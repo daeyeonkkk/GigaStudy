@@ -56,6 +56,9 @@ export type ExtractionCandidate = {
   confidence: number
   status: 'pending' | 'approved' | 'rejected'
   notes: ScoreNote[]
+  audio_source_path: string | null
+  audio_source_label: string | null
+  audio_mime_type: string | null
   job_id: string | null
   message: string | null
   created_at: string
@@ -69,6 +72,9 @@ export type TrackSlot = {
   sync_offset_seconds: number
   source_kind: SourceKind | null
   source_label: string | null
+  audio_source_path: string | null
+  audio_source_label: string | null
+  audio_mime_type: string | null
   duration_seconds: number
   notes: ScoreNote[]
   updated_at: string

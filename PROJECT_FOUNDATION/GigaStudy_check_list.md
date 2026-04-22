@@ -82,6 +82,10 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Metronome participates in recording/scoring only when enabled.
 - [x] Metronome uses the studio time-signature denominator pulse and accents
   measure downbeats.
+- [x] Playback source can be switched between retained recording audio and
+  synthesized score notes.
+- [x] Global playback can layer all registered tracks together from retained
+  recordings where available.
 
 ## Track Registration
 
@@ -103,6 +107,8 @@ This checklist tracks the new six-track studio foundation only.
   to WAV before server-side voice extraction.
 - [x] Upload supports every advertised browser-decodable audio extension with a
   real decode path before extraction.
+- [x] Registered voice/audio tracks retain the normalized source audio for
+  playback while TrackNote data remains the scoring/generation truth source.
 - [x] Upload accepts supported MIDI formats.
 - [x] Upload accepts supported score formats.
 - [x] PDF/image score upload is fully covered by OMR job tests.
@@ -160,6 +166,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Checklist has Start.
 - [x] Checklist has Cancel.
 - [x] Start plays selected references together.
+- [x] Start plays selected reference tracks through speakers using the current
+  audio-or-score playback source.
 - [x] Start plays the checked metronome, including metronome-only scoring.
 - [x] Start attempts microphone capture.
 - [x] Stop ends recording and begins scoring.

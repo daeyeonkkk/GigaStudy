@@ -131,6 +131,38 @@
   accent-color: #082fbd;
 }
 
+.composer-source-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-left: 6px;
+  border: 1px solid #9aa7b3;
+  border-radius: 4px;
+  background: #f6f8fa;
+  overflow: hidden;
+}
+
+.composer-source-toggle button {
+  min-width: 48px;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-left: 1px solid #c1c9d0;
+  background: transparent;
+  color: #1c2c3a;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.composer-source-toggle button:first-child {
+  border-left: 0;
+}
+
+.composer-source-toggle button.is-active {
+  background: #082fbd;
+  color: #ffffff;
+}
+
 .studio-status-line {
   display: flex;
   align-items: center;

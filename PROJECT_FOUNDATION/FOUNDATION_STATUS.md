@@ -86,6 +86,9 @@ The current implementation has a working six-track vertical slice:
   parser is connected.
 - Per-track browser recording captures microphone audio, encodes WAV, and
   registers TrackNotes through the voice extraction path.
+- Registered voice/audio tracks retain their normalized source audio as a
+  playback asset while keeping TrackNote data as the canonical scoring and
+  generation source.
 - Per-track browser recording plays the metronome when enabled and shows
   elapsed-time/input-level feedback while recording.
 - Web studio responsibilities are split so upload detection, browser audio
@@ -110,7 +113,11 @@ The current implementation has a working six-track vertical slice:
 - AI vocal generation uses multiple voice-leading profiles so the review queue
   exposes meaningfully different register, motion, and contour options instead
   of near-duplicate top-N search results.
-- Playback uses TrackNote pitch/rhythm data.
+- Playback can use either retained recording audio or synthesized TrackNote
+  pitch/rhythm data. In audio mode, tracks without retained audio fall back to
+  score synthesis.
+- Global playback schedules all registered tracks together so stacked
+  one-person recordings can be rehearsed as an ensemble.
 - Registered tracks render as horizontally scrollable measure strips on the
   studio time-signature grid, with dense runs expanding the score width instead
   of overlapping.
@@ -129,6 +136,9 @@ The current implementation has a working six-track vertical slice:
   labels remain fixed.
 - Scoring reference playback honors the scoring checklist's metronome setting,
   including metronome-only scoring sessions.
+- Scoring reference playback uses the same audio-or-score playback source
+  selection as normal studio playback, so checked tracks are audible practice
+  context while the target take is recorded.
 - Scoring uses the target track as the answer sheet, extracts/accepts
   performance notes, auto-aligns global sync, and reports quantitative errors.
 - Studio report feed shows compact report title/date links; full quantitative

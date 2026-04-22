@@ -62,6 +62,13 @@ DEFAULT_UPLOAD_BPM = 92
 OMR_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
 AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
+AUDIO_MIME_TYPES = {
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+}
 
 
 class StudioRepository:
@@ -177,6 +184,20 @@ class StudioRepository:
         except ScorePdfExportError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
+    def get_track_audio(self, studio_id: str, slot_id: int) -> tuple[Path, str, str]:
+        studio = self.get_studio(studio_id)
+        track = self._find_track(studio, slot_id)
+        if track.status != "registered" or track.audio_source_path is None:
+            raise HTTPException(status_code=404, detail="Track audio source not found.")
+
+        source_path = self._resolve_data_asset_path(track.audio_source_path)
+        if not source_path.exists() or not source_path.is_file():
+            raise HTTPException(status_code=404, detail="Track audio source file is missing.")
+
+        media_type = track.audio_mime_type or _guess_audio_mime_type(source_path.name)
+        filename = track.audio_source_label or track.source_label or source_path.name
+        return source_path, media_type, filename
+
     def upload_track(
         self,
         studio_id: str,
@@ -258,6 +279,9 @@ class StudioRepository:
                         method="voice_transcription_review",
                         confidence=min((note.confidence for note in notes), default=0.45),
                         message="Voice transcription is waiting for user approval.",
+                        audio_source_path=self._relative_data_asset_path(source_path),
+                        audio_source_label=filename,
+                        audio_mime_type=_guess_audio_mime_type(filename),
                     )
                 track = self._find_track(studio, slot_id)
                 if _track_has_content(track) and not request.allow_overwrite:
@@ -271,6 +295,9 @@ class StudioRepository:
                     source_kind="audio",
                     source_label=filename,
                     notes=notes,
+                    audio_source_path=self._relative_data_asset_path(source_path),
+                    audio_source_label=filename,
+                    audio_mime_type=_guess_audio_mime_type(filename),
                 )
 
             if request.source_kind == "score" and suffix in OMR_SOURCE_SUFFIXES:
@@ -410,6 +437,9 @@ class StudioRepository:
             track.status = "registered"
             track.source_kind = candidate.source_kind
             track.source_label = candidate.source_label
+            track.audio_source_path = candidate.audio_source_path
+            track.audio_source_label = candidate.audio_source_label
+            track.audio_mime_type = candidate.audio_mime_type
             track.duration_seconds = _track_duration_seconds(candidate.notes)
             track.notes = candidate.notes
             track.updated_at = timestamp
@@ -508,6 +538,9 @@ class StudioRepository:
                 track.status = "registered"
                 track.source_kind = candidate.source_kind
                 track.source_label = candidate.source_label
+                track.audio_source_path = candidate.audio_source_path
+                track.audio_source_label = candidate.audio_source_label
+                track.audio_mime_type = candidate.audio_mime_type
                 track.duration_seconds = _track_duration_seconds(candidate.notes)
                 track.notes = candidate.notes
                 track.updated_at = timestamp
@@ -614,6 +647,9 @@ class StudioRepository:
         source_kind: SourceKind,
         source_label: str,
         notes: list[TrackNote],
+        audio_source_path: str | None = None,
+        audio_source_label: str | None = None,
+        audio_mime_type: str | None = None,
     ) -> Studio:
         with self._lock:
             payload = self._load()
@@ -625,6 +661,9 @@ class StudioRepository:
             track.status = "registered"
             track.source_kind = source_kind
             track.source_label = source_label
+            track.audio_source_path = audio_source_path
+            track.audio_source_label = audio_source_label
+            track.audio_mime_type = audio_mime_type
             track.duration_seconds = _track_duration_seconds(notes)
             track.notes = notes
             track.updated_at = timestamp
@@ -652,6 +691,9 @@ class StudioRepository:
                 track.status = "registered"
                 track.source_kind = source_kind
                 track.source_label = source_label
+                track.audio_source_path = None
+                track.audio_source_label = None
+                track.audio_mime_type = None
                 track.duration_seconds = _track_duration_seconds(notes)
                 track.notes = notes
                 track.updated_at = timestamp
@@ -744,6 +786,9 @@ class StudioRepository:
                 confidence=confidence,
                 notes=notes,
                 message="Audio upload produced a reviewable track candidate.",
+                audio_source_path=self._relative_data_asset_path(source_path),
+                audio_source_label=source_filename,
+                audio_mime_type=_guess_audio_mime_type(source_filename),
             )
             return studio
 
@@ -788,6 +833,9 @@ class StudioRepository:
         confidence: float,
         notes: list[TrackNote],
         message: str,
+        audio_source_path: str | None = None,
+        audio_source_label: str | None = None,
+        audio_mime_type: str | None = None,
     ) -> None:
         timestamp = _now()
         candidate = ExtractionCandidate(
@@ -798,6 +846,9 @@ class StudioRepository:
             method=method,
             confidence=confidence,
             notes=notes,
+            audio_source_path=audio_source_path,
+            audio_source_label=audio_source_label,
+            audio_mime_type=audio_mime_type,
             message=message,
             created_at=timestamp,
             updated_at=timestamp,
@@ -922,6 +973,9 @@ class StudioRepository:
         message: str | None = None,
         candidate_group_id: str | None = None,
         variant_label: str | None = None,
+        audio_source_path: str | None = None,
+        audio_source_label: str | None = None,
+        audio_mime_type: str | None = None,
     ) -> Studio:
         with self._lock:
             payload = self._load()
@@ -940,6 +994,9 @@ class StudioRepository:
                     variant_label=variant_label,
                     confidence=confidence,
                     notes=notes,
+                    audio_source_path=audio_source_path,
+                    audio_source_label=audio_source_label,
+                    audio_mime_type=audio_mime_type,
                     job_id=job_id,
                     message=message,
                     created_at=timestamp,
@@ -1112,6 +1169,9 @@ class StudioRepository:
         if not track.notes:
             track.source_kind = None
             track.source_label = None
+            track.audio_source_path = None
+            track.audio_source_label = None
+            track.audio_mime_type = None
             track.duration_seconds = 0
         track.updated_at = timestamp
 
@@ -1130,6 +1190,21 @@ class StudioRepository:
         path = upload_dir / f"{uuid4().hex}-{safe_filename}"
         path.write_bytes(content)
         return path
+
+    def _relative_data_asset_path(self, path: Path) -> str:
+        try:
+            return path.resolve().relative_to(self._root.resolve()).as_posix()
+        except ValueError as error:
+            raise HTTPException(status_code=500, detail="Uploaded asset is outside storage root.") from error
+
+    def _resolve_data_asset_path(self, asset_path: str) -> Path:
+        raw_path = Path(asset_path)
+        candidate = raw_path if raw_path.is_absolute() else self._root / raw_path
+        resolved_candidate = candidate.resolve()
+        resolved_root = self._root.resolve()
+        if resolved_candidate != resolved_root and resolved_root not in resolved_candidate.parents:
+            raise HTTPException(status_code=404, detail="Track audio source not found.")
+        return resolved_candidate
 
     def _job_output_dir(self, studio_id: str, job_id: str) -> Path:
         return self._root / "jobs" / studio_id / job_id
@@ -1247,6 +1322,10 @@ def _decode_base64(content_base64: str) -> bytes:
         return base64.b64decode(payload, validate=True)
     except ValueError as error:
         raise HTTPException(status_code=422, detail="Invalid base64 upload content.") from error
+
+
+def _guess_audio_mime_type(filename: str) -> str:
+    return AUDIO_MIME_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
 
 
 def _migrate_legacy_studio_payload(studio_payload: Any) -> Any:

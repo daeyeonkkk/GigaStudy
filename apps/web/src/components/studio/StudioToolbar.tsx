@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 
+import type { PlaybackSourceMode } from '../../lib/studio'
+
 type ActionState =
   | { phase: 'idle' }
   | { phase: 'busy'; message: string }
@@ -10,10 +12,12 @@ type StudioToolbarProps = {
   actionState: ActionState
   globalPlaying: boolean
   metronomeEnabled: boolean
+  playbackSource: PlaybackSourceMode
   registeredTrackCount: number
   studioTitle: string
   onExportPdf: () => void
   onMetronomeChange: (enabled: boolean) => void
+  onPlaybackSourceChange: (source: PlaybackSourceMode) => void
   onStopGlobalPlayback: () => void
   onToggleGlobalPlayback: () => void
 }
@@ -22,10 +26,12 @@ export function StudioToolbar({
   actionState,
   globalPlaying,
   metronomeEnabled,
+  playbackSource,
   registeredTrackCount,
   studioTitle,
   onExportPdf,
   onMetronomeChange,
+  onPlaybackSourceChange,
   onStopGlobalPlayback,
   onToggleGlobalPlayback,
 }: StudioToolbarProps) {
@@ -89,6 +95,26 @@ export function StudioToolbar({
           <span aria-hidden="true">♪</span>
           메트로놈
         </label>
+        <div className="composer-source-toggle" role="group" aria-label="재생 소스">
+          <button
+            aria-pressed={playbackSource === 'audio'}
+            className={playbackSource === 'audio' ? 'is-active' : ''}
+            data-testid="playback-source-audio"
+            type="button"
+            onClick={() => onPlaybackSourceChange('audio')}
+          >
+            녹음
+          </button>
+          <button
+            aria-pressed={playbackSource === 'score'}
+            className={playbackSource === 'score' ? 'is-active' : ''}
+            data-testid="playback-source-score"
+            type="button"
+            onClick={() => onPlaybackSourceChange('score')}
+          >
+            악보
+          </button>
+        </div>
         <button
           className="composer-tool composer-tool--text"
           data-testid="export-pdf-button"

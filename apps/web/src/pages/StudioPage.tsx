@@ -14,6 +14,7 @@ import {
   exportStudioPdf,
   generateTrack,
   getStudio,
+  getTrackAudioUrl,
   readFileAsDataUrl,
   rejectCandidate,
   scoreTrack,
@@ -29,6 +30,7 @@ import {
 } from '../lib/audio'
 import {
   createTone,
+  createAudioBufferPlayback,
   DEFAULT_METER,
   detectUploadKind,
   disposePlaybackSession,
@@ -41,6 +43,7 @@ import {
   startLoopingMetronomeSession,
   type PlaybackNode,
   type PlaybackSession,
+  type PlaybackSourceMode,
 } from '../lib/studio'
 import type {
   ExtractionCandidate,
@@ -66,6 +69,7 @@ export function StudioPage() {
   const [loadState, setLoadState] = useState<LoadState>({ phase: 'loading' })
   const [actionState, setActionState] = useState<ActionState>({ phase: 'idle' })
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
+  const [playbackSource, setPlaybackSource] = useState<PlaybackSourceMode>('audio')
   const [globalPlaying, setGlobalPlaying] = useState(false)
   const [playingSlots, setPlayingSlots] = useState<Set<number>>(() => new Set())
   const [recordingSlotId, setRecordingSlotId] = useState<number | null>(null)
@@ -78,6 +82,7 @@ export function StudioPage() {
   const [candidateOverwriteApprovals, setCandidateOverwriteApprovals] = useState<Record<string, boolean>>({})
   const [jobOverwriteApprovals, setJobOverwriteApprovals] = useState<Record<string, boolean>>({})
   const playbackSessionRef = useRef<PlaybackSession | null>(null)
+  const playbackRunIdRef = useRef(0)
   const recordingMetronomeSessionRef = useRef<PlaybackSession | null>(null)
   const trackRecorderRef = useRef<MicrophoneRecorder | null>(null)
   const trackRecordingAllowOverwriteRef = useRef(false)
@@ -379,26 +384,65 @@ export function StudioPage() {
     }
   }
 
-  function stopPlaybackSession() {
+  function disposeCurrentPlaybackSession() {
     disposePlaybackSession(playbackSessionRef.current)
     playbackSessionRef.current = null
   }
 
-  function startPlaybackSession(
+  function stopPlaybackSession() {
+    playbackRunIdRef.current += 1
+    disposeCurrentPlaybackSession()
+  }
+
+  function trackHasPlayableScore(track: TrackSlot): boolean {
+    return track.notes.some((note) => note.is_rest !== true)
+  }
+
+  function trackHasPlayableAudio(track: TrackSlot): boolean {
+    return Boolean(track.audio_source_path)
+  }
+
+  async function loadTrackAudioBuffer(
+    context: AudioContext,
+    track: TrackSlot,
+  ): Promise<AudioBuffer | null> {
+    if (!studio || !track.audio_source_path) {
+      return null
+    }
+
+    try {
+      const response = await fetch(getTrackAudioUrl(studio.studio_id, track.slot_id))
+      if (!response.ok) {
+        return null
+      }
+      return await context.decodeAudioData(await response.arrayBuffer())
+    } catch {
+      return null
+    }
+  }
+
+  async function startPlaybackSession(
     tracksToPlay: TrackSlot[],
     includeMetronome = metronomeEnabled,
-  ): boolean {
+  ): Promise<boolean> {
     if (!studio) {
       return false
     }
 
     const playableTracks = tracksToPlay.filter(
-      (track) => track.status === 'registered' && track.notes.some((note) => note.is_rest !== true),
+      (track) =>
+        track.status === 'registered' &&
+        (playbackSource === 'audio'
+          ? trackHasPlayableAudio(track) || trackHasPlayableScore(track)
+          : trackHasPlayableScore(track)),
     )
     if (playableTracks.length === 0) {
-      setActionState({ phase: 'error', message: '재생할 악보가 있는 등록 트랙이 없습니다.' })
+      setActionState({ phase: 'error', message: '재생할 등록 트랙이 없습니다.' })
       return false
     }
+
+    const runId = playbackRunIdRef.current + 1
+    playbackRunIdRef.current = runId
 
     const AudioContextConstructor = getBrowserAudioContextConstructor()
     if (!AudioContextConstructor) {
@@ -438,7 +482,7 @@ export function StudioPage() {
       return true
     }
 
-    stopPlaybackSession()
+    disposeCurrentPlaybackSession()
 
     let context: AudioContext
     try {
@@ -458,7 +502,56 @@ export function StudioPage() {
     try {
       void context.resume().catch(() => undefined)
 
+      const audioBuffersBySlot = new Map<number, AudioBuffer>()
+      if (playbackSource === 'audio') {
+        const audioTracks = playableTracks.filter(trackHasPlayableAudio)
+        const decodedBuffers = await Promise.all(
+          audioTracks.map(async (track) => ({
+            slotId: track.slot_id,
+            buffer: await loadTrackAudioBuffer(context, track),
+          })),
+        )
+
+        if (playbackRunIdRef.current !== runId) {
+          disposePlaybackSession({ context, nodes, timeoutIds: [] })
+          return false
+        }
+
+        decodedBuffers.forEach(({ slotId, buffer }) => {
+          if (buffer) {
+            audioBuffersBySlot.set(slotId, buffer)
+          }
+        })
+      }
+
+      let scheduledAnyTrack = false
+      const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
+
       playableTracks.forEach((track) => {
+        const audioBuffer = playbackSource === 'audio' ? audioBuffersBySlot.get(track.slot_id) : undefined
+        if (audioBuffer) {
+          const trackStart = Math.max(0, track.sync_offset_seconds - minOffsetSeconds)
+          const node = createAudioBufferPlayback(
+            context,
+            audioBuffer,
+            scheduledStart + trackStart,
+            0,
+            audioTrackVolume,
+          )
+          if (node) {
+            nodes.push(node)
+            latestStop = Math.max(latestStop, trackStart + audioBuffer.duration)
+            scheduledAnyTrack = true
+          }
+        }
+
+        if (audioBuffer) {
+          track.notes.forEach((note) => {
+            maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
+          })
+          return
+        }
+
         track.notes.forEach((note) => {
           const frequency = getNotePlaybackFrequency(note)
           if (frequency === null) {
@@ -483,8 +576,15 @@ export function StudioPage() {
           )
           latestStop = Math.max(latestStop, normalizedStart + duration)
           maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
+          scheduledAnyTrack = true
         })
       })
+
+      if (!scheduledAnyTrack) {
+        disposePlaybackSession({ context, nodes, timeoutIds: [] })
+        setActionState({ phase: 'error', message: '재생 가능한 녹음 파일이나 악보 음표가 없습니다.' })
+        return false
+      }
 
       if (includeMetronome) {
         latestStop = Math.max(
@@ -515,7 +615,7 @@ export function StudioPage() {
     return true
   }
 
-  function toggleGlobalPlayback() {
+  async function toggleGlobalPlayback() {
     if (globalPlaying) {
       stopPlaybackSession()
       setGlobalPlaying(false)
@@ -529,10 +629,17 @@ export function StudioPage() {
       return
     }
 
-    if (startPlaybackSession(registeredTracks)) {
+    setActionState({ phase: 'busy', message: '재생 소스를 준비하는 중입니다.' })
+    if (await startPlaybackSession(registeredTracks)) {
       setPlayingSlots(new Set())
       setGlobalPlaying(true)
-      setActionState({ phase: 'success', message: '등록된 트랙 전체를 현재 싱크 기준으로 재생합니다.' })
+      setActionState({
+        phase: 'success',
+        message:
+          playbackSource === 'audio'
+            ? '등록된 트랙 전체를 녹음 원본 우선으로 합쳐 재생합니다.'
+            : '등록된 트랙 전체를 악보 음 기준으로 동시에 재생합니다.',
+      })
     }
   }
 
@@ -546,7 +653,21 @@ export function StudioPage() {
     })
   }
 
-  function toggleTrackPlayback(track: TrackSlot) {
+  function changePlaybackSource(nextSource: PlaybackSourceMode) {
+    if (nextSource === playbackSource) {
+      return
+    }
+    stopPlaybackSession()
+    setGlobalPlaying(false)
+    setPlayingSlots(new Set())
+    setPlaybackSource(nextSource)
+    setActionState({
+      phase: 'success',
+      message: nextSource === 'audio' ? '재생 소스를 녹음 원본으로 전환했습니다.' : '재생 소스를 악보 음으로 전환했습니다.',
+    })
+  }
+
+  async function toggleTrackPlayback(track: TrackSlot) {
     if (track.status !== 'registered') {
       setActionState({ phase: 'error', message: `${track.name} 트랙은 아직 등록되지 않았습니다.` })
       return
@@ -559,10 +680,17 @@ export function StudioPage() {
       return
     }
 
-    if (startPlaybackSession([track])) {
+    setActionState({ phase: 'busy', message: `${track.name} 재생 소스를 준비하는 중입니다.` })
+    if (await startPlaybackSession([track])) {
       setGlobalPlaying(false)
       setPlayingSlots(new Set([track.slot_id]))
-      setActionState({ phase: 'success', message: `${track.name} 트랙을 재생합니다.` })
+      setActionState({
+        phase: 'success',
+        message:
+          playbackSource === 'audio' && track.audio_source_path
+            ? `${track.name} 트랙의 녹음 원본을 재생합니다.`
+            : `${track.name} 트랙을 악보 음 기준으로 재생합니다.`,
+      })
     }
   }
 
@@ -774,7 +902,8 @@ export function StudioPage() {
       scoreSession.selectedReferenceIds.includes(track.slot_id),
     )
     if (referenceTracks.length > 0) {
-      if (!startPlaybackSession(referenceTracks, scoreSession.includeMetronome)) {
+      setActionState({ phase: 'busy', message: '채점 기준 트랙 재생을 준비하는 중입니다.' })
+      if (!(await startPlaybackSession(referenceTracks, scoreSession.includeMetronome))) {
         return
       }
       setGlobalPlaying(false)
@@ -922,12 +1051,14 @@ export function StudioPage() {
           actionState={actionState}
           globalPlaying={globalPlaying}
           metronomeEnabled={metronomeEnabled}
+          playbackSource={playbackSource}
           registeredTrackCount={registeredTracks.length}
           studioTitle={studio.title}
           onExportPdf={() => void handleExportPdf()}
           onMetronomeChange={setMetronomeEnabled}
+          onPlaybackSourceChange={changePlaybackSource}
           onStopGlobalPlayback={stopGlobalPlayback}
-          onToggleGlobalPlayback={toggleGlobalPlayback}
+          onToggleGlobalPlayback={() => void toggleGlobalPlayback()}
         />
         <section className="composer-score-viewport">
           <div className="composer-score-paper">
@@ -955,7 +1086,7 @@ export function StudioPage() {
               onRecord={(track) => void handleRecord(track)}
               onStopPlayback={stopTrackPlayback}
               onSync={(track, nextOffset) => void handleSync(track, nextOffset)}
-              onTogglePlayback={toggleTrackPlayback}
+              onTogglePlayback={(track) => void toggleTrackPlayback(track)}
               onUpload={(track, file) => void handleUpload(track, file)}
             />
             <ExtractionJobsPanel

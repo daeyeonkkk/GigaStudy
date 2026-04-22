@@ -28,7 +28,11 @@ class Settings(BaseSettings):
     asset_warning_bytes: int = 7 * 1024 * 1024 * 1024
     asset_hard_bytes: int = int(8.5 * 1024 * 1024 * 1024)
     direct_upload_expiration_seconds: int = 15 * 60
+    staged_upload_retention_seconds: int = 24 * 60 * 60
+    lifecycle_cleanup_interval_seconds: int = 15 * 60
     max_active_engine_jobs: int = 1
+    engine_job_max_attempts: int = 3
+    engine_job_lease_seconds: int = 10 * 60
     audiveris_bin: str | None = None
     engine_processing_timeout_seconds: int = 120
     cors_origins: Annotated[list[str], NoDecode] = [

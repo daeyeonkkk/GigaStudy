@@ -19,6 +19,7 @@ import {
   putDirectUpload,
   readFileAsDataUrl,
   rejectCandidate,
+  retryExtractionJob,
   scoreTrack,
   updateTrackSync,
   uploadTrack,
@@ -359,6 +360,17 @@ export function StudioPage() {
       () => approveJobCandidates(studio.studio_id, jobId, allowOverwrite),
       'OMR 결과를 각 트랙에 등록하는 중입니다.',
       'OMR 결과를 제안된 트랙에 등록했습니다.',
+    )
+  }
+
+  async function handleRetryJob(jobId: string) {
+    if (!studio) {
+      return
+    }
+    await runStudioAction(
+      () => retryExtractionJob(studio.studio_id, jobId),
+      '추출 작업을 다시 대기열에 올리는 중입니다.',
+      '추출 작업을 다시 시작했습니다. 완료되면 후보가 표시됩니다.',
     )
   }
 
@@ -735,7 +747,7 @@ export function StudioPage() {
           })
         },
         `${track.name} 녹음을 악보화하는 중입니다.`,
-        `${track.name} 트랙에 실제 녹음 기반 악보를 등록했습니다.`,
+        `${track.name} 녹음의 음성 추출 작업을 시작했습니다. 완료되면 트랙에 등록됩니다.`,
       )
       return
     }
@@ -838,11 +850,18 @@ export function StudioPage() {
       `${track.name} 업로드를 악보화하는 중입니다.`,
       `${track.name} 트랙에 ${file.name} 추출 후보를 만들었습니다.`,
     )
-    if (uploadSucceeded && isOmrUpload(file)) {
-      setActionState({
-        phase: 'success',
-        message: `${track.name} PDF/image OMR 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
-      })
+    if (uploadSucceeded) {
+      if (isOmrUpload(file)) {
+        setActionState({
+          phase: 'success',
+          message: `${track.name} PDF/image OMR 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
+        })
+      } else if (sourceKind === 'audio') {
+        setActionState({
+          phase: 'success',
+          message: `${track.name} 음성 추출 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
+        })
+      }
     }
   }
 
@@ -1122,6 +1141,7 @@ export function StudioPage() {
               getPendingJobCandidates={getPendingJobCandidates}
               jobWouldOverwrite={jobWouldOverwrite}
               onApproveJobCandidates={(jobId) => void handleApproveJobCandidates(jobId)}
+              onRetryJob={(jobId) => void handleRetryJob(jobId)}
               onUpdateJobOverwriteApproval={updateJobOverwriteApproval}
             />
 

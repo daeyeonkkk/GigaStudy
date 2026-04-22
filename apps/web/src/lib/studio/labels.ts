@@ -22,11 +22,11 @@ export const sourceLabels: Record<SourceKind, string> = {
 
 export function getJobStatusLabel(status: TrackExtractionJob['status']): string {
   const labels: Record<TrackExtractionJob['status'], string> = {
-    queued: 'Queued',
-    running: 'Running',
-    needs_review: 'Review ready',
-    completed: 'Completed',
-    failed: 'Failed',
+    queued: '대기 중',
+    running: '처리 중',
+    needs_review: '검토 가능',
+    completed: '완료',
+    failed: '실패',
   }
   return labels[status]
 }

@@ -33,8 +33,12 @@ The current implementation has a working vertical slice for:
 - Public registration endpoints reject missing upload content instead of
   creating fixture note data.
 - Home-screen PDF score start queues OMR instead of seeding placeholder notes.
-- Studio UI polls active OMR jobs and exposes their queued/running/review/failed
-  state.
+- Studio UI polls active extraction jobs and exposes their queued/running/review/
+  failed state for both OMR and voice extraction.
+- OMR and per-track voice extraction use a durable engine queue with Postgres
+  backing in deployed alpha and local JSON fallback in development. A studio
+  reload can reschedule queued or expired running jobs, and failed jobs can be
+  retried while the original input asset remains available.
 - OMR job review can register all mapped candidates into their suggested tracks
   in one operation.
 - Extraction candidate queue with approve/reject registration
@@ -84,6 +88,8 @@ The current implementation has a working vertical slice for:
 - Alpha free-plan guardrails are enforced: 500 studio hard cap, 8.5 GiB stored
   asset hard cap, 15 MiB file-upload cap, and one active OMR/voice extraction
   job at a time.
+- Staged upload cleanup has an app-level lifecycle path for expired staged
+  objects plus admin controls for expired-only or all abandoned staged objects.
 
 ## Phase 0: Foundation Reset
 
@@ -320,6 +326,10 @@ Required:
 - Home-start staged upload-target API and browser orchestration.
 - Admin cleanup operation for staged upload objects that were abandoned before
   studio creation/promotion.
+- App-level staged upload lifecycle cleanup, triggered during upload-target
+  creation and configurable through retention/interval settings.
+- Durable engine queue for OMR and per-track voice extraction before Cloud Run
+  maxScale is raised above one.
 - R2/S3 bucket CORS must allow direct browser `PUT` from the deployed Pages
   origin before the presigned path can carry production traffic without falling
   back to base64.
@@ -352,8 +362,8 @@ Required:
   chosen.
 - Verify the live Cloud Run service is using Postgres/R2 instead of local JSON
   and local files.
-- Add object lifecycle/retention cleanup before production-scale recording
-  tests.
+- Add bucket-native R2 lifecycle rules if/when the free-plan app-level cleanup
+  path is not enough for production-scale recording tests.
 - Add optional direct/temporary handling for larger scoring takes if alpha
   scoring recordings outgrow the current temporary base64 path.
 

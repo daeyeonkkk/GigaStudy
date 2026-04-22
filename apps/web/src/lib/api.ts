@@ -249,6 +249,14 @@ export function approveJobCandidates(
   )
 }
 
+export function retryExtractionJob(studioId: string, jobId: string): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/jobs/${jobId}/retry`,
+    { method: 'POST' },
+    '추출 작업을 다시 시작하지 못했습니다.',
+  )
+}
+
 export function generateTrack(
   studioId: string,
   slotId: number,
@@ -406,6 +414,19 @@ export function deleteAdminStagedAssets(
       headers: adminHeaders(credentials),
     },
     'Staged uploads could not be deleted.',
+  )
+}
+
+export function deleteAdminExpiredStagedAssets(
+  credentials: AdminCredentials,
+): Promise<AdminDeleteResult> {
+  return requestJson<AdminDeleteResult>(
+    '/api/admin/expired-staged-assets',
+    {
+      method: 'DELETE',
+      headers: adminHeaders(credentials),
+    },
+    'Expired staged uploads could not be deleted.',
   )
 }
 

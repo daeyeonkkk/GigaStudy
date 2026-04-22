@@ -113,6 +113,10 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Upload accepts supported score formats.
 - [x] PDF/image score upload is fully covered by OMR job tests.
 - [x] Active OMR jobs are visible and auto-refreshed in the studio UI.
+- [x] Active voice extraction jobs are visible and auto-refreshed in the same
+  studio extraction queue.
+- [x] Failed OMR/voice extraction jobs can be retried while the original input
+  asset is still retained.
 - [x] OMR candidates preserve `source="omr"` instead of looking like direct
   MusicXML imports.
 - [x] OMR job results can be registered into all suggested tracks at once.
@@ -204,6 +208,7 @@ This checklist tracks the new six-track studio foundation only.
   candidate, or OMR job references to that file.
 - [x] `/admin` page can delete abandoned staged direct-upload files that were
   never promoted into a studio.
+- [x] `/admin` page can delete only expired staged direct-upload files.
 - [x] Studio metadata storage can use Postgres/Neon through
   `GIGASTUDY_API_DATABASE_URL`, with local JSON kept as the development
   fallback.
@@ -236,18 +241,22 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Studio creation is blocked at the configured alpha hard cap.
 - [x] Upload/generated asset writes are blocked at the configured alpha hard
   storage cap.
-- [x] OMR and voice extraction run through a single local engine execution
-  lane in the alpha build.
+- [x] OMR and voice extraction use a durable engine queue with Postgres/Neon
+  backing in deployed alpha and local JSON fallback in development.
+- [x] OMR and voice extraction still honor the free-plan one-active-engine-job
+  lane by default.
 - [ ] Studio access is not yet user-owned or private; public studio list/detail
   endpoints still expose all stored studios in the alpha build.
 - [x] Live deployment sets the Postgres/R2 environment variables and verifies
   admin storage summary against the deployed service.
-- [ ] Durable object storage still needs a lifecycle/retention policy.
+- [x] Staged object cleanup has an app-level lifecycle policy driven by
+  retention and cleanup-interval settings.
 - [x] Browser-to-R2 direct upload/signed URL flow is implemented for existing
   studio track uploads and staged home-start uploads.
-- [x] Manual admin cleanup exists for abandoned staged upload objects.
-- [ ] OMR/voice extraction still needs a durable queue before Cloud Run
-  maxScale is raised above one instance.
+- [x] Manual admin cleanup exists for abandoned and expired staged upload
+  objects.
+- [x] OMR/voice extraction has a durable queue before Cloud Run maxScale is
+  raised above one instance.
 
 ## Implementation Structure
 
@@ -266,7 +275,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Production web builds default to the live alpha Cloud Run API unless
   `VITE_API_BASE_URL` explicitly overrides it.
 - [x] Studio page presentation is split into dedicated toolbar, track board,
-  OMR queue, candidate review, report feed, and scoring drawer components.
+  extraction queue, candidate review, report feed, and scoring drawer
+  components.
 - [x] Score rendering math is isolated from the page component.
 - [x] Visible browser score engraving is isolated in
   `components/studio/EngravedScoreStrip.tsx`.

@@ -68,6 +68,11 @@ The current implementation has a working six-track vertical slice:
   on read so older development data does not block the current schema.
 - Studio PDF/image upload exposes active OMR jobs, polls until completion or
   failure, and turns successful OMR output into reviewable candidates.
+- OMR and per-track voice extraction now create durable engine queue records
+  before processing. The queue is Postgres-backed when `GIGASTUDY_API_DATABASE_URL`
+  is configured and local-JSON backed in development. Studio reloads can
+  reschedule queued or expired running jobs, and failed jobs can be retried from
+  the studio UI while the original input asset remains available.
 - OMR-generated notes are marked with `source="omr"` and
   `extraction_method="audiveris_omr_v0"`.
 - OMR jobs that produce multiple mapped parts can be approved in one operation,
@@ -85,7 +90,7 @@ The current implementation has a working six-track vertical slice:
 - NWC is not advertised as an accepted upload format until an NWC-to-TrackNote
   parser is connected.
 - Per-track browser recording captures microphone audio, encodes WAV, and
-  registers TrackNotes through the voice extraction path.
+  registers TrackNotes through the queued voice extraction path.
 - Registered voice/audio tracks retain their normalized source audio as a
   playback asset while keeping TrackNote data as the canonical scoring and
   generation source.
@@ -94,8 +99,9 @@ The current implementation has a working six-track vertical slice:
   when configured. The page can inspect studio/file usage, delete a whole
   studio, delete all stored files for a studio while keeping normalized
   TrackNote/report data, or delete an individual stored asset and clear its
-  audio/job references. It also has a cleanup operation for abandoned staged
-  direct-upload objects that were never promoted into a studio.
+  audio/job references. It also has cleanup operations for expired staged
+  direct-upload objects and for all abandoned staged objects that were never
+  promoted into a studio.
 - Admin password validation also accepts the alpha keyboard aliases
   `eodus123` and `daeyeon123` so an English-keyboard entry does not block
   testers who are trying to enter `대연123`.
@@ -140,8 +146,12 @@ The current implementation has a working six-track vertical slice:
   audio, or OMR pipeline. The browser keeps a base64 fallback if target creation
   or binary PUT fails.
 - Abandoned home-start staged uploads can be removed through
-  `DELETE /api/admin/staged-assets` and the `/admin` cleanup control. Staged
-  objects remain outside normal studio asset listings until promotion succeeds.
+  `DELETE /api/admin/staged-assets` and the `/admin` cleanup control. Expired
+  staged uploads are also automatically cleaned when new upload targets are
+  created, using `GIGASTUDY_API_STAGED_UPLOAD_RETENTION_SECONDS` plus
+  `GIGASTUDY_API_LIFECYCLE_CLEANUP_INTERVAL_SECONDS`, and can be manually
+  removed through `DELETE /api/admin/expired-staged-assets`. Staged objects
+  remain outside normal studio asset listings until promotion succeeds.
 - Scoring performance audio still uses the smaller existing base64/temporary
   path. It is deleted after extraction rather than retained as an admin-listed
   asset.
@@ -167,8 +177,8 @@ The current implementation has a working six-track vertical slice:
   `http://127.0.0.1:8000`. This prevents manual Pages builds from shipping a
   localhost API URL.
 - Studio UI presentation is split into dedicated components for the composer
-  toolbar, track board, OMR job queue, candidate review queue, report feed, and
-  scoring drawer. `StudioPage.tsx` now mainly coordinates data loading, user
+  toolbar, track board, extraction job queue, candidate review queue, report
+  feed, and scoring drawer. `StudioPage.tsx` now mainly coordinates data loading, user
   actions, playback/recording state, and API orchestration.
 - Extraction results can be held as pending candidates and approved or rejected
   before registration.

@@ -52,9 +52,10 @@ def create_studio(
 @router.get("/{studio_id}", response_model=Studio)
 def get_studio(
     studio_id: str,
+    background_tasks: BackgroundTasks,
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> Studio:
-    return repository.get_studio(studio_id)
+    return repository.get_studio(studio_id, background_tasks=background_tasks)
 
 
 @router.get("/{studio_id}/export/pdf")
@@ -182,6 +183,16 @@ def approve_job_candidates(
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> Studio:
     return repository.approve_job_candidates(studio_id, job_id, request)
+
+
+@router.post("/{studio_id}/jobs/{job_id}/retry", response_model=Studio)
+def retry_extraction_job(
+    studio_id: str,
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> Studio:
+    return repository.retry_extraction_job(studio_id, job_id, background_tasks=background_tasks)
 
 
 @router.post("/{studio_id}/tracks/{slot_id}/score", response_model=Studio)

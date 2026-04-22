@@ -87,6 +87,9 @@ class AssetStorage(Protocol):
     def delete_prefix(self, relative_prefix: str) -> tuple[int, int]:
         ...
 
+    def delete_prefix_older_than(self, relative_prefix: str, cutoff: datetime) -> tuple[int, int]:
+        ...
+
 
 class LocalAssetStorage:
     def __init__(self, root: Path) -> None:
@@ -202,6 +205,31 @@ class LocalAssetStorage:
     def delete_prefix(self, relative_prefix: str) -> tuple[int, int]:
         root = self._cache_path(relative_prefix)
         return _delete_local_tree(self._root, root)
+
+    def delete_prefix_older_than(self, relative_prefix: str, cutoff: datetime) -> tuple[int, int]:
+        root = self._cache_path(relative_prefix)
+        if not root.exists():
+            return 0, 0
+        cutoff_utc = cutoff.astimezone(UTC)
+        deleted_files = 0
+        deleted_bytes = 0
+        for path in sorted(root.rglob("*"), key=lambda child: len(child.parts), reverse=True):
+            if path.is_dir():
+                try:
+                    path.rmdir()
+                except OSError:
+                    pass
+                continue
+            if not path.is_file():
+                continue
+            modified_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+            if modified_at >= cutoff_utc:
+                continue
+            deleted_bytes += path.stat().st_size
+            path.unlink()
+            deleted_files += 1
+        _prune_empty_dirs(self._root, root)
+        return deleted_files, deleted_bytes
 
     def _relative_path_from_reference(self, asset_path: str) -> str:
         raw_path = Path(asset_path)
@@ -382,6 +410,35 @@ class S3AssetStorage(LocalAssetStorage):
 
         local_root = self._cache_path(clean_prefix) if clean_prefix else self._root
         _delete_local_tree(self._root, local_root)
+        return deleted_files, deleted_bytes
+
+    def delete_prefix_older_than(self, relative_prefix: str, cutoff: datetime) -> tuple[int, int]:
+        clean_prefix = _clean_relative_path(relative_prefix)
+        if clean_prefix and not clean_prefix.endswith("/"):
+            clean_prefix = f"{clean_prefix}/"
+        cutoff_utc = cutoff.astimezone(UTC)
+        deleted_files = 0
+        deleted_bytes = 0
+        batch: list[dict[str, str]] = []
+
+        for item in self._list_objects(clean_prefix):
+            updated_at = item.get("LastModified")
+            if not isinstance(updated_at, datetime) or updated_at.astimezone(UTC) >= cutoff_utc:
+                continue
+            key = str(item["Key"])
+            deleted_files += 1
+            deleted_bytes += int(item.get("Size", 0))
+            batch.append({"Key": key})
+            if len(batch) == 1000:
+                self._delete_objects(batch)
+                batch = []
+
+        if batch:
+            self._delete_objects(batch)
+
+        local_deleted_files, local_deleted_bytes = super().delete_prefix_older_than(clean_prefix, cutoff_utc)
+        if deleted_files == 0:
+            return local_deleted_files, local_deleted_bytes
         return deleted_files, deleted_bytes
 
     def _list_objects(self, prefix: str):

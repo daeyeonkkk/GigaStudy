@@ -60,8 +60,11 @@ Studio metadata and stored binary assets are separate responsibilities.
   `POST /api/studios` with `source_asset_path`. The API must promote the staged
   object into the created studio's upload namespace before parsing, OMR, or
   voice extraction. Staged objects are not durable studio assets until that
-  promotion succeeds. Abandoned staged objects are cleaned manually through
-  `DELETE /api/admin/staged-assets` until bucket lifecycle cleanup is added.
+  promotion succeeds. Expired staged objects are automatically cleaned by the
+  API upload-target path according to `GIGASTUDY_API_STAGED_UPLOAD_RETENTION_SECONDS`
+  and `GIGASTUDY_API_LIFECYCLE_CLEANUP_INTERVAL_SECONDS`. Operators can also
+  delete only expired staged objects through `DELETE /api/admin/expired-staged-assets`
+  or delete all abandoned staged objects through `DELETE /api/admin/staged-assets`.
 - Object-store direct upload requires bucket CORS that permits the deployed web
   origin to `PUT` with the returned headers, especially `Content-Type`. The live
   alpha bucket policy is tracked in `ops/r2-cors.gigastudy-alpha.json`.
@@ -69,11 +72,19 @@ Studio metadata and stored binary assets are separate responsibilities.
   endpoints must load only the requested studio id. Admin storage summaries
   must page studio rows and limit per-studio asset details so 1,000+ alpha
   studios do not require a full metadata scan on every request.
-- Free-plan alpha limits are part of the engine contract until the upload/job
-  architecture changes: 300 studios is the soft warning line, 500 studios is
-  the hard creation cap, 7 GiB of registered assets is the warning line,
-  8.5 GiB is the hard asset cap, individual base64 uploads are capped at
-  15 MiB, and local OMR/voice extraction is serialized to one active engine job.
+- Free-plan alpha limits are part of the engine contract: 300 studios is the
+  soft warning line, 500 studios is the hard creation cap, 7 GiB of registered
+  assets is the warning line, 8.5 GiB is the hard asset cap, individual base64
+  uploads are capped at 15 MiB, and OMR/voice extraction is claimed through a
+  durable engine queue while still limited to one active local engine lane by
+  default.
+- Engine jobs are durable records, not only in-process Cloud Run background
+  tasks. The queue uses Postgres when `GIGASTUDY_API_DATABASE_URL` is set and a
+  local JSON queue as the development fallback. Queue records store job type,
+  studio id, track slot, input asset key, payload, attempt count, max attempts,
+  lock lease, and terminal status. Studio `jobs` expose the user-facing state.
+  A studio reload can reschedule queued or expired running jobs, and failed jobs
+  can be retried from the UI while the original input asset is still retained.
 - Track audio playback resolves retained audio through the asset storage layer.
   In object-storage mode, a missing local file is downloaded into the local
   cache before `FileResponse` serves it.
@@ -196,6 +207,13 @@ and sends it through the same upload/transcription path. During browser
 recording, the UI may play a metronome loop and show input level feedback, but
 the persisted track content remains symbolic `TrackNote` data.
 
+Per-track voice upload and microphone recording must create durable `voice`
+engine jobs before extraction runs. The request may return while the job is
+queued; the studio UI polls the shared extraction queue and either registers
+the resulting TrackNotes, creates review candidates, or exposes a failed job
+with retry. Scoring performance audio remains a temporary synchronous path for
+now because it is not a retained track-registration asset.
+
 When a voice upload or microphone take successfully registers a track, the
 server also stores a relative pointer to the original normalized audio asset.
 The browser may fetch that asset for playback, while scoring continues to
@@ -220,10 +238,10 @@ to the API.
 
 ### OMR
 
-PDF and image score input should use Audiveris as an asynchronous job:
+PDF and image score input should use Audiveris as a durable asynchronous job:
 
 1. Save the uploaded source.
-2. Create an extraction job.
+2. Create an `omr` extraction job and matching durable queue record.
 3. Run Audiveris CLI.
 4. Parse exported MusicXML/MXL.
 5. Mark resulting `TrackNote` objects as `source="omr"` with
@@ -244,8 +262,9 @@ recording payload is supplied. Test helpers may construct TrackNotes directly,
 but product endpoints must always use uploaded, recorded, OMR, symbolic, or AI
 generated material.
 
-The studio UI should show active OMR jobs and poll them until they become
-review candidates or fail.
+The studio UI should show active extraction jobs and poll them until they
+become review candidates, register the target track, complete, or fail.
+Failed OMR jobs expose retry if the original input asset still exists.
 
 When an OMR job produces multiple mapped parts, the user must be able to
 register all pending candidates from that job into their suggested tracks in one
@@ -461,6 +480,8 @@ These code paths currently implement the contract:
 - API schema: `apps/api/src/gigastudy_api/api/schemas/studios.py`
 - Symbolic import: `apps/api/src/gigastudy_api/services/engine/symbolic.py`
 - Voice extraction: `apps/api/src/gigastudy_api/services/engine/voice.py`
+- Durable extraction queue:
+  `apps/api/src/gigastudy_api/services/engine_queue.py`
 - Browser audio primitives:
   `apps/web/src/lib/audio/audioContext.ts`
 - Browser WAV encoding:

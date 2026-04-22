@@ -18,6 +18,7 @@ StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["score", "music"]
 NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
 ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
+ExtractionJobType = Literal["omr", "voice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
 
@@ -47,6 +48,7 @@ ScoreNote = TrackNote
 
 class TrackExtractionJob(BaseModel):
     job_id: str
+    job_type: ExtractionJobType = "omr"
     slot_id: int
     source_kind: SourceKind
     source_label: str
@@ -55,6 +57,8 @@ class TrackExtractionJob(BaseModel):
     message: str | None = None
     input_path: str | None = None
     output_path: str | None = None
+    attempt_count: int = Field(default=0, ge=0)
+    max_attempts: int = Field(default=3, ge=1)
     created_at: str
     updated_at: str
 

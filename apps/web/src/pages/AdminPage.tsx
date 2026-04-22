@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   type AdminCredentials,
   deleteAdminAsset,
+  deleteAdminExpiredStagedAssets,
   deleteAdminStagedAssets,
   deleteAdminStudio,
   deleteAdminStudioAssets,
@@ -200,6 +201,13 @@ export function AdminPage() {
     void runDeletion('staged-assets', () => deleteAdminStagedAssets(activeCredentials))
   }
 
+  function handleDeleteExpiredStagedAssets() {
+    if (!window.confirm('Delete only expired staged upload files? Active studio files will remain.')) {
+      return
+    }
+    void runDeletion('expired-staged-assets', () => deleteAdminExpiredStagedAssets(activeCredentials))
+  }
+
   return (
     <main className="app-shell admin-page">
       <section className="admin-window" aria-label="GigaStudy admin">
@@ -288,8 +296,15 @@ export function AdminPage() {
               <div>
                 <span>Cleanup</span>
                 <strong>Abandoned staged uploads</strong>
-                <p>Remove upload-start files that were never promoted into a studio.</p>
+                <p>Expired staged files are also cleaned automatically when new upload targets are created.</p>
               </div>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={handleDeleteExpiredStagedAssets}
+              >
+                Delete Expired
+              </button>
               <button
                 className="admin-danger"
                 type="button"

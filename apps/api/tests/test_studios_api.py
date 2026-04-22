@@ -637,7 +637,11 @@ def test_audio_upload_keeps_source_file_for_track_playback(tmp_path: Path, monke
     )
 
     assert upload_response.status_code == 200
-    soprano = upload_response.json()["tracks"][0]
+    queued_job = upload_response.json()["jobs"][0]
+    assert queued_job["job_type"] == "voice"
+    assert queued_job["status"] == "queued"
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    soprano = payload["tracks"][0]
     assert soprano["status"] == "registered"
     assert soprano["source_kind"] == "audio"
     assert soprano["audio_source_path"].startswith("uploads/")
@@ -1015,6 +1019,58 @@ def test_upload_pdf_marks_omr_job_failed_when_audiveris_unavailable(
     assert payload["jobs"][0]["message"] == "Audiveris missing"
     assert payload["tracks"][0]["status"] == "failed"
     assert payload["candidates"] == []
+
+
+def test_failed_omr_job_can_be_retried_from_durable_queue(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_omr(
+        *,
+        input_path: Path,
+        output_dir: Path,
+        audiveris_bin: str | None,
+        timeout_seconds: int,
+    ) -> Path:
+        raise OmrUnavailableError("Audiveris missing")
+
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Retryable PDF OMR",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "retry.pdf",
+            "content_base64": encoded,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    failed_payload = client.get(f"/api/studios/{studio_id}").json()
+    job = failed_payload["jobs"][0]
+    assert job["job_type"] == "omr"
+    assert job["status"] == "failed"
+    assert job["attempt_count"] == 1
+
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+    retry_response = client.post(f"/api/studios/{studio_id}/jobs/{job['job_id']}/retry")
+
+    assert retry_response.status_code == 200
+    retry_payload = client.get(f"/api/studios/{studio_id}").json()
+    assert retry_payload["jobs"][0]["status"] == "needs_review"
+    assert retry_payload["jobs"][0]["attempt_count"] == 1
+    assert retry_payload["candidates"][0]["notes"][0]["source"] == "omr"
 
 
 def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, monkeypatch) -> None:

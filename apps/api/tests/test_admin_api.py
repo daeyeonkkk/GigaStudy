@@ -1,5 +1,7 @@
 import base64
 import json
+import os
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -58,7 +60,7 @@ def create_audio_studio(client: TestClient) -> tuple[str, dict]:
         },
     )
     assert upload_response.status_code == 200
-    return studio_id, upload_response.json()
+    return studio_id, client.get(f"/api/studios/{studio_id}").json()
 
 
 def test_admin_storage_accepts_default_admin_login(tmp_path: Path, monkeypatch) -> None:
@@ -158,6 +160,46 @@ def test_admin_can_delete_abandoned_staged_uploads(tmp_path: Path, monkeypatch) 
     assert payload["deleted"] is True
     assert payload["deleted_files"] == 1
     assert payload["deleted_bytes"] == len(content)
+    assert not staged_path.exists()
+
+
+def test_upload_target_creation_cleans_expired_staged_assets(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("GIGASTUDY_API_STAGED_UPLOAD_RETENTION_SECONDS", "1")
+    monkeypatch.setenv("GIGASTUDY_API_LIFECYCLE_CLEANUP_INTERVAL_SECONDS", "1")
+    client = build_client(tmp_path, monkeypatch)
+    content = b"%PDF-1.4 expired staged direct upload"
+    target_response = client.post(
+        "/api/studios/upload-target",
+        json={
+            "source_kind": "score",
+            "filename": "expired.pdf",
+            "size_bytes": len(content),
+            "content_type": "application/pdf",
+        },
+    )
+    assert target_response.status_code == 200
+    target = target_response.json()
+    put_path = target["upload_url"].removeprefix("http://testserver")
+    put_response = client.put(put_path, content=content)
+    assert put_response.status_code == 200
+    staged_path = tmp_path / Path(*target["asset_path"].split("/"))
+    assert staged_path.exists()
+
+    old_time = time.time() - 10
+    os.utime(staged_path, (old_time, old_time))
+    time.sleep(1.05)
+
+    next_target_response = client.post(
+        "/api/studios/upload-target",
+        json={
+            "source_kind": "score",
+            "filename": "next.pdf",
+            "size_bytes": len(content),
+            "content_type": "application/pdf",
+        },
+    )
+
+    assert next_target_response.status_code == 200
     assert not staged_path.exists()
 
 

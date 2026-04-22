@@ -33,6 +33,7 @@ export type ScoreNote = {
 
 export type TrackExtractionJob = {
   job_id: string
+  job_type: 'omr' | 'voice'
   slot_id: number
   source_kind: SourceKind
   source_label: string
@@ -41,6 +42,8 @@ export type TrackExtractionJob = {
   message: string | null
   input_path: string | null
   output_path: string | null
+  attempt_count: number
+  max_attempts: number
   created_at: string
   updated_at: string
 }

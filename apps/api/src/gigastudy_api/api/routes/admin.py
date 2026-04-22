@@ -97,6 +97,14 @@ def delete_admin_staged_assets(
     return repository.delete_admin_staged_assets()
 
 
+@router.delete("/expired-staged-assets", response_model=AdminDeleteResult)
+def delete_admin_expired_staged_assets(
+    _: None = Depends(require_admin_credentials),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> AdminDeleteResult:
+    return repository.delete_admin_expired_staged_assets()
+
+
 @router.delete("/assets/{asset_id}", response_model=AdminDeleteResult)
 def delete_admin_asset(
     asset_id: str,

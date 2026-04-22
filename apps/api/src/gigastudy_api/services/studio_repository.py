@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 import base64
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock, RLock
 from typing import Any
@@ -55,6 +55,7 @@ from gigastudy_api.services.engine.pdf_export import ScorePdfExportError, build_
 from gigastudy_api.services.engine.scoring import build_scoring_report
 from gigastudy_api.services.engine.symbolic import SymbolicParseError, parse_symbolic_file_with_metadata
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError, transcribe_voice_file
+from gigastudy_api.services.engine_queue import EngineQueueJob, EngineQueueStore, build_engine_queue_store
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
 
 
@@ -116,6 +117,11 @@ class StudioRepository:
             storage_root=self._root,
             database_url=settings.database_url,
         )
+        self._engine_queue: EngineQueueStore = build_engine_queue_store(
+            storage_root=self._root,
+            database_url=settings.database_url,
+        )
+        self._last_lifecycle_cleanup_at: datetime | None = None
         self._lock = RLock()
 
     def list_studios(self, *, limit: int = 50, offset: int = 0) -> list[StudioListItem]:
@@ -192,11 +198,14 @@ class StudioRepository:
             self._save_studio(studio)
         return studio
 
-    def get_studio(self, studio_id: str) -> Studio:
+    def get_studio(self, studio_id: str, *, background_tasks: BackgroundTasks | None = None) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
         if studio is None:
             raise HTTPException(status_code=404, detail="Studio not found.")
+        self._ensure_queue_records_for_active_jobs(studio)
+        if background_tasks is not None and self._engine_queue.has_runnable(studio_id=studio_id):
+            self._schedule_engine_queue_processing(background_tasks)
         return studio
 
     def export_score_pdf(self, studio_id: str) -> tuple[str, bytes]:
@@ -269,6 +278,7 @@ class StudioRepository:
             if not self._delete_studio(studio_id):
                 raise HTTPException(status_code=404, detail="Studio not found.")
 
+        self._engine_queue.delete_studio_jobs(studio_id)
         upload_files, upload_bytes = self._delete_asset_prefix(f"uploads/{studio_id}/")
         job_files, job_bytes = self._delete_asset_prefix(f"jobs/{studio_id}/")
         deleted_files = upload_files + job_files
@@ -312,6 +322,15 @@ class StudioRepository:
             deleted_bytes=deleted_bytes,
         )
 
+    def delete_admin_expired_staged_assets(self) -> AdminDeleteResult:
+        deleted_files, deleted_bytes = self._delete_expired_staged_uploads()
+        return AdminDeleteResult(
+            deleted=True,
+            message="Expired staged upload assets deleted.",
+            deleted_files=deleted_files,
+            deleted_bytes=deleted_bytes,
+        )
+
     def delete_admin_asset(self, asset_id: str) -> AdminDeleteResult:
         relative_path = self._decode_asset_id(asset_id)
         deleted_files, deleted_bytes = self._delete_asset_file(relative_path)
@@ -340,6 +359,7 @@ class StudioRepository:
         self,
         request: StudioSeedUploadRequest,
     ) -> DirectUploadTarget:
+        self._cleanup_expired_staged_uploads_if_due()
         filename, _suffix = _validated_studio_seed_upload_filename(request.source_kind, request.filename)
         settings = get_settings()
         if request.size_bytes > settings.max_upload_bytes:
@@ -373,6 +393,7 @@ class StudioRepository:
         slot_id: int,
         request: DirectUploadRequest,
     ) -> DirectUploadTarget:
+        self._cleanup_expired_staged_uploads_if_due()
         studio = self.get_studio(studio_id)
         self._find_track(studio, slot_id)
         filename, _suffix = _validated_track_upload_filename(request.source_kind, request.filename)
@@ -493,41 +514,21 @@ class StudioRepository:
                 )
 
             if request.source_kind == "audio":
-                notes = self._transcribe_voice_file(
-                    source_path,
-                    bpm=studio.bpm,
-                    slot_id=slot_id,
-                    time_signature_numerator=studio.time_signature_numerator,
-                    time_signature_denominator=studio.time_signature_denominator,
-                )
-                if request.review_before_register:
-                    return self._add_extraction_candidates(
-                        studio_id,
-                        {slot_id: notes},
-                        source_kind="audio",
-                        source_label=filename,
-                        method="voice_transcription_review",
-                        confidence=min((note.confidence for note in notes), default=0.45),
-                        message="Voice transcription is waiting for user approval.",
-                        audio_source_path=self._relative_data_asset_path(source_path),
-                        audio_source_label=filename,
-                        audio_mime_type=_guess_audio_mime_type(filename),
-                    )
                 track = self._find_track(studio, slot_id)
-                if _track_has_content(track) and not request.allow_overwrite:
+                if _track_has_content(track) and not request.allow_overwrite and not request.review_before_register:
                     raise HTTPException(
                         status_code=409,
                         detail="Upload would overwrite an existing registered track.",
                     )
-                return self._update_track(
+                return self._enqueue_voice_job(
                     studio_id,
                     slot_id,
                     source_kind="audio",
                     source_label=filename,
-                    notes=notes,
-                    audio_source_path=self._relative_data_asset_path(source_path),
-                    audio_source_label=filename,
-                    audio_mime_type=_guess_audio_mime_type(filename),
+                    source_path=source_path,
+                    background_tasks=background_tasks,
+                    review_before_register=request.review_before_register,
+                    allow_overwrite=request.allow_overwrite,
                 )
 
             if request.source_kind == "score" and suffix in OMR_SOURCE_SUFFIXES:
@@ -776,6 +777,43 @@ class StudioRepository:
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
+
+    def retry_extraction_job(
+        self,
+        studio_id: str,
+        job_id: str,
+        *,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            job = next((candidate_job for candidate_job in studio.jobs if candidate_job.job_id == job_id), None)
+            if job is None:
+                raise HTTPException(status_code=404, detail="Extraction job not found.")
+            if job.status not in {"queued", "running", "failed"}:
+                raise HTTPException(status_code=409, detail="Only queued, running, or failed jobs can be retried.")
+            if not job.input_path:
+                raise HTTPException(status_code=409, detail="Extraction job has no stored input file.")
+
+            timestamp = _now()
+            job.status = "queued"
+            job.message = "Extraction retry queued."
+            job.output_path = None
+            job.updated_at = timestamp
+            track = self._find_track(studio, job.slot_id)
+            if not _track_has_content(track):
+                track.status = "extracting"
+                track.source_kind = job.source_kind
+                track.source_label = job.source_label
+                track.updated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+
+        self._enqueue_existing_extraction_job(studio_id, job_id)
+        self._schedule_engine_queue_processing(background_tasks)
+        return self.get_studio(studio_id)
 
     def score_track(self, studio_id: str, slot_id: int, request: ScoreTrackRequest) -> Studio:
         studio = self.get_studio(studio_id)
@@ -1103,14 +1141,17 @@ class StudioRepository:
         parse_all_parts: bool = False,
     ) -> Studio:
         timestamp = _now()
+        settings = get_settings()
         job = TrackExtractionJob(
             job_id=uuid4().hex,
+            job_type="omr",
             slot_id=slot_id,
             source_kind=source_kind,
             source_label=source_label,
             status="queued",
             method="audiveris_cli",
             input_path=self._relative_data_asset_path(source_path),
+            max_attempts=settings.engine_job_max_attempts,
             created_at=timestamp,
             updated_at=timestamp,
         )
@@ -1129,68 +1170,231 @@ class StudioRepository:
             studio.updated_at = timestamp
             self._save_studio(studio)
 
-        if background_tasks is None:
-            self._process_omr_job(studio_id, job.job_id, source_path, source_label, parse_all_parts)
-        else:
-            background_tasks.add_task(
-                self._process_omr_job,
-                studio_id,
-                job.job_id,
-                source_path,
-                source_label,
-                parse_all_parts,
+        self._engine_queue.enqueue(
+            EngineQueueJob(
+                job_id=job.job_id,
+                studio_id=studio_id,
+                slot_id=slot_id,
+                job_type="omr",
+                status="queued",
+                payload={
+                    "input_path": job.input_path,
+                    "source_kind": source_kind,
+                    "source_label": source_label,
+                    "parse_all_parts": parse_all_parts,
+                },
+                attempt_count=0,
+                max_attempts=settings.engine_job_max_attempts,
+                locked_until=None,
+                message=None,
+                created_at=timestamp,
+                updated_at=timestamp,
             )
+        )
+        self._schedule_engine_queue_processing(background_tasks)
         return studio
 
-    def _process_omr_job(
+    def _enqueue_voice_job(
         self,
         studio_id: str,
-        job_id: str,
-        source_path: Path,
+        slot_id: int,
+        *,
+        source_kind: SourceKind,
         source_label: str,
-        parse_all_parts: bool = False,
-    ) -> None:
+        source_path: Path,
+        background_tasks: BackgroundTasks | None,
+        review_before_register: bool,
+        allow_overwrite: bool,
+    ) -> Studio:
         settings = get_settings()
-        studio = self.get_studio(studio_id)
-        self._mark_job_running(studio_id, job_id)
+        timestamp = _now()
+        input_path = self._relative_data_asset_path(source_path)
+        job = TrackExtractionJob(
+            job_id=uuid4().hex,
+            job_type="voice",
+            slot_id=slot_id,
+            source_kind=source_kind,
+            source_label=source_label,
+            status="queued",
+            method="voice_transcription",
+            message="Voice extraction queued.",
+            input_path=input_path,
+            max_attempts=settings.engine_job_max_attempts,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            track = self._find_track(studio, slot_id)
+            if not _track_has_content(track) or not review_before_register:
+                track.status = "extracting"
+                track.source_kind = source_kind
+                track.source_label = source_label
+                track.updated_at = timestamp
+            studio.jobs.append(job)
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+
+        self._engine_queue.enqueue(
+            EngineQueueJob(
+                job_id=job.job_id,
+                studio_id=studio_id,
+                slot_id=slot_id,
+                job_type="voice",
+                status="queued",
+                payload={
+                    "input_path": input_path,
+                    "source_kind": source_kind,
+                    "source_label": source_label,
+                    "review_before_register": review_before_register,
+                    "allow_overwrite": allow_overwrite,
+                    "audio_mime_type": _guess_audio_mime_type(source_label),
+                },
+                attempt_count=0,
+                max_attempts=settings.engine_job_max_attempts,
+                locked_until=None,
+                message=None,
+                created_at=timestamp,
+                updated_at=timestamp,
+            )
+        )
+        self._schedule_engine_queue_processing(background_tasks)
+        return studio
+
+    def process_engine_queue_once(self) -> EngineQueueJob | None:
+        settings = get_settings()
+        record = self._engine_queue.claim_next(
+            max_active=settings.max_active_engine_jobs,
+            lease_seconds=settings.engine_job_lease_seconds,
+        )
+        if record is None:
+            return None
+
+        self._mark_job_running(
+            record.studio_id,
+            record.job_id,
+            attempt_count=record.attempt_count,
+            max_attempts=record.max_attempts,
+        )
+        try:
+            if record.job_type == "omr":
+                self._process_omr_queue_record(record)
+            elif record.job_type == "voice":
+                self._process_voice_queue_record(record)
+            else:
+                raise RuntimeError(f"Unsupported engine job type: {record.job_type}")
+        except Exception as error:
+            message = str(error) or "Engine job failed."
+            self._mark_job_failed(record.studio_id, record.job_id, message=message)
+            self._engine_queue.fail(record.job_id, message=message)
+            return record
+
+        refreshed = self.get_studio(record.studio_id)
+        final_status = next((job.status for job in refreshed.jobs if job.job_id == record.job_id), None)
+        if final_status == "failed":
+            failed_job = next((job for job in refreshed.jobs if job.job_id == record.job_id), None)
+            self._engine_queue.fail(record.job_id, message=failed_job.message or "Engine job failed.")
+        else:
+            self._engine_queue.complete(record.job_id)
+        return record
+
+    def _process_omr_queue_record(self, record: EngineQueueJob) -> None:
+        settings = get_settings()
+        studio = self.get_studio(record.studio_id)
+        input_path = self._resolve_data_asset_path(str(record.payload.get("input_path") or ""))
+        source_label = str(record.payload.get("source_label") or "uploaded-score")
+        parse_all_parts = bool(record.payload.get("parse_all_parts"))
         try:
             output_path = self._run_audiveris_omr(
-                input_path=source_path,
-                output_dir=self._job_output_dir(studio_id, job_id),
+                input_path=input_path,
+                output_dir=self._job_output_dir(record.studio_id, record.job_id),
                 audiveris_bin=settings.audiveris_bin,
                 timeout_seconds=settings.engine_processing_timeout_seconds,
             )
             parsed_symbolic = parse_symbolic_file_with_metadata(
                 output_path,
                 bpm=studio.bpm,
-                target_slot_id=None if parse_all_parts else self._job_slot_id(studio_id, job_id),
+                target_slot_id=None if parse_all_parts else self._job_slot_id(record.studio_id, record.job_id),
             )
             output_reference = self._persist_generated_asset(output_path)
             mapped_notes = _mark_notes_as_omr(parsed_symbolic.mapped_notes)
         except (OmrUnavailableError, SymbolicParseError) as error:
-            self._mark_job_failed(studio_id, job_id, message=str(error))
+            self._mark_job_failed(record.studio_id, record.job_id, message=str(error))
             return
         except AssetStorageError as error:
-            self._mark_job_failed(studio_id, job_id, message=str(error))
+            self._mark_job_failed(record.studio_id, record.job_id, message=str(error))
             return
 
         if parsed_symbolic.has_time_signature:
             self._update_time_signature(
-                studio_id,
+                record.studio_id,
                 parsed_symbolic.time_signature_numerator,
                 parsed_symbolic.time_signature_denominator,
             )
-        self._mark_job_completed(studio_id, job_id, output_path=output_reference)
+        self._mark_job_completed(record.studio_id, record.job_id, output_path=output_reference)
         self._add_extraction_candidates(
-            studio_id,
+            record.studio_id,
             mapped_notes,
             source_kind="score",
             source_label=source_label,
             method="audiveris_omr_review",
             confidence=0.55,
-            job_id=job_id,
+            job_id=record.job_id,
             message="OMR result requires user approval before track registration.",
         )
+
+    def _process_voice_queue_record(self, record: EngineQueueJob) -> None:
+        studio = self.get_studio(record.studio_id)
+        source_path = self._resolve_data_asset_path(str(record.payload.get("input_path") or ""))
+        source_label = str(record.payload.get("source_label") or "voice.wav")
+        review_before_register = bool(record.payload.get("review_before_register"))
+        allow_overwrite = bool(record.payload.get("allow_overwrite"))
+        audio_mime_type = str(record.payload.get("audio_mime_type") or _guess_audio_mime_type(source_label))
+        notes = self._transcribe_voice_file(
+            source_path,
+            bpm=studio.bpm,
+            slot_id=record.slot_id,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+        )
+        if review_before_register:
+            self._add_extraction_candidates(
+                record.studio_id,
+                {record.slot_id: notes},
+                source_kind="audio",
+                source_label=source_label,
+                method="voice_transcription_review",
+                confidence=min((note.confidence for note in notes), default=0.45),
+                message="Voice transcription is waiting for user approval.",
+                job_id=record.job_id,
+                audio_source_path=str(record.payload.get("input_path") or ""),
+                audio_source_label=source_label,
+                audio_mime_type=audio_mime_type,
+            )
+            return
+
+        track = self._find_track(studio, record.slot_id)
+        if _track_has_content(track) and not allow_overwrite:
+            self._mark_job_failed(
+                record.studio_id,
+                record.job_id,
+                message="Upload would overwrite an existing registered track.",
+            )
+            return
+        self._update_track(
+            record.studio_id,
+            record.slot_id,
+            source_kind="audio",
+            source_label=source_label,
+            notes=notes,
+            audio_source_path=str(record.payload.get("input_path") or ""),
+            audio_source_label=source_label,
+            audio_mime_type=audio_mime_type,
+        )
+        self._mark_job_completed(record.studio_id, record.job_id, output_path=str(record.payload.get("input_path") or ""))
 
     def _add_extraction_candidates(
         self,
@@ -1300,7 +1504,78 @@ class StudioRepository:
                 return job.slot_id
         raise HTTPException(status_code=404, detail="Extraction job not found.")
 
-    def _mark_job_running(self, studio_id: str, job_id: str) -> None:
+    def _schedule_engine_queue_processing(self, background_tasks: BackgroundTasks | None) -> None:
+        if background_tasks is None:
+            self.process_engine_queue_once()
+            return
+        background_tasks.add_task(self.process_engine_queue_once)
+
+    def _ensure_queue_records_for_active_jobs(self, studio: Studio) -> None:
+        for job in studio.jobs:
+            if job.status not in {"queued", "running"}:
+                continue
+            if self._engine_queue.get(job.job_id) is not None:
+                continue
+            self._enqueue_existing_extraction_job(studio.studio_id, job.job_id)
+
+    def _enqueue_existing_extraction_job(self, studio_id: str, job_id: str) -> None:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            job = next((candidate_job for candidate_job in studio.jobs if candidate_job.job_id == job_id), None)
+            if job is None:
+                raise HTTPException(status_code=404, detail="Extraction job not found.")
+            if not job.input_path:
+                raise HTTPException(status_code=409, detail="Extraction job has no stored input file.")
+            job_type = job.job_type
+            payload: dict[str, Any] = {
+                "input_path": job.input_path,
+                "source_kind": job.source_kind,
+                "source_label": job.source_label,
+            }
+            if job_type == "omr":
+                payload["parse_all_parts"] = True
+            elif job_type == "voice":
+                queue_record = self._engine_queue.get(job_id)
+                if queue_record is not None:
+                    payload.update(queue_record.payload)
+                payload.setdefault("review_before_register", True)
+                payload.setdefault("allow_overwrite", False)
+                payload.setdefault("audio_mime_type", _guess_audio_mime_type(job.source_label))
+            else:
+                raise HTTPException(status_code=409, detail="Unsupported extraction job type.")
+            timestamp = _now()
+            job.attempt_count = 0
+            job.max_attempts = get_settings().engine_job_max_attempts
+            job.updated_at = timestamp
+            self._save_studio(studio)
+
+        self._engine_queue.enqueue(
+            EngineQueueJob(
+                job_id=job.job_id,
+                studio_id=studio_id,
+                slot_id=job.slot_id,
+                job_type=job_type,
+                status="queued",
+                payload=payload,
+                attempt_count=0,
+                max_attempts=job.max_attempts,
+                locked_until=None,
+                message=None,
+                created_at=job.created_at,
+                updated_at=timestamp,
+            )
+        )
+
+    def _mark_job_running(
+        self,
+        studio_id: str,
+        job_id: str,
+        *,
+        attempt_count: int | None = None,
+        max_attempts: int | None = None,
+    ) -> None:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
@@ -1309,6 +1584,11 @@ class StudioRepository:
             for job in studio.jobs:
                 if job.job_id == job_id:
                     job.status = "running"
+                    job.message = "Extraction running."
+                    if attempt_count is not None:
+                        job.attempt_count = attempt_count
+                    if max_attempts is not None:
+                        job.max_attempts = max_attempts
                     job.updated_at = timestamp
                     break
             studio.updated_at = timestamp
@@ -1656,6 +1936,28 @@ class StudioRepository:
             raise HTTPException(status_code=500, detail=str(error)) from error
         self._asset_registry.mark_prefix_deleted(relative_prefix)
         return result
+
+    def _delete_expired_staged_uploads(self) -> tuple[int, int]:
+        settings = get_settings()
+        cutoff = datetime.now(UTC) - timedelta(seconds=settings.staged_upload_retention_seconds)
+        try:
+            return self._asset_storage.delete_prefix_older_than("staged/", cutoff)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+    def _cleanup_expired_staged_uploads_if_due(self) -> None:
+        settings = get_settings()
+        if settings.lifecycle_cleanup_interval_seconds <= 0:
+            return
+        now = datetime.now(UTC)
+        if (
+            self._last_lifecycle_cleanup_at is not None
+            and now - self._last_lifecycle_cleanup_at
+            < timedelta(seconds=settings.lifecycle_cleanup_interval_seconds)
+        ):
+            return
+        self._last_lifecycle_cleanup_at = now
+        self._delete_expired_staged_uploads()
 
     def _encode_asset_id(self, relative_path: str) -> str:
         encoded = base64.urlsafe_b64encode(relative_path.encode("utf-8")).decode("ascii")

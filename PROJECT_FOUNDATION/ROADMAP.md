@@ -67,6 +67,10 @@ The current implementation has a working vertical slice for:
 - Stored assets are indexed through a registry so admin storage totals,
   per-studio file pages, cleanup actions, and alpha capacity checks can be
   handled without scanning every object path on each request.
+- Per-track uploads use a direct-upload compatible flow: request an upload
+  target, `PUT` the binary to the API proxy in local mode or presigned R2/S3 URL
+  in object-storage mode, then finalize extraction/registration with the stored
+  `asset_path`.
 - Paginated studio/admin metadata reads: studio lists return summary rows,
   studio detail loads one document, admin storage pages studios and limits
   per-studio asset details, and report/candidate payloads are split out as
@@ -308,6 +312,10 @@ Required:
 - Scoring performance audio is treated as temporary extraction input.
 - Configurable max upload size keeps base64 JSON uploads inside the free-plan
   Cloud Run memory/request envelope.
+- Per-track upload-target API and browser direct upload orchestration.
+- R2/S3 bucket CORS must allow direct browser `PUT` from the deployed Pages
+  origin before the presigned path can carry production traffic without falling
+  back to base64.
 
 Cut line:
 
@@ -339,6 +347,8 @@ Required:
   and local files.
 - Add object lifecycle/retention cleanup before production-scale recording
   tests.
+- Add staged direct upload for home-start sources, where a studio id does not
+  exist until after the selected score/music source is accepted.
 
 ## Deferred Until Needed
 

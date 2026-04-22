@@ -1,10 +1,12 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
 from fastapi.responses import FileResponse
 
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
     CreateStudioRequest,
+    DirectUploadRequest,
+    DirectUploadTarget,
     GenerateTrackRequest,
     ScoreTrackRequest,
     Studio,
@@ -74,6 +76,34 @@ def get_track_audio(
 ) -> FileResponse:
     path, media_type, filename = repository.get_track_audio(studio_id, slot_id)
     return FileResponse(path, media_type=media_type, filename=filename)
+
+
+@router.put("/direct-uploads/{asset_id}")
+async def put_direct_upload(
+    asset_id: str,
+    request: Request,
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> dict[str, int | str]:
+    content = await request.body()
+    return repository.write_direct_upload_content(asset_id, content)
+
+
+@router.post("/{studio_id}/tracks/{slot_id}/upload-target", response_model=DirectUploadTarget)
+def create_track_upload_target(
+    studio_id: str,
+    slot_id: int,
+    request: DirectUploadRequest,
+    http_request: Request,
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> DirectUploadTarget:
+    target = repository.create_track_upload_target(studio_id, slot_id, request)
+    if not target.upload_url:
+        target = target.model_copy(
+            update={
+                "upload_url": str(http_request.url_for("put_direct_upload", asset_id=target.asset_id)),
+            }
+        )
+    return target
 
 
 @router.post("/{studio_id}/tracks/{slot_id}/upload", response_model=Studio)

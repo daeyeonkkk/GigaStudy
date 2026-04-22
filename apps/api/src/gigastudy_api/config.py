@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     studio_hard_limit: int = 500
     asset_warning_bytes: int = 7 * 1024 * 1024 * 1024
     asset_hard_bytes: int = int(8.5 * 1024 * 1024 * 1024)
+    direct_upload_expiration_seconds: int = 15 * 60
     max_active_engine_jobs: int = 1
     audiveris_bin: str | None = None
     engine_processing_timeout_seconds: int = 120

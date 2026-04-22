@@ -183,9 +183,35 @@ class CreateStudioRequest(BaseModel):
 class UploadTrackRequest(BaseModel):
     source_kind: Literal["audio", "midi", "score"]
     filename: str = Field(min_length=1, max_length=180)
-    content_base64: str = Field(min_length=1)
+    content_base64: str | None = Field(default=None, min_length=1)
+    asset_path: str | None = Field(default=None, min_length=1)
     review_before_register: bool = False
     allow_overwrite: bool = False
+
+    @model_validator(mode="after")
+    def validate_upload_source(self) -> "UploadTrackRequest":
+        has_inline_content = bool(self.content_base64)
+        has_asset_path = bool(self.asset_path)
+        if has_inline_content == has_asset_path:
+            raise ValueError("Track upload requires exactly one of content_base64 or asset_path.")
+        return self
+
+
+class DirectUploadRequest(BaseModel):
+    source_kind: Literal["audio", "midi", "score"]
+    filename: str = Field(min_length=1, max_length=180)
+    size_bytes: int = Field(ge=1)
+    content_type: str | None = Field(default=None, max_length=120)
+
+
+class DirectUploadTarget(BaseModel):
+    asset_id: str
+    asset_path: str
+    upload_url: str
+    method: Literal["PUT"] = "PUT"
+    headers: dict[str, str] = Field(default_factory=dict)
+    expires_at: str
+    max_bytes: int
 
 
 class GenerateTrackRequest(BaseModel):

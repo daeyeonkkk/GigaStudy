@@ -47,6 +47,16 @@ Studio metadata and stored binary assets are separate responsibilities.
 - Asset references stored in tracks, candidates, and OMR jobs should be
   relative storage keys such as `uploads/{studio_id}/{slot_id}/{file}` or
   `jobs/{studio_id}/{job_id}/{file}`.
+- Per-track browser uploads should prefer the direct upload contract when the
+  browser already has a concrete studio id and track slot:
+  `POST /api/studios/{studio_id}/tracks/{slot_id}/upload-target`,
+  binary `PUT` to the returned URL, then
+  `POST /api/studios/{studio_id}/tracks/{slot_id}/upload` with `asset_path`.
+  The final upload endpoint remains the only step that registers TrackNotes or
+  review candidates. In local development the returned URL may be an API proxy
+  endpoint; in S3/R2 deployments it should be a presigned object-store URL.
+- Object-store direct upload requires bucket CORS that permits the deployed web
+  origin to `PUT` with the returned headers, especially `Content-Type`.
 - Studio list endpoints must return summary rows with pagination. Studio detail
   endpoints must load only the requested studio id. Admin storage summaries
   must page studio rows and limit per-studio asset details so 1,000+ alpha
@@ -463,6 +473,10 @@ These code paths currently implement the contract:
   `apps/api/src/gigastudy_api/services/studio_store.py`
 - Stored upload/recording/OMR asset persistence:
   `apps/api/src/gigastudy_api/services/asset_storage.py`
+- Track upload target/finalize API:
+  `apps/api/src/gigastudy_api/api/routes/studios.py`
+- Browser direct-upload orchestration:
+  `apps/web/src/lib/api.ts` and `apps/web/src/pages/StudioPage.tsx`
 - Browser TrackNote score rendering math and hidden layout markers:
   `apps/web/src/lib/studio/scoreRendering.ts`
 - Browser VexFlow SVG engraving:

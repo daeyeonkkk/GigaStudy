@@ -216,6 +216,12 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Upload, recording, and OMR job assets can use S3-compatible object
   storage such as Cloudflare R2 through `GIGASTUDY_API_STORAGE_BACKEND=s3`,
   with local filesystem storage kept as the development fallback.
+- [x] Per-track uploads can use a signed/direct-upload compatible flow before
+  finalizing TrackNote extraction with a stored `asset_path`.
+- [ ] Home-start uploads still need staged direct upload because a studio id
+  does not exist before the source file is accepted.
+- [ ] R2 bucket CORS must be configured to allow browser `PUT` plus
+  `Content-Type` from the deployed Pages origin for the presigned upload path.
 - [x] Cloud Run local filesystem is treated as temporary engine/cache space
   when object storage is configured, not as the durable source of truth.
 - [x] Scoring performance audio is temporary extraction input and is deleted
@@ -235,7 +241,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Live deployment sets the Postgres/R2 environment variables and verifies
   admin storage summary against the deployed service.
 - [ ] Durable object storage still needs a lifecycle/retention policy.
-- [ ] Browser-to-R2 direct upload/signed URL flow is not implemented yet.
+- [x] Browser-to-R2 direct upload/signed URL flow is implemented for existing
+  studio track uploads.
 - [ ] OMR/voice extraction still needs a durable queue before Cloud Run
   maxScale is raised above one instance.
 

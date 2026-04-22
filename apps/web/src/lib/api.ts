@@ -2,6 +2,7 @@ import type {
   AdminDeleteResult,
   AdminStorageSummary,
   CreateStudioRequest,
+  DirectUploadTarget,
   ScoreNote,
   Studio,
   StudioListItem,
@@ -132,13 +133,45 @@ export function getTrackAudioUrl(studioId: string, slotId: number): string {
   return new URL(`/api/studios/${studioId}/tracks/${slotId}/audio`, apiBaseUrl).toString()
 }
 
+export function createTrackUploadTarget(
+  studioId: string,
+  slotId: number,
+  payload: {
+    source_kind: 'audio' | 'midi' | 'score'
+    filename: string
+    size_bytes: number
+    content_type?: string
+  },
+): Promise<DirectUploadTarget> {
+  return requestJson<DirectUploadTarget>(
+    `/api/studios/${studioId}/tracks/${slotId}/upload-target`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    'Upload target could not be created.',
+  )
+}
+
+export async function putDirectUpload(target: DirectUploadTarget, blob: Blob): Promise<void> {
+  const response = await fetch(target.upload_url, {
+    method: target.method,
+    headers: target.headers,
+    body: blob,
+  })
+  if (!response.ok) {
+    throw new Error('Direct upload failed.')
+  }
+}
+
 export function uploadTrack(
   studioId: string,
   slotId: number,
   payload: {
     source_kind: 'audio' | 'midi' | 'score'
     filename: string
-    content_base64: string
+    content_base64?: string
+    asset_path?: string
     review_before_register?: boolean
     allow_overwrite?: boolean
   },

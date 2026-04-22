@@ -124,6 +124,15 @@ The current implementation has a working six-track vertical slice:
 - Upload payload size is capped by `GIGASTUDY_API_MAX_UPLOAD_BYTES`, defaulting
   to 15 MiB, to keep the current base64 JSON path inside the alpha free-plan
   request and memory envelope.
+- Per-track uploads now have a signed/direct-upload compatible path:
+  the browser requests an upload target, uploads the binary file with `PUT`,
+  then finalizes registration by passing the stored relative `asset_path` to
+  the existing track upload pipeline. Local development receives an API proxy
+  upload URL; S3/R2 deployments receive a presigned object-store URL.
+- Home-screen upload start and scoring performance audio still use the smaller
+  existing base64/temporary paths. The next upload architecture step is staged
+  direct upload for pre-studio home sources and direct/temporary handling for
+  larger scoring takes if needed.
 - Free-plan alpha operating limits are configurable and enforced in the API:
   studio soft warning 300, studio hard cap 500, asset warning 7 GiB, asset hard
   cap 8.5 GiB, file upload cap 15 MiB, and one active local engine job at a
@@ -209,8 +218,9 @@ not legacy product surfaces.
    upload/job assets.
 6. Add user ownership or private share boundaries before inviting broader
    traffic; public list/detail endpoints are still alpha-only.
-7. Add streaming or direct-to-object upload if the product needs files larger
-   than the current base64 JSON envelope.
+7. Extend direct-to-object upload beyond per-track uploads: staged home-start
+   uploads before a studio id exists, optional larger scoring-take handling,
+   and R2 bucket CORS allowing `PUT` plus `Content-Type` from the Pages origin.
 8. Move extraction/OMR execution into a durable queue before raising Cloud Run
    maxScale above the current free-plan alpha shape.
 

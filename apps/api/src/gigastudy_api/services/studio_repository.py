@@ -19,6 +19,8 @@ from gigastudy_api.api.schemas.admin import (
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
+    DirectUploadRequest,
+    DirectUploadTarget,
     ExtractionCandidate,
     GenerateTrackRequest,
     ScoreTrackRequest,
@@ -75,6 +77,11 @@ DEFAULT_UPLOAD_BPM = 92
 OMR_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
 AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
+TRACK_UPLOAD_SUFFIXES = {
+    "audio": tuple(AUDIO_SOURCE_SUFFIXES),
+    "midi": (".mid", ".midi"),
+    "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
+}
 AUDIO_MIME_TYPES = {
     ".wav": "audio/wav",
     ".mp3": "audio/mpeg",
@@ -313,6 +320,64 @@ class StudioRepository:
             deleted_bytes=deleted_bytes,
         )
 
+    def create_track_upload_target(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: DirectUploadRequest,
+    ) -> DirectUploadTarget:
+        studio = self.get_studio(studio_id)
+        self._find_track(studio, slot_id)
+        filename, _suffix = _validated_track_upload_filename(request.source_kind, request.filename)
+        settings = get_settings()
+        if request.size_bytes > settings.max_upload_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds the configured {settings.max_upload_bytes} byte limit.",
+            )
+        self._ensure_asset_capacity(request.size_bytes)
+        try:
+            upload_info = self._asset_storage.create_direct_upload(
+                studio_id=studio_id,
+                slot_id=slot_id,
+                filename=filename,
+                content_type=request.content_type,
+                expires_in_seconds=settings.direct_upload_expiration_seconds,
+            )
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+        return DirectUploadTarget(
+            asset_id=self._encode_asset_id(upload_info.relative_path),
+            asset_path=upload_info.relative_path,
+            upload_url=upload_info.upload_url or "",
+            method="PUT",
+            headers=upload_info.headers,
+            expires_at=upload_info.expires_at,
+            max_bytes=settings.max_upload_bytes,
+        )
+
+    def write_direct_upload_content(self, asset_id: str, content: bytes) -> dict[str, int | str]:
+        relative_path = self._decode_asset_id(asset_id)
+        upload_owner = _track_upload_owner_from_path(relative_path)
+        if upload_owner is None:
+            raise HTTPException(status_code=404, detail="Upload target not found.")
+        studio_id, slot_id = upload_owner
+        studio = self.get_studio(studio_id)
+        self._find_track(studio, slot_id)
+        max_upload_bytes = get_settings().max_upload_bytes
+        if len(content) > max_upload_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds the configured {max_upload_bytes} byte limit.",
+            )
+        self._ensure_asset_capacity(len(content))
+        try:
+            self._asset_storage.write_direct_upload(relative_path=relative_path, content=content)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Upload target not found.") from error
+        return {"asset_path": relative_path, "size_bytes": len(content)}
+
     def upload_track(
         self,
         studio_id: str,
@@ -321,24 +386,25 @@ class StudioRepository:
         *,
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
-        allowed_suffixes = {
-            "audio": tuple(AUDIO_SOURCE_SUFFIXES),
-            "midi": (".mid", ".midi"),
-            "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
-        }
-        filename = request.filename.strip()
-        suffix = Path(filename).suffix.lower()
-        if not filename.lower().endswith(allowed_suffixes[request.source_kind]):
-            raise HTTPException(status_code=422, detail="Unsupported file type for this upload.")
+        filename, suffix = _validated_track_upload_filename(request.source_kind, request.filename)
 
         studio = self.get_studio(studio_id)
+        self._find_track(studio, slot_id)
 
-        source_path = self._save_upload(
-            studio_id=studio_id,
-            slot_id=slot_id,
-            filename=filename,
-            content_base64=request.content_base64,
-        )
+        if request.asset_path is not None:
+            source_path = self._resolve_existing_upload_asset(
+                studio_id=studio_id,
+                slot_id=slot_id,
+                filename=filename,
+                asset_path=request.asset_path,
+            )
+        else:
+            source_path = self._save_upload(
+                studio_id=studio_id,
+                slot_id=slot_id,
+                filename=filename,
+                content_base64=request.content_base64 or "",
+            )
 
         try:
             if request.source_kind == "midi" or suffix in SYMBOLIC_SOURCE_SUFFIXES:
@@ -1567,13 +1633,54 @@ class StudioRepository:
             kind="upload",
             filename=filename,
             size_bytes=len(content),
-            content_type=(
-                _guess_audio_mime_type(filename)
-                if Path(filename).suffix.lower() in AUDIO_SOURCE_SUFFIXES
-                else None
-            ),
+            content_type=_guess_content_type(filename),
         )
         return path
+
+    def _resolve_existing_upload_asset(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        asset_path: str,
+    ) -> Path:
+        try:
+            relative_path = self._asset_storage.normalize_reference(asset_path)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Upload target not found.") from error
+
+        expected_prefix = f"uploads/{studio_id}/{slot_id}/"
+        if not relative_path.startswith(expected_prefix):
+            raise HTTPException(status_code=404, detail="Upload target not found.")
+
+        try:
+            source_path = self._asset_storage.resolve_path(relative_path)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Uploaded asset was not found.") from error
+        if not source_path.exists() or not source_path.is_file():
+            raise HTTPException(status_code=404, detail="Uploaded asset was not found.")
+
+        size_bytes = source_path.stat().st_size
+        if size_bytes <= 0:
+            raise HTTPException(status_code=422, detail="Uploaded asset is empty.")
+        max_upload_bytes = get_settings().max_upload_bytes
+        if size_bytes > max_upload_bytes:
+            self._delete_asset_file(relative_path)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds the configured {max_upload_bytes} byte limit.",
+            )
+
+        self._ensure_asset_capacity(size_bytes)
+        self._register_asset(
+            relative_path=relative_path,
+            kind="upload",
+            filename=filename,
+            size_bytes=size_bytes,
+            content_type=_guess_content_type(filename),
+        )
+        return source_path
 
     def _save_temp_upload(
         self,
@@ -1803,6 +1910,15 @@ def _track_has_content(track: TrackSlot) -> bool:
     return track.status == "registered" or bool(track.notes)
 
 
+def _validated_track_upload_filename(source_kind: str, filename: str) -> tuple[str, str]:
+    safe_filename = Path(filename.strip()).name
+    suffix = Path(safe_filename).suffix.lower()
+    allowed_suffixes = TRACK_UPLOAD_SUFFIXES.get(source_kind)
+    if not safe_filename or allowed_suffixes is None or not safe_filename.lower().endswith(allowed_suffixes):
+        raise HTTPException(status_code=422, detail="Unsupported file type for this upload.")
+    return safe_filename, suffix
+
+
 def _decode_base64(content_base64: str) -> bytes:
     payload = content_base64.split(",", 1)[1] if "," in content_base64 else content_base64
     try:
@@ -1820,6 +1936,40 @@ def _decode_base64(content_base64: str) -> bytes:
 
 def _guess_audio_mime_type(filename: str) -> str:
     return AUDIO_MIME_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
+
+
+def _guess_content_type(filename: str) -> str | None:
+    suffix = Path(filename).suffix.lower()
+    if suffix in AUDIO_SOURCE_SUFFIXES:
+        return _guess_audio_mime_type(filename)
+    if suffix in {".musicxml", ".xml"}:
+        return "application/vnd.recordare.musicxml+xml"
+    if suffix == ".mxl":
+        return "application/vnd.recordare.musicxml"
+    if suffix in {".mid", ".midi"}:
+        return "audio/midi"
+    if suffix == ".pdf":
+        return "application/pdf"
+    if suffix in {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}:
+        if suffix in {".jpg", ".jpeg"}:
+            return "image/jpeg"
+        if suffix in {".tif", ".tiff"}:
+            return "image/tiff"
+        return f"image/{suffix.lstrip('.')}"
+    return None
+
+
+def _track_upload_owner_from_path(relative_path: str) -> tuple[str, int] | None:
+    parts = relative_path.split("/")
+    if len(parts) < 4 or parts[0] != "uploads":
+        return None
+    try:
+        slot_id = int(parts[2])
+    except ValueError:
+        return None
+    if slot_id < 1 or slot_id > 6:
+        return None
+    return parts[1], slot_id
 
 
 def _admin_asset_kind(kind: str) -> str:

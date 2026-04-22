@@ -459,6 +459,53 @@ def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatc
     assert soprano["notes"][0]["pitch_midi"] == 72
 
 
+def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Direct upload target",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    content = MUSICXML_UPLOAD.encode("utf-8")
+
+    target_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload-target",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "size_bytes": len(content),
+            "content_type": "application/vnd.recordare.musicxml+xml",
+        },
+    )
+
+    assert target_response.status_code == 200
+    target = target_response.json()
+    assert target["asset_path"].startswith(f"uploads/{studio_id}/1/")
+    assert target["method"] == "PUT"
+
+    put_path = target["upload_url"].removeprefix("http://testserver")
+    put_response = client.put(put_path, content=content)
+    assert put_response.status_code == 200
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "asset_path": target["asset_path"],
+        },
+    )
+
+    assert upload_response.status_code == 200
+    soprano = upload_response.json()["tracks"][0]
+    assert soprano["status"] == "registered"
+    assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
+
+
 def test_audio_upload_keeps_source_file_for_track_playback(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [

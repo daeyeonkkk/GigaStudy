@@ -155,6 +155,16 @@ export type CreateStudioRequest = {
   source_content_base64?: string
 }
 
+export type DirectUploadTarget = {
+  asset_id: string
+  asset_path: string
+  upload_url: string
+  method: 'PUT'
+  headers: Record<string, string>
+  expires_at: string
+  max_bytes: number
+}
+
 export type AdminAssetSummary = {
   asset_id: string
   studio_id: string

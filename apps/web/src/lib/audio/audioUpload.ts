@@ -10,6 +10,8 @@ const AUDIO_DECODE_TIMEOUT_MS = 30_000
 export type PreparedAudioUpload = {
   filename: string
   contentBase64: string
+  blob: Blob
+  contentType: string
   convertedToWav: boolean
 }
 
@@ -31,6 +33,8 @@ export async function prepareAudioFileForUpload(file: File): Promise<PreparedAud
     return {
       filename: file.name,
       contentBase64: await readFileAsDataUrl(file),
+      blob: file,
+      contentType: file.type || 'audio/wav',
       convertedToWav: false,
     }
   }
@@ -44,9 +48,12 @@ export async function prepareAudioFileForUpload(file: File): Promise<PreparedAud
   try {
     context = new AudioContextConstructor()
     const audioBuffer = await decodeAudioDataWithTimeout(context, await file.arrayBuffer())
+    const contentBase64 = encodeAudioBufferToWavDataUrl(audioBuffer)
     return {
       filename: replaceFileExtension(file.name, '.wav'),
-      contentBase64: encodeAudioBufferToWavDataUrl(audioBuffer),
+      contentBase64,
+      blob: dataUrlToBlob(contentBase64),
+      contentType: 'audio/wav',
       convertedToWav: true,
     }
   } catch (error) {
@@ -59,6 +66,21 @@ export async function prepareAudioFileForUpload(file: File): Promise<PreparedAud
       await context.close().catch(() => undefined)
     }
   }
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, payload] = dataUrl.split(',', 2)
+  if (!header || !payload) {
+    throw new Error('Invalid audio data URL.')
+  }
+  const mimeMatch = /^data:([^;]+);base64$/.exec(header)
+  const contentType = mimeMatch?.[1] || 'application/octet-stream'
+  const binary = atob(payload)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return new Blob([bytes], { type: contentType })
 }
 
 function replaceFileExtension(filename: string, extension: string): string {

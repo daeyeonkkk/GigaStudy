@@ -11,10 +11,12 @@ import { TrackBoard } from '../components/studio/TrackBoard'
 import {
   approveJobCandidates,
   approveCandidate,
+  createTrackUploadTarget,
   exportStudioPdf,
   generateTrack,
   getStudio,
   getTrackAudioUrl,
+  putDirectUpload,
   readFileAsDataUrl,
   rejectCandidate,
   scoreTrack,
@@ -801,12 +803,35 @@ export function StudioPage() {
             ? await prepareAudioFileForUpload(file)
             : {
                 filename: file.name,
-                contentBase64: await readFileAsDataUrl(file),
+                blob: file,
+                contentType: file.type || 'application/octet-stream',
+                contentBase64: undefined,
               }
+
+        const uploadTarget = await createTrackUploadTarget(studio.studio_id, track.slot_id, {
+          source_kind: sourceKind,
+          filename: preparedUpload.filename,
+          size_bytes: preparedUpload.blob.size,
+          content_type: preparedUpload.contentType,
+        })
+
+        try {
+          await putDirectUpload(uploadTarget, preparedUpload.blob)
+        } catch {
+          const fallbackContentBase64 =
+            preparedUpload.contentBase64 ?? (await readFileAsDataUrl(file))
+          return uploadTrack(studio.studio_id, track.slot_id, {
+            source_kind: sourceKind,
+            filename: preparedUpload.filename,
+            content_base64: fallbackContentBase64,
+            review_before_register: true,
+          })
+        }
+
         return uploadTrack(studio.studio_id, track.slot_id, {
           source_kind: sourceKind,
           filename: preparedUpload.filename,
-          content_base64: preparedUpload.contentBase64,
+          asset_path: uploadTarget.asset_path,
           review_before_register: true,
         })
       },

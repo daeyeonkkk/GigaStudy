@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import uuid4
@@ -20,6 +20,14 @@ class StoredAssetInfo:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class DirectUploadInfo:
+    relative_path: str
+    upload_url: str | None
+    headers: dict[str, str]
+    expires_at: str
+
+
 class AssetStorage(Protocol):
     @property
     def label(self) -> str:
@@ -33,6 +41,20 @@ class AssetStorage(Protocol):
         filename: str,
         content: bytes,
     ) -> Path:
+        ...
+
+    def create_direct_upload(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        content_type: str | None,
+        expires_in_seconds: int,
+    ) -> DirectUploadInfo:
+        ...
+
+    def write_direct_upload(self, *, relative_path: str, content: bytes) -> Path:
         ...
 
     def persist_file(self, path: Path) -> str:
@@ -74,6 +96,31 @@ class LocalAssetStorage:
         content: bytes,
     ) -> Path:
         relative_path = _upload_relative_path(studio_id, slot_id, filename)
+        path = self._cache_path(relative_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        return path
+
+    def create_direct_upload(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        content_type: str | None,
+        expires_in_seconds: int,
+    ) -> DirectUploadInfo:
+        del content_type
+        relative_path = _upload_relative_path(studio_id, slot_id, filename)
+        expires_at = _expires_at(expires_in_seconds)
+        return DirectUploadInfo(
+            relative_path=relative_path,
+            upload_url=None,
+            headers={},
+            expires_at=expires_at,
+        )
+
+    def write_direct_upload(self, *, relative_path: str, content: bytes) -> Path:
         path = self._cache_path(relative_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
@@ -185,6 +232,45 @@ class S3AssetStorage(LocalAssetStorage):
         local_path.parent.mkdir(parents=True, exist_ok=True)
         local_path.write_bytes(content)
         self._client.put_object(Bucket=self._bucket, Key=relative_path, Body=content)
+        return local_path
+
+    def create_direct_upload(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        content_type: str | None,
+        expires_in_seconds: int,
+    ) -> DirectUploadInfo:
+        relative_path = _upload_relative_path(studio_id, slot_id, filename)
+        params: dict[str, str] = {
+            "Bucket": self._bucket,
+            "Key": relative_path,
+        }
+        headers: dict[str, str] = {}
+        if content_type:
+            params["ContentType"] = content_type
+            headers["Content-Type"] = content_type
+        upload_url = self._client.generate_presigned_url(
+            "put_object",
+            Params=params,
+            ExpiresIn=expires_in_seconds,
+            HttpMethod="PUT",
+        )
+        return DirectUploadInfo(
+            relative_path=relative_path,
+            upload_url=upload_url,
+            headers=headers,
+            expires_at=_expires_at(expires_in_seconds),
+        )
+
+    def write_direct_upload(self, *, relative_path: str, content: bytes) -> Path:
+        clean_path = _clean_relative_path(relative_path)
+        local_path = self._cache_path(clean_path)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.write_bytes(content)
+        self._client.put_object(Bucket=self._bucket, Key=clean_path, Body=content)
         return local_path
 
     def persist_file(self, path: Path) -> str:
@@ -338,6 +424,10 @@ def _build_s3_client(
 def _upload_relative_path(studio_id: str, slot_id: int, filename: str) -> str:
     safe_filename = Path(filename).name.strip() or "upload.bin"
     return _clean_relative_path(f"uploads/{studio_id}/{slot_id}/{uuid4().hex}-{safe_filename}")
+
+
+def _expires_at(expires_in_seconds: int) -> str:
+    return (datetime.now(UTC) + timedelta(seconds=expires_in_seconds)).isoformat()
 
 
 def _studio_prefixes(studio_id: str) -> list[tuple[str, str]]:

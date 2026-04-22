@@ -198,7 +198,7 @@ class FileAssetRegistry:
 
 class PostgresAssetRegistry:
     def __init__(self, database_url: str) -> None:
-        self._database_url = database_url
+        self._database_url = _normalize_database_url(database_url)
         self._ensure_schema()
 
     def upsert(self, record: AssetRecord) -> None:
@@ -360,3 +360,9 @@ def build_asset_registry(*, storage_root: Path, database_url: str | None) -> Ass
     if database_url:
         return PostgresAssetRegistry(database_url)
     return FileAssetRegistry(storage_root)
+
+
+def _normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql+psycopg://"):
+        return database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    return database_url

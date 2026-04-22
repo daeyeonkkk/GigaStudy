@@ -1,6 +1,6 @@
 # GigaStudy Engine Architecture
 
-Date: 2026-04-20
+Date: 2026-04-22
 
 This document is the canonical engine contract for the current six-track
 GigaStudy foundation.
@@ -67,6 +67,14 @@ imported MIDI notes preserve beat positions and are normalized to studio BPM for
 
 Track rendering, playback, AI generation, and scoring must consume this schema
 rather than inventing separate note shapes.
+
+Browser score display engraves the same `TrackNote` data into VexFlow SVG
+notation. Timing helpers may prepare measure/sync layout metadata, but the
+visible noteheads, stems, beams, dots, ledger lines, accidentals, and ties must
+be produced by the engraving layer rather than CSS pseudo-elements. Display
+ties are allowed only when the renderer can connect two concrete notes: either
+measure-split segments of the same stored `TrackNote`, or adjacent same-pitch
+notes whose timing and `is_tied` metadata indicate a true continuation.
 
 Metronome playback follows the same contract. The click interval is the
 time-signature denominator pulse expressed in quarter beats:
@@ -379,8 +387,10 @@ These code paths currently implement the contract:
   `apps/web/src/lib/studio/timing.ts`
 - Browser TrackNote playback and metronome scheduling:
   `apps/web/src/lib/studio/playback.ts`
-- Browser TrackNote score rendering math:
+- Browser TrackNote score rendering math and hidden layout markers:
   `apps/web/src/lib/studio/scoreRendering.ts`
+- Browser VexFlow SVG engraving:
+  `apps/web/src/components/studio/EngravedScoreStrip.tsx`
 - Home upload flow:
   `apps/web/src/pages/LaunchPage.tsx`
 - Studio orchestration:

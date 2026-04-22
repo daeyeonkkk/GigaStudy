@@ -3,21 +3,13 @@ import type { CSSProperties } from 'react'
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
   TRACK_UPLOAD_ACCEPT,
-  formatBeatInMeasure,
   formatDurationSeconds,
   formatSeconds,
-  getClefSymbol,
-  getScoreBeatLineStyle,
-  getScoreMeasureBoundaryStyle,
-  getScoreMeasureLabelStyle,
-  getScoreTimelineStyle,
-  getTimelineNoteClass,
-  getTimelineNoteStyle,
-  getTrackRenderModel,
   getTrackSourceLabel,
   statusLabels,
 } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
+import { EngravedScoreStrip } from './EngravedScoreStrip'
 
 type TrackRecordingMeter = {
   durationSeconds: number
@@ -42,73 +34,6 @@ type TrackBoardProps = {
   onSync: (track: TrackSlot, nextOffset: number) => void
   onTogglePlayback: (track: TrackSlot) => void
   onUpload: (track: TrackSlot, file: File | null) => void
-}
-
-function ScoreStrip({
-  beatsPerMeasure,
-  bpm,
-  track,
-}: {
-  beatsPerMeasure: number
-  bpm: number
-  track: TrackSlot
-}) {
-  const scoreModel = getTrackRenderModel(track, bpm, beatsPerMeasure)
-
-  return (
-    <div
-      className="track-card__measure-strip"
-      data-testid={`track-score-strip-${track.slot_id}`}
-      style={getScoreTimelineStyle(scoreModel)}
-    >
-      <span className="track-card__clef" aria-hidden="true">
-        {getClefSymbol(track.slot_id)}
-      </span>
-      {scoreModel.beatGuideOffsets.map((beatOffset) => (
-        <span
-          aria-hidden="true"
-          className="track-card__beat-line"
-          key={`${track.slot_id}-beat-line-${beatOffset}`}
-          style={getScoreBeatLineStyle(beatOffset, scoreModel)}
-        />
-      ))}
-      {scoreModel.measureBoundaryOffsets.map((beatOffset) => (
-        <span
-          aria-hidden="true"
-          className="track-card__beat-line track-card__beat-line--measure"
-          key={`${track.slot_id}-measure-line-${beatOffset}`}
-          style={getScoreMeasureBoundaryStyle(beatOffset, scoreModel)}
-        />
-      ))}
-      {scoreModel.measures.map((measureIndex) => (
-        <span
-          className="track-card__measure-label"
-          key={`${track.slot_id}-measure-label-${measureIndex}`}
-          style={getScoreMeasureLabelStyle(measureIndex, scoreModel)}
-        >
-          {measureIndex}
-        </span>
-      ))}
-      {scoreModel.notes.map((renderNote) => (
-        <span
-          aria-label={`${renderNote.note.label} ${renderNote.durationLabel}`}
-          className={getTimelineNoteClass(renderNote)}
-          data-duration={renderNote.durationGlyph}
-          data-testid={`track-note-${track.slot_id}-${renderNote.renderKey}`}
-          key={renderNote.renderKey}
-          style={getTimelineNoteStyle(track.slot_id, renderNote, scoreModel)}
-          title={`${renderNote.note.label} · ${renderNote.durationLabel}`}
-        >
-          <span className="track-card__note-flag track-card__note-flag--primary" aria-hidden="true" />
-          <span className="track-card__note-flag track-card__note-flag--secondary" aria-hidden="true" />
-          {renderNote.tieStop ? <span className="track-card__note-tie track-card__note-tie--stop" aria-hidden="true" /> : null}
-          {renderNote.tieStart ? <span className="track-card__note-tie track-card__note-tie--start" aria-hidden="true" /> : null}
-          <small>{formatBeatInMeasure(renderNote.displayBeat, beatsPerMeasure)}</small>
-          <strong>{renderNote.note.label}</strong>
-        </span>
-      ))}
-    </div>
-  )
 }
 
 export function TrackBoard({
@@ -181,7 +106,7 @@ export function TrackBoard({
 
               <div className="track-card__score" aria-label={`${track.name} 악보`}>
                 {isRegistered ? (
-                  <ScoreStrip
+                  <EngravedScoreStrip
                     beatsPerMeasure={beatsPerMeasure}
                     bpm={bpm}
                     track={track}

@@ -1,6 +1,6 @@
 # GigaStudy Roadmap
 
-Date: 2026-04-21
+Date: 2026-04-22
 
 This roadmap replaces the previous guide-recording, arrangement, sharing, ops,
 and calibration roadmap.
@@ -51,8 +51,8 @@ The current implementation has a working vertical slice for:
 - Ensemble playback from TrackNote data
 - Scoring playback honors the scoring checklist's metronome selection
 - Answer-sheet scoring with offline sync alignment
-- Horizontally scrollable measure-based track score rendering with fixed
-  measure lines and sync-shifted note layers
+- Horizontally scrollable VexFlow SVG track score engraving with fixed measure
+  lines, sync-shifted note markers, and `TrackNote` as the source of truth
 - Compact report feed with separate quantitative report detail pages
 - Registered score PDF export from the main studio toolbar
 
@@ -181,16 +181,16 @@ Required:
 - Global stop
 - Sync offset applied to global and per-track playback
 - Stable visual timing feedback
-- Measure-based horizontal score rendering per track on the studio
+- Measure-based horizontal VexFlow SVG score engraving per track on the studio
   time-signature grid
-- Duration-aware browser note glyphs for whole, half, quarter, eighth, and
-  sixteenth-note classes, plus tie arcs for long or explicitly tied notes.
+- Duration-aware browser notation for whole, half, quarter, eighth, sixteenth,
+  and dotted values, plus note-to-note ties for long or explicitly tied notes.
 - Dense note runs expand the score timeline instead of overlapping.
 - Measure strips reserve inner notation padding and clamp note centers inside
   their owning measure.
 - Sync changes move notes across the fixed grid without moving barlines.
-- Soprano/Alto/Tenor use treble staff anchoring, Baritone/Bass use bass staff
-  anchoring, and rendered note positions stay inside the score viewport.
+- Soprano/Alto/Tenor use treble engraving, Baritone/Bass use bass engraving,
+  and high/low notes rely on ledger lines instead of visual clamping.
 - Key-signature marks are hidden until the score renderer can guarantee
   reliable spacing and clipping behavior.
 

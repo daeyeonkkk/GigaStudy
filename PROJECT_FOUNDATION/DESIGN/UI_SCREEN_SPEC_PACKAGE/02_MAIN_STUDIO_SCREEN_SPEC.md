@@ -1,6 +1,6 @@
 # 02 Main Studio Screen Spec
 
-Date: 2026-04-20
+Date: 2026-04-22
 
 Screen ID: `MAIN_STUDIO`
 
@@ -112,7 +112,8 @@ Required behavior:
 
 Each track should show its score or an equivalent note/timing representation.
 
-Registered track scores should be rendered as a horizontal, measure-based strip:
+Registered track scores should be rendered as a horizontal, measure-based
+VexFlow SVG engraving strip:
 
 - The track row owns a horizontally scrollable score area.
 - Measures are derived from `TrackNote.beat` on the studio time-signature grid,
@@ -121,20 +122,22 @@ Registered track scores should be rendered as a horizontal, measure-based strip:
   6/8 studio has three quarter-beats per measure.
 - The audible metronome follows the same time-signature grid as the visible
   score.
-- Measure boundaries and measure numbers are visible.
-- The first measure carries the appropriate clef signal for the track range.
-- Soprano, Alto, and Tenor use treble staff anchoring; Baritone and Bass use
-  bass staff anchoring.
+- Measure boundaries and measure numbers are visible through the engraving.
+- The first measure carries the appropriate VexFlow clef for the track range.
+- Soprano, Alto, and Tenor use treble engraving; Baritone and Bass use bass
+  engraving. High/low notes should use ledger lines instead of being clamped
+  into the staff.
 - Key-signature marks are intentionally hidden until they can be rendered with
   reliable spacing and clipping behavior.
 - Notes are positioned by beat within the measure, not simply listed in upload
   order.
-- Notes use `TrackNote.duration_beats` to choose symbolic duration glyphs for
-  whole, half, quarter, eighth, and sixteenth-note classes.
+- Notes use `TrackNote.duration_beats` to choose engraved whole, half,
+  quarter, eighth, sixteenth, and dotted values where supported by the
+  quantized rhythm.
 - Notes that span a measure boundary are split for display only and connected
-  with tie arcs; stored `TrackNote` data remains unchanged.
-- Explicit `TrackNote.is_tied` metadata renders tie arcs between adjacent same
-  pitch notes when available.
+  with VexFlow note-to-note ties; stored `TrackNote` data remains unchanged.
+- Explicit `TrackNote.is_tied` metadata renders ties only between adjacent
+  same-pitch notes whose timing supports a real continuation.
 - Each measure reserves an inner notation area, so downbeat notes sit inside
   the barline instead of on or outside it.
 - Note centers must be clamped inside their owning measure; cluster offsets may

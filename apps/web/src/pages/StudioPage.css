@@ -1661,3 +1661,72 @@
     grid-column: auto;
   }
 }
+
+.track-card__score {
+  display: block;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.track-card__score .track-card__engraved-strip {
+  position: relative;
+  display: block;
+  width: var(--score-width);
+  min-width: var(--score-width);
+  min-height: var(--score-height);
+  background: #ffffff;
+}
+
+.track-card__engraving-canvas {
+  position: relative;
+  width: var(--score-width);
+  height: var(--score-height);
+}
+
+.track-card__engraving-canvas svg {
+  display: block;
+  width: var(--score-width);
+  height: var(--score-height);
+  overflow: visible;
+}
+
+.track-card__engraving-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.track-card__score .track-card__engraved-strip .track-card__beat-line {
+  opacity: 0;
+}
+
+.track-card__score .track-card__engraved-strip .track-card__engraving-marker {
+  position: absolute;
+  top: 0;
+  left: var(--note-left);
+  display: block;
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transform: none;
+}
+
+.track-card__score .track-card__engraved-strip .track-card__engraving-marker::before,
+.track-card__score .track-card__engraved-strip .track-card__engraving-marker::after {
+  content: none;
+  display: none;
+}
+
+.track-card__score .track-card__engraved-strip .track-card__engraving-marker small,
+.track-card__score .track-card__engraved-strip .track-card__engraving-marker strong {
+  position: static;
+  display: block;
+  transform: none;
+}

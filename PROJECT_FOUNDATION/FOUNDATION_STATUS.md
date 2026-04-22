@@ -1,6 +1,6 @@
 # Foundation Status
 
-Date: 2026-04-21
+Date: 2026-04-22
 
 ## Current Decision
 
@@ -114,11 +114,15 @@ The current implementation has a working six-track vertical slice:
 - Registered tracks render as horizontally scrollable measure strips on the
   studio time-signature grid, with dense runs expanding the score width instead
   of overlapping.
-- Browser score rendering now reflects symbolic note duration classes from
-  `duration_beats` and shows tie arcs for display-split long notes. Explicit
-  `is_tied` metadata renders a tie only when adjacent same-pitch timing supports
-  a real continuation.
-- The score renderer gives each measure inner notation padding and clamps note
+- Browser score rendering now uses VexFlow SVG engraving from `TrackNote`
+  pitch/rhythm data. Noteheads, stems, beams, dots, accidentals, ledger lines,
+  and visible ties are produced by the engraving engine instead of CSS
+  pseudo-elements.
+- Visible tie arcs are drawn only as VexFlow note-to-note ties for
+  display-split long notes or explicit adjacent same-pitch continuations.
+- The renderer keeps a hidden layout-marker layer for regression checks and
+  sync behavior, while the visible notation is the engraved SVG score.
+- The score renderer gives each measure inner notation padding and keeps note
   centers inside their owning measure, so sync and same-onset clustering cannot
   push notes outside barlines.
 - Track sync visually shifts the note layer while measure lines and measure
@@ -132,9 +136,10 @@ The current implementation has a working six-track vertical slice:
 - AI generation now creates multiple pending candidates first; approving one
   candidate registers it and rejects sibling candidates from the same
   generation group.
-- The score renderer now uses clef-aware staff anchors so Soprano through Bass
-  tracks stay inside the staff viewport more reliably. Key-signature marks are
-  hidden until the notation layout can render them without clipping.
+- The score renderer now uses VexFlow clefs and ledger lines so Soprano through
+  Bass tracks can extend above or below the staff without being clamped into
+  misleading positions. Key-signature marks are hidden until the notation layout
+  can render them without clipping.
 
 Remaining implementation gaps are now refinements of the six-track direction,
 not legacy product surfaces.
@@ -143,8 +148,8 @@ not legacy product surfaces.
 
 1. Add score-image-aware OMR preview and page/part confidence indicators.
 2. Add clearer failed-extraction recovery for browser recording.
-3. Improve browser and PDF score rendering notation fidelity while preserving
-   TrackNote as the source of truth.
+3. Improve PDF score export engraving fidelity to match the browser VexFlow
+   score display while preserving TrackNote as the source of truth.
 4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
    is available.
 5. Add persistence/version boundaries only where they support the core flows.

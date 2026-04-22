@@ -1,6 +1,6 @@
 # GigaStudy Checklist
 
-Date: 2026-04-21
+Date: 2026-04-22
 
 This checklist tracks the new six-track studio foundation only.
 
@@ -50,16 +50,19 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Registered track score display is horizontally scrollable by measure.
 - [x] Registered track notes are positioned from `TrackNote.beat` on the studio
   time-signature grid.
-- [x] Registered track notes render duration-aware glyph classes for whole,
-  half, quarter, eighth, and sixteenth-note values.
+- [x] Registered track score display uses VexFlow SVG engraving rather than
+  CSS pseudo-noteheads/stems/ties.
+- [x] Registered track notes render duration-aware engraved notation for whole,
+  half, quarter, eighth, sixteenth, and dotted values when the TrackNote rhythm
+  supports it.
 - [x] Long notes that cross measure boundaries render display-only tied
   segments without mutating the stored TrackNote.
-- [x] Explicit `TrackNote.is_tied` metadata renders tie arcs when adjacent
-  same-pitch timing supports it.
+- [x] Explicit `TrackNote.is_tied` metadata renders note-to-note ties only when
+  adjacent same-pitch timing supports a real continuation.
 - [x] Note centers remain inside their owning measure; downbeat notes use
   measure-internal notation padding rather than sitting outside the barline.
-- [x] Soprano through Bass notation uses clef-aware staff anchors so high
-  soprano and low bass notes remain inside the score viewport.
+- [x] Soprano through Bass notation uses VexFlow clefs and ledger lines so high
+  soprano and low bass notes are engraved instead of visually clamped.
 - [x] Key-signature marks are hidden in the current renderer to avoid clipped
   or misleading notation until reliable layout support is added.
 - [x] MusicXML/MIDI import can preserve source time signature metadata.
@@ -193,6 +196,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Studio page presentation is split into dedicated toolbar, track board,
   OMR queue, candidate review, report feed, and scoring drawer components.
 - [x] Score rendering math is isolated from the page component.
+- [x] Visible browser score engraving is isolated in
+  `components/studio/EngravedScoreStrip.tsx`.
 
 ## Out Of Scope Until The Core Works
 

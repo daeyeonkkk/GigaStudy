@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from math import ceil
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,7 @@ class _StaffRow:
 @dataclass
 class _RawNote:
     slot_id: int
+    page_index: int
     beat: float
     measure_index: int
     beat_in_measure: float
@@ -129,6 +131,7 @@ def parse_born_digital_pdf_score(
     raw_notes_by_slot: dict[int, list[_RawNote]] = defaultdict(list)
     next_measure_by_slot: dict[int, int] = defaultdict(lambda: 1)
     labelled_slots_seen: set[int] = set()
+    staff_rows_by_slot: dict[int, int] = defaultdict(int)
 
     for page_index in range(document.page_count):
         page = document[page_index]
@@ -138,6 +141,7 @@ def parse_born_digital_pdf_score(
             if staff.slot_id is None or staff.slot_id > max_slot_id:
                 continue
             labelled_slots_seen.add(staff.slot_id)
+            staff_rows_by_slot[staff.slot_id] += 1
             row_notes, row_measure_count = _extract_notes_from_staff(
                 page=page,
                 staff=staff,
@@ -162,7 +166,22 @@ def parse_born_digital_pdf_score(
         if not notes:
             continue
         name = _track_name(slot_id)
-        tracks.append(ParsedTrack(name=name, notes=notes, slot_id=slot_id))
+        tracks.append(
+            ParsedTrack(
+                name=name,
+                notes=notes,
+                slot_id=slot_id,
+                diagnostics=_build_vector_track_diagnostics(
+                    slot_id=slot_id,
+                    raw_notes=raw_notes,
+                    notes=notes,
+                    document_page_count=document.page_count,
+                    detected_part_count=len(labelled_slots_seen),
+                    staff_row_count=staff_rows_by_slot.get(slot_id, 0),
+                    beats_per_measure=beats_per_measure,
+                ),
+            )
+        )
         mapped_notes[slot_id] = notes
 
     if not mapped_notes:
@@ -296,6 +315,7 @@ def _extract_notes_from_staff(
         raw_notes.append(
             _RawNote(
                 slot_id=staff.slot_id or 1,
+                page_index=staff.page_index,
                 beat=absolute_beat,
                 measure_index=measure_index,
                 beat_in_measure=beat_in_measure,
@@ -473,6 +493,102 @@ def _finalize_track_notes(
             )
         )
     return notes
+
+
+def _build_vector_track_diagnostics(
+    *,
+    slot_id: int,
+    raw_notes: list[_RawNote],
+    notes: list[TrackNote],
+    document_page_count: int,
+    detected_part_count: int,
+    staff_row_count: int,
+    beats_per_measure: float,
+) -> dict[str, Any]:
+    pitched_notes = [
+        note
+        for note in notes
+        if not note.is_rest and note.pitch_midi is not None
+    ]
+    measure_indices = {
+        note.measure_index
+        for note in notes
+        if note.measure_index is not None
+    }
+    page_indices = {raw_note.page_index for raw_note in raw_notes}
+    range_fit_ratio = _range_fit_ratio(slot_id, pitched_notes)
+    timing_grid_ratio = _timing_grid_ratio(notes)
+    avg_note_confidence = (
+        sum(note.confidence for note in notes) / len(notes)
+        if notes
+        else 0
+    )
+    duration_beats = 0.0
+    if notes:
+        duration_beats = max(note.beat + max(note.duration_beats, 0.25) - 1 for note in notes)
+    measure_count = len(measure_indices) or max(1, ceil(duration_beats / max(0.25, beats_per_measure)))
+    return {
+        "engine": "pdf_vector_omr_v0",
+        "document_page_count": document_page_count,
+        "candidate_page_count": len(page_indices),
+        "detected_part_count": detected_part_count,
+        "staff_row_count": staff_row_count,
+        "note_count": len(notes),
+        "pitched_note_count": len(pitched_notes),
+        "measure_count": measure_count,
+        "avg_note_confidence": round(avg_note_confidence, 3),
+        "range_fit_ratio": round(range_fit_ratio, 3),
+        "timing_grid_ratio": round(timing_grid_ratio, 3),
+        "density_notes_per_measure": round(len(notes) / max(1, measure_count), 2),
+        "review_hint": _vector_review_hint(
+            note_count=len(notes),
+            range_fit_ratio=range_fit_ratio,
+            timing_grid_ratio=timing_grid_ratio,
+            detected_part_count=detected_part_count,
+        ),
+    }
+
+
+def _range_fit_ratio(slot_id: int, notes: list[TrackNote]) -> float:
+    if not notes:
+        return 0
+    low, high = SLOT_PITCH_RANGES.get(slot_id, (0, 127))
+    in_range = [
+        note
+        for note in notes
+        if note.pitch_midi is not None and low <= note.pitch_midi <= high
+    ]
+    return len(in_range) / len(notes)
+
+
+def _timing_grid_ratio(notes: list[TrackNote]) -> float:
+    if not notes:
+        return 0
+    aligned = 0
+    for note in notes:
+        beat_aligned = abs(note.beat * 4 - round(note.beat * 4)) <= 0.03
+        duration_aligned = abs(note.duration_beats * 4 - round(note.duration_beats * 4)) <= 0.03
+        if beat_aligned and duration_aligned:
+            aligned += 1
+    return aligned / len(notes)
+
+
+def _vector_review_hint(
+    *,
+    note_count: int,
+    range_fit_ratio: float,
+    timing_grid_ratio: float,
+    detected_part_count: int,
+) -> str:
+    if note_count < 4:
+        return "few_notes"
+    if range_fit_ratio < 0.85:
+        return "range_outliers"
+    if timing_grid_ratio < 0.82:
+        return "rhythm_grid_review"
+    if detected_part_count < 4:
+        return "partial_score_review"
+    return "review_accidentals_and_rhythm"
 
 
 def _extract_glyphs(page: Any) -> list[_Glyph]:

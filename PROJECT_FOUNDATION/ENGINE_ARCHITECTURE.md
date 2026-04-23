@@ -303,6 +303,14 @@ is:
 5. Keep all fallback output in the candidate-review path because PDF geometry
    extraction can still misread rhythm, accidentals, or dense notation.
 
+Vector-PDF and Audiveris OMR candidates must carry diagnostics that help the
+user decide whether to approve the result. At minimum, OMR candidates should
+surface candidate method, track name, note count, measure count, confidence,
+range-fit ratio, timing-grid ratio, density, and a review hint such as
+`few_notes`, `range_outliers`, `rhythm_grid_review`, or
+`review_accidentals_and_rhythm`. These diagnostics are advisory decision aids,
+not hidden auto-approval rules.
+
 LLM or local-LLM assistance is allowed only as a secondary repair/classification
 aid around OMR output. It must not replace a score-specific OMR or vector
 geometry parser as the primary source of pitch/rhythm truth.
@@ -348,6 +356,8 @@ Each candidate carries:
 - Confidence
 - Candidate `TrackNote` list
 - Optional job id
+- Diagnostic metadata for uncertain extraction, such as measure count,
+  note count, range fit, rhythm grid fit, engine name, and review hint
 - Pending, approved, or rejected status
 
 Approving a candidate writes its `TrackNote` list into the target track and
@@ -359,7 +369,8 @@ target track already has registered content, approval must require explicit
 overwrite confirmation from the user/API request.
 
 Candidate review should show enough symbolic preview data for a decision:
-source, method, confidence, note count, duration, pitch/rhythm preview, and the
+source, method, confidence, note count, duration, pitch/rhythm preview,
+diagnostic review hints, page/part or measure counts when available, and the
 currently selected target track.
 
 Candidate review is the required path for OMR results and the recommended path

@@ -52,7 +52,13 @@ The current implementation has a working vertical slice for:
 - OMR job review can register all mapped candidates into their suggested tracks
   in one operation.
 - Extraction candidate queue with approve/reject registration
-- Candidate target override, compact preview, and overwrite guard
+- Candidate target override, compact preview, diagnostic evidence, and
+  overwrite guard
+- OMR candidate diagnostics expose method, track, note/measure count, confidence
+  label, range fit, rhythm grid fit, density, review hints, and page/part
+  evidence when available.
+- Failed extraction job rows show contextual retry guidance for noisy voice
+  takes, vector fallback failure, and Audiveris timeout cases.
 - AI generation produces multiple reviewable candidates and rejects sibling
   candidates when one is approved
 - Rule-based symbolic vocal harmony generation with key estimation, chord
@@ -374,8 +380,9 @@ Required:
   sustained singing from speech, breath, keyboard clicks, and other unstable
   room noise.
 - Harden browser audio decoding failure messages for codec-specific failures.
-- Harden OMR review with score-image-aware visual preview and page/part
-  confidence indicators.
+- Harden OMR review with score-image-aware visual preview. Page/part/count
+  confidence indicators now exist as candidate diagnostics, but the user still
+  needs a source-page preview for scanned/image PDF review.
 - Add mixed-audio fallback behavior that does not overpromise SATB separation.
 - Keep candidate review decision-first: musical character, confidence,
   register fit, movement, rhythm density, and contour should stay more

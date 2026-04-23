@@ -1214,6 +1214,12 @@ class StudioRepository:
         audio_mime_type: str | None = None,
     ) -> None:
         timestamp = _now()
+        diagnostics = _candidate_diagnostics(
+            suggested_slot_id,
+            notes,
+            method=method,
+            confidence=confidence,
+        )
         candidate = ExtractionCandidate(
             candidate_id=uuid4().hex,
             suggested_slot_id=suggested_slot_id,
@@ -1226,6 +1232,7 @@ class StudioRepository:
             audio_source_label=audio_source_label,
             audio_mime_type=audio_mime_type,
             message=message,
+            diagnostics=diagnostics,
             created_at=timestamp,
             updated_at=timestamp,
         )
@@ -1496,6 +1503,37 @@ class StudioRepository:
                 parsed_symbolic.time_signature_denominator,
             )
         self._mark_job_completed(record.studio_id, record.job_id, output_path=output_reference, method=job_method)
+        diagnostics_by_slot = _parsed_track_diagnostics_by_slot(
+            parsed_symbolic,
+            method=extraction_method,
+            fallback_method=candidate_method,
+        )
+        confidence_by_slot = {
+            slot_id: _estimate_candidate_confidence(
+                slot_id,
+                notes,
+                method=candidate_method,
+                fallback_confidence=confidence,
+                diagnostics=diagnostics_by_slot.get(slot_id),
+            )
+            for slot_id, notes in mapped_notes.items()
+        }
+        message_by_slot = {
+            slot_id: _candidate_review_message(
+                slot_id,
+                notes,
+                method=candidate_method,
+                diagnostics=_candidate_diagnostics(
+                    slot_id,
+                    notes,
+                    method=candidate_method,
+                    confidence=confidence_by_slot[slot_id],
+                    source_diagnostics=diagnostics_by_slot.get(slot_id),
+                ),
+                default_message=message,
+            )
+            for slot_id, notes in mapped_notes.items()
+        }
         self._add_extraction_candidates(
             record.studio_id,
             mapped_notes,
@@ -1503,8 +1541,11 @@ class StudioRepository:
             source_label=source_label,
             method=candidate_method,
             confidence=confidence,
+            confidence_by_slot=confidence_by_slot,
+            diagnostics_by_slot=diagnostics_by_slot,
             job_id=record.job_id,
             message=message,
+            message_by_slot=message_by_slot,
         )
 
     def _process_voice_queue_record(self, record: EngineQueueJob) -> None:
@@ -1566,6 +1607,9 @@ class StudioRepository:
         source_label: str,
         method: str,
         confidence: float,
+        confidence_by_slot: dict[int, float] | None = None,
+        diagnostics_by_slot: dict[int, dict[str, Any]] | None = None,
+        message_by_slot: dict[int, str] | None = None,
         job_id: str | None = None,
         message: str | None = None,
         candidate_group_id: str | None = None,
@@ -1580,6 +1624,25 @@ class StudioRepository:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
             for slot_id, notes in mapped_notes.items():
+                source_diagnostics = (diagnostics_by_slot or {}).get(slot_id)
+                slot_confidence = (
+                    confidence_by_slot.get(slot_id)
+                    if confidence_by_slot and slot_id in confidence_by_slot
+                    else _estimate_candidate_confidence(
+                        slot_id,
+                        notes,
+                        method=method,
+                        fallback_confidence=confidence,
+                        diagnostics=source_diagnostics,
+                    )
+                )
+                slot_diagnostics = _candidate_diagnostics(
+                    slot_id,
+                    notes,
+                    method=method,
+                    confidence=slot_confidence,
+                    source_diagnostics=source_diagnostics,
+                )
                 candidate = ExtractionCandidate(
                     candidate_id=uuid4().hex,
                     candidate_group_id=candidate_group_id,
@@ -1588,13 +1651,23 @@ class StudioRepository:
                     source_label=source_label,
                     method=method,
                     variant_label=variant_label,
-                    confidence=confidence,
+                    confidence=slot_confidence,
                     notes=notes,
                     audio_source_path=audio_source_path,
                     audio_source_label=audio_source_label,
                     audio_mime_type=audio_mime_type,
                     job_id=job_id,
-                    message=message,
+                    message=(message_by_slot or {}).get(
+                        slot_id,
+                        _candidate_review_message(
+                            slot_id,
+                            notes,
+                            method=method,
+                            diagnostics=slot_diagnostics,
+                            default_message=message,
+                        ),
+                    ),
+                    diagnostics=slot_diagnostics,
                     created_at=timestamp,
                     updated_at=timestamp,
                 )
@@ -1661,6 +1734,7 @@ class StudioRepository:
             timestamp = _now()
             candidate_group_id = uuid4().hex
             for index, notes in enumerate(candidate_notes, start=1):
+                confidence = min((note.confidence for note in notes), default=0.65)
                 candidate = ExtractionCandidate(
                     candidate_id=uuid4().hex,
                     candidate_group_id=candidate_group_id,
@@ -1669,9 +1743,15 @@ class StudioRepository:
                     source_label=source_label,
                     method=method,
                     variant_label=_generation_variant_label(index, slot_id, notes),
-                    confidence=min((note.confidence for note in notes), default=0.65),
+                    confidence=confidence,
                     notes=notes,
                     message=message,
+                    diagnostics=_candidate_diagnostics(
+                        slot_id,
+                        notes,
+                        method=method,
+                        confidence=confidence,
+                    ),
                     created_at=timestamp,
                     updated_at=timestamp,
                 )
@@ -2492,6 +2572,258 @@ def _track_duration_seconds(notes: list[TrackNote]) -> float:
     return round(max(note.onset_seconds + note.duration_seconds for note in notes), 4)
 
 
+def _parsed_track_diagnostics_by_slot(
+    parsed_symbolic: ParsedSymbolicFile,
+    *,
+    method: str,
+    fallback_method: str,
+) -> dict[int, dict[str, Any]]:
+    diagnostics_by_slot: dict[int, dict[str, Any]] = {}
+    for parsed_track in parsed_symbolic.tracks:
+        if parsed_track.slot_id is None or not parsed_track.notes:
+            continue
+        diagnostics = dict(parsed_track.diagnostics)
+        diagnostics.setdefault("engine", method)
+        diagnostics.setdefault("candidate_method", fallback_method)
+        diagnostics.setdefault("part_name", parsed_track.name)
+        diagnostics_by_slot[parsed_track.slot_id] = diagnostics
+    return diagnostics_by_slot
+
+
+def _candidate_diagnostics(
+    slot_id: int,
+    notes: list[TrackNote],
+    *,
+    method: str,
+    confidence: float,
+    source_diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    diagnostics = dict(source_diagnostics or {})
+    pitched_notes = [
+        note
+        for note in notes
+        if not note.is_rest and note.pitch_midi is not None
+    ]
+    measure_indices = {
+        note.measure_index
+        for note in notes
+        if note.measure_index is not None
+    }
+    duration_seconds = _track_duration_seconds(notes) if notes else 0
+    measure_count = len(measure_indices)
+    if measure_count == 0 and notes:
+        measure_count = max(1, int(max(note.beat + note.duration_beats for note in notes) // 4) + 1)
+    avg_note_confidence = sum(note.confidence for note in notes) / len(notes) if notes else 0
+    range_fit_ratio = _candidate_range_fit_ratio(slot_id, pitched_notes)
+    timing_grid_ratio = _candidate_timing_grid_ratio(notes)
+    note_count = len(notes)
+    diagnostics.update(
+        {
+            "candidate_method": method,
+            "track": track_name(slot_id),
+            "note_count": note_count,
+            "pitched_note_count": len(pitched_notes),
+            "rest_count": note_count - len(pitched_notes),
+            "measure_count": measure_count,
+            "duration_seconds": round(duration_seconds, 3),
+            "range": _candidate_range_label(pitched_notes),
+            "avg_note_confidence": round(avg_note_confidence, 3),
+            "range_fit_ratio": round(range_fit_ratio, 3),
+            "timing_grid_ratio": round(timing_grid_ratio, 3),
+            "density_notes_per_measure": round(note_count / max(1, measure_count), 2),
+            "confidence_label": _confidence_label(confidence),
+            "review_hint": diagnostics.get("review_hint")
+            or _review_hint_for_candidate(
+                method=method,
+                note_count=note_count,
+                range_fit_ratio=range_fit_ratio,
+                timing_grid_ratio=timing_grid_ratio,
+                avg_note_confidence=avg_note_confidence,
+            ),
+        }
+    )
+    return diagnostics
+
+
+def _estimate_candidate_confidence(
+    slot_id: int,
+    notes: list[TrackNote],
+    *,
+    method: str,
+    fallback_confidence: float,
+    diagnostics: dict[str, Any] | None = None,
+) -> float:
+    if not notes:
+        return 0
+
+    if method.startswith("audiveris"):
+        base = max(fallback_confidence, 0.62)
+    elif method.startswith("pdf_vector"):
+        base = max(fallback_confidence, 0.44)
+    elif method.startswith("voice"):
+        base = max(fallback_confidence, 0.4)
+    else:
+        base = fallback_confidence
+
+    avg_note_confidence = sum(note.confidence for note in notes) / len(notes)
+    range_fit_ratio = _diagnostic_float(
+        diagnostics,
+        "range_fit_ratio",
+        default=_candidate_range_fit_ratio(slot_id, [note for note in notes if note.pitch_midi is not None]),
+    )
+    timing_grid_ratio = _diagnostic_float(
+        diagnostics,
+        "timing_grid_ratio",
+        default=_candidate_timing_grid_ratio(notes),
+    )
+    measure_count = _diagnostic_int(diagnostics, "measure_count", default=0)
+
+    note_volume_bonus = min(0.12, len(notes) / 1200)
+    measure_bonus = min(0.08, measure_count / 80)
+    confidence = (
+        base * 0.52
+        + avg_note_confidence * 0.3
+        + range_fit_ratio * 0.12
+        + timing_grid_ratio * 0.06
+        + note_volume_bonus
+        + measure_bonus
+    )
+    if len(notes) < 4:
+        confidence -= 0.08
+    if range_fit_ratio < 0.85:
+        confidence -= (0.85 - range_fit_ratio) * 0.16
+    if timing_grid_ratio < 0.75:
+        confidence -= (0.75 - timing_grid_ratio) * 0.08
+    return round(max(0.15, min(0.92, confidence)), 3)
+
+
+def _candidate_review_message(
+    slot_id: int,
+    notes: list[TrackNote],
+    *,
+    method: str,
+    diagnostics: dict[str, Any] | None,
+    default_message: str | None,
+) -> str | None:
+    if not notes:
+        return default_message
+    if diagnostics is None:
+        diagnostics = _candidate_diagnostics(
+            slot_id,
+            notes,
+            method=method,
+            confidence=0.5,
+        )
+    note_count = _diagnostic_int(diagnostics, "note_count", default=len(notes))
+    measure_count = _diagnostic_int(diagnostics, "measure_count", default=0)
+    confidence_label = str(diagnostics.get("confidence_label") or "review")
+    hint = str(diagnostics.get("review_hint") or "")
+    hint_label = _review_hint_label(hint)
+    if method.startswith("pdf_vector"):
+        return (
+            f"{track_name(slot_id)}: vector PDF에서 {measure_count}마디, "
+            f"{note_count}개 음표를 추출했습니다. {confidence_label}; {hint_label}"
+        )
+    if method.startswith("audiveris"):
+        return (
+            f"{track_name(slot_id)}: Audiveris MusicXML 결과에서 {measure_count}마디, "
+            f"{note_count}개 음표를 추출했습니다. {confidence_label}; 원본과 대조 후 승인하세요."
+        )
+    return default_message
+
+
+def _candidate_range_fit_ratio(slot_id: int, notes: list[TrackNote]) -> float:
+    pitched = [note for note in notes if note.pitch_midi is not None]
+    if not pitched:
+        return 0
+    low, high = SLOT_RANGES.get(slot_id, (0, 127))
+    in_range = [
+        note
+        for note in pitched
+        if note.pitch_midi is not None and low <= note.pitch_midi <= high
+    ]
+    return len(in_range) / len(pitched)
+
+
+def _candidate_timing_grid_ratio(notes: list[TrackNote]) -> float:
+    if not notes:
+        return 0
+    aligned = 0
+    for note in notes:
+        beat_aligned = abs(note.beat * 4 - round(note.beat * 4)) <= 0.03
+        duration_aligned = abs(note.duration_beats * 4 - round(note.duration_beats * 4)) <= 0.03
+        if beat_aligned and duration_aligned:
+            aligned += 1
+    return aligned / len(notes)
+
+
+def _candidate_range_label(notes: list[TrackNote]) -> str:
+    midi_notes = [
+        note
+        for note in notes
+        if note.pitch_midi is not None
+    ]
+    if not midi_notes:
+        return "-"
+    sorted_notes = sorted(midi_notes, key=lambda note: note.pitch_midi or 0)
+    return f"{sorted_notes[0].label} - {sorted_notes[-1].label}"
+
+
+def _confidence_label(confidence: float) -> str:
+    if confidence >= 0.72:
+        return "높은 신뢰도"
+    if confidence >= 0.5:
+        return "검토 필요"
+    return "낮은 신뢰도"
+
+
+def _review_hint_for_candidate(
+    *,
+    method: str,
+    note_count: int,
+    range_fit_ratio: float,
+    timing_grid_ratio: float,
+    avg_note_confidence: float,
+) -> str:
+    if note_count < 4:
+        return "few_notes"
+    if avg_note_confidence < 0.52:
+        return "low_note_confidence"
+    if range_fit_ratio < 0.85:
+        return "range_outliers"
+    if timing_grid_ratio < 0.82:
+        return "rhythm_grid_review"
+    if method.startswith("pdf_vector"):
+        return "review_accidentals_and_rhythm"
+    return "review_against_source"
+
+
+def _review_hint_label(hint: str) -> str:
+    return {
+        "few_notes": "음표 수가 적어 파트 판독을 꼭 확인하세요.",
+        "low_note_confidence": "음표별 신뢰도가 낮아 원본 대조가 필요합니다.",
+        "range_outliers": "파트 음역 밖 음이 있어 트랙 배정을 확인하세요.",
+        "rhythm_grid_review": "리듬 격자가 불안정해 박자 판독을 확인하세요.",
+        "partial_score_review": "일부 파트만 감지되어 누락 파트를 확인하세요.",
+        "review_accidentals_and_rhythm": "조표/임시표와 리듬을 원본과 대조하세요.",
+        "review_against_source": "원본과 대조 후 승인하세요.",
+    }.get(hint, "원본과 대조 후 승인하세요.")
+
+
+def _diagnostic_float(diagnostics: dict[str, Any] | None, key: str, *, default: float) -> float:
+    if diagnostics is None:
+        return default
+    value = diagnostics.get(key)
+    return float(value) if isinstance(value, (int, float)) else default
+
+
+def _diagnostic_int(diagnostics: dict[str, Any] | None, key: str, *, default: int) -> int:
+    if diagnostics is None:
+        return default
+    value = diagnostics.get(key)
+    return int(value) if isinstance(value, (int, float)) else default
+
+
 def _mark_notes_as_omr(
     mapped_notes: dict[int, list[TrackNote]],
     *,
@@ -2529,6 +2861,7 @@ def _write_pdf_vector_omr_summary(
                 "slot_id": track.slot_id,
                 "name": track.name,
                 "note_count": len(track.notes),
+                "diagnostics": track.diagnostics,
             }
             for track in parsed_symbolic.tracks
         ],

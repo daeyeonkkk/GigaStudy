@@ -129,8 +129,13 @@ This checklist tracks the new six-track studio foundation only.
   studio extraction queue.
 - [x] Failed OMR/voice extraction jobs can be retried while the original input
   asset is still retained.
+- [x] Failed extraction jobs show contextual retry guidance for noisy voice
+  takes, vector fallback failure, and Audiveris timeout cases.
 - [x] OMR candidates preserve `source="omr"` instead of looking like direct
   MusicXML imports.
+- [x] OMR candidates carry decision diagnostics such as track name, note count,
+  measure count, confidence, range fit, rhythm grid fit, density, and review
+  hints.
 - [x] OMR job results can be registered into all suggested tracks at once.
 - [x] Unsupported upload fails without corrupting the track.
 - [x] Public registration APIs reject missing upload content instead of creating
@@ -148,6 +153,9 @@ This checklist tracks the new six-track studio foundation only.
   only method/confidence system fields.
 - [x] Candidate review shows compact note preview data and contour-style flow
   cues when pitch data is available.
+- [x] Candidate review shows OMR/uncertain-extraction diagnostics so the user
+  can compare candidates by musical and source-derived evidence rather than
+  raw engine method names.
 - [x] Pending extraction candidates can be rejected without registering notes.
 - [x] Upload into an occupied track overwrites intentionally.
 - [x] AI generation uses registered tracks as context.

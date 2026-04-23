@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
@@ -83,6 +83,7 @@ class ExtractionCandidate(BaseModel):
     audio_mime_type: str | None = None
     job_id: str | None = None
     message: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: str
 

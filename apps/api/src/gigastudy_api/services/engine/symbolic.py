@@ -4,6 +4,7 @@ import struct
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from xml.etree import ElementTree
 
 from gigastudy_api.api.schemas.studios import TrackNote
@@ -21,6 +22,7 @@ class ParsedTrack:
     name: str
     notes: list[TrackNote] = field(default_factory=list)
     slot_id: int | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

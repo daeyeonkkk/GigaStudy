@@ -109,6 +109,11 @@ The current implementation has a working six-track vertical slice:
 - Vector-PDF fallback notes are marked with `source="omr"` and
   `extraction_method="pdf_vector_omr_v0"` so they stay distinguishable from
   Audiveris MusicXML output.
+- OMR candidates now include diagnostic metadata used for review decisions:
+  engine/candidate method, suggested track, note count, measure count, duration,
+  range label, average note confidence, range-fit ratio, rhythm-grid ratio,
+  density, confidence label, and review hint. Vector PDF fallback also records
+  detected page/part/staff evidence where available.
 - OMR jobs that produce multiple mapped parts can be approved in one operation,
   registering candidates into their suggested tracks with overwrite protection.
 - Registered TrackNote scores can be exported as a PDF from the studio toolbar.
@@ -227,6 +232,13 @@ The current implementation has a working six-track vertical slice:
 - Candidate review supports target-track override, musical decision summaries
   (range, register fit, movement, rhythm density, start/end, confidence,
   contour preview), and explicit overwrite confirmation for occupied targets.
+- Candidate review now surfaces extraction diagnostics as first-class user
+  evidence, so OMR and other uncertain candidates can be compared by page/part
+  count, measure/note count, range fit, rhythm grid fit, density, and review
+  hint instead of only raw engine method names.
+- Failed extraction jobs show contextual retry guidance for noisy voice takes,
+  vector fallback failure, and Audiveris timeout cases while preserving the
+  retry action when the original input asset remains available.
 - Recording, direct upload, candidate approval, and AI generation have explicit
   overwrite guards for occupied tracks.
 - AI generation is rule-based symbolic harmony/percussion generation.
@@ -276,11 +288,12 @@ not legacy product surfaces.
 
 ## Next Required Work
 
-1. Add score-image-aware OMR preview and page/part confidence indicators,
-   especially for scanned/image PDFs where Audiveris may still be slow or
-   uncertain.
-2. Add clearer failed-extraction recovery for browser recording and noisy
-   single-voice takes.
+1. Add score-image-aware OMR visual preview, especially for scanned/image PDFs
+   where Audiveris may still be slow or uncertain. Candidate diagnostics now
+   expose page/part/count confidence signals, but users still cannot visually
+   compare the source page against extracted notes inside GigaStudy.
+2. Continue improving failed-extraction recovery for browser recording and
+   noisy single-voice takes with better preflight/noise feedback before retry.
 3. Improve PDF score export engraving fidelity to match the browser VexFlow
    score display while preserving TrackNote as the source of truth.
 4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
@@ -391,6 +404,26 @@ not legacy product surfaces.
   produced five candidates. Candidate note counts were Soprano 255, Alto 278,
   Tenor 392, Baritone 281, and Bass 332. The temporary smoke-test studio and
   uploaded/generated assets were deleted through admin cleanup.
+
+## OMR Review Diagnostics Gate - 2026-04-23
+
+- OMR and uncertain extraction candidates now carry diagnostic metadata in the
+  API `ExtractionCandidate` contract. Audiveris and vector-PDF candidates expose
+  track, note count, measure count, duration, range fit, timing grid fit,
+  density, confidence label, and review hint; vector-PDF candidates can also
+  expose detected document/candidate page counts, part count, and staff-row
+  count.
+- Candidate confidence is no longer a flat method constant for OMR. It is
+  estimated from engine family, average note confidence, range fit, timing grid
+  fit, note volume, and measure count, with penalties for tiny or suspicious
+  outputs.
+- Studio candidate review shows a dedicated diagnostic row for page/count/range
+  and rhythm evidence, adds translated review-hint tags, and keeps raw engine
+  details behind the technical disclosure.
+- Extraction job rows show compact candidate summaries when review candidates
+  exist and contextual recovery hints when a retryable OMR/voice job fails.
+- Verification for this gate: API regression suite 68/68, web lint, production
+  web build, and browser E2E release gate 24/24 all passed locally.
 
 ## Status Summary
 

@@ -95,6 +95,17 @@ export function CandidateReviewPanel({
                 </div>
               </div>
 
+              {decisionSummary.diagnostics.length > 0 ? (
+                <dl className="candidate-review__diagnostics" aria-label="판독 근거">
+                  {decisionSummary.diagnostics.map((metric) => (
+                    <div key={`${candidate.candidate_id}-diagnostic-${metric.label}`}>
+                      <dt>{metric.label}</dt>
+                      <dd>{metric.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+
               <dl className="candidate-review__metrics">
                 {decisionSummary.metrics.map((metric) => (
                   <div key={`${candidate.candidate_id}-${metric.label}`}>

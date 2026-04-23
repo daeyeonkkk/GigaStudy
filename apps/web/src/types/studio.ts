@@ -68,6 +68,7 @@ export type ExtractionCandidate = {
   audio_mime_type: string | null
   job_id: string | null
   message: string | null
+  diagnostics: Record<string, unknown>
   created_at: string
   updated_at: string
 }

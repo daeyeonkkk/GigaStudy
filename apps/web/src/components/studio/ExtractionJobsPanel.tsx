@@ -49,6 +49,8 @@ export function ExtractionJobsPanel({
           const allowOverwrite = jobOverwriteApprovals[job.job_id] === true
           const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : 'PDF/Image OMR'
           const jobTargetLabel = job.parse_all_parts ? 'Full score' : (jobTrack?.name ?? `Track ${job.slot_id}`)
+          const candidateSummary = getJobCandidateSummary(jobCandidates, tracks)
+          const recoveryHint = getJobRecoveryHint(job)
           const attemptLabel =
             job.attempt_count > 0 ? `${job.attempt_count}/${job.max_attempts}회 시도` : '대기 중'
 
@@ -64,9 +66,10 @@ export function ExtractionJobsPanel({
                 {getJobStatusLabel(job.status)}
               </span>
               <p>{job.message ?? job.method}</p>
+              {candidateSummary ? <p className="extraction-jobs__candidate-strip">{candidateSummary}</p> : null}
               {canRegisterJob ? (
                 <div className="extraction-jobs__actions">
-                  <span>{jobCandidates.length} track candidates</span>
+                  <span>{jobCandidates.length}개 트랙 후보</span>
                   {wouldOverwrite ? (
                     <label>
                       <input
@@ -75,7 +78,7 @@ export function ExtractionJobsPanel({
                         type="checkbox"
                         onChange={(event) => onUpdateJobOverwriteApproval(job.job_id, event.target.checked)}
                       />
-                      overwrite occupied tracks
+                      이미 등록된 트랙 덮어쓰기
                     </label>
                   ) : null}
                   <button
@@ -85,13 +88,13 @@ export function ExtractionJobsPanel({
                     type="button"
                     onClick={() => onApproveJobCandidates(job.job_id)}
                   >
-                    Register OMR
+                    OMR 후보 등록
                   </button>
                 </div>
               ) : null}
               {canRetryJob ? (
                 <div className="extraction-jobs__actions">
-                  <span>원본 파일이 남아 있으면 같은 입력으로 다시 처리합니다.</span>
+                  <span className="extraction-jobs__failure">{recoveryHint}</span>
                   <button
                     className="app-button app-button--secondary"
                     data-testid={`job-retry-${job.job_id}`}
@@ -108,4 +111,39 @@ export function ExtractionJobsPanel({
       </div>
     </section>
   )
+}
+
+function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: TrackSlot[]): string {
+  if (candidates.length === 0) {
+    return ''
+  }
+  return candidates
+    .map((candidate) => {
+      const track = tracks.find((item) => item.slot_id === candidate.suggested_slot_id)
+      const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
+      const measureCount = getCandidateDiagnosticNumber(candidate, 'measure_count')
+      const noteCount = getCandidateDiagnosticNumber(candidate, 'note_count') ?? candidate.notes.length
+      const measureLabel = measureCount !== null ? `${measureCount}마디` : '마디 확인'
+      return `${track?.name ?? `Track ${candidate.suggested_slot_id}`} ${confidence} · ${measureLabel}/${noteCount}음`
+    })
+    .join(' · ')
+}
+
+function getJobRecoveryHint(job: TrackExtractionJob): string {
+  const message = `${job.message ?? ''} ${job.method}`.toLowerCase()
+  if (job.job_type === 'voice' && (message.includes('stable voiced') || message.includes('no stable'))) {
+    return '노래로 판단할 만큼 안정적인 음정 구간을 찾지 못했습니다. 배경 소음을 줄이고 실제 노래 구간만 다시 녹음해 보세요.'
+  }
+  if (job.job_type === 'omr' && message.includes('vector fallback failed')) {
+    return '스캔/이미지 PDF일 가능성이 높습니다. 더 선명한 원본, MusicXML, MIDI가 있으면 우선 사용하세요.'
+  }
+  if (job.job_type === 'omr' && message.includes('timed out')) {
+    return 'Audiveris 처리 시간이 초과됐습니다. 재시도하거나, vector PDF 후보가 생성됐는지 확인하세요.'
+  }
+  return '원본 파일이 남아 있으면 같은 입력으로 다시 처리합니다.'
+}
+
+function getCandidateDiagnosticNumber(candidate: ExtractionCandidate, key: string): number | null {
+  const value = candidate.diagnostics?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }

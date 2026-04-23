@@ -18,6 +18,7 @@ export type CandidateDecisionSummary = {
   tags: string[]
   phrasePreview: string
   metrics: CandidateMetric[]
+  diagnostics: CandidateMetric[]
   technical: CandidateMetric[]
 }
 
@@ -87,6 +88,8 @@ export function getCandidateDecisionSummary(
   const contour = getContourSummary(midiNotes)
   const startEnd = getStartEndSummary(pitchedNotes)
   const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
+  const diagnostics = getCandidateDiagnostics(candidate)
+  const reviewHint = getReviewHintSummary(candidate)
 
   if (candidate.notes.length === 0) {
     return {
@@ -99,9 +102,11 @@ export function getCandidateDecisionSummary(
         { label: '음표', value: '0' },
         { label: '신뢰도', value: confidence },
       ],
+      diagnostics,
       technical: [
         { label: 'engine', value: candidate.method },
         { label: 'source', value: candidate.source_label },
+        ...getTechnicalDiagnostics(candidate),
       ],
     }
   }
@@ -119,6 +124,7 @@ export function getCandidateDecisionSummary(
     `${range} 범위, ${startEnd}.`,
     `${movement.detail}.`,
     `${rhythm.detail}.`,
+    reviewHint?.sentence ?? '',
   ].join(' ')
 
   return {
@@ -131,7 +137,8 @@ export function getCandidateDecisionSummary(
       movement.tag,
       rhythm.tag,
       contour.tag,
-    ],
+      reviewHint?.tag ?? '',
+    ].filter((tag) => tag.length > 0),
     phrasePreview: getCandidatePhrasePreview(candidate),
     metrics: [
       { label: '음역', value: `${range}${register.averageLabel ? ` · 중심 ${register.averageLabel}` : ''}` },
@@ -141,10 +148,12 @@ export function getCandidateDecisionSummary(
       { label: '신뢰도', value: confidence },
       { label: '길이', value: `${durationSeconds.toFixed(2)}s · ${candidate.notes.length} notes` },
     ],
+    diagnostics,
     technical: [
       { label: 'engine', value: candidate.method },
       { label: 'source', value: candidate.source_label },
       { label: 'raw preview', value: getCandidatePreviewText(candidate) },
+      ...getTechnicalDiagnostics(candidate),
     ],
   }
 }
@@ -361,4 +370,115 @@ function getCandidatePhrasePreview(candidate: ExtractionCandidate): string {
   const labels = notes.slice(0, 12).map((note) => note.label)
   const suffix = notes.length > labels.length ? ' ...' : ''
   return `${labels.join(' -> ')}${suffix}`
+}
+
+function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetric[] {
+  const diagnostics = candidate.diagnostics ?? {}
+  const metrics: CandidateMetric[] = []
+  const documentPageCount = getDiagnosticNumber(diagnostics, 'document_page_count')
+  const candidatePageCount = getDiagnosticNumber(diagnostics, 'candidate_page_count')
+  if (documentPageCount !== null || candidatePageCount !== null) {
+    metrics.push({
+      label: '페이지',
+      value:
+        documentPageCount !== null && candidatePageCount !== null
+          ? `${candidatePageCount}/${documentPageCount}`
+          : `${candidatePageCount ?? documentPageCount}`,
+    })
+  }
+
+  const measureCount = getDiagnosticNumber(diagnostics, 'measure_count')
+  const noteCount = getDiagnosticNumber(diagnostics, 'note_count') ?? candidate.notes.length
+  metrics.push({
+    label: '감지량',
+    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인'} · ${noteCount} notes`,
+  })
+
+  const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
+  if (rangeFitRatio !== null) {
+    metrics.push({ label: '음역 적합', value: formatRatio(rangeFitRatio) })
+  }
+
+  const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
+  if (timingGridRatio !== null) {
+    metrics.push({ label: '리듬 격자', value: formatRatio(timingGridRatio) })
+  }
+
+  const density = getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
+  if (density !== null) {
+    metrics.push({ label: '밀도', value: `${density.toFixed(1)} notes/measure` })
+  }
+
+  return metrics
+}
+
+function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; sentence: string } | null {
+  const hint = getDiagnosticString(candidate.diagnostics ?? {}, 'review_hint')
+  if (!hint) {
+    return null
+  }
+  return (
+    {
+      few_notes: {
+        tag: '음표 수 적음',
+        sentence: '음표 수가 적어 파트 누락 여부를 확인하세요.',
+      },
+      low_note_confidence: {
+        tag: '원본 대조 필요',
+        sentence: '음표별 신뢰도가 낮아 원본 대조가 필요합니다.',
+      },
+      range_outliers: {
+        tag: '음역 확인',
+        sentence: '파트 음역 밖 음이 있어 트랙 배정을 확인하세요.',
+      },
+      rhythm_grid_review: {
+        tag: '박자 확인',
+        sentence: '리듬 격자가 불안정해 박자 판독을 확인하세요.',
+      },
+      partial_score_review: {
+        tag: '파트 누락 확인',
+        sentence: '일부 파트만 감지되어 누락 파트를 확인하세요.',
+      },
+      review_accidentals_and_rhythm: {
+        tag: '조표/리듬 확인',
+        sentence: '조표, 임시표, 리듬을 원본과 대조하세요.',
+      },
+      review_against_source: {
+        tag: '원본 대조',
+        sentence: '원본과 대조한 뒤 승인하세요.',
+      },
+    } satisfies Record<string, { tag: string; sentence: string }>
+  )[hint] ?? null
+}
+
+function getTechnicalDiagnostics(candidate: ExtractionCandidate): CandidateMetric[] {
+  const diagnostics = candidate.diagnostics ?? {}
+  return [
+    getDiagnosticString(diagnostics, 'engine')
+      ? { label: 'diagnostic engine', value: getDiagnosticString(diagnostics, 'engine') ?? '' }
+      : null,
+    getDiagnosticString(diagnostics, 'candidate_method')
+      ? { label: 'candidate method', value: getDiagnosticString(diagnostics, 'candidate_method') ?? '' }
+      : null,
+    getDiagnosticString(diagnostics, 'part_name')
+      ? { label: 'part name', value: getDiagnosticString(diagnostics, 'part_name') ?? '' }
+      : null,
+    getDiagnosticString(diagnostics, 'review_hint')
+      ? { label: 'review hint', value: getDiagnosticString(diagnostics, 'review_hint') ?? '' }
+      : null,
+  ].filter((metric): metric is CandidateMetric => metric !== null)
+}
+
+function getDiagnosticNumber(diagnostics: Record<string, unknown>, key: string): number | null {
+  const value = diagnostics[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function getDiagnosticString(diagnostics: Record<string, unknown>, key: string): string | null {
+  const value = diagnostics[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function formatRatio(value: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`
 }

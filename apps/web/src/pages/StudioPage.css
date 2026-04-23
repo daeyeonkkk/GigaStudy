@@ -978,6 +978,23 @@
   margin: 0;
 }
 
+.extraction-jobs__item .extraction-jobs__candidate-strip {
+  padding: 7px 9px;
+  border: 1px solid #dbe1e6;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #263541;
+}
+
+.extraction-jobs__item .extraction-jobs__failure {
+  flex: 1 1 260px;
+  padding: 7px 9px;
+  border: 1px solid #e2b4af;
+  border-radius: 4px;
+  background: #fff7f5;
+  color: #8d241b;
+}
+
 .extraction-jobs__actions {
   grid-column: 1 / -1;
   display: flex;
@@ -1159,6 +1176,7 @@
 }
 
 .candidate-review__metrics,
+.candidate-review__diagnostics,
 .candidate-review__technical dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1166,7 +1184,13 @@
   margin: 0;
 }
 
+.candidate-review__diagnostics {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .candidate-review__metrics div,
+.candidate-review__diagnostics div,
 .candidate-review__technical dl div {
   display: grid;
   gap: 2px;
@@ -1679,6 +1703,7 @@
   }
 
   .candidate-review__metrics,
+  .candidate-review__diagnostics,
   .candidate-review__technical dl {
     grid-template-columns: 1fr;
   }

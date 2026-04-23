@@ -68,6 +68,12 @@ type ActionState =
   | { phase: 'success'; message: string }
   | { phase: 'error'; message: string }
 
+type PlaybackTimeline = {
+  durationSeconds: number
+  minOffsetSeconds: number
+  startedAtMs: number
+}
+
 export function StudioPage() {
   const { studioId } = useParams()
   const [studio, setStudio] = useState<Studio | null>(null)
@@ -77,6 +83,8 @@ export function StudioPage() {
   const [playbackSource, setPlaybackSource] = useState<PlaybackSourceMode>('audio')
   const [globalPlaying, setGlobalPlaying] = useState(false)
   const [playingSlots, setPlayingSlots] = useState<Set<number>>(() => new Set())
+  const [playbackTimeline, setPlaybackTimeline] = useState<PlaybackTimeline | null>(null)
+  const [playheadSeconds, setPlayheadSeconds] = useState<number | null>(null)
   const [recordingSlotId, setRecordingSlotId] = useState<number | null>(null)
   const [trackRecordingMeter, setTrackRecordingMeter] = useState({
     durationSeconds: 0,
@@ -142,6 +150,26 @@ export function StudioPage() {
       scoreRecorderRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!playbackTimeline) {
+      return undefined
+    }
+
+    let animationFrameId = 0
+    const updatePlayhead = () => {
+      const elapsedSeconds = (performance.now() - playbackTimeline.startedAtMs) / 1000
+      setPlayheadSeconds(elapsedSeconds + playbackTimeline.minOffsetSeconds)
+      if (elapsedSeconds <= playbackTimeline.durationSeconds + 0.2) {
+        animationFrameId = window.requestAnimationFrame(updatePlayhead)
+      }
+    }
+
+    updatePlayhead()
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+    }
+  }, [playbackTimeline])
 
   useEffect(() => {
     if (recordingSlotId === null) {
@@ -403,6 +431,8 @@ export function StudioPage() {
   function disposeCurrentPlaybackSession() {
     disposePlaybackSession(playbackSessionRef.current)
     playbackSessionRef.current = null
+    setPlaybackTimeline(null)
+    setPlayheadSeconds(null)
   }
 
   function stopPlaybackSession() {
@@ -568,12 +598,19 @@ export function StudioPage() {
 
       disposePlaybackSession(playbackSession)
       playbackSessionRef.current = null
+      setPlaybackTimeline(null)
+      setPlayheadSeconds(null)
       setGlobalPlaying(false)
       setPlayingSlots(new Set())
     }, Math.ceil((latestStop + 0.45) * 1000))
 
     playbackSession.timeoutIds.push(timeoutId)
     playbackSessionRef.current = playbackSession
+    setPlaybackTimeline({
+      durationSeconds: latestStop + 0.45,
+      minOffsetSeconds,
+      startedAtMs: performance.now() + mediaStartDelaySeconds * 1000,
+    })
     return true
   }
 
@@ -1081,6 +1118,7 @@ export function StudioPage() {
               metronomeEnabled={metronomeEnabled}
               pendingCandidateCount={pendingCandidates.length}
               playingSlots={playingSlots}
+              playheadSeconds={playheadSeconds}
               registeredTracks={registeredTracks}
               recordingSlotId={recordingSlotId}
               trackRecordingMeter={trackRecordingMeter}

@@ -12,6 +12,7 @@ export type EngravingEvent = {
   duration: EngravingDuration
   durationBeats: number
   eventKey: string
+  hidden: boolean
   kind: 'note' | 'rest'
   renderNote: TrackRenderNote | null
   startBeat: number
@@ -37,13 +38,14 @@ export type EngravingLayout = {
 
 const GRID_BEATS = 0.25
 const EPSILON_BEATS = 0.001
-const MIN_NOTATED_REST_BEATS = 0.75
+const MIN_SPACER_REST_BEATS = 0.25
+const MIN_VISIBLE_REST_BEATS = 0.75
 const FIRST_MEASURE_EXTRA_WIDTH_PX = 86
 const SCORE_RIGHT_PADDING_PX = 32
 const MEASURE_LEFT_PADDING_PX = 42
 const MEASURE_RIGHT_PADDING_PX = 34
-const MIN_MEASURE_WIDTH_PX = 230
-const MAX_MEASURE_WIDTH_PX = 760
+const MIN_MEASURE_WIDTH_PX = 260
+const MAX_MEASURE_WIDTH_PX = 1080
 const MIN_SCORE_WIDTH_PX = 1040
 const WHOLE_REST: EngravingDuration = { beats: 4, duration: 'w', dots: 0 }
 
@@ -143,25 +145,18 @@ function normalizeMeasureNotes(
           return
         }
 
-        const shiftedStart = previous.endBeat
-        if (shiftedStart >= measureEndBeat - EPSILON_BEATS) {
+        const previousMinimumEnd = previous.startBeat + GRID_BEATS
+        if (entry.startBeat >= previousMinimumEnd + EPSILON_BEATS) {
+          previous.endBeat = entry.startBeat
+          normalized.push(entry)
           return
         }
-        normalized.push({
-          ...entry,
-          startBeat: shiftedStart,
-          endBeat: clamp(Math.max(entry.endBeat, shiftedStart + GRID_BEATS), shiftedStart + GRID_BEATS, measureEndBeat),
-        })
-        return
-      }
 
-      const gap = entry.startBeat - previous.endBeat
-      if (gap > 0 && gap < MIN_NOTATED_REST_BEATS) {
-        normalized.push({
-          ...entry,
-          startBeat: previous.endBeat,
-          endBeat: clamp(entry.endBeat - gap, previous.endBeat + GRID_BEATS, measureEndBeat),
-        })
+        const previousConfidence = previous.renderNote.note.confidence ?? 0
+        const entryConfidence = entry.renderNote.note.confidence ?? 0
+        if (entryConfidence > previousConfidence + 0.08) {
+          normalized[normalized.length - 1] = entry
+        }
         return
       }
 
@@ -172,16 +167,19 @@ function normalizeMeasureNotes(
 }
 
 function addRestEvents(events: EngravingEvent[], startBeat: number, gapBeats: number, keyPrefix: string) {
-  if (gapBeats < MIN_NOTATED_REST_BEATS) {
+  const notatedGapBeats = roundToGrid(gapBeats)
+  if (notatedGapBeats < MIN_SPACER_REST_BEATS) {
     return
   }
 
   let cursor = startBeat
-  decomposeDuration(gapBeats).forEach((duration, index) => {
+  const hidden = notatedGapBeats < MIN_VISIBLE_REST_BEATS
+  decomposeDuration(notatedGapBeats).forEach((duration, index) => {
     events.push({
       duration,
       durationBeats: duration.beats,
       eventKey: `${keyPrefix}-rest-${index}`,
+      hidden,
       kind: 'rest',
       renderNote: null,
       startBeat: cursor,
@@ -202,18 +200,38 @@ function buildMeasureEvents(
   const events: EngravingEvent[] = []
 
   if (normalizedNotes.length === 0) {
-    return [
-      {
-        duration: WHOLE_REST,
-        durationBeats: measureEndBeat - measureStartBeat,
-        eventKey: `measure-${measureIndex}-whole-rest`,
+    const measureBeats = measureEndBeat - measureStartBeat
+    if (Math.abs(measureBeats - WHOLE_REST.beats) <= EPSILON_BEATS) {
+      return [
+        {
+          duration: WHOLE_REST,
+          durationBeats: measureBeats,
+          eventKey: `measure-${measureIndex}-whole-rest`,
+          hidden: false,
+          kind: 'rest',
+          renderNote: null,
+          startBeat: measureStartBeat,
+          tieStart: false,
+          tieStop: false,
+        },
+      ]
+    }
+    let cursor = measureStartBeat
+    return decomposeDuration(measureBeats).map((duration, index) => {
+      const event: EngravingEvent = {
+        duration,
+        durationBeats: duration.beats,
+        eventKey: `measure-${measureIndex}-meter-rest-${index}`,
+        hidden: false,
         kind: 'rest',
         renderNote: null,
-        startBeat: measureStartBeat,
+        startBeat: cursor,
         tieStart: false,
         tieStop: false,
-      },
-    ]
+      }
+      cursor += duration.beats
+      return event
+    })
   }
 
   let cursorBeat = measureStartBeat
@@ -230,6 +248,7 @@ function buildMeasureEvents(
         duration,
         durationBeats: duration.beats,
         eventKey: `${entry.renderNote.renderKey}-piece-${pieceIndex}`,
+        hidden: false,
         kind: 'note',
         renderNote: {
           ...entry.renderNote,
@@ -252,14 +271,16 @@ function buildMeasureEvents(
 function getMeasureWidth(events: EngravingEvent[], measureIndex: number): number {
   const noteEvents = events.filter((event) => event.kind === 'note')
   const shortEvents = events.filter((event) => event.duration.beats <= 0.5)
-  const restEvents = events.filter((event) => event.kind === 'rest')
+  const visibleRestEvents = events.filter((event) => event.kind === 'rest' && !event.hidden)
+  const spacerRestEvents = events.filter((event) => event.kind === 'rest' && event.hidden)
   const accidentalCount = noteEvents.reduce((total, event) => total + (event.renderNote ? accidentalWeight(event.renderNote) : 0), 0)
   const tieCount = events.filter((event) => event.tieStart || event.tieStop).length
   const rawWidth =
     112 +
-    noteEvents.length * 42 +
-    restEvents.length * 22 +
-    shortEvents.length * 18 +
+    noteEvents.length * 46 +
+    visibleRestEvents.length * 26 +
+    spacerRestEvents.length * 8 +
+    shortEvents.length * 14 +
     accidentalCount * 12 +
     tieCount * 10 +
     (measureIndex === 0 ? FIRST_MEASURE_EXTRA_WIDTH_PX : 0)
@@ -270,6 +291,7 @@ export function buildEngravingLayout(
   notes: TrackRenderNote[],
   measureCount: number,
   beatsPerMeasure: number,
+  preferredMeasureWidths: number[] = [],
 ): EngravingLayout {
   const safeBeatsPerMeasure = Math.max(GRID_BEATS, beatsPerMeasure)
   let cursorX = 0
@@ -280,7 +302,11 @@ export function buildEngravingLayout(
       (note) => note.displayBeat >= measureStartBeat - EPSILON_BEATS && note.displayBeat < measureEndBeat - EPSILON_BEATS,
     )
     const events = buildMeasureEvents(measureNotes, measureStartBeat, measureEndBeat, measureIndex)
-    const width = getMeasureWidth(events, measureIndex)
+    const preferredWidth = preferredMeasureWidths[measureIndex]
+    const width =
+      typeof preferredWidth === 'number' && Number.isFinite(preferredWidth)
+        ? Math.round(clamp(preferredWidth, MIN_MEASURE_WIDTH_PX, MAX_MEASURE_WIDTH_PX))
+        : getMeasureWidth(events, measureIndex)
     const measure: EngravingMeasure = {
       endBeat: measureEndBeat,
       events,
@@ -304,6 +330,57 @@ export function buildEngravingLayout(
     scoreWidth,
     syncPxPerBeat: Math.max(120, averageBeatWidth),
   }
+}
+
+export function buildEngravingMeasureWidths(
+  notes: TrackRenderNote[],
+  measureCount: number,
+  beatsPerMeasure: number,
+): number[] {
+  const safeBeatsPerMeasure = Math.max(GRID_BEATS, beatsPerMeasure)
+
+  return Array.from({ length: Math.max(1, measureCount) }, (_, measureIndex) => {
+    const measureStartBeat = 1 + measureIndex * safeBeatsPerMeasure
+    const measureEndBeat = measureStartBeat + safeBeatsPerMeasure
+    const measureNotes = notes.filter(
+      (note) => note.displayBeat >= measureStartBeat - EPSILON_BEATS && note.displayBeat < measureEndBeat - EPSILON_BEATS,
+    )
+    return getMeasureWidth(buildMeasureEvents(measureNotes, measureStartBeat, measureEndBeat, measureIndex), measureIndex)
+  })
+}
+
+function getEngravingXForBeat(displayBeat: number, layout: EngravingLayout, beatsPerMeasure: number): number {
+  const safeBeatsPerMeasure = Math.max(GRID_BEATS, beatsPerMeasure)
+  const lastMeasure = layout.measures[layout.measures.length - 1]
+  const clampedBeat = Math.max(1, displayBeat)
+  const rawMeasureIndex = Math.floor((clampedBeat - 1) / safeBeatsPerMeasure)
+  const measureIndex = Math.min(layout.measures.length - 1, Math.max(0, rawMeasureIndex))
+  const measure = layout.measures[measureIndex] ?? lastMeasure
+  const beatWithinMeasure = (clampedBeat - 1) - measureIndex * safeBeatsPerMeasure
+  const usableWidth = Math.max(1, measure.width - MEASURE_LEFT_PADDING_PX - MEASURE_RIGHT_PADDING_PX)
+  const rawX = measure.x + MEASURE_LEFT_PADDING_PX + (beatWithinMeasure / safeBeatsPerMeasure) * usableWidth
+  return clamp(rawX, 0, layout.scoreWidth - SCORE_RIGHT_PADDING_PX)
+}
+
+export function getEngravingXForSeconds(
+  playheadSeconds: number,
+  bpm: number,
+  layout: EngravingLayout,
+  beatsPerMeasure: number,
+): number {
+  const beatSeconds = 60 / Math.max(1, bpm)
+  return getEngravingXForBeat(1 + playheadSeconds / beatSeconds, layout, beatsPerMeasure)
+}
+
+export function getEngravingPlayheadStyle(
+  playheadSeconds: number,
+  bpm: number,
+  layout: EngravingLayout,
+  beatsPerMeasure: number,
+): CSSProperties {
+  return {
+    '--playhead-left': `${Math.round(getEngravingXForSeconds(playheadSeconds, bpm, layout, beatsPerMeasure) * 100) / 100}px`,
+  } as CSSProperties
 }
 
 export function getEngravingMeasureLineStyle(measureIndex: number, layout: EngravingLayout): CSSProperties {
@@ -331,16 +408,7 @@ export function getEngravingMarkerNoteStyle(
   beatsPerMeasure: number,
   syncShiftPx = 0,
 ): CSSProperties {
-  const safeBeatsPerMeasure = Math.max(GRID_BEATS, beatsPerMeasure)
-  const normalizedBeat = Math.max(1, renderNote.displayBeat)
-  const measureIndex = Math.min(
-    layout.measures.length - 1,
-    Math.max(0, Math.floor((normalizedBeat - 1) / safeBeatsPerMeasure)),
-  )
-  const measure = layout.measures[measureIndex]
-  const beatWithinMeasure = (normalizedBeat - 1) - measureIndex * safeBeatsPerMeasure
-  const usableWidth = Math.max(1, measure.width - MEASURE_LEFT_PADDING_PX - MEASURE_RIGHT_PADDING_PX)
   return {
-    '--note-left': `${Math.round(measure.x + MEASURE_LEFT_PADDING_PX + (beatWithinMeasure / safeBeatsPerMeasure) * usableWidth + syncShiftPx)}px`,
+    '--note-left': `${Math.round(getEngravingXForBeat(renderNote.displayBeat, layout, beatsPerMeasure) + syncShiftPx)}px`,
   } as CSSProperties
 }

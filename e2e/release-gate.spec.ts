@@ -291,6 +291,18 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   await expect(page.getByTestId('track-card-2')).toContainText('Voice-leading harmony score')
   await expect(page.locator('[data-testid="track-score-strip-2"] .track-card__measure-note')).toHaveCount(2)
 
+  const sopranoSecondMeasureLine = await page
+    .locator('[data-testid="track-score-strip-1"] .track-card__beat-line--measure')
+    .nth(1)
+    .boundingBox()
+  const altoSecondMeasureLine = await page
+    .locator('[data-testid="track-score-strip-2"] .track-card__beat-line--measure')
+    .nth(1)
+    .boundingBox()
+  expect(sopranoSecondMeasureLine).not.toBeNull()
+  expect(altoSecondMeasureLine).not.toBeNull()
+  expect(Math.abs(sopranoSecondMeasureLine!.x - altoSecondMeasureLine!.x)).toBeLessThan(0.5)
+
   const altoFirstNoteBeforeSync = await page
     .locator('[data-testid="track-score-strip-2"] .track-card__measure-note')
     .first()
@@ -316,8 +328,45 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   expect(altoFirstNoteAfterSync!.x).toBeGreaterThan(altoFirstNoteBeforeSync!.x + 1)
   expect(Math.abs(altoFirstBarAfterSync!.x - altoFirstBarBeforeSync!.x)).toBeLessThan(0.5)
 
+  const browserSupportsScoreAudio = await page.evaluate(
+    () => Boolean(window.AudioContext || ('webkitAudioContext' in window)),
+  )
   await page.getByTestId('global-play-button').click()
   await expect(page.getByTestId('global-stop-button')).toBeEnabled()
+  if (browserSupportsScoreAudio) {
+    await expect(page.getByTestId('track-playhead-1')).toBeVisible()
+    await expect(page.getByTestId('track-playhead-2')).toBeVisible()
+    const playheadBefore = await page.evaluate(() => {
+      const getRect = (testId: string) => {
+        const rect = document.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect()
+        return rect ? { x: rect.x } : null
+      }
+      return {
+        alto: getRect('track-playhead-2'),
+        soprano: getRect('track-playhead-1'),
+      }
+    })
+    await page.waitForTimeout(250)
+    const playheadAfter = await page.evaluate(() => {
+      const getRect = (testId: string) => {
+        const rect = document.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect()
+        return rect ? { x: rect.x } : null
+      }
+      return {
+        alto: getRect('track-playhead-2'),
+        soprano: getRect('track-playhead-1'),
+      }
+    })
+    expect(playheadBefore.soprano).not.toBeNull()
+    expect(playheadBefore.alto).not.toBeNull()
+    expect(playheadAfter.soprano).not.toBeNull()
+    expect(playheadAfter.alto).not.toBeNull()
+    expect(Math.abs(playheadBefore.soprano!.x - playheadBefore.alto!.x)).toBeLessThan(1)
+    expect(Math.abs(playheadAfter.soprano!.x - playheadAfter.alto!.x)).toBeLessThan(1)
+    expect(playheadAfter.soprano!.x).toBeGreaterThan(playheadBefore.soprano!.x + 2)
+  } else {
+    await expect(page.getByText(/오디오 장치|audio/i)).toBeVisible()
+  }
   await page.getByTestId('global-stop-button').click()
 
   await page.getByTestId('track-score-1').click()

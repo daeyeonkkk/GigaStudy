@@ -60,7 +60,7 @@ def test_voice_transcription_detects_separated_notes_with_silence(tmp_path: Path
     notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1)
 
     assert [note.label for note in notes] == ["C5", "E5", "G5"]
-    assert all(note.extraction_method == "wav_autocorrelation_v1" for note in notes)
+    assert all(note.extraction_method == "wav_autocorrelation_v2" for note in notes)
     assert all(note.duration_beats >= 0.75 for note in notes)
     assert min(note.confidence for note in notes) > 0.55
 
@@ -90,6 +90,26 @@ def test_voice_transcription_rejects_noise_without_stable_singing(tmp_path: Path
             (1.6, None, 0),
         ],
         noise_amplitude=0.18,
+    )
+
+    with pytest.raises(VoiceTranscriptionError, match="No .*voiced|No stable voiced"):
+        transcribe_voice_file(wav_path, bpm=120, slot_id=1)
+
+
+def test_voice_transcription_rejects_short_noisy_tonal_clicks(tmp_path: Path) -> None:
+    wav_path = tmp_path / "clicky-room.wav"
+    _write_mono_wav(
+        wav_path,
+        [
+            (0.2, None, 0),
+            (0.04, 72, 0.45),
+            (0.16, None, 0),
+            (0.04, 76, 0.42),
+            (0.18, None, 0),
+            (0.04, 79, 0.4),
+            (0.4, None, 0),
+        ],
+        noise_amplitude=0.035,
     )
 
     with pytest.raises(VoiceTranscriptionError, match="No .*voiced|No stable voiced"):

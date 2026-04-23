@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
+import type { RenderContext } from 'vexflow'
 import {
   Accidental,
   Beam,
   Dot,
   Formatter,
+  Fraction,
   Renderer,
   Stave,
   StaveNote,
@@ -16,6 +18,8 @@ import {
   buildEngravingLayout,
   formatBeatInMeasure,
   getEngravingBeatLineStyle,
+  getEngravingPlayheadStyle,
+  getEngravingXForSeconds,
   getEngravingMarkerNoteStyle,
   getEngravingMeasureLineStyle,
   getTrackRenderModel,
@@ -27,6 +31,8 @@ import type { ScoreNote, TrackSlot } from '../../types/studio'
 type EngravedScoreStripProps = {
   beatsPerMeasure: number
   bpm: number
+  playheadSeconds: number | null
+  sharedMeasureWidths: number[]
   track: TrackSlot
 }
 
@@ -112,7 +118,7 @@ function createStaveNote(note: ScoreNote, duration: EngravingDuration, clef: Cle
   return staveNote
 }
 
-function createRest(duration: EngravingDuration, clef: Clef): StaveNote {
+function createRest(duration: EngravingDuration, clef: Clef, hidden = false): StaveNote {
   const rest = new StaveNote({
     clef,
     duration: getVexDurationCode(duration),
@@ -122,7 +128,51 @@ function createRest(duration: EngravingDuration, clef: Clef): StaveNote {
   if (duration.dots > 0) {
     Dot.buildAndAttach([rest], { all: true })
   }
+  if (hidden) {
+    rest.setStyle({ fillStyle: 'transparent', strokeStyle: 'transparent' })
+  }
   return rest
+}
+
+function shouldBeamMeasure(events: EngravingEvent[]): boolean {
+  const beamableNotes = events.filter(
+    (event) => event.kind === 'note' && !event.renderNote?.note.is_rest && event.duration.beats <= 0.5,
+  )
+  if (beamableNotes.length < 2) {
+    return false
+  }
+  if (beamableNotes.length > 12) {
+    return false
+  }
+
+  const averageConfidence =
+    beamableNotes.reduce((total, event) => total + (event.renderNote?.note.confidence ?? 0), 0) / beamableNotes.length
+  const voiceHeavy = beamableNotes.filter((event) => event.renderNote?.note.source === 'voice').length >= beamableNotes.length / 2
+  if (voiceHeavy && averageConfidence < 0.8) {
+    return false
+  }
+
+  return true
+}
+
+function drawBeamsForMeasure(staveNotes: StaveNote[], events: EngravingEvent[], context: RenderContext) {
+  if (!shouldBeamMeasure(events)) {
+    return
+  }
+
+  try {
+    Beam.generateBeams(staveNotes, {
+      beamRests: false,
+      flatBeams: true,
+      groups: [new Fraction(1, 4)],
+      maintainStemDirections: false,
+      showStemlets: false,
+    }).forEach((beam) => {
+      beam.setContext(context).draw()
+    })
+  } catch {
+    // Beam construction is best-effort. A bad imported rhythm should never blank the score.
+  }
 }
 
 function hasTiePitchMatch(left: TrackRenderNote, right: TrackRenderNote): boolean {
@@ -172,7 +222,13 @@ function findTieTargetIndex(drawnNotes: DrawnNote[], sourceIndex: number): numbe
   return null
 }
 
-export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScoreStripProps) {
+export function EngravedScoreStrip({
+  beatsPerMeasure,
+  bpm,
+  playheadSeconds,
+  sharedMeasureWidths,
+  track,
+}: EngravedScoreStripProps) {
   const engravingRef = useRef<HTMLDivElement | null>(null)
   const scoreModel = useMemo(
     () => getTrackRenderModel(track, bpm, beatsPerMeasure),
@@ -190,13 +246,43 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
     [beatsPerMeasure, bpm, engravingTrack],
   )
   const clef = getClef(track.slot_id)
-  const measureCount = Math.max(scoreModel.measureCount, engravingModel.measureCount)
+  const measureCount = Math.max(scoreModel.measureCount, engravingModel.measureCount, sharedMeasureWidths.length)
   const engravingLayout = useMemo(
-    () => buildEngravingLayout(engravingModel.notes, measureCount, beatsPerMeasure),
-    [beatsPerMeasure, engravingModel.notes, measureCount],
+    () => buildEngravingLayout(engravingModel.notes, measureCount, beatsPerMeasure, sharedMeasureWidths),
+    [beatsPerMeasure, engravingModel.notes, measureCount, sharedMeasureWidths],
   )
   const scoreWidth = engravingLayout.scoreWidth
   const syncShiftPx = getSyncShiftPx(track.sync_offset_seconds, bpm, engravingLayout.syncPxPerBeat)
+  const playheadX = useMemo(
+    () =>
+      playheadSeconds === null
+        ? null
+        : getEngravingXForSeconds(playheadSeconds, bpm, engravingLayout, beatsPerMeasure),
+    [beatsPerMeasure, bpm, engravingLayout, playheadSeconds],
+  )
+
+  useEffect(() => {
+    if (playheadX === null) {
+      return
+    }
+
+    const viewport = engravingRef.current?.parentElement?.parentElement
+    if (!viewport) {
+      return
+    }
+
+    const leadingRoomPx = 88
+    const trailingRoomPx = 180
+    const currentLeft = viewport.scrollLeft
+    const currentRight = currentLeft + viewport.clientWidth
+    if (playheadX < currentLeft + leadingRoomPx) {
+      viewport.scrollLeft = Math.max(0, playheadX - leadingRoomPx)
+      return
+    }
+    if (playheadX > currentRight - trailingRoomPx) {
+      viewport.scrollLeft = Math.max(0, playheadX - viewport.clientWidth * 0.42)
+    }
+  }, [playheadX])
 
   useEffect(() => {
     const container = engravingRef.current
@@ -231,7 +317,7 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
       measure.events.forEach((event) => {
         const staveNote =
           event.kind === 'rest' || event.renderNote === null
-            ? createRest(event.duration, clef)
+            ? createRest(event.duration, clef, event.hidden)
             : createStaveNote(event.renderNote.note, event.duration, clef)
         staveNotes.push(staveNote)
         if (event.kind === 'note') {
@@ -254,12 +340,7 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
         .formatToStave([voice], stave, { alignRests: true, context })
       voice.draw(context, stave)
 
-      Beam.generateBeams(staveNotes, {
-        beamRests: false,
-        maintainStemDirections: true,
-      }).forEach((beam) => {
-        beam.setContext(context).draw()
-      })
+      drawBeamsForMeasure(staveNotes, measure.events, context)
 
       drawnNotes.push(...drawnMeasureNotes)
     })
@@ -347,6 +428,14 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
             <strong>{renderNote.note.label}</strong>
           </div>
         ))}
+        {playheadSeconds !== null ? (
+          <div
+            aria-hidden="true"
+            className="track-card__playhead"
+            data-testid={`track-playhead-${track.slot_id}`}
+            style={getEngravingPlayheadStyle(playheadSeconds, bpm, engravingLayout, beatsPerMeasure)}
+          />
+        ) : null}
       </div>
     </div>
   )

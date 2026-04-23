@@ -53,7 +53,7 @@ def transcribe_voice_file(
     if not samples:
         raise VoiceTranscriptionError("Audio file is empty.")
 
-    samples = _remove_dc_offset(samples)
+    samples = _prepare_voice_samples(samples, sample_rate)
     frame_size = min(4096, max(1024, sample_rate // 20))
     hop_size = frame_size // 2
     hop_seconds = hop_size / sample_rate
@@ -99,8 +99,10 @@ def transcribe_voice_file(
             )
         )
 
+    stable_frame_pitches = _stabilize_pitch_frames(frame_pitches, low_midi=low_midi, high_midi=high_midi)
+
     return _frames_to_notes(
-        frame_pitches,
+        stable_frame_pitches,
         bpm=bpm,
         hop_seconds=hop_seconds,
         time_signature_numerator=time_signature_numerator,
@@ -113,6 +115,26 @@ def _remove_dc_offset(samples: list[float]) -> list[float]:
         return samples
     average = sum(samples) / len(samples)
     return [sample - average for sample in samples]
+
+
+def _prepare_voice_samples(samples: list[float], sample_rate: int) -> list[float]:
+    centered = _remove_dc_offset(samples)
+    return _high_pass_filter(centered, sample_rate, cutoff_hz=70)
+
+
+def _high_pass_filter(samples: list[float], sample_rate: int, *, cutoff_hz: float) -> list[float]:
+    if len(samples) < 2 or sample_rate <= 0:
+        return samples
+    alpha = math.exp(-2 * math.pi * cutoff_hz / sample_rate)
+    filtered: list[float] = []
+    previous_input = samples[0]
+    previous_output = 0.0
+    for sample in samples:
+        output = alpha * (previous_output + sample - previous_input)
+        filtered.append(output)
+        previous_input = sample
+        previous_output = output
+    return filtered
 
 
 def _dynamic_voice_threshold(rms_values: list[float]) -> float:
@@ -202,6 +224,58 @@ def _estimate_frequency(
     return sample_rate / refined_lag, best_score
 
 
+def _stabilize_pitch_frames(
+    frames: list[PitchFrame],
+    *,
+    low_midi: int,
+    high_midi: int,
+) -> list[PitchFrame]:
+    if len(frames) < 3:
+        return frames
+
+    stabilized: list[PitchFrame] = []
+    for index, frame in enumerate(frames):
+        window = [
+            candidate
+            for candidate in frames[max(0, index - 2) : min(len(frames), index + 3)]
+            if abs(candidate.time_seconds - frame.time_seconds) <= 0.22
+        ]
+        midi_float = frame.midi_float
+        if len(window) >= 3:
+            local_median = median(candidate.midi_float for candidate in window)
+            octave_candidates = [
+                frame.midi_float + octave_shift
+                for octave_shift in (-24, -12, 0, 12, 24)
+                if low_midi - 1 <= frame.midi_float + octave_shift <= high_midi + 1
+            ]
+            if octave_candidates:
+                corrected = min(octave_candidates, key=lambda candidate: abs(candidate - local_median))
+                if (
+                    abs(frame.midi_float - local_median) > 6
+                    and abs(corrected - local_median) + 0.5 < abs(frame.midi_float - local_median)
+                ):
+                    midi_float = corrected
+
+            neighbor_values = [
+                candidate.midi_float
+                for candidate in window
+                if candidate.time_seconds != frame.time_seconds
+            ]
+            if len(neighbor_values) >= 2:
+                neighbor_median = median(neighbor_values)
+                if _pitch_std(neighbor_values) < 0.55 and abs(midi_float - neighbor_median) > 1.2 and frame.confidence < 0.72:
+                    midi_float = neighbor_median
+
+        stabilized.append(
+            PitchFrame(
+                time_seconds=frame.time_seconds,
+                midi_float=midi_float,
+                confidence=frame.confidence,
+            )
+        )
+    return stabilized
+
+
 def _zero_crossing_rate(frame: list[float]) -> float:
     if len(frame) < 2:
         return 0.0
@@ -277,7 +351,7 @@ def _frames_to_notes(
                 duration_beats=duration_beats,
                 bpm=bpm,
                 source="voice",
-                extraction_method="wav_autocorrelation_v1",
+                extraction_method="wav_autocorrelation_v2",
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 pitch_midi=midi_note,

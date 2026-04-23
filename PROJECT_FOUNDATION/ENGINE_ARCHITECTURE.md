@@ -166,6 +166,13 @@ be produced by the engraving layer rather than CSS pseudo-elements. Display
 ties are allowed only when the renderer can connect two concrete notes: either
 measure-split segments of the same stored `TrackNote`, or adjacent same-pitch
 notes whose timing and `is_tied` metadata indicate a true continuation.
+Short rhythmic gaps must remain in the engraving timeline as hidden spacer
+rests instead of being collapsed; this preserves beat spacing while avoiding
+visual clutter from noisy micro-rests. Overlapping monophonic notes are trimmed
+or confidence-filtered instead of shifted forward, so the renderer does not
+invent extra timing movement. Auto-beams are conservative: they are flat,
+measure-local, rest-breaking, and disabled for dense or low-confidence voice
+measures that would otherwise produce misleading beam forests.
 
 Track playback has two user-selectable sources:
 
@@ -179,6 +186,13 @@ use the same scheduler so one singer can layer recorded takes and hear checked
 reference parts during practice. Sync offsets shift each track as a whole in
 that scheduler. The offset never changes stored note beats or measure
 boundaries.
+
+Browser playback feedback uses a single smooth playhead time derived from the
+same scheduler. Registered tracks share measure widths for a common score
+grid, so global playback lines align vertically across all visible staves. A
+track sync change translates only that track's note/audio layer; barlines,
+measure labels, beat guides, and the global playhead remain locked to the
+studio meter.
 
 Metronome playback follows the same contract. The click interval is the
 time-signature denominator pulse expressed in quarter beats:
@@ -302,6 +316,12 @@ is:
    empty instead of reporting them as failed.
 5. Keep all fallback output in the candidate-review path because PDF geometry
    extraction can still misread rhythm, accidentals, or dense notation.
+
+Detected vector-note positions must be clamped to the valid measure onset grid,
+and inferred note durations must be capped at the owning measure boundary. A
+note near the right barline may become the final sixteenth-position onset, but
+it must not spill into the next measure unless a concrete next note or measure
+split supports that timing.
 
 Vector-PDF and Audiveris OMR candidates must carry diagnostics that help the
 user decide whether to approve the result. At minimum, OMR candidates should

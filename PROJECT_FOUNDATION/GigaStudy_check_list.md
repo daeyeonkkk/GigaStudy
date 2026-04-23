@@ -60,6 +60,10 @@ This checklist tracks the new six-track studio foundation only.
   segments without mutating the stored TrackNote.
 - [x] Explicit `TrackNote.is_tied` metadata renders note-to-note ties only when
   adjacent same-pitch timing supports a real continuation.
+- [x] Short rhythmic gaps are kept as hidden spacer rests so engraving spacing
+  follows the beat grid without filling noisy takes with visible micro-rests.
+- [x] Auto-beaming is conservative and measure-local, with flat beams disabled
+  for dense or low-confidence voice-derived measures.
 - [x] Note centers remain inside their owning measure; downbeat notes use
   measure-internal notation padding rather than sitting outside the barline.
 - [x] Soprano through Bass notation uses VexFlow clefs and ledger lines so high
@@ -73,6 +77,8 @@ This checklist tracks the new six-track studio foundation only.
   boundaries.
 - [x] Each track has 0.01 second sync adjustment.
 - [x] Sync adjustment keeps measure lines fixed and shifts only the note layer.
+- [x] Registered track score strips share measure widths across tracks, so
+  barlines stay vertically aligned during ensemble playback.
 
 ## Global Transport
 
@@ -87,6 +93,8 @@ This checklist tracks the new six-track studio foundation only.
   synthesized score notes.
 - [x] Global playback can layer all registered tracks together from retained
   recordings where available.
+- [x] Track, global, and scoring-reference playback draw a smooth score
+  playhead from scheduler time instead of tick-stepping by beat.
 
 ## Track Registration
 
@@ -102,6 +110,9 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Voice extraction filters noisy frames with adaptive RMS thresholding,
   high zero-crossing rejection, autocorrelation confidence, pitch stability,
   and minimum segment duration.
+- [x] Voice extraction v2 high-pass filters low-frequency rumble, stabilizes
+  octave/outlier pitch frames before segmentation, and rejects short tonal
+  click bursts as non-singing input.
 - [x] Noise-only or non-singing recordings fail as recoverable extraction
   errors instead of registering dense false notes.
 - [x] Browser upload decodes supported MP3/M4A/OGG/FLAC audio and normalizes it
@@ -120,6 +131,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Born-digital notation PDFs have a vector fallback that can read staff
   rows, part labels, key signatures, and notehead glyph positions when
   Audiveris is unavailable or fails.
+- [x] Vector PDF fallback clamps note onsets to the valid measure grid and caps
+  inferred durations at each note's owning measure boundary.
 - [x] Audiveris timeout is treated as an OMR engine failure that still allows
   born-digital PDF vector fallback to run.
 - [x] Four-part PDF score extraction maps top-to-bottom into Soprano, Alto,

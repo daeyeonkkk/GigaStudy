@@ -76,6 +76,10 @@ The current implementation has a working six-track vertical slice:
   `source="omr"` candidates. Audiveris subprocess timeouts are normalized into
   the same unavailable/failure path so vector fallback still runs instead of
   leaving the job as a hard failure.
+- The vector fallback now clamps detected note positions to the valid measure
+  onset grid and caps inferred durations at the owning measure boundary. The
+  previously supplied `Phonecert_-_10cm.pdf` was verified locally as a
+  born-digital score that yields Soprano through Bass review candidates.
 - Full-score OMR jobs are treated as score-wide extraction, not Soprano-only
   extraction. Empty Soprano through Bass tracks enter the extraction state,
   successful parsed parts become candidates, and unmapped vocal placeholders
@@ -119,9 +123,11 @@ The current implementation has a working six-track vertical slice:
 - Registered TrackNote scores can be exported as a PDF from the studio toolbar.
   The export includes title, BPM, meter, track names, measure markers, and
   staff-like note placement.
-- Single voice extraction exists as a local WAV MVP with adaptive voice
-  thresholding, high zero-crossing rejection, normalized autocorrelation,
-  confidence filtering, pitch-stability filtering, and median segment grouping.
+- Single voice extraction exists as a local WAV v2 MVP with high-pass rumble
+  filtering, adaptive voice thresholding, high zero-crossing rejection,
+  normalized autocorrelation, confidence filtering, octave/outlier pitch-frame
+  stabilization, pitch-stability filtering, short-click rejection, and median
+  segment grouping.
 - Noise-only or non-singing recordings are rejected instead of being registered
   as dense false notes.
 - Browser upload normalizes browser-decodable MP3/M4A/OGG/FLAC audio into mono
@@ -261,6 +267,10 @@ The current implementation has a working six-track vertical slice:
   pitch/rhythm data. Noteheads, stems, beams, dots, accidentals, ledger lines,
   and visible ties are produced by the engraving engine instead of CSS
   pseudo-elements.
+- The engraving pipeline now keeps short timing gaps as hidden spacer rests,
+  trims/filters overlapping monophonic notes instead of shifting them forward,
+  and only draws conservative flat measure-local beams when the note density and
+  confidence make beaming useful.
 - Visible tie arcs are drawn only as VexFlow note-to-note ties for
   display-split long notes or explicit adjacent same-pitch continuations.
 - The renderer keeps a hidden layout-marker layer for regression checks and
@@ -270,6 +280,9 @@ The current implementation has a working six-track vertical slice:
   push notes outside barlines.
 - Track sync visually shifts the note layer while measure lines and measure
   labels remain fixed.
+- Registered track strips now share measure widths and draw a smooth scheduler
+  playhead, keeping global playback progress vertically aligned across tracks
+  while per-track sync moves only notes/audio.
 - Scoring reference playback honors the scoring checklist's metronome setting,
   including metronome-only scoring sessions.
 - Scoring reference playback uses the same audio-or-score playback source

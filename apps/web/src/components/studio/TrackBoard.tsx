@@ -1,11 +1,14 @@
+import { useMemo } from 'react'
 import type { CSSProperties } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
   TRACK_UPLOAD_ACCEPT,
+  buildEngravingMeasureWidths,
   formatDurationSeconds,
   formatSeconds,
   getTrackSourceLabel,
+  getTrackRenderModel,
   statusLabels,
 } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
@@ -23,6 +26,7 @@ type TrackBoardProps = {
   metronomeEnabled: boolean
   pendingCandidateCount: number
   playingSlots: Set<number>
+  playheadSeconds: number | null
   registeredTracks: TrackSlot[]
   recordingSlotId: number | null
   trackRecordingMeter: TrackRecordingMeter
@@ -43,6 +47,7 @@ export function TrackBoard({
   metronomeEnabled,
   pendingCandidateCount,
   playingSlots,
+  playheadSeconds,
   registeredTracks,
   recordingSlotId,
   trackRecordingMeter,
@@ -55,6 +60,27 @@ export function TrackBoard({
   onTogglePlayback,
   onUpload,
 }: TrackBoardProps) {
+  const sharedMeasureWidths = useMemo(() => {
+    const registeredModels = registeredTracks.map((track) =>
+      getTrackRenderModel(
+        {
+          ...track,
+          sync_offset_seconds: 0,
+        },
+        bpm,
+        beatsPerMeasure,
+      ),
+    )
+    const measureCount = Math.max(1, ...registeredModels.map((model) => model.measureCount))
+    const widthSets = registeredModels.map((model) =>
+      buildEngravingMeasureWidths(model.notes, measureCount, beatsPerMeasure),
+    )
+
+    return Array.from({ length: measureCount }, (_, measureIndex) =>
+      Math.max(260, ...widthSets.map((widths) => widths[measureIndex] ?? 0)),
+    )
+  }, [beatsPerMeasure, bpm, registeredTracks])
+
   return (
     <section className="studio-tracks" aria-label="6개 트랙">
       <div className="studio-tracks__header">
@@ -109,6 +135,8 @@ export function TrackBoard({
                   <EngravedScoreStrip
                     beatsPerMeasure={beatsPerMeasure}
                     bpm={bpm}
+                    playheadSeconds={isPlaying ? playheadSeconds : null}
+                    sharedMeasureWidths={sharedMeasureWidths}
                     track={track}
                   />
                 ) : (

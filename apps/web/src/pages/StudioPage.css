@@ -1796,6 +1796,45 @@
   pointer-events: none;
 }
 
+.track-card__score .track-card__engraved-strip .track-card__playhead {
+  --playhead-left: 0px;
+  position: absolute;
+  top: 24px;
+  bottom: 22px;
+  left: var(--playhead-left);
+  z-index: 4;
+  display: block;
+  width: 2px;
+  min-width: 2px;
+  min-height: 0;
+  padding: 0;
+  background: #153fb6;
+  box-shadow: 0 0 0 1px rgba(21, 63, 182, 0.22), 0 0 10px rgba(21, 63, 182, 0.26);
+  opacity: 0.95;
+  pointer-events: none;
+  transform: translateX(-1px);
+}
+
+.track-card__score .track-card__engraved-strip .track-card__playhead::before,
+.track-card__score .track-card__engraved-strip .track-card__playhead::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  display: block;
+  width: 9px;
+  height: 3px;
+  background: #153fb6;
+  transform: translateX(-50%);
+}
+
+.track-card__score .track-card__engraved-strip .track-card__playhead::before {
+  top: 0;
+}
+
+.track-card__score .track-card__engraved-strip .track-card__playhead::after {
+  bottom: 0;
+}
+
 .track-card__score .track-card__engraved-strip .track-card__beat-line {
   opacity: 0;
 }

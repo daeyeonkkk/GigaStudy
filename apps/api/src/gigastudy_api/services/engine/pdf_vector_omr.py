@@ -32,6 +32,7 @@ NOTEHEAD_CHARS = {"\ue0a3", "\ue0a4", "\ue0a9", "\ue0db"}
 ACCIDENTAL_OFFSETS = {"\ue260": -1, "\ue261": 0, "\ue262": 1}
 SHARP_ORDER = ("F", "C", "G", "D", "A", "E", "B")
 FLAT_ORDER = ("B", "E", "A", "D", "G", "C", "F")
+OMR_GRID_BEATS = 0.25
 
 LABEL_ALIASES: dict[str, int] = {
     "soprano": 1,
@@ -450,8 +451,9 @@ def _measure_position_for_x(
             interval_index = candidate_index
     left, right = intervals[interval_index]
     fraction = (x - left) / max(1.0, right - left)
-    beat_in_measure = quantize(1 + fraction * beats_per_measure, 0.25)
-    beat_in_measure = max(1.0, min(beats_per_measure + 0.75, beat_in_measure))
+    beat_in_measure = quantize(1 + fraction * beats_per_measure, OMR_GRID_BEATS)
+    latest_onset = max(1.0, beats_per_measure + 1 - OMR_GRID_BEATS)
+    beat_in_measure = max(1.0, min(latest_onset, beat_in_measure))
     return interval_index, beat_in_measure
 
 
@@ -473,10 +475,12 @@ def _finalize_track_notes(
     notes: list[TrackNote] = []
     for index, raw_note in enumerate(deduped):
         next_beat = deduped[index + 1].beat if index + 1 < len(deduped) else raw_note.beat + 1
-        duration_beats = quantize(next_beat - raw_note.beat, 0.25)
+        measure_end_beat = raw_note.measure_index * beats_per_measure + 1
+        measure_remaining = max(OMR_GRID_BEATS, measure_end_beat - raw_note.beat)
+        duration_beats = quantize(next_beat - raw_note.beat, OMR_GRID_BEATS)
         if duration_beats <= 0:
-            duration_beats = 0.25
-        duration_beats = min(duration_beats, beats_per_measure)
+            duration_beats = OMR_GRID_BEATS
+        duration_beats = min(duration_beats, measure_remaining, beats_per_measure)
         notes.append(
             note_from_pitch(
                 beat=raw_note.beat,

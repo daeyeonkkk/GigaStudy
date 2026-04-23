@@ -20,8 +20,10 @@ The current implementation has a working vertical slice for:
 - TrackNote schema
 - MusicXML/MXL/XML and MIDI parsing
 - MusicXML/MIDI source time-signature preservation
-- Local WAV single-voice extraction MVP with adaptive thresholding, noisy-frame
-  rejection, stable-pitch filtering, and median-based note segmentation
+- Local WAV single-voice extraction v2 with high-pass rumble filtering,
+  adaptive thresholding, noisy-frame rejection, octave/outlier contour
+  stabilization, short-click rejection, stable-pitch filtering, and
+  median-based note segmentation
 - Browser MP3/M4A/OGG/FLAC audio normalization to WAV before voice extraction
 - Browser microphone recording to WAV TrackNote registration
 - Retained recording/audio track assets for playback while TrackNote remains
@@ -59,6 +61,9 @@ The current implementation has a working vertical slice for:
   evidence when available.
 - OMR candidate review can show the retained source PDF/image first page as a
   visual preview for approval decisions.
+- Born-digital PDF vector fallback clamps note onsets to the valid measure grid
+  and caps inferred durations at the owning measure boundary, reducing notes
+  that visually leak past barlines.
 - Failed extraction job rows show contextual retry guidance for noisy voice
   takes, vector fallback failure, and Audiveris timeout cases.
 - AI generation produces multiple reviewable candidates and rejects sibling
@@ -76,7 +81,9 @@ The current implementation has a working vertical slice for:
 - Scoring playback honors the scoring checklist's metronome selection
 - Answer-sheet scoring with offline sync alignment
 - Horizontally scrollable VexFlow SVG track score engraving with fixed measure
-  lines, sync-shifted note markers, and `TrackNote` as the source of truth
+  lines, hidden spacer rests for short rhythmic gaps, conservative flat
+  measure-local beams, sync-shifted note markers, and `TrackNote` as the source
+  of truth
 - Compact report feed with separate quantitative report detail pages
 - Registered score PDF export from the main studio toolbar
 - Lightweight alpha admin storage console for inspecting studios/assets and
@@ -241,15 +248,22 @@ Required:
 - Per-track stop
 - Global stop
 - Sync offset applied to global and per-track playback
-- Stable visual timing feedback
+- Stable visual timing feedback through a smooth scheduler-driven playhead
+  aligned to the same measure grid on every registered track
 - Measure-based horizontal VexFlow SVG score engraving per track on the studio
   time-signature grid
 - Duration-aware browser notation for whole, half, quarter, eighth, sixteenth,
   and dotted values, plus note-to-note ties for long or explicitly tied notes.
+- Hidden spacer rests preserve rhythmic gaps while keeping noisy micro-rests out
+  of the visible score.
+- Auto-beams stay flat, measure-local, rest-breaking, and disabled for dense or
+  low-confidence voice-derived measures.
 - Dense note runs expand the score timeline instead of overlapping.
 - Measure strips reserve inner notation padding and clamp note centers inside
   their owning measure.
 - Sync changes move notes across the fixed grid without moving barlines.
+- Registered tracks share measure widths so ensemble playback, barlines, and
+  playhead feedback do not drift between staves.
 - Soprano/Alto/Tenor use treble engraving, Baritone/Bass use bass engraving,
   and high/low notes rely on ledger lines instead of visual clamping.
 - Key-signature marks are hidden until the score renderer can guarantee

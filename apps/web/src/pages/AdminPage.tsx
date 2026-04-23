@@ -8,6 +8,7 @@ import {
   deleteAdminStagedAssets,
   deleteAdminStudio,
   deleteAdminStudioAssets,
+  drainAdminEngineQueue,
   getAdminStorage,
 } from '../lib/api'
 import type { AdminAssetSummary, AdminStorageSummary, AdminStudioSummary } from '../types/studio'
@@ -208,6 +209,31 @@ export function AdminPage() {
     void runDeletion('expired-staged-assets', () => deleteAdminExpiredStagedAssets(activeCredentials))
   }
 
+  async function handleDrainEngineQueue() {
+    if (credentials === null) {
+      return
+    }
+    setBusyKey('engine-drain')
+    setStatus({ phase: 'loading', message: 'Processing one engine queue lane.' })
+    try {
+      const result = await drainAdminEngineQueue(activeCredentials, 3)
+      await loadSummary(activeCredentials, studioOffset)
+      setStatus({
+        phase: 'success',
+        message: `Engine queue processed ${result.processed_jobs}/${result.max_jobs} job(s).${
+          result.remaining_runnable ? ' More jobs are waiting.' : ''
+        }`,
+      })
+    } catch (error) {
+      setStatus({
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Engine queue could not be processed.',
+      })
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
   return (
     <main className="app-shell admin-page">
       <section className="admin-window" aria-label="GigaStudy admin">
@@ -312,6 +338,22 @@ export function AdminPage() {
                 onClick={handleDeleteStagedAssets}
               >
                 Delete Staged Files
+              </button>
+            </section>
+
+            <section className="admin-queue" aria-label="Engine queue operations">
+              <div>
+                <span>Engine queue</span>
+                <strong>OMR and voice extraction lane</strong>
+                <p>Runs up to 3 queued or expired jobs now. Use this after a failed wake-up or a quiet period.</p>
+              </div>
+              <button
+                className="app-button"
+                type="button"
+                disabled={isBusy}
+                onClick={() => void handleDrainEngineQueue()}
+              >
+                Run Queue
               </button>
             </section>
 

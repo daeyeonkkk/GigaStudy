@@ -263,6 +263,41 @@
   white-space: nowrap;
 }
 
+.admin-queue {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid #b5bec6;
+  background: #f8fafb;
+}
+
+.admin-queue div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-queue span {
+  color: var(--warm);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-queue strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.admin-queue p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
 .admin-studios {
   padding: 22px 24px 28px;
   overflow: auto;

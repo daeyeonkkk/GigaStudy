@@ -22,7 +22,13 @@ class StudioStore(Protocol):
     def list_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
         ...
 
-    def list_summary_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+    def list_summary_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        owner_token_hash: str | None = None,
+    ) -> list[tuple[str, Any]]:
         ...
 
     def count(self) -> int:
@@ -74,8 +80,18 @@ class FileStudioStore:
             for studio_id, studio_payload in rows[offset : offset + limit]
         ]
 
-    def list_summary_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
-        payload = self._read_base_raw()
+    def list_summary_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        owner_token_hash: str | None = None,
+    ) -> list[tuple[str, Any]]:
+        payload = {
+            studio_id: studio_payload
+            for studio_id, studio_payload in self._read_base_raw().items()
+            if _owner_matches(studio_payload, owner_token_hash)
+        }
         rows = sorted(
             payload.items(),
             key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
@@ -229,17 +245,31 @@ class PostgresStudioStore:
             for row in rows
         ]
 
-    def list_summary_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+    def list_summary_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        owner_token_hash: str | None = None,
+    ) -> list[tuple[str, Any]]:
+        owner_clause = ""
+        params: tuple[Any, ...]
+        if owner_token_hash is not None:
+            owner_clause = "WHERE payload ->> 'owner_token_hash' = %s"
+            params = (owner_token_hash, limit, offset)
+        else:
+            params = (limit, offset)
         with self._connect() as connection:
             self._ensure_schema(connection)
             rows = connection.execute(
-                """
+                f"""
                 SELECT studio_id, payload
                 FROM studio_documents
+                {owner_clause}
                 ORDER BY updated_at DESC
                 LIMIT %s OFFSET %s
                 """,
-                (limit, offset),
+                params,
             ).fetchall()
         return [(str(row["studio_id"]), row["payload"]) for row in rows]
 
@@ -481,6 +511,12 @@ def _merge_sidecars(
         merged_payload.setdefault("candidates", [])
 
     return merged_payload
+
+
+def _owner_matches(studio_payload: Any, owner_token_hash: str | None) -> bool:
+    if owner_token_hash is None:
+        return True
+    return isinstance(studio_payload, dict) and studio_payload.get("owner_token_hash") == owner_token_hash
 
 
 def _normalize_database_url(database_url: str) -> str:

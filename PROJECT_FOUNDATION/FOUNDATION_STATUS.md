@@ -1,6 +1,6 @@
 ﻿# Foundation Status
 
-Date: 2026-04-22
+Date: 2026-04-23
 
 ## Current Decision
 
@@ -61,6 +61,27 @@ The current implementation has a working six-track vertical slice:
 - Track upload can parse MusicXML/MXL/XML and MIDI into TrackNote data.
 - MusicXML/MIDI imports preserve source time signature metadata when present.
 - PDF/image OMR is wired as an Audiveris job path.
+- The API Docker image now installs the Audiveris 5.10.2 Linux `.deb` during
+  image build and sets `GIGASTUDY_API_AUDIVERIS_BIN` to
+  `/opt/audiveris/bin/Audiveris`, matching the official Linux package layout.
+  Local development can still use an explicitly configured Audiveris binary or
+  a PATH-discoverable `audiveris`/`Audiveris` command. The container build
+  extracts the `.deb` with `dpkg-deb -x` instead of running the package
+  post-install scripts so the headless Cloud Build image is not blocked by
+  desktop menu registration.
+- PDF upload now has a born-digital vector fallback for notation-program PDFs
+  such as MuseScore exports. If Audiveris is unavailable or fails, the engine
+  can inspect PDF vector staff lines, visible part labels, key-signature
+  accidentals, and SMuFL notehead glyph positions to create reviewable
+  `source="omr"` candidates. Audiveris subprocess timeouts are normalized into
+  the same unavailable/failure path so vector fallback still runs instead of
+  leaving the job as a hard failure.
+- Full-score OMR jobs are treated as score-wide extraction, not Soprano-only
+  extraction. Empty Soprano through Bass tracks enter the extraction state,
+  successful parsed parts become candidates, and unmapped vocal placeholders
+  are cleared back to empty. If a four-part score is parsed, the parts map
+  top-to-bottom into Soprano, Alto, Tenor, and Baritone while Bass remains
+  empty.
 - Home-screen PDF score start now queues OMR instead of seeding fixture notes.
 - Public registration endpoints no longer create fixture note data when no file
   or recording payload is supplied.
@@ -76,8 +97,18 @@ The current implementation has a working six-track vertical slice:
   options such as OMR part parsing, review-before-register, overwrite allowance,
   and audio MIME type are stored on the studio job as well as the queue payload
   so recovery does not depend on hidden in-memory state.
+- Admin can manually or scheduler-trigger drain the durable engine queue through
+  `POST /api/admin/engine/drain`. The endpoint processes a bounded number of
+  queued or expired OMR/voice jobs using the same one-active-lane claim logic,
+  so Cloud Run no longer depends only on a studio page poll to wake extraction.
+  The live alpha service has a Cloud Scheduler job named
+  `gigastudy-engine-drain` in `asia-northeast3`, enabled every 5 minutes in the
+  `Asia/Seoul` time zone with a 300 second attempt deadline.
 - OMR-generated notes are marked with `source="omr"` and
   `extraction_method="audiveris_omr_v0"`.
+- Vector-PDF fallback notes are marked with `source="omr"` and
+  `extraction_method="pdf_vector_omr_v0"` so they stay distinguishable from
+  Audiveris MusicXML output.
 - OMR jobs that produce multiple mapped parts can be approved in one operation,
   registering candidates into their suggested tracks with overwrite protection.
 - Registered TrackNote scores can be exported as a PDF from the studio toolbar.
@@ -108,6 +139,12 @@ The current implementation has a working six-track vertical slice:
 - Admin password validation also accepts the alpha keyboard aliases
   `eodus123` and `daeyeon123` so an English-keyboard entry does not block
   testers who are trying to enter `대연123`.
+- Studio list/detail/action routes are owner-token scoped by default through
+  `GIGASTUDY_API_STUDIO_ACCESS_POLICY=owner`. The browser stores a local
+  per-device owner token and sends it as `X-GigaStudy-Owner-Token`; HTML audio
+  playback uses a query-token URL because media elements cannot attach custom
+  headers. Public mode remains available only by explicitly setting the policy
+  to `public` for tests or local demos.
 - Studio metadata persistence is now abstracted. Local JSON remains the
   development fallback, while `GIGASTUDY_API_DATABASE_URL` enables a
   Postgres/Neon-backed `studio_documents` store.
@@ -168,6 +205,8 @@ The current implementation has a working six-track vertical slice:
   alpha limits.
 - Per-track browser recording plays the metronome when enabled and shows
   elapsed-time/input-level feedback while recording.
+- Studio toolbar includes an explicit Home navigation control so users can
+  leave a studio without relying on the small titlebar app mark.
 - Web studio responsibilities are split so upload detection, browser audio
   access, WAV encoding, recorder lifecycle, timing/meter math, and playback
   scheduling live in focused `apps/web/src/lib/audio/*` and
@@ -237,8 +276,11 @@ not legacy product surfaces.
 
 ## Next Required Work
 
-1. Add score-image-aware OMR preview and page/part confidence indicators.
-2. Add clearer failed-extraction recovery for browser recording.
+1. Add score-image-aware OMR preview and page/part confidence indicators,
+   especially for scanned/image PDFs where Audiveris may still be slow or
+   uncertain.
+2. Add clearer failed-extraction recovery for browser recording and noisy
+   single-voice takes.
 3. Improve PDF score export engraving fidelity to match the browser VexFlow
    score display while preserving TrackNote as the source of truth.
 4. Add visual PDF rendering checks to CI once Poppler or an equivalent renderer
@@ -246,13 +288,10 @@ not legacy product surfaces.
 5. Add object storage lifecycle cleanup and a retention rule for abandoned
    upload/job assets. Manual admin cleanup exists for staged upload objects,
    but the bucket still needs an automatic lifecycle rule.
-6. Add user ownership or private share boundaries before inviting broader
-   traffic; public list/detail endpoints are still alpha-only.
+6. Add full user ownership/auth or private share boundaries before inviting
+   broader traffic. Owner-token scoping is alpha privacy, not account auth.
 7. Add optional direct/temporary handling for larger scoring takes if alpha
    scoring recordings become too large for the current base64 path.
-8. Add a scheduler or worker wake-up path for queued extraction jobs before
-   relying on unattended long-running batch processing. The queue itself is
-   durable; the current alpha wake-up path is still request/poll driven.
 
 ## Live Test Gate - 2026-04-22
 
@@ -293,6 +332,65 @@ not legacy product surfaces.
   the live studio payload confirmed VexFlow renders without console errors and
   Tenor playback calls the live track audio URL through
   `HTMLMediaElement.play()`.
+
+## Full Process Audit Gate - 2026-04-23
+
+- API regression suite passed locally: 65/65.
+- Web lint passed locally.
+- Production web build passed locally. The VexFlow vendor chunk still emits the
+  expected large-chunk warning, but the build succeeds.
+- Browser E2E release gate passed locally: 21/21 across Chromium, WebKit, and
+  Firefox.
+- The real `Phonecert_-_10cm.pdf` upload path was smoke-tested through the API
+  with a temporary local store. The job completed as `needs_review` with
+  `method="pdf_vector_omr"`, produced Soprano through Bass candidates, and left
+  Percussion empty as intended. Candidate note counts were Soprano 255, Alto
+  278, Tenor 392, Baritone 281, and Bass 332.
+- Deployed alpha API read-only checks passed: Cloud Run root returned `ok`, and
+  `/api/admin/storage` accepted the lightweight admin credentials. The live
+  service reports `s3://gigastudy-alpha`, 2 studios, 3 active assets, about
+  2.2 MB total usage, and no alpha limit warnings.
+- The remaining notable process risk is still non-vector image/scanned-score
+  OMR. Born-digital PDF fallback is practical for notation-program PDFs, but
+  image/PDF scans depend on Audiveris or a future OMR worker path being
+  available in the runtime.
+
+## Runtime Hardening Gate - 2026-04-23
+
+- API regression suite passed locally: 68/68.
+- Web lint and production build passed locally.
+- Browser E2E release gate passed locally: 24/24 across Chromium, WebKit, and
+  Firefox. This now includes the `/admin` login with `admin` / `대연123` and
+  the admin queue-drain control.
+- Owner-token studio access is enabled by default in local E2E. Home creation,
+  direct upload, candidate approval, PDF export, AI generation, sync, scoring,
+  and admin storage continued to pass through the new access boundary.
+- Audiveris 5.10.2 release asset URL for the Ubuntu 22.04 `.deb` was verified
+  reachable. Cloud Build verified the API image with the Audiveris runtime, and
+  the live alpha Cloud Run service was redeployed from that image.
+- Cloud Scheduler now provides the external wake-up path for queued extraction
+  jobs. The remaining process risks are narrower: scanned/image OMR quality,
+  bucket-native lifecycle cleanup, and fuller failure-recovery UX.
+
+## Live Runtime Deployment Gate - 2026-04-23
+
+- Local verification before commit: API regression suite 68/68, web lint,
+  production web build, and browser E2E release gate 24/24 all passed.
+- Cloud Build succeeded for the API image: build
+  `32460883-6a75-4de7-8cee-796212cf246f`, image
+  `asia-northeast3-docker.pkg.dev/gigastudy-alpha-493208/gigastudy-alpha/gigastudy-api:latest`.
+- Cloud Run now serves `gigastudy-api-alpha-00016-k5r` at 100 percent traffic.
+- Cloud Scheduler job `gigastudy-engine-drain` is enabled in
+  `asia-northeast3`, runs every 5 minutes in `Asia/Seoul`, and has a 300 second
+  attempt deadline.
+- Live root health returned `ok`; live admin storage reported
+  `s3://gigastudy-alpha`, 2 existing studios, 3 active assets, about 2.2 MB
+  stored asset usage, and no alpha limit warnings.
+- Live `Phonecert_-_10cm.pdf` upload smoke completed after Audiveris timed out:
+  the job fell back to `method="pdf_vector_omr"`, reached `needs_review`, and
+  produced five candidates. Candidate note counts were Soprano 255, Alto 278,
+  Tenor 392, Baritone 281, and Bass 332. The temporary smoke-test studio and
+  uploaded/generated assets were deleted through admin cleanup.
 
 ## Status Summary
 

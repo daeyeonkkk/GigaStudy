@@ -4,7 +4,7 @@ import unicodedata
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
-from gigastudy_api.api.schemas.admin import AdminDeleteResult, AdminStorageSummary
+from gigastudy_api.api.schemas.admin import AdminDeleteResult, AdminEngineDrainResult, AdminStorageSummary
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
 
@@ -112,3 +112,12 @@ def delete_admin_asset(
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> AdminDeleteResult:
     return repository.delete_admin_asset(asset_id)
+
+
+@router.post("/engine/drain", response_model=AdminEngineDrainResult)
+def drain_engine_queue(
+    max_jobs: int = Query(default=3, ge=1, le=20),
+    _: None = Depends(require_admin_credentials),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> AdminEngineDrainResult:
+    return repository.drain_engine_queue(max_jobs=max_jobs)

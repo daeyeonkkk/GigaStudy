@@ -59,8 +59,9 @@ export function StudioToolbar({
       </nav>
 
       <div className="composer-toolbar" aria-label="전체 트랙 재생 제어">
-        <Link className="composer-tool" to="/" aria-label="홈으로">
+        <Link className="composer-tool composer-tool--home" to="/" aria-label="홈으로">
           <span aria-hidden="true">H</span>
+          <span>Home</span>
         </Link>
         <button
           aria-label={globalPlaying ? '전체 일시정지' : '전체 재생'}

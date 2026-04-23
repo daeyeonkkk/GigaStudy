@@ -71,3 +71,10 @@ class AdminDeleteResult(BaseModel):
     asset_id: str | None = None
     deleted_files: int = 0
     deleted_bytes: int = 0
+
+
+class AdminEngineDrainResult(BaseModel):
+    processed_jobs: int
+    remaining_runnable: bool
+    max_jobs: int
+    messages: list[str]

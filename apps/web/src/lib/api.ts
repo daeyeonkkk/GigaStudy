@@ -1,5 +1,6 @@
 import type {
   AdminDeleteResult,
+  AdminEngineDrainResult,
   AdminStorageSummary,
   CreateStudioRequest,
   DirectUploadTarget,
@@ -13,6 +14,7 @@ const defaultApiBaseUrl = import.meta.env.PROD
   : 'http://127.0.0.1:8000'
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
+const OWNER_TOKEN_STORAGE_KEY = 'gigastudy.ownerToken.v1'
 
 export type AdminCredentials = {
   username: string
@@ -72,6 +74,7 @@ async function requestJson<T>(
     const response = await fetch(new URL(path, apiBaseUrl), {
       headers: {
         'Content-Type': 'application/json',
+        ...ownerHeaders(),
         ...options.headers,
       },
       ...options,
@@ -87,7 +90,9 @@ async function requestJson<T>(
 
 async function requestBlob(path: string, fallbackMessage: string): Promise<Blob> {
   try {
-    const response = await fetch(new URL(path, apiBaseUrl))
+    const response = await fetch(new URL(path, apiBaseUrl), {
+      headers: ownerHeaders(),
+    })
     if (response.ok) {
       return await response.blob()
     }
@@ -149,7 +154,9 @@ export function getStudio(studioId: string): Promise<Studio> {
 }
 
 export function getTrackAudioUrl(studioId: string, slotId: number): string {
-  return new URL(`/api/studios/${studioId}/tracks/${slotId}/audio`, apiBaseUrl).toString()
+  const url = new URL(`/api/studios/${studioId}/tracks/${slotId}/audio`, apiBaseUrl)
+  url.searchParams.set('owner_token', getOwnerToken())
+  return url.toString()
 }
 
 export function createTrackUploadTarget(
@@ -322,6 +329,31 @@ function adminHeaders(credentials: AdminCredentials): HeadersInit {
   }
 }
 
+function ownerHeaders(): HeadersInit {
+  return {
+    'X-GigaStudy-Owner-Token': getOwnerToken(),
+  }
+}
+
+function getOwnerToken(): string {
+  if (typeof window === 'undefined') {
+    return 'server-render-disabled-owner-token'
+  }
+  const existing = window.localStorage.getItem(OWNER_TOKEN_STORAGE_KEY)
+  if (existing && existing.length >= 24) {
+    return existing
+  }
+  const next = createOwnerToken()
+  window.localStorage.setItem(OWNER_TOKEN_STORAGE_KEY, next)
+  return next
+}
+
+function createOwnerToken(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 function encodeUtf8Base64(value: string): string {
   const bytes = new TextEncoder().encode(value)
   let binary = ''
@@ -427,6 +459,21 @@ export function deleteAdminExpiredStagedAssets(
       headers: adminHeaders(credentials),
     },
     'Expired staged uploads could not be deleted.',
+  )
+}
+
+export function drainAdminEngineQueue(
+  credentials: AdminCredentials,
+  maxJobs = 3,
+): Promise<AdminEngineDrainResult> {
+  const params = new URLSearchParams({ max_jobs: String(maxJobs) })
+  return requestJson<AdminEngineDrainResult>(
+    `/api/admin/engine/drain?${params.toString()}`,
+    {
+      method: 'POST',
+      headers: adminHeaders(credentials),
+    },
+    'Engine queue could not be drained.',
   )
 }
 

@@ -1,6 +1,6 @@
 ﻿# GigaStudy Checklist
 
-Date: 2026-04-22
+Date: 2026-04-23
 
 This checklist tracks the new six-track studio foundation only.
 
@@ -37,6 +37,7 @@ This checklist tracks the new six-track studio foundation only.
 ## Track Workspace
 
 - [x] Main studio centers six fixed tracks.
+- [x] Studio toolbar has an explicit Home button back to the launch screen.
 - [x] Track 1 is Soprano.
 - [x] Track 2 is Alto.
 - [x] Track 3 is Tenor.
@@ -112,6 +113,17 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Upload accepts supported MIDI formats.
 - [x] Upload accepts supported score formats.
 - [x] PDF/image score upload is fully covered by OMR job tests.
+- [x] API Docker image includes an Audiveris Linux runtime and configures the
+  default CLI path for Cloud Run OMR execution.
+- [x] Full-score PDF/image OMR attempts Soprano through Bass instead of
+  surfacing the job as a Soprano-only extraction.
+- [x] Born-digital notation PDFs have a vector fallback that can read staff
+  rows, part labels, key signatures, and notehead glyph positions when
+  Audiveris is unavailable or fails.
+- [x] Audiveris timeout is treated as an OMR engine failure that still allows
+  born-digital PDF vector fallback to run.
+- [x] Four-part PDF score extraction maps top-to-bottom into Soprano, Alto,
+  Tenor, and Baritone while leaving Bass empty.
 - [x] Active OMR jobs are visible and auto-refreshed in the studio UI.
 - [x] Active voice extraction jobs are visible and auto-refreshed in the same
   studio extraction queue.
@@ -247,8 +259,9 @@ This checklist tracks the new six-track studio foundation only.
   so retry/recovery does not rely on a surviving queue payload alone.
 - [x] OMR and voice extraction still honor the free-plan one-active-engine-job
   lane by default.
-- [ ] Studio access is not yet user-owned or private; public studio list/detail
-  endpoints still expose all stored studios in the alpha build.
+- [x] Studio list/detail/action APIs are scoped by a hashed per-browser owner
+  token by default, so the alpha UI no longer exposes every studio to every
+  visitor.
 - [x] Live deployment sets the Postgres/R2 environment variables and verifies
   admin storage summary against the deployed service.
 - [x] Staged object cleanup has an app-level lifecycle policy driven by
@@ -259,11 +272,17 @@ This checklist tracks the new six-track studio foundation only.
   objects.
 - [x] OMR/voice extraction has a durable queue before Cloud Run maxScale is
   raised above one instance.
-- [x] 2026-04-22 실사용 테스트 배포 전 게이트를 통과했다: API 63개,
-  웹 lint/build, 브라우저 E2E 21개.
-- [ ] Queued OMR/voice extraction jobs are durable, but unattended queue
-  wake-up still needs a scheduler or worker trigger beyond request/poll-driven
-  alpha processing.
+- [x] Admin/scheduler endpoint can drain a bounded number of queued or expired
+  OMR/voice extraction jobs without requiring a studio page poll.
+- [x] 2026-04-23 런타임 보강 게이트를 통과했다: API 68/68, 웹
+  lint/build, 브라우저 E2E 24/24.
+- [x] External unattended scheduler configuration exists for alpha:
+  Cloud Scheduler job `gigastudy-engine-drain` calls the admin queue drain
+  endpoint every 5 minutes with a 300 second attempt deadline.
+- [x] 2026-04-23 live Cloud Run OMR smoke passed: API revision
+  `gigastudy-api-alpha-00016-k5r` converted `Phonecert_-_10cm.pdf` into
+  Soprano through Bass `pdf_vector_omr` review candidates after Audiveris timed
+  out.
 
 ## Implementation Structure
 
@@ -300,6 +319,10 @@ This checklist tracks the new six-track studio foundation only.
   브라우저 E2E 21/21 통과, Playwright 로컬 브라우저에서 라이브
   스튜디오 payload 기준 VexFlow 렌더 콘솔 오류 없음, Tenor 재생 버튼이
   실제 track audio URL을 `HTMLMediaElement.play()`로 호출함을 확인.
+- [x] 2026-04-23 전체 프로세스 점검: API 65/65, 웹 lint, 프로덕션
+  빌드, 브라우저 E2E 21/21 통과. 실제 `Phonecert_-_10cm.pdf`는
+  `pdf_vector_omr` 경로로 Soprano~Bass 후보를 모두 생성했고, live
+  alpha admin/storage 읽기 전용 확인도 성공했다.
 
 ## Out Of Scope Until The Core Works
 

@@ -48,6 +48,7 @@ export function ExtractionJobsPanel({
           const wouldOverwrite = jobWouldOverwrite(job.job_id)
           const allowOverwrite = jobOverwriteApprovals[job.job_id] === true
           const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : 'PDF/Image OMR'
+          const jobTargetLabel = job.parse_all_parts ? 'Full score' : (jobTrack?.name ?? `Track ${job.slot_id}`)
           const attemptLabel =
             job.attempt_count > 0 ? `${job.attempt_count}/${job.max_attempts}회 시도` : '대기 중'
 
@@ -56,7 +57,7 @@ export function ExtractionJobsPanel({
               <div>
                 <strong>{job.source_label}</strong>
                 <span>
-                  {jobKindLabel} · {jobTrack?.name ?? `Track ${job.slot_id}`} · {attemptLabel}
+                  {jobKindLabel} · {jobTargetLabel} · {attemptLabel}
                 </span>
               </div>
               <span className={`extraction-jobs__status extraction-jobs__status--${job.status}`}>

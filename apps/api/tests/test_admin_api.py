@@ -29,6 +29,7 @@ def admin_headers(password: str) -> dict[str, str]:
 
 def build_client(tmp_path: Path, monkeypatch, *, admin_token: str | None = None) -> TestClient:
     monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", str(tmp_path))
+    monkeypatch.setenv("GIGASTUDY_API_STUDIO_ACCESS_POLICY", "public")
     if admin_token is None:
         monkeypatch.delenv("GIGASTUDY_API_ADMIN_TOKEN", raising=False)
     else:
@@ -91,6 +92,21 @@ def test_admin_storage_rejects_wrong_login(tmp_path: Path, monkeypatch) -> None:
     )
 
     assert response.status_code == 401
+
+
+def test_admin_can_drain_empty_engine_queue(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+
+    response = client.post("/api/admin/engine/drain?max_jobs=2", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "processed_jobs": 0,
+        "remaining_runnable": False,
+        "max_jobs": 2,
+        "messages": [],
+    }
 
 
 def test_admin_storage_still_accepts_configured_token(tmp_path: Path, monkeypatch) -> None:

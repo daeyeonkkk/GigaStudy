@@ -16,7 +16,7 @@ def run_audiveris_omr(
     audiveris_bin: str | None,
     timeout_seconds: int,
 ) -> Path:
-    binary = audiveris_bin or shutil.which("audiveris")
+    binary = audiveris_bin or shutil.which("audiveris") or shutil.which("Audiveris")
     if not binary:
         raise OmrUnavailableError("Audiveris CLI is not configured on this machine.")
 
@@ -31,13 +31,16 @@ def run_audiveris_omr(
         "--",
         str(input_path),
     ]
-    completed = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise OmrUnavailableError(f"Audiveris timed out after {timeout_seconds} seconds.") from error
     if completed.returncode != 0:
         message = completed.stderr.strip() or completed.stdout.strip() or "Audiveris failed."
         raise OmrUnavailableError(message)

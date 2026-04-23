@@ -1,6 +1,6 @@
 ﻿# GigaStudy Roadmap
 
-Date: 2026-04-22
+Date: 2026-04-23
 
 This roadmap replaces the previous guide-recording, arrangement, sharing, ops,
 and calibration roadmap.
@@ -28,6 +28,8 @@ The current implementation has a working vertical slice for:
   canonical for scoring, notation, export, and AI generation
 - Browser recording metronome playback and input level feedback
 - Audiveris OMR job adapter
+- API Docker image now includes Audiveris 5.10.2 for Cloud Run OMR execution,
+  with local development still able to override the binary path.
 - PDF/image score upload is treated as asynchronous OMR input, not as fixture
   registration.
 - Public registration endpoints reject missing upload content instead of
@@ -41,6 +43,12 @@ The current implementation has a working vertical slice for:
   retried while the original input asset remains available. Replay-critical job
   options are stored on studio metadata so recovery can rebuild a missing queue
   payload without changing user intent.
+- Admin/scheduler queue draining is available through
+  `POST /api/admin/engine/drain`, so queued or expired OMR/voice jobs can be
+  processed without depending only on studio-page polling.
+- Live alpha now has Cloud Scheduler job `gigastudy-engine-drain`, enabled
+  every 5 minutes in `Asia/Seoul`, to wake the durable extraction queue without
+  user/admin page traffic.
 - OMR job review can register all mapped candidates into their suggested tracks
   in one operation.
 - Extraction candidate queue with approve/reject registration
@@ -92,6 +100,10 @@ The current implementation has a working vertical slice for:
   job at a time.
 - Staged upload cleanup has an app-level lifecycle path for expired staged
   objects plus admin controls for expired-only or all abandoned staged objects.
+- Studio access is owner-token scoped by default. The browser sends a local
+  `X-GigaStudy-Owner-Token`, the API stores only its hash, and list/detail
+  routes are no longer public across all stored studios unless explicitly
+  configured for public/local-test mode.
 
 ## Phase 0: Foundation Reset
 
@@ -335,6 +347,14 @@ Required:
 - R2/S3 bucket CORS must allow direct browser `PUT` from the deployed Pages
   origin before the presigned path can carry production traffic without falling
   back to base64.
+- Owner-token scoped studio list/detail/action APIs for alpha privacy.
+- Admin/scheduler endpoint that can drain queued/expired OMR and voice
+  extraction jobs using the durable queue and the one-active-lane limit.
+- Containerized Audiveris runtime in the API image for scanned PDF/image OMR.
+- Cloud Build and Cloud Run deployment verification for the Audiveris-enabled
+  image.
+- Live born-digital PDF smoke verification that Audiveris timeout falls through
+  to `pdf_vector_omr` review candidates for Soprano through Bass.
 
 Cut line:
 
@@ -362,8 +382,13 @@ Required:
   prominent than raw engine method names.
 - Add NWC parsing only after a reliable NWC-to-TrackNote conversion path is
   chosen.
-- Verify the live Cloud Run service is using Postgres/R2 instead of local JSON
-  and local files.
+- Keep checking the live Cloud Run service is using Postgres/R2 instead of
+  local JSON and local files during each deployment gate.
+- Expand OMR smoke coverage from born-digital PDFs to true scanned/image PDFs
+  and capture quality/failure modes in the candidate review UI.
+- Monitor the external Cloud Scheduler queue-drain trigger and add alerting or
+  admin-visible last-run state if unattended extraction failures become hard to
+  diagnose.
 - Add bucket-native R2 lifecycle rules if/when the free-plan app-level cleanup
   path is not enough for production-scale recording tests.
 - Add optional direct/temporary handling for larger scoring takes if alpha

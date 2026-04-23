@@ -101,6 +101,12 @@
   color: #002bb0;
 }
 
+.composer-tool--home {
+  min-width: 68px;
+  gap: 5px;
+  color: #061a7f;
+}
+
 .composer-tool--text {
   min-width: 46px;
   margin-left: 4px;

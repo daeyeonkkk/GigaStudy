@@ -7,6 +7,8 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.api.schemas.studios import TrackNote
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.omr import OmrUnavailableError
+from gigastudy_api.services.engine.pdf_vector_omr import PdfVectorOmrError
+from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, ParsedTrack
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services import studio_repository
 
@@ -91,6 +93,8 @@ MULTI_TRACK_MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 PDF_UPLOAD_BYTES = b"%PDF-1.4\n% GigaStudy test PDF\n"
+OWNER_TOKEN_A = "a" * 32
+OWNER_TOKEN_B = "b" * 32
 
 
 def fake_audiveris_omr(
@@ -122,8 +126,74 @@ def fake_multi_track_audiveris_omr(
     return output_path
 
 
-def build_client(tmp_path: Path, monkeypatch) -> TestClient:
+def fake_pdf_vector_omr(
+    path: Path,
+    *,
+    bpm: int,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+    max_slot_id: int = 5,
+) -> ParsedSymbolicFile:
+    mapped_notes: dict[int, list[TrackNote]] = {}
+    tracks: list[ParsedTrack] = []
+    for slot_id, label, pitch_midi in [
+        (1, "C5", 72),
+        (2, "A4", 69),
+        (3, "E4", 64),
+        (4, "C4", 60),
+        (5, "C3", 48),
+    ][:max_slot_id]:
+        notes = [
+            TrackNote(
+                pitch_midi=pitch_midi,
+                label=label,
+                onset_seconds=0,
+                duration_seconds=60 / bpm,
+                duration_beats=1,
+                beat=1,
+                measure_index=1,
+                beat_in_measure=1,
+                confidence=0.62,
+                source="omr",
+                extraction_method="pdf_vector_omr_v0",
+            )
+        ]
+        mapped_notes[slot_id] = notes
+        tracks.append(ParsedTrack(name=f"Vector {slot_id}", notes=notes, slot_id=slot_id))
+    return ParsedSymbolicFile(
+        tracks=tracks,
+        mapped_notes=mapped_notes,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+        has_time_signature=False,
+    )
+
+
+def fake_four_part_pdf_vector_omr(
+    path: Path,
+    *,
+    bpm: int,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+    max_slot_id: int = 5,
+) -> ParsedSymbolicFile:
+    parsed = fake_pdf_vector_omr(
+        path,
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+        max_slot_id=4,
+    )
+    return parsed
+
+
+def fail_pdf_vector_omr(*args, **kwargs) -> ParsedSymbolicFile:
+    raise PdfVectorOmrError("Vector fallback cannot read PDF")
+
+
+def build_client(tmp_path: Path, monkeypatch, *, studio_access_policy: str = "public") -> TestClient:
     monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", str(tmp_path))
+    monkeypatch.setenv("GIGASTUDY_API_STUDIO_ACCESS_POLICY", studio_access_policy)
     get_settings.cache_clear()
     studio_repository._repository = None
     return TestClient(create_app())
@@ -200,6 +270,37 @@ def test_studio_list_is_paginated(tmp_path: Path, monkeypatch) -> None:
     payload = response.json()
     assert len(payload) == 2
     assert all("tracks" not in studio for studio in payload)
+
+
+def test_owner_policy_scopes_studio_list_and_detail_access(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch, studio_access_policy="owner")
+    owner_headers = {"X-GigaStudy-Owner-Token": OWNER_TOKEN_A}
+    other_headers = {"X-GigaStudy-Owner-Token": OWNER_TOKEN_B}
+
+    create_response = client.post(
+        "/api/studios",
+        headers=owner_headers,
+        json={
+            "title": "Private studio",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+
+    assert create_response.status_code == 200
+    payload = create_response.json()
+    studio_id = payload["studio_id"]
+    assert "owner_token_hash" not in payload
+    assert client.get("/api/studios").json() == []
+    assert client.get("/api/studios", headers=other_headers).json() == []
+
+    owner_list = client.get("/api/studios", headers=owner_headers)
+
+    assert owner_list.status_code == 200
+    assert [studio["studio_id"] for studio in owner_list.json()] == [studio_id]
+    assert client.get(f"/api/studios/{studio_id}", headers=owner_headers).status_code == 200
+    assert client.get(f"/api/studios/{studio_id}", headers=other_headers).status_code == 404
+    assert client.get(f"/api/studios/{studio_id}").status_code == 401
 
 
 def test_blank_studio_can_start_with_custom_time_signature(tmp_path: Path, monkeypatch) -> None:
@@ -900,6 +1001,102 @@ def test_upload_pdf_can_register_omr_candidates_into_each_suggested_track(
     assert all(candidate["status"] == "approved" for candidate in approved_payload["candidates"])
 
 
+def test_upload_pdf_falls_back_to_vector_omr_and_attempts_all_vocal_tracks(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_omr(
+        *,
+        input_path: Path,
+        output_dir: Path,
+        audiveris_bin: str | None,
+        timeout_seconds: int,
+    ) -> Path:
+        raise OmrUnavailableError("Audiveris missing")
+
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
+        fake_pdf_vector_omr,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Vector PDF fallback",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "phonecert.pdf",
+            "content_base64": encoded,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "needs_review"
+    assert payload["jobs"][0]["output_path"].endswith("pdf-vector-omr-summary.json")
+    assert [candidate["suggested_slot_id"] for candidate in payload["candidates"]] == [1, 2, 3, 4, 5]
+    assert all(candidate["method"] == "pdf_vector_omr_review" for candidate in payload["candidates"])
+    assert all(candidate["notes"][0]["extraction_method"] == "pdf_vector_omr_v0" for candidate in payload["candidates"])
+    assert [track["status"] for track in payload["tracks"][:5]] == ["needs_review"] * 5
+    assert payload["tracks"][5]["status"] == "empty"
+
+
+def test_vector_omr_four_part_score_clears_unmapped_bass_placeholder(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_omr(
+        *,
+        input_path: Path,
+        output_dir: Path,
+        audiveris_bin: str | None,
+        timeout_seconds: int,
+    ) -> Path:
+        raise OmrUnavailableError("Audiveris missing")
+
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
+        fake_four_part_pdf_vector_omr,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Four part vector PDF",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+
+    response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "four-part.pdf",
+            "content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert [candidate["suggested_slot_id"] for candidate in payload["candidates"]] == [1, 2, 3, 4]
+    assert [track["status"] for track in payload["tracks"][:4]] == ["needs_review"] * 4
+    assert payload["tracks"][4]["status"] == "empty"
+
+
 def test_omr_job_bulk_approval_requires_overwrite_confirmation(
     tmp_path: Path,
     monkeypatch,
@@ -992,6 +1189,10 @@ def test_upload_pdf_marks_omr_job_failed_when_audiveris_unavailable(
         raise OmrUnavailableError("Audiveris missing")
 
     monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
+        fail_pdf_vector_omr,
+    )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
@@ -1017,8 +1218,9 @@ def test_upload_pdf_marks_omr_job_failed_when_audiveris_unavailable(
     assert upload_response.status_code == 200
     payload = client.get(f"/api/studios/{studio_id}").json()
     assert payload["jobs"][0]["status"] == "failed"
-    assert payload["jobs"][0]["message"] == "Audiveris missing"
-    assert payload["tracks"][0]["status"] == "failed"
+    assert "Audiveris missing" in payload["jobs"][0]["message"]
+    assert "PDF vector fallback failed" in payload["jobs"][0]["message"]
+    assert [track["status"] for track in payload["tracks"][:5]] == ["failed"] * 5
     assert payload["candidates"] == []
 
 
@@ -1036,6 +1238,10 @@ def test_failed_omr_job_can_be_retried_from_durable_queue(
         raise OmrUnavailableError("Audiveris missing")
 
     monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
+        fail_pdf_vector_omr,
+    )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
@@ -1072,6 +1278,8 @@ def test_failed_omr_job_can_be_retried_from_durable_queue(
     assert retry_payload["jobs"][0]["status"] == "needs_review"
     assert retry_payload["jobs"][0]["attempt_count"] == 1
     assert retry_payload["candidates"][0]["notes"][0]["source"] == "omr"
+    assert retry_payload["tracks"][0]["status"] == "needs_review"
+    assert [track["status"] for track in retry_payload["tracks"][1:5]] == ["empty"] * 4
 
 
 def test_voice_retry_rehydrates_direct_register_mode_without_queue_record(

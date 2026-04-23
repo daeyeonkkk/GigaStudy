@@ -241,6 +241,19 @@ test('home music upload decodes MP3-like input to WAV before analysis', async ({
   await expect(page.getByTestId('candidate-review')).toContainText('C5')
 })
 
+test('admin login can inspect storage and run the engine queue trigger', async ({ page }) => {
+  await page.goto('/admin')
+  await page.getByLabel('ID').fill('admin')
+  await page.getByLabel('Password').fill('대연123')
+  await page.getByRole('button', { name: 'Login' }).click()
+  await expect(page.getByText('Storage backend')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Run Queue' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Run Queue' }).click()
+
+  await expect(page.getByText(/Engine queue processed/)).toBeVisible()
+})
+
 test('six-track studio supports create, register, generate, sync, play, and score', async ({ page }) => {
   await createBlankStudio(page, 'Playwright six-track session', '104')
 

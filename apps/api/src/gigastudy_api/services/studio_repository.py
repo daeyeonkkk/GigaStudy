@@ -1,6 +1,8 @@
 ﻿from __future__ import annotations
 
 import base64
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock, RLock
@@ -12,6 +14,7 @@ from fastapi import BackgroundTasks, HTTPException
 from gigastudy_api.api.schemas.admin import (
     AdminAssetSummary,
     AdminDeleteResult,
+    AdminEngineDrainResult,
     AdminLimitSummary,
     AdminStorageSummary,
     AdminStudioSummary,
@@ -51,9 +54,17 @@ from gigastudy_api.services.engine.music_theory import (
     track_name,
 )
 from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
+from gigastudy_api.services.engine.pdf_vector_omr import (
+    PdfVectorOmrError,
+    parse_born_digital_pdf_score,
+)
 from gigastudy_api.services.engine.pdf_export import ScorePdfExportError, build_studio_score_pdf
 from gigastudy_api.services.engine.scoring import build_scoring_report
-from gigastudy_api.services.engine.symbolic import SymbolicParseError, parse_symbolic_file_with_metadata
+from gigastudy_api.services.engine.symbolic import (
+    ParsedSymbolicFile,
+    SymbolicParseError,
+    parse_symbolic_file_with_metadata,
+)
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError, transcribe_voice_file
 from gigastudy_api.services.engine_queue import EngineQueueJob, EngineQueueStore, build_engine_queue_store
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
@@ -129,6 +140,24 @@ class StudioRepository:
             rows = self._store.list_summary_raw(limit=limit, offset=offset)
         return [_studio_list_item_from_payload(studio_id, studio_payload) for studio_id, studio_payload in rows]
 
+    def list_accessible_studios(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        owner_token: str | None = None,
+    ) -> list[StudioListItem]:
+        owner_hash = self._owner_hash_for_request(owner_token, allow_missing=True)
+        if self._owner_policy_enabled() and owner_hash is None:
+            return []
+        with self._lock:
+            rows = self._store.list_summary_raw(
+                limit=limit,
+                offset=offset,
+                owner_token_hash=owner_hash,
+            )
+        return [_studio_list_item_from_payload(studio_id, studio_payload) for studio_id, studio_payload in rows]
+
     def create_studio(
         self,
         *,
@@ -141,13 +170,16 @@ class StudioRepository:
         source_filename: str | None = None,
         source_content_base64: str | None = None,
         source_asset_path: str | None = None,
+        owner_token: str | None = None,
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         timestamp = _now()
         self._ensure_studio_capacity()
+        owner_hash = self._owner_hash_for_request(owner_token)
         resolved_bpm = bpm if bpm is not None else DEFAULT_UPLOAD_BPM
         studio = Studio(
             studio_id=uuid4().hex,
+            owner_token_hash=owner_hash,
             title=title.strip(),
             bpm=resolved_bpm,
             time_signature_numerator=time_signature_numerator,
@@ -198,25 +230,40 @@ class StudioRepository:
             self._save_studio(studio)
         return studio
 
-    def get_studio(self, studio_id: str, *, background_tasks: BackgroundTasks | None = None) -> Studio:
+    def get_studio(
+        self,
+        studio_id: str,
+        *,
+        background_tasks: BackgroundTasks | None = None,
+        owner_token: str | None = None,
+        enforce_owner: bool = False,
+    ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
         if studio is None:
             raise HTTPException(status_code=404, detail="Studio not found.")
+        if enforce_owner:
+            self._require_studio_access(studio, owner_token)
         self._ensure_queue_records_for_active_jobs(studio)
         if background_tasks is not None and self._engine_queue.has_runnable(studio_id=studio_id):
             self._schedule_engine_queue_processing(background_tasks)
         return studio
 
-    def export_score_pdf(self, studio_id: str) -> tuple[str, bytes]:
-        studio = self.get_studio(studio_id)
+    def export_score_pdf(self, studio_id: str, *, owner_token: str | None = None) -> tuple[str, bytes]:
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         try:
             return f"{studio.studio_id}-score.pdf", build_studio_score_pdf(studio)
         except ScorePdfExportError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
-    def get_track_audio(self, studio_id: str, slot_id: int) -> tuple[Path, str, str]:
-        studio = self.get_studio(studio_id)
+    def get_track_audio(
+        self,
+        studio_id: str,
+        slot_id: int,
+        *,
+        owner_token: str | None = None,
+    ) -> tuple[Path, str, str]:
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         track = self._find_track(studio, slot_id)
         if track.status != "registered" or track.audio_source_path is None:
             raise HTTPException(status_code=404, detail="Track audio source not found.")
@@ -358,7 +405,10 @@ class StudioRepository:
     def create_studio_upload_target(
         self,
         request: StudioSeedUploadRequest,
+        *,
+        owner_token: str | None = None,
     ) -> DirectUploadTarget:
+        self._owner_hash_for_request(owner_token)
         self._cleanup_expired_staged_uploads_if_due()
         filename, _suffix = _validated_studio_seed_upload_filename(request.source_kind, request.filename)
         settings = get_settings()
@@ -392,9 +442,11 @@ class StudioRepository:
         studio_id: str,
         slot_id: int,
         request: DirectUploadRequest,
+        *,
+        owner_token: str | None = None,
     ) -> DirectUploadTarget:
         self._cleanup_expired_staged_uploads_if_due()
-        studio = self.get_studio(studio_id)
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._find_track(studio, slot_id)
         filename, _suffix = _validated_track_upload_filename(request.source_kind, request.filename)
         settings = get_settings()
@@ -454,11 +506,12 @@ class StudioRepository:
         slot_id: int,
         request: UploadTrackRequest,
         *,
+        owner_token: str | None = None,
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         filename, suffix = _validated_track_upload_filename(request.source_kind, request.filename)
 
-        studio = self.get_studio(studio_id)
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._find_track(studio, slot_id)
 
         if request.asset_path is not None:
@@ -546,8 +599,15 @@ class StudioRepository:
 
         raise HTTPException(status_code=422, detail="Unsupported upload processing path.")
 
-    def generate_track(self, studio_id: str, slot_id: int, request: GenerateTrackRequest) -> Studio:
-        studio = self.get_studio(studio_id)
+    def generate_track(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: GenerateTrackRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._find_track(studio, slot_id)
         registered_tracks = [track for track in studio.tracks if track.status == "registered"]
         context_slot_ids = request.context_slot_ids or [track.slot_id for track in registered_tracks]
@@ -607,11 +667,19 @@ class StudioRepository:
             notes=candidate_notes[0],
         )
 
-    def update_sync(self, studio_id: str, slot_id: int, request: SyncTrackRequest) -> Studio:
+    def update_sync(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: SyncTrackRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
+            self._require_studio_access(studio, owner_token)
             timestamp = _now()
             track = self._find_track(studio, slot_id)
             track.sync_offset_seconds = round(request.sync_offset_seconds, 2)
@@ -642,11 +710,14 @@ class StudioRepository:
         studio_id: str,
         candidate_id: str,
         request: ApproveCandidateRequest,
+        *,
+        owner_token: str | None = None,
     ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
+            self._require_studio_access(studio, owner_token)
             timestamp = _now()
             candidate = self._find_candidate(studio, candidate_id)
             if candidate.status != "pending":
@@ -689,11 +760,18 @@ class StudioRepository:
             self._save_studio(studio)
         return studio
 
-    def reject_candidate(self, studio_id: str, candidate_id: str) -> Studio:
+    def reject_candidate(
+        self,
+        studio_id: str,
+        candidate_id: str,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
+            self._require_studio_access(studio, owner_token)
             timestamp = _now()
             candidate = self._find_candidate(studio, candidate_id)
             if candidate.status != "pending":
@@ -715,11 +793,14 @@ class StudioRepository:
         studio_id: str,
         job_id: str,
         request: ApproveJobCandidatesRequest,
+        *,
+        owner_token: str | None = None,
     ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
+            self._require_studio_access(studio, owner_token)
 
             job = next((candidate_job for candidate_job in studio.jobs if candidate_job.job_id == job_id), None)
             if job is None:
@@ -783,12 +864,14 @@ class StudioRepository:
         studio_id: str,
         job_id: str,
         *,
+        owner_token: str | None = None,
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
+            self._require_studio_access(studio, owner_token)
             job = next((candidate_job for candidate_job in studio.jobs if candidate_job.job_id == job_id), None)
             if job is None:
                 raise HTTPException(status_code=404, detail="Extraction job not found.")
@@ -815,8 +898,15 @@ class StudioRepository:
         self._schedule_engine_queue_processing(background_tasks)
         return self.get_studio(studio_id)
 
-    def score_track(self, studio_id: str, slot_id: int, request: ScoreTrackRequest) -> Studio:
-        studio = self.get_studio(studio_id)
+    def score_track(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: ScoreTrackRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         target_track = self._find_track(studio, slot_id)
         if target_track.status != "registered" or not target_track.notes:
             raise HTTPException(status_code=409, detail="Scoring requires a registered answer track.")
@@ -866,6 +956,24 @@ class StudioRepository:
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
+
+    def drain_engine_queue(self, *, max_jobs: int | None = None) -> AdminEngineDrainResult:
+        settings = get_settings()
+        job_limit = max(1, min(max_jobs or settings.engine_drain_max_jobs, 20))
+        processed = 0
+        messages: list[str] = []
+        for _ in range(job_limit):
+            record = self.process_engine_queue_once()
+            if record is None:
+                break
+            processed += 1
+            messages.append(f"{record.job_type}:{record.job_id}:{record.status}")
+        return AdminEngineDrainResult(
+            processed_jobs=processed,
+            remaining_runnable=self._engine_queue.has_runnable(),
+            max_jobs=job_limit,
+            messages=messages,
+        )
 
     def _extract_scoring_audio(
         self,
@@ -1161,8 +1269,14 @@ class StudioRepository:
             studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
-            track = self._find_track(studio, slot_id)
-            if not _track_has_content(track):
+            placeholder_tracks = (
+                [track for track in studio.tracks if track.slot_id <= 5]
+                if parse_all_parts
+                else [self._find_track(studio, slot_id)]
+            )
+            for track in placeholder_tracks:
+                if _track_has_content(track):
+                    continue
                 track.status = "extracting"
                 track.source_kind = source_kind
                 track.source_label = source_label
@@ -1312,6 +1426,11 @@ class StudioRepository:
         input_path = self._resolve_data_asset_path(str(record.payload.get("input_path") or ""))
         source_label = str(record.payload.get("source_label") or "uploaded-score")
         parse_all_parts = bool(record.payload.get("parse_all_parts"))
+        candidate_method = "audiveris_omr_review"
+        extraction_method = "audiveris_omr_v0"
+        job_method = "audiveris_cli"
+        confidence = 0.55
+        message = "OMR result requires user approval before track registration."
         try:
             output_path = self._run_audiveris_omr(
                 input_path=input_path,
@@ -1325,12 +1444,49 @@ class StudioRepository:
                 target_slot_id=None if parse_all_parts else self._job_slot_id(record.studio_id, record.job_id),
             )
             output_reference = self._persist_generated_asset(output_path)
-            mapped_notes = _mark_notes_as_omr(parsed_symbolic.mapped_notes)
-        except (OmrUnavailableError, SymbolicParseError) as error:
-            self._mark_job_failed(record.studio_id, record.job_id, message=str(error))
-            return
+        except (OmrUnavailableError, SymbolicParseError) as primary_error:
+            if input_path.suffix.lower() != ".pdf":
+                self._mark_job_failed(record.studio_id, record.job_id, message=str(primary_error))
+                return
+            try:
+                parsed_symbolic = parse_born_digital_pdf_score(
+                    input_path,
+                    bpm=studio.bpm,
+                    time_signature_numerator=studio.time_signature_numerator,
+                    time_signature_denominator=studio.time_signature_denominator,
+                )
+                output_path = _write_pdf_vector_omr_summary(
+                    self._job_output_dir(record.studio_id, record.job_id),
+                    parsed_symbolic,
+                    source_label=source_label,
+                    primary_error=str(primary_error),
+                )
+                output_reference = self._persist_generated_asset(output_path)
+                candidate_method = "pdf_vector_omr_review"
+                extraction_method = "pdf_vector_omr_v0"
+                job_method = "pdf_vector_omr"
+                confidence = 0.46
+                message = (
+                    "Audiveris failed or was unavailable; vector PDF extraction produced "
+                    "reviewable part candidates."
+                )
+            except (PdfVectorOmrError, AssetStorageError) as fallback_error:
+                self._mark_job_failed(
+                    record.studio_id,
+                    record.job_id,
+                    message=f"{primary_error}; PDF vector fallback failed: {fallback_error}",
+                )
+                return
         except AssetStorageError as error:
             self._mark_job_failed(record.studio_id, record.job_id, message=str(error))
+            return
+
+        mapped_notes = _mark_notes_as_omr(
+            parsed_symbolic.mapped_notes,
+            extraction_method=extraction_method,
+        )
+        if not mapped_notes:
+            self._mark_job_failed(record.studio_id, record.job_id, message="OMR did not produce any track notes.")
             return
 
         if parsed_symbolic.has_time_signature:
@@ -1339,16 +1495,16 @@ class StudioRepository:
                 parsed_symbolic.time_signature_numerator,
                 parsed_symbolic.time_signature_denominator,
             )
-        self._mark_job_completed(record.studio_id, record.job_id, output_path=output_reference)
+        self._mark_job_completed(record.studio_id, record.job_id, output_path=output_reference, method=job_method)
         self._add_extraction_candidates(
             record.studio_id,
             mapped_notes,
             source_kind="score",
             source_label=source_label,
-            method="audiveris_omr_review",
-            confidence=0.55,
+            method=candidate_method,
+            confidence=confidence,
             job_id=record.job_id,
-            message="OMR result requires user approval before track registration.",
+            message=message,
         )
 
     def _process_voice_queue_record(self, record: EngineQueueJob) -> None:
@@ -1454,10 +1610,39 @@ class StudioRepository:
                     job.status = "needs_review"
                     job.message = message
                     job.updated_at = timestamp
+                    if job.parse_all_parts:
+                        self._clear_unmapped_omr_placeholders(
+                            studio,
+                            job,
+                            mapped_slot_ids=set(mapped_notes),
+                            timestamp=timestamp,
+                        )
                     break
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
+
+    def _clear_unmapped_omr_placeholders(
+        self,
+        studio: Studio,
+        job: TrackExtractionJob,
+        *,
+        mapped_slot_ids: set[int],
+        timestamp: str,
+    ) -> None:
+        for track in studio.tracks:
+            if track.slot_id > 5 or track.slot_id in mapped_slot_ids:
+                continue
+            if _track_has_content(track):
+                continue
+            if track.source_kind != job.source_kind or track.source_label != job.source_label:
+                continue
+            if track.status not in {"extracting", "failed", "needs_review"}:
+                continue
+            track.status = "empty"
+            track.source_kind = None
+            track.source_label = None
+            track.updated_at = timestamp
 
     def _add_generation_candidates(
         self,
@@ -1589,7 +1774,7 @@ class StudioRepository:
             for job in studio.jobs:
                 if job.job_id == job_id:
                     job.status = "running"
-                    job.message = "Extraction running."
+                    job.message = "Full-score extraction running." if job.parse_all_parts else "Extraction running."
                     if attempt_count is not None:
                         job.attempt_count = attempt_count
                     if max_attempts is not None:
@@ -1610,16 +1795,35 @@ class StudioRepository:
                     job.status = "failed"
                     job.message = message
                     job.updated_at = timestamp
-                    track = self._find_track(studio, job.slot_id)
-                    if not _track_has_content(track):
+                    failed_tracks = (
+                        [track for track in studio.tracks if track.slot_id <= 5]
+                        if job.parse_all_parts
+                        else [self._find_track(studio, job.slot_id)]
+                    )
+                    for track in failed_tracks:
+                        if _track_has_content(track):
+                            continue
+                        if track.source_kind not in {None, job.source_kind}:
+                            continue
+                        if track.source_label not in {None, job.source_label}:
+                            continue
                         track.status = "failed"
+                        track.source_kind = job.source_kind
+                        track.source_label = job.source_label
                         track.updated_at = timestamp
                     break
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
 
-    def _mark_job_completed(self, studio_id: str, job_id: str, *, output_path: str) -> None:
+    def _mark_job_completed(
+        self,
+        studio_id: str,
+        job_id: str,
+        *,
+        output_path: str,
+        method: str | None = None,
+    ) -> None:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
@@ -1629,6 +1833,8 @@ class StudioRepository:
                 if job.job_id == job_id:
                     job.status = "completed"
                     job.output_path = output_path
+                    if method is not None:
+                        job.method = method
                     job.updated_at = timestamp
                     break
             studio.updated_at = timestamp
@@ -1646,6 +1852,29 @@ class StudioRepository:
             if candidate.candidate_id == candidate_id:
                 return candidate
         raise HTTPException(status_code=404, detail="Extraction candidate not found.")
+
+    def _owner_policy_enabled(self) -> bool:
+        return get_settings().studio_access_policy.strip().lower() not in {"", "public", "off", "false"}
+
+    def _owner_hash_for_request(self, owner_token: str | None, *, allow_missing: bool = False) -> str | None:
+        if not self._owner_policy_enabled():
+            return None
+        normalized = (owner_token or "").strip()
+        if not normalized:
+            if allow_missing:
+                return None
+            raise HTTPException(status_code=401, detail="Studio owner token is required.")
+        if len(normalized) < 24 or len(normalized) > 256:
+            raise HTTPException(status_code=401, detail="Studio owner token is invalid.")
+        return _hash_owner_token(normalized)
+
+    def _require_studio_access(self, studio: Studio, owner_token: str | None) -> None:
+        if not self._owner_policy_enabled():
+            return
+        if studio.owner_token_hash is None:
+            raise HTTPException(status_code=404, detail="Studio not found.")
+        if self._owner_hash_for_request(owner_token) != studio.owner_token_hash:
+            raise HTTPException(status_code=404, detail="Studio not found.")
 
     def _mapped_notes_would_overwrite(
         self,
@@ -2185,7 +2414,10 @@ class StudioRepository:
         return Studio.model_validate(_migrate_legacy_studio_payload(raw_payload))
 
     def _save_studio(self, studio: Studio) -> None:
-        self._store.save_one_raw(studio.studio_id, studio.model_dump(mode="json"))
+        payload = studio.model_dump(mode="json")
+        if studio.owner_token_hash is not None:
+            payload["owner_token_hash"] = studio.owner_token_hash
+        self._store.save_one_raw(studio.studio_id, payload)
 
     def _delete_studio(self, studio_id: str) -> bool:
         return self._store.delete_one_raw(studio_id)
@@ -2201,10 +2433,13 @@ class StudioRepository:
         self._store.save_raw(self._encode_payload(payload))
 
     def _encode_payload(self, payload: dict[str, Studio]) -> dict[str, Any]:
-        return {
-            studio_id: studio.model_dump(mode="json")
-            for studio_id, studio in payload.items()
-        }
+        encoded: dict[str, Any] = {}
+        for studio_id, studio in payload.items():
+            studio_payload = studio.model_dump(mode="json")
+            if studio.owner_token_hash is not None:
+                studio_payload["owner_token_hash"] = studio.owner_token_hash
+            encoded[studio_id] = studio_payload
+        return encoded
 
 
 def _studio_list_item(studio: Studio) -> StudioListItem:
@@ -2257,19 +2492,49 @@ def _track_duration_seconds(notes: list[TrackNote]) -> float:
     return round(max(note.onset_seconds + note.duration_seconds for note in notes), 4)
 
 
-def _mark_notes_as_omr(mapped_notes: dict[int, list[TrackNote]]) -> dict[int, list[TrackNote]]:
+def _mark_notes_as_omr(
+    mapped_notes: dict[int, list[TrackNote]],
+    *,
+    extraction_method: str = "audiveris_omr_v0",
+) -> dict[int, list[TrackNote]]:
     return {
         slot_id: [
             note.model_copy(
                 update={
                     "source": "omr",
-                    "extraction_method": "audiveris_omr_v0",
+                    "extraction_method": extraction_method,
                 }
             )
             for note in notes
         ]
         for slot_id, notes in mapped_notes.items()
     }
+
+
+def _write_pdf_vector_omr_summary(
+    output_dir: Path,
+    parsed_symbolic: ParsedSymbolicFile,
+    *,
+    source_label: str,
+    primary_error: str,
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "pdf-vector-omr-summary.json"
+    payload = {
+        "method": "pdf_vector_omr_v0",
+        "source_label": source_label,
+        "fallback_reason": primary_error,
+        "tracks": [
+            {
+                "slot_id": track.slot_id,
+                "name": track.name,
+                "note_count": len(track.notes),
+            }
+            for track in parsed_symbolic.tracks
+        ],
+    }
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return output_path
 
 
 def _generation_variant_label(index: int, slot_id: int, notes: list[TrackNote]) -> str:
@@ -2424,6 +2689,10 @@ def _studio_id_from_asset_path(relative_path: str) -> str | None:
     if len(parts) >= 2 and parts[0] in {"uploads", "jobs"}:
         return parts[1]
     return None
+
+
+def _hash_owner_token(owner_token: str) -> str:
+    return hashlib.sha256(owner_token.strip().encode("utf-8")).hexdigest()
 
 
 def _migrate_legacy_studio_payload(studio_payload: Any) -> Any:

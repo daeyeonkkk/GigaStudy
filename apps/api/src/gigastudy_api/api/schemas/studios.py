@@ -143,6 +143,7 @@ class ScoringReport(BaseModel):
 
 class Studio(BaseModel):
     studio_id: str
+    owner_token_hash: str | None = Field(default=None, exclude=True)
     title: str
     bpm: int
     time_signature_numerator: int = Field(default=4, ge=1, le=32)

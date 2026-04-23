@@ -239,3 +239,10 @@ export type AdminDeleteResult = {
   deleted_files: number
   deleted_bytes: number
 }
+
+export type AdminEngineDrainResult = {
+  processed_jobs: number
+  remaining_runnable: boolean
+  max_jobs: number
+  messages: string[]
+}

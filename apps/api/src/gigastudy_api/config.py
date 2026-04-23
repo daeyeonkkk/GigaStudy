@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     admin_token: str | None = None
     admin_username: str = "admin"
     admin_password: str = "\ub300\uc5f0123"
+    studio_access_policy: str = "owner"
     database_url: str | None = None
     storage_backend: str = "local"
     s3_bucket: str | None = None
@@ -33,6 +34,7 @@ class Settings(BaseSettings):
     max_active_engine_jobs: int = 1
     engine_job_max_attempts: int = 3
     engine_job_lease_seconds: int = 10 * 60
+    engine_drain_max_jobs: int = 3
     audiveris_bin: str | None = None
     engine_processing_timeout_seconds: int = 120
     cors_origins: Annotated[list[str], NoDecode] = [

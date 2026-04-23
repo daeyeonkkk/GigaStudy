@@ -287,6 +287,19 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Score rendering math is isolated from the page component.
 - [x] Visible browser score engraving is isolated in
   `components/studio/EngravedScoreStrip.tsx`.
+- [x] Browser score notation has a dedicated `scoreEngraving` adapter that
+  converts normalized `TrackNote` data into measure-local VexFlow events with
+  variable measure widths, real dotted durations, beam groups, rests, and
+  adjacent-segment ties.
+- [x] Studio playback in audio mode uses retained recording/upload media URLs
+  directly instead of decoding recorded files into Web Audio buffers before
+  playback.
+- [x] Track, global, and scoring-reference playback all follow the same
+  audio-first/source-toggle policy.
+- [x] 2026-04-23 실사용 재생/악보 이슈 재검증: 웹 lint/build 통과,
+  브라우저 E2E 21/21 통과, Playwright 로컬 브라우저에서 라이브
+  스튜디오 payload 기준 VexFlow 렌더 콘솔 오류 없음, Tenor 재생 버튼이
+  실제 track audio URL을 `HTMLMediaElement.play()`로 호출함을 확인.
 
 ## Out Of Scope Until The Core Works
 

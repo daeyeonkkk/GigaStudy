@@ -13,13 +13,15 @@ import {
 } from 'vexflow'
 
 import {
+  buildEngravingLayout,
   formatBeatInMeasure,
-  getScoreBeatLineStyle,
-  getScoreMeasureBoundaryStyle,
-  getTimelineNoteStyle,
+  getEngravingBeatLineStyle,
+  getEngravingMarkerNoteStyle,
+  getEngravingMeasureLineStyle,
   getTrackRenderModel,
 } from '../../lib/studio'
-import type { NoteDurationGlyph, TrackRenderNote } from '../../lib/studio'
+import type { EngravingDuration, EngravingEvent } from '../../lib/studio'
+import type { TrackRenderNote } from '../../lib/studio'
 import type { ScoreNote, TrackSlot } from '../../types/studio'
 
 type EngravedScoreStripProps = {
@@ -30,77 +32,20 @@ type EngravedScoreStripProps = {
 
 type Clef = 'treble' | 'bass'
 
-type VexDuration = {
-  beats: number
-  dots: number
-  duration: 'w' | 'h' | 'q' | '8' | '16'
-}
-
 type DrawnNote = {
-  renderNote: TrackRenderNote
+  event: EngravingEvent
   staveNote: StaveNote
 }
 
 const SCORE_HEIGHT_PX = 190
 const STAVE_Y_PX = 58
-const FIRST_MEASURE_EXTRA_WIDTH_PX = 92
-const SCORE_RIGHT_PADDING_PX = 32
-const MIN_REST_BEATS = 0.24
 const TIE_EPSILON_BEATS = 0.08
 const SYNC_TRANSLATED_VEXFLOW_GROUPS = '.vf-stavenote, .vf-beam, .vf-stavetie'
 
 const pitchNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-const durationCandidates: VexDuration[] = [
-  { beats: 4, duration: 'w', dots: 0 },
-  { beats: 3, duration: 'h', dots: 1 },
-  { beats: 2, duration: 'h', dots: 0 },
-  { beats: 1.5, duration: 'q', dots: 1 },
-  { beats: 1, duration: 'q', dots: 0 },
-  { beats: 0.75, duration: '8', dots: 1 },
-  { beats: 0.5, duration: '8', dots: 0 },
-  { beats: 0.375, duration: '16', dots: 1 },
-  { beats: 0.25, duration: '16', dots: 0 },
-]
-
-const durationGlyphToVexDuration: Record<NoteDurationGlyph, VexDuration> = {
-  whole: { beats: 4, duration: 'w', dots: 0 },
-  half: { beats: 2, duration: 'h', dots: 0 },
-  quarter: { beats: 1, duration: 'q', dots: 0 },
-  eighth: { beats: 0.5, duration: '8', dots: 0 },
-  sixteenth: { beats: 0.25, duration: '16', dots: 0 },
-}
-
 function getClef(slotId: number): Clef {
   return slotId >= 5 ? 'bass' : 'treble'
-}
-
-function getMeasureIndex(displayBeat: number, beatsPerMeasure: number): number {
-  const safeBeatsPerMeasure = Math.max(0.25, beatsPerMeasure)
-  return Math.floor((Math.max(1, displayBeat) - 1) / safeBeatsPerMeasure)
-}
-
-function getMeasureStartBeat(measureIndex: number, beatsPerMeasure: number): number {
-  return 1 + measureIndex * Math.max(0.25, beatsPerMeasure)
-}
-
-function getMeasureX(measureIndex: number, measureWidth: number): number {
-  if (measureIndex === 0) {
-    return 0
-  }
-  return measureWidth + FIRST_MEASURE_EXTRA_WIDTH_PX + (measureIndex - 1) * measureWidth
-}
-
-function getMeasureWidth(measureIndex: number, measureWidth: number): number {
-  return measureIndex === 0 ? measureWidth + FIRST_MEASURE_EXTRA_WIDTH_PX : measureWidth
-}
-
-function getScoreWidth(measureCount: number, measureWidth: number): number {
-  return (
-    getMeasureX(Math.max(0, measureCount - 1), measureWidth) +
-    getMeasureWidth(Math.max(0, measureCount - 1), measureWidth) +
-    SCORE_RIGHT_PADDING_PX
-  )
 }
 
 function getSyncShiftPx(syncOffsetSeconds: number, bpm: number, pxPerBeat: number): number {
@@ -144,37 +89,15 @@ function getVexPitch(note: ScoreNote, clef: Clef): { accidental: string | null; 
   return getLabelParts(note.label) ?? { accidental: null, key: 'c/4' }
 }
 
-function getNearestVexDuration(beats: number): VexDuration {
-  const safeBeats = Math.max(0.25, beats)
-  return durationCandidates.reduce((best, candidate) => {
-    const bestDistance = Math.abs(best.beats - safeBeats)
-    const candidateDistance = Math.abs(candidate.beats - safeBeats)
-    return candidateDistance < bestDistance ? candidate : best
-  }, durationCandidates[durationCandidates.length - 1])
+function getVexDurationCode(duration: EngravingDuration): string {
+  return `${duration.duration}${'d'.repeat(duration.dots)}`
 }
 
-function getRestDurations(gapBeats: number): VexDuration[] {
-  const roundedGap = Math.round(Math.max(0, gapBeats) * 4) / 4
-  const rests: VexDuration[] = []
-  let remaining = roundedGap
-
-  while (remaining >= MIN_REST_BEATS) {
-    const nextDuration =
-      durationCandidates.find((candidate) => candidate.beats <= remaining + 0.001) ??
-      durationGlyphToVexDuration.sixteenth
-    rests.push(nextDuration)
-    remaining = Math.round((remaining - nextDuration.beats) * 4) / 4
-  }
-
-  return rests
-}
-
-function createStaveNote(note: ScoreNote, duration: VexDuration, clef: Clef): StaveNote {
+function createStaveNote(note: ScoreNote, duration: EngravingDuration, clef: Clef): StaveNote {
   const pitch = getVexPitch(note, clef)
   const staveNote = new StaveNote({
     clef,
-    dots: duration.dots,
-    duration: duration.duration,
+    duration: getVexDurationCode(duration),
     keys: [pitch.key],
     type: note.is_rest ? 'r' : undefined,
   })
@@ -189,11 +112,10 @@ function createStaveNote(note: ScoreNote, duration: VexDuration, clef: Clef): St
   return staveNote
 }
 
-function createRest(duration: VexDuration, clef: Clef): StaveNote {
+function createRest(duration: EngravingDuration, clef: Clef): StaveNote {
   const rest = new StaveNote({
     clef,
-    dots: duration.dots,
-    duration: duration.duration,
+    duration: getVexDurationCode(duration),
     keys: [clef === 'bass' ? 'd/3' : 'b/4'],
     type: 'r',
   })
@@ -220,20 +142,28 @@ function hasTiePitchMatch(left: TrackRenderNote, right: TrackRenderNote): boolea
 
 function findTieTargetIndex(drawnNotes: DrawnNote[], sourceIndex: number): number | null {
   const source = drawnNotes[sourceIndex]
-  const expectedNextBeat = source.renderNote.displayBeat + source.renderNote.displayDurationBeats
+  const sourceRenderNote = source.event.renderNote
+  if (!sourceRenderNote) {
+    return null
+  }
+  const expectedNextBeat = source.event.startBeat + source.event.durationBeats
 
   for (let index = sourceIndex + 1; index < drawnNotes.length; index += 1) {
     const candidate = drawnNotes[index]
-    if (candidate.renderNote.displayBeat > expectedNextBeat + TIE_EPSILON_BEATS) {
+    const candidateRenderNote = candidate.event.renderNote
+    if (!candidateRenderNote) {
+      continue
+    }
+    if (candidate.event.startBeat > expectedNextBeat + TIE_EPSILON_BEATS) {
       return null
     }
     const isSplitSegment =
-      candidate.renderNote.note.id === source.renderNote.note.id &&
-      candidate.renderNote.segmentIndex === source.renderNote.segmentIndex + 1
+      candidateRenderNote.note.id === sourceRenderNote.note.id &&
+      (candidate.event.tieStop || candidateRenderNote.segmentIndex === sourceRenderNote.segmentIndex + 1)
     const isExplicitTie =
-      candidate.renderNote.tieStop &&
-      hasTiePitchMatch(source.renderNote, candidate.renderNote) &&
-      Math.abs(candidate.renderNote.displayBeat - expectedNextBeat) <= TIE_EPSILON_BEATS
+      candidate.event.tieStop &&
+      hasTiePitchMatch(sourceRenderNote, candidateRenderNote) &&
+      Math.abs(candidate.event.startBeat - expectedNextBeat) <= TIE_EPSILON_BEATS
     if (isSplitSegment || isExplicitTie) {
       return index
     }
@@ -261,8 +191,12 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
   )
   const clef = getClef(track.slot_id)
   const measureCount = Math.max(scoreModel.measureCount, engravingModel.measureCount)
-  const scoreWidth = getScoreWidth(measureCount, scoreModel.measureWidth)
-  const syncShiftPx = getSyncShiftPx(track.sync_offset_seconds, bpm, scoreModel.pxPerBeat)
+  const engravingLayout = useMemo(
+    () => buildEngravingLayout(engravingModel.notes, measureCount, beatsPerMeasure),
+    [beatsPerMeasure, engravingModel.notes, measureCount],
+  )
+  const scoreWidth = engravingLayout.scoreWidth
+  const syncShiftPx = getSyncShiftPx(track.sync_offset_seconds, bpm, engravingLayout.syncPxPerBeat)
 
   useEffect(() => {
     const container = engravingRef.current
@@ -277,46 +211,32 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
     const context = renderer.getContext()
     const drawnNotes: DrawnNote[] = []
 
-    Array.from({ length: measureCount }, (_, index) => index + 1).forEach((measureNumber, measureIndex) => {
-      const staveX = getMeasureX(measureIndex, scoreModel.measureWidth)
-      const staveWidth = getMeasureWidth(measureIndex, scoreModel.measureWidth)
-      const stave = new Stave(staveX, STAVE_Y_PX, staveWidth, {
-        leftBar: measureIndex === 0,
+    engravingLayout.measures.forEach((measure) => {
+      const stave = new Stave(measure.x, STAVE_Y_PX, measure.width, {
+        leftBar: measure.measureIndex === 0,
         rightBar: true,
         spaceAboveStaffLn: 5,
         spaceBelowStaffLn: 7,
       })
 
-      if (measureIndex === 0) {
+      if (measure.measureIndex === 0) {
         stave.addClef(clef)
       }
-      stave.setMeasure(measureNumber)
+      stave.setMeasure(measure.measureNumber)
       stave.setContext(context).draw()
 
-      const measureStartBeat = getMeasureStartBeat(measureIndex, beatsPerMeasure)
-      const measureEndBeat = measureStartBeat + Math.max(0.25, beatsPerMeasure)
-      const measureNotes = engravingModel.notes.filter(
-        (renderNote) => getMeasureIndex(renderNote.displayBeat, beatsPerMeasure) === measureIndex,
-      )
       const staveNotes: StaveNote[] = []
       const drawnMeasureNotes: DrawnNote[] = []
-      let cursorBeat = measureStartBeat
 
-      measureNotes.forEach((renderNote) => {
-        const gapBeats = renderNote.displayBeat - cursorBeat
-        getRestDurations(gapBeats).forEach((restDuration) => {
-          staveNotes.push(createRest(restDuration, clef))
-        })
-
-        const duration = getNearestVexDuration(renderNote.displayDurationBeats)
-        const staveNote = createStaveNote(renderNote.note, duration, clef)
+      measure.events.forEach((event) => {
+        const staveNote =
+          event.kind === 'rest' || event.renderNote === null
+            ? createRest(event.duration, clef)
+            : createStaveNote(event.renderNote.note, event.duration, clef)
         staveNotes.push(staveNote)
-        drawnMeasureNotes.push({ renderNote, staveNote })
-        cursorBeat = Math.max(cursorBeat, renderNote.displayBeat + renderNote.displayDurationBeats)
-      })
-
-      getRestDurations(measureEndBeat - cursorBeat).forEach((restDuration) => {
-        staveNotes.push(createRest(restDuration, clef))
+        if (event.kind === 'note') {
+          drawnMeasureNotes.push({ event, staveNote })
+        }
       })
 
       if (staveNotes.length === 0) {
@@ -345,7 +265,7 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
     })
 
     drawnNotes.forEach((drawnNote, index) => {
-      if (!drawnNote.renderNote.tieStart || drawnNote.renderNote.note.is_rest) {
+      if (!drawnNote.event.tieStart || !drawnNote.event.renderNote || drawnNote.event.renderNote.note.is_rest) {
         return
       }
       const targetIndex = findTieTargetIndex(drawnNotes, index)
@@ -377,7 +297,7 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
     return () => {
       container.innerHTML = ''
     }
-  }, [beatsPerMeasure, clef, engravingModel, measureCount, scoreModel.measureWidth, scoreWidth, syncShiftPx, track.name])
+  }, [beatsPerMeasure, clef, engravingLayout, scoreWidth, syncShiftPx, track.name])
 
   return (
     <div
@@ -396,17 +316,17 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
           <div
             className="track-card__beat-line"
             key={`${track.slot_id}-beat-line-${beatOffset}`}
-            style={getScoreBeatLineStyle(beatOffset, scoreModel)}
+            style={getEngravingBeatLineStyle(beatOffset, engravingLayout, beatsPerMeasure)}
           />
         ))}
         {scoreModel.measureBoundaryOffsets.map((beatOffset) => (
           <div
             className="track-card__beat-line track-card__beat-line--measure"
             key={`${track.slot_id}-measure-line-${beatOffset}`}
-            style={getScoreMeasureBoundaryStyle(beatOffset, scoreModel)}
+            style={getEngravingMeasureLineStyle(Math.round(beatOffset / Math.max(0.25, beatsPerMeasure)), engravingLayout)}
           />
         ))}
-        {scoreModel.notes.map((renderNote) => (
+        {engravingModel.notes.map((renderNote) => (
           <div
             aria-label={`${renderNote.note.label} ${renderNote.durationLabel}`}
             className={[
@@ -421,7 +341,7 @@ export function EngravedScoreStrip({ beatsPerMeasure, bpm, track }: EngravedScor
             data-duration={renderNote.durationGlyph}
             data-testid={`track-note-${track.slot_id}-${renderNote.renderKey}`}
             key={renderNote.renderKey}
-            style={getTimelineNoteStyle(track.slot_id, renderNote, scoreModel)}
+            style={getEngravingMarkerNoteStyle(renderNote, engravingLayout, beatsPerMeasure, syncShiftPx)}
           >
             <small>{formatBeatInMeasure(renderNote.displayBeat, beatsPerMeasure)}</small>
             <strong>{renderNote.note.label}</strong>

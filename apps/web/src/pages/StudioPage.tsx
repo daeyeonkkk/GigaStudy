@@ -33,7 +33,7 @@ import {
 } from '../lib/audio'
 import {
   createTone,
-  createAudioBufferPlayback,
+  createMediaElementPlayback,
   DEFAULT_METER,
   detectUploadKind,
   disposePlaybackSession,
@@ -42,6 +42,7 @@ import {
   getStudioMeter,
   isOmrUpload,
   safeDownloadName,
+  scheduleMediaElementPlayback,
   scheduleMetronomeClicks,
   startLoopingMetronomeSession,
   type PlaybackNode,
@@ -416,25 +417,6 @@ export function StudioPage() {
     return Boolean(track.audio_source_path)
   }
 
-  async function loadTrackAudioBuffer(
-    context: AudioContext,
-    track: TrackSlot,
-  ): Promise<AudioBuffer | null> {
-    if (!studio || !track.audio_source_path) {
-      return null
-    }
-
-    try {
-      const response = await fetch(getTrackAudioUrl(studio.studio_id, track.slot_id))
-      if (!response.ok) {
-        return null
-      }
-      return await context.decodeAudioData(await response.arrayBuffer())
-    } catch {
-      return null
-    }
-  }
-
   async function startPlaybackSession(
     tracksToPlay: TrackSlot[],
     includeMetronome = metronomeEnabled,
@@ -458,108 +440,68 @@ export function StudioPage() {
     const runId = playbackRunIdRef.current + 1
     playbackRunIdRef.current = runId
 
-    const AudioContextConstructor = getBrowserAudioContextConstructor()
-    if (!AudioContextConstructor) {
-      stopPlaybackSession()
-
-      const beatSeconds = 60 / studio.bpm
-      const minOffsetSeconds = Math.min(0, ...playableTracks.map((track) => track.sync_offset_seconds))
-      let latestStop = 0
-
-      playableTracks.forEach((track) => {
-        track.notes.forEach((note) => {
-          if (note.is_rest === true) {
-            return
-          }
-          const noteStart =
-            (note.beat - 1) * beatSeconds + track.sync_offset_seconds - minOffsetSeconds
-          const normalizedStart = Math.max(0, noteStart)
-          const duration = Math.max(0.09, note.duration_beats * beatSeconds * 0.82)
-          latestStop = Math.max(latestStop, normalizedStart + duration)
-        })
-      })
-
-      const fallbackSession: PlaybackSession = { nodes: [], timeoutIds: [] }
-      const timeoutId = window.setTimeout(() => {
-        if (playbackSessionRef.current !== fallbackSession) {
-          return
-        }
-
-        disposePlaybackSession(fallbackSession)
-        playbackSessionRef.current = null
-        setGlobalPlaying(false)
-        setPlayingSlots(new Set())
-      }, Math.ceil((latestStop + 0.45) * 1000))
-
-      fallbackSession.timeoutIds.push(timeoutId)
-      playbackSessionRef.current = fallbackSession
-      return true
-    }
-
     disposeCurrentPlaybackSession()
-
-    let context: AudioContext
-    try {
-      context = new AudioContextConstructor()
-    } catch {
-      setActionState({ phase: 'error', message: '오디오 장치를 열지 못했습니다. 브라우저 권한을 확인해 주세요.' })
-      return false
-    }
 
     const beatSeconds = 60 / studio.bpm
     const minOffsetSeconds = Math.min(0, ...playableTracks.map((track) => track.sync_offset_seconds))
-    const scheduledStart = context.currentTime + 0.08
+    const mediaStartDelaySeconds = 0.06
+    const audioTracks = playbackSource === 'audio' ? playableTracks.filter(trackHasPlayableAudio) : []
+    const scoreTracks = playableTracks.filter(
+      (track) => !(playbackSource === 'audio' && trackHasPlayableAudio(track)) && trackHasPlayableScore(track),
+    )
+    const needsAudioContext = scoreTracks.length > 0 || includeMetronome
     const nodes: PlaybackNode[] = []
+    const timeoutIds: number[] = []
     let latestStop = 0
     let maxBeat = 1
+    let context: AudioContext | undefined
+    let scheduledStart = 0
+
+    const AudioContextConstructor = getBrowserAudioContextConstructor()
+    if (needsAudioContext) {
+      if (!AudioContextConstructor) {
+        setActionState({ phase: 'error', message: '악보 음이나 메트로놈을 재생할 오디오 장치를 열지 못했습니다.' })
+        return false
+      }
+      try {
+        context = new AudioContextConstructor()
+        scheduledStart = context.currentTime + mediaStartDelaySeconds
+        void context.resume().catch(() => undefined)
+      } catch {
+        setActionState({ phase: 'error', message: '오디오 장치를 열지 못했습니다. 브라우저 권한을 확인해 주세요.' })
+        return false
+      }
+    }
 
     try {
-      void context.resume().catch(() => undefined)
-
-      const audioBuffersBySlot = new Map<number, AudioBuffer>()
-      if (playbackSource === 'audio') {
-        const audioTracks = playableTracks.filter(trackHasPlayableAudio)
-        const decodedBuffers = await Promise.all(
-          audioTracks.map(async (track) => ({
-            slotId: track.slot_id,
-            buffer: await loadTrackAudioBuffer(context, track),
-          })),
-        )
-
-        if (playbackRunIdRef.current !== runId) {
-          disposePlaybackSession({ context, nodes, timeoutIds: [] })
-          return false
-        }
-
-        decodedBuffers.forEach(({ slotId, buffer }) => {
-          if (buffer) {
-            audioBuffersBySlot.set(slotId, buffer)
-          }
-        })
-      }
-
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
 
-      playableTracks.forEach((track) => {
-        const audioBuffer = playbackSource === 'audio' ? audioBuffersBySlot.get(track.slot_id) : undefined
-        if (audioBuffer) {
-          const trackStart = Math.max(0, track.sync_offset_seconds - minOffsetSeconds)
-          const node = createAudioBufferPlayback(
-            context,
-            audioBuffer,
-            scheduledStart + trackStart,
-            0,
-            audioTrackVolume,
-          )
-          if (node) {
-            nodes.push(node)
-            latestStop = Math.max(latestStop, trackStart + audioBuffer.duration)
-            scheduledAnyTrack = true
+      audioTracks.forEach((track) => {
+        const trackStart = Math.max(0, track.sync_offset_seconds - minOffsetSeconds)
+        const node = createMediaElementPlayback(getTrackAudioUrl(studio.studio_id, track.slot_id), audioTrackVolume)
+        nodes.push(node)
+        const timeoutId = scheduleMediaElementPlayback(node, mediaStartDelaySeconds + trackStart, 0, () => {
+          if (playbackRunIdRef.current === runId) {
+            setActionState({
+              phase: 'error',
+              message: `${track.name} 녹음 원본을 재생하지 못했습니다. 브라우저 오디오 권한과 출력 장치를 확인해 주세요.`,
+            })
           }
+        })
+        if (timeoutId !== null) {
+          timeoutIds.push(timeoutId)
         }
+        latestStop = Math.max(latestStop, trackStart + Math.max(1, track.duration_seconds + 1))
+        scheduledAnyTrack = true
 
-        if (audioBuffer) {
+        track.notes.forEach((note) => {
+          maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
+        })
+      })
+
+      scoreTracks.forEach((track) => {
+        if (!context) {
           track.notes.forEach((note) => {
             maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
           })
@@ -595,24 +537,29 @@ export function StudioPage() {
       })
 
       if (!scheduledAnyTrack) {
-        disposePlaybackSession({ context, nodes, timeoutIds: [] })
+        disposePlaybackSession({ context, nodes, timeoutIds })
         setActionState({ phase: 'error', message: '재생 가능한 녹음 파일이나 악보 음표가 없습니다.' })
         return false
       }
 
-      if (includeMetronome) {
+      if (includeMetronome && context) {
         latestStop = Math.max(
           latestStop,
           scheduleMetronomeClicks(context, nodes, scheduledStart, maxBeat, studio.bpm, studioMeter, 0.035),
         )
       }
     } catch {
-      disposePlaybackSession({ context, nodes, timeoutIds: [] })
+      disposePlaybackSession({ context, nodes, timeoutIds })
       setActionState({ phase: 'error', message: '재생을 준비하는 중 문제가 발생했습니다.' })
       return false
     }
 
-    const playbackSession: PlaybackSession = { context, nodes, timeoutIds: [] }
+    if (playbackRunIdRef.current !== runId) {
+      disposePlaybackSession({ context, nodes, timeoutIds })
+      return false
+    }
+
+    const playbackSession: PlaybackSession = { context, nodes, timeoutIds }
     const timeoutId = window.setTimeout(() => {
       if (playbackSessionRef.current !== playbackSession) {
         return
@@ -643,7 +590,13 @@ export function StudioPage() {
       return
     }
 
-    setActionState({ phase: 'busy', message: '재생 소스를 준비하는 중입니다.' })
+    setActionState({
+      phase: 'busy',
+      message:
+        playbackSource === 'audio'
+          ? '등록된 녹음 원본을 바로 재생합니다.'
+          : '등록된 트랙을 악보 음 기준으로 재생합니다.',
+    })
     if (await startPlaybackSession(registeredTracks)) {
       setPlayingSlots(new Set())
       setGlobalPlaying(true)
@@ -694,7 +647,13 @@ export function StudioPage() {
       return
     }
 
-    setActionState({ phase: 'busy', message: `${track.name} 재생 소스를 준비하는 중입니다.` })
+    setActionState({
+      phase: 'busy',
+      message:
+        playbackSource === 'audio' && track.audio_source_path
+          ? `${track.name} 녹음 원본을 바로 재생합니다.`
+          : `${track.name} 트랙을 악보 음 기준으로 재생합니다.`,
+    })
     if (await startPlaybackSession([track])) {
       setGlobalPlaying(false)
       setPlayingSlots(new Set([track.slot_id]))
@@ -946,7 +905,7 @@ export function StudioPage() {
       scoreSession.selectedReferenceIds.includes(track.slot_id),
     )
     if (referenceTracks.length > 0) {
-      setActionState({ phase: 'busy', message: '채점 기준 트랙 재생을 준비하는 중입니다.' })
+      setActionState({ phase: 'busy', message: '선택한 채점 기준 트랙을 재생합니다.' })
       if (!(await startPlaybackSession(referenceTracks, scoreSession.includeMetronome))) {
         return
       }

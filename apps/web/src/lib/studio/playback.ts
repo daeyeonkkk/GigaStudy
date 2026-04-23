@@ -7,9 +7,10 @@ import {
 } from './timing'
 
 export type PlaybackNode = {
+  media?: HTMLAudioElement
   oscillator?: OscillatorNode
   source?: AudioBufferSourceNode
-  gain: GainNode
+  gain?: GainNode
 }
 
 export type PlaybackSourceMode = 'audio' | 'score'
@@ -71,6 +72,43 @@ export function createAudioBufferPlayback(
   source.stop(startTime + duration + 0.03)
 
   return { source, gain }
+}
+
+export function createMediaElementPlayback(audioUrl: string, volume: number): PlaybackNode {
+  const media = new Audio(audioUrl)
+  media.preload = 'auto'
+  media.volume = Math.max(0, Math.min(1, volume))
+  return { media }
+}
+
+export function scheduleMediaElementPlayback(
+  node: PlaybackNode,
+  delaySeconds: number,
+  offsetSeconds: number,
+  onError?: (error: unknown) => void,
+): number | null {
+  if (!node.media) {
+    return null
+  }
+
+  const media = node.media
+  const start = () => {
+    try {
+      media.currentTime = Math.max(0, offsetSeconds)
+      void media.play().catch((error) => {
+        onError?.(error)
+      })
+    } catch (error) {
+      onError?.(error)
+    }
+  }
+
+  if (delaySeconds <= 0.02) {
+    start()
+    return null
+  }
+
+  return window.setTimeout(start, Math.round(delaySeconds * 1000))
 }
 
 export function startLoopingMetronomeSession(
@@ -137,15 +175,20 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ oscillator, source, gain }) => {
+  session.nodes.forEach(({ media, oscillator, source, gain }) => {
     try {
-      gain.gain.cancelScheduledValues(0)
-      gain.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
+      if (media) {
+        media.pause()
+        media.removeAttribute('src')
+        media.load()
+      }
+      gain?.gain.cancelScheduledValues(0)
+      gain?.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
       oscillator?.stop()
       oscillator?.disconnect()
       source?.stop()
       source?.disconnect()
-      gain.disconnect()
+      gain?.disconnect()
     } catch {
       return
     }

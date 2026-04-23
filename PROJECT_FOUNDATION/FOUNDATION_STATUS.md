@@ -269,6 +269,31 @@ not legacy product surfaces.
   configurable limits, and staged upload cleanup all follow settings or
   storage-backend abstractions rather than fixed in-page assumptions.
 
+## Live Test Fix Gate - 2026-04-23
+
+- Browser score engraving was reworked around a dedicated engraving adapter,
+  not the old timeline renderer. `TrackNote` remains the source of truth, but
+  visible notation now normalizes noisy/overlapping notes into measure-local
+  events, quantizes to a sixteenth-note grid, keeps meaningful rests, expands
+  dense measures, and lets VexFlow `Voice`/`Formatter`/`Beam` perform tick-based
+  spacing instead of placing notes at fixed pixel-per-beat positions.
+- Dotted note values are now passed to VexFlow as dotted durations, not only as
+  visual dots, so spacing and beam/tie geometry use the correct rhythmic ticks.
+- Visible ties are limited to adjacent split segments or explicit same-pitch
+  continuations. The renderer no longer draws free-floating CSS tie arcs.
+- Track playback in audio mode now uses the retained recording/upload URL as a
+  browser media element. It no longer blocks on `fetch -> decodeAudioData` just
+  to play a recorded file, and it no longer silently falls back to synthesized
+  score tones when recorded audio playback is requested.
+- Global playback and scoring reference playback share the same source policy:
+  recorded media is used when audio mode and an audio asset exist; score tone
+  synthesis is used only for score mode or tracks without retained audio.
+- Verification for this gate: web lint passed, production web build passed,
+  browser E2E release gate passed 21/21, and a Playwright browser check against
+  the live studio payload confirmed VexFlow renders without console errors and
+  Tenor playback calls the live track audio URL through
+  `HTMLMediaElement.play()`.
+
 ## Status Summary
 
 Foundation reset: complete.

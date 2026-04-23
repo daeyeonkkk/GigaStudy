@@ -15,6 +15,7 @@ type CandidateReviewPanelProps = {
   candidates: ExtractionCandidate[]
   tracks: TrackSlot[]
   candidateWouldOverwrite: (candidate: ExtractionCandidate) => boolean
+  getJobSourcePreviewUrl?: (jobId: string) => string
   getSelectedCandidateSlotId: (candidate: ExtractionCandidate) => number
   onApproveCandidate: (candidate: ExtractionCandidate) => void
   onRejectCandidate: (candidate: ExtractionCandidate) => void
@@ -28,6 +29,7 @@ export function CandidateReviewPanel({
   candidates,
   tracks,
   candidateWouldOverwrite,
+  getJobSourcePreviewUrl,
   getSelectedCandidateSlotId,
   onApproveCandidate,
   onRejectCandidate,
@@ -57,6 +59,10 @@ export function CandidateReviewPanel({
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
           const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
           const contourPoints = getCandidateContourPoints(candidate)
+          const sourcePreviewUrl =
+            candidate.job_id && shouldShowSourcePreview(candidate) && getJobSourcePreviewUrl
+              ? getJobSourcePreviewUrl(candidate.job_id)
+              : null
 
           return (
             <article className="candidate-review__item" key={candidate.candidate_id}>
@@ -149,6 +155,20 @@ export function CandidateReviewPanel({
                 <small>위치: {getCandidatePreviewText(candidate)}</small>
               </div>
 
+              {sourcePreviewUrl ? (
+                <details className="candidate-review__source-preview">
+                  <summary>원본 악보 대조</summary>
+                  <div>
+                    <img
+                      alt={`${candidate.source_label} 원본 악보 첫 페이지`}
+                      loading="lazy"
+                      src={sourcePreviewUrl}
+                    />
+                    <span>원본 첫 페이지와 후보 음역, 리듬, 파트 위치를 비교한 뒤 승인하세요.</span>
+                  </div>
+                </details>
+              ) : null}
+
               {candidate.message ? <p>{candidate.message}</p> : null}
               <details className="candidate-review__technical">
                 <summary>엔진 정보</summary>
@@ -186,5 +206,13 @@ export function CandidateReviewPanel({
         })}
       </div>
     </section>
+  )
+}
+
+function shouldShowSourcePreview(candidate: ExtractionCandidate): boolean {
+  return (
+    candidate.source_kind === 'score' &&
+    candidate.job_id !== null &&
+    (candidate.method.includes('omr') || candidate.method.includes('score'))
   )
 }

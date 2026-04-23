@@ -1,7 +1,9 @@
 import base64
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from reportlab.pdfgen import canvas
 
 from gigastudy_api.config import get_settings
 from gigastudy_api.api.schemas.studios import TrackNote
@@ -95,6 +97,17 @@ MULTI_TRACK_MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
 PDF_UPLOAD_BYTES = b"%PDF-1.4\n% GigaStudy test PDF\n"
 OWNER_TOKEN_A = "a" * 32
 OWNER_TOKEN_B = "b" * 32
+
+
+def build_preview_pdf_bytes() -> bytes:
+    buffer = BytesIO()
+    page = canvas.Canvas(buffer, pagesize=(320, 240))
+    page.setFont("Helvetica", 16)
+    page.drawString(40, 170, "GigaStudy preview")
+    page.line(40, 120, 280, 120)
+    page.showPage()
+    page.save()
+    return buffer.getvalue()
 
 
 def fake_audiveris_omr(
@@ -907,7 +920,7 @@ def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, mon
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
+    encoded = base64.b64encode(build_preview_pdf_bytes()).decode("ascii")
 
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
@@ -937,6 +950,13 @@ def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, mon
     assert candidate["diagnostics"]["review_hint"] == "few_notes"
     assert candidate["notes"][0]["source"] == "omr"
     assert candidate["notes"][0]["extraction_method"] == "audiveris_omr_v0"
+
+    preview_response = client.get(
+        f"/api/studios/{studio_id}/jobs/{payload['jobs'][0]['job_id']}/source-preview"
+    )
+    assert preview_response.status_code == 200
+    assert preview_response.headers["content-type"] == "image/png"
+    assert preview_response.content.startswith(b"\x89PNG\r\n\x1a\n")
 
     approve_response = client.post(
         f"/api/studios/{studio_id}/candidates/{candidate['candidate_id']}/approve",

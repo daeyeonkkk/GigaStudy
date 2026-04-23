@@ -103,6 +103,31 @@ def get_track_audio(
     return FileResponse(path, media_type=media_type, filename=filename)
 
 
+@router.get("/{studio_id}/jobs/{job_id}/source-preview")
+def get_omr_job_source_preview(
+    studio_id: str,
+    job_id: str,
+    page_index: int = Query(default=0, ge=0, le=200),
+    owner_token_query: str | None = Query(default=None, alias="owner_token"),
+    owner_token_header: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> Response:
+    content, filename = repository.get_omr_source_preview(
+        studio_id,
+        job_id,
+        page_index=page_index,
+        owner_token=owner_token_header or owner_token_query,
+    )
+    return Response(
+        content=content,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, max-age=300",
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )
+
+
 @router.put("/direct-uploads/{asset_id}")
 async def put_direct_upload(
     asset_id: str,

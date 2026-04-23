@@ -1231,6 +1231,42 @@
   overflow-wrap: anywhere;
 }
 
+.candidate-review__source-preview {
+  grid-column: 1 / -1;
+  border: 1px solid #dbe1e6;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.candidate-review__source-preview summary {
+  width: fit-content;
+  cursor: pointer;
+  padding: 8px 10px;
+  color: #263541;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.candidate-review__source-preview div {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.candidate-review__source-preview img {
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border: 1px solid #c8cfd5;
+  background: #f8fafb;
+}
+
+.candidate-review__source-preview span {
+  color: #54616c;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .candidate-review__target {
   grid-column: 1 / -1;
   display: flex;

@@ -311,6 +311,13 @@ range-fit ratio, timing-grid ratio, density, and a review hint such as
 `review_accidentals_and_rhythm`. These diagnostics are advisory decision aids,
 not hidden auto-approval rules.
 
+OMR review must also keep the original score input inspectable. A retained OMR
+job input asset can be rendered as a PNG source preview through
+`GET /api/studios/{studio_id}/jobs/{job_id}/source-preview`. The route must use
+the same studio owner-token access rule as other studio asset reads. The current
+UI exposes the first page in a collapsed source-preview block for OMR
+candidates; future work may add page navigation and note-overlay alignment.
+
 LLM or local-LLM assistance is allowed only as a secondary repair/classification
 aid around OMR output. It must not replace a score-specific OMR or vector
 geometry parser as the primary source of pitch/rhythm truth.
@@ -371,7 +378,9 @@ overwrite confirmation from the user/API request.
 Candidate review should show enough symbolic preview data for a decision:
 source, method, confidence, note count, duration, pitch/rhythm preview,
 diagnostic review hints, page/part or measure counts when available, and the
-currently selected target track.
+currently selected target track. For OMR candidates, review should additionally
+offer the original score-page preview when the retained source asset can be
+rendered.
 
 Candidate review is the required path for OMR results and the recommended path
 for mixed or low-confidence audio extraction. It is also allowed for
@@ -582,6 +591,8 @@ These code paths currently implement the contract:
 - OMR adapter: `apps/api/src/gigastudy_api/services/engine/omr.py`
 - Born-digital PDF vector fallback:
   `apps/api/src/gigastudy_api/services/engine/pdf_vector_omr.py`
+- OMR source preview renderer:
+  `apps/api/src/gigastudy_api/services/engine/score_preview.py`
 - Scoring and offline alignment:
   `apps/api/src/gigastudy_api/services/engine/scoring.py`
 - Candidate approval orchestration:

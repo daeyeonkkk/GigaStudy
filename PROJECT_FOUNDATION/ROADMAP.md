@@ -57,6 +57,8 @@ The current implementation has a working vertical slice for:
 - OMR candidate diagnostics expose method, track, note/measure count, confidence
   label, range fit, rhythm grid fit, density, review hints, and page/part
   evidence when available.
+- OMR candidate review can show the retained source PDF/image first page as a
+  visual preview for approval decisions.
 - Failed extraction job rows show contextual retry guidance for noisy voice
   takes, vector fallback failure, and Audiveris timeout cases.
 - AI generation produces multiple reviewable candidates and rejects sibling
@@ -380,9 +382,9 @@ Required:
   sustained singing from speech, breath, keyboard clicks, and other unstable
   room noise.
 - Harden browser audio decoding failure messages for codec-specific failures.
-- Harden OMR review with score-image-aware visual preview. Page/part/count
-  confidence indicators now exist as candidate diagnostics, but the user still
-  needs a source-page preview for scanned/image PDF review.
+- Harden OMR review beyond the current first-page source preview: add page
+  navigation, candidate-to-page focus, and eventual source-note overlay for
+  scanned/image PDF review.
 - Add mixed-audio fallback behavior that does not overpromise SATB separation.
 - Keep candidate review decision-first: musical character, confidence,
   register fit, movement, rhythm density, and contour should stay more

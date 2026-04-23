@@ -13,6 +13,7 @@ import {
   approveCandidate,
   createTrackUploadTarget,
   exportStudioPdf,
+  getOmrJobSourcePreviewUrl,
   generateTrack,
   getStudio,
   getTrackAudioUrl,
@@ -1110,6 +1111,7 @@ export function StudioPage() {
               candidates={pendingCandidates}
               tracks={studio.tracks}
               candidateWouldOverwrite={candidateWouldOverwrite}
+              getJobSourcePreviewUrl={(jobId) => getOmrJobSourcePreviewUrl(studio.studio_id, jobId)}
               getSelectedCandidateSlotId={getSelectedCandidateSlotId}
               onApproveCandidate={(candidate) => void handleApproveCandidate(candidate)}
               onRejectCandidate={(candidate) => void handleRejectCandidate(candidate)}

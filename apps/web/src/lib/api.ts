@@ -159,6 +159,13 @@ export function getTrackAudioUrl(studioId: string, slotId: number): string {
   return url.toString()
 }
 
+export function getOmrJobSourcePreviewUrl(studioId: string, jobId: string, pageIndex = 0): string {
+  const url = new URL(`/api/studios/${studioId}/jobs/${jobId}/source-preview`, apiBaseUrl)
+  url.searchParams.set('page_index', String(pageIndex))
+  url.searchParams.set('owner_token', getOwnerToken())
+  return url.toString()
+}
+
 export function createTrackUploadTarget(
   studioId: string,
   slotId: number,

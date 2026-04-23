@@ -236,6 +236,10 @@ The current implementation has a working six-track vertical slice:
   evidence, so OMR and other uncertain candidates can be compared by page/part
   count, measure/note count, range fit, rhythm grid fit, density, and review
   hint instead of only raw engine method names.
+- OMR score candidates can expose an authenticated first-page source preview in
+  the candidate review panel. The API renders the original PDF/image input to a
+  PNG from the retained job input asset so the user can visually compare the
+  source page against the extracted candidate before approval.
 - Failed extraction jobs show contextual retry guidance for noisy voice takes,
   vector fallback failure, and Audiveris timeout cases while preserving the
   retry action when the original input asset remains available.
@@ -288,10 +292,10 @@ not legacy product surfaces.
 
 ## Next Required Work
 
-1. Add score-image-aware OMR visual preview, especially for scanned/image PDFs
-   where Audiveris may still be slow or uncertain. Candidate diagnostics now
-   expose page/part/count confidence signals, but users still cannot visually
-   compare the source page against extracted notes inside GigaStudy.
+1. Extend OMR source preview beyond the current first-page image: multi-page
+   navigation, candidate-to-page focus, and eventually overlay/highlight
+   alignment for scanned/image PDFs where Audiveris may still be slow or
+   uncertain.
 2. Continue improving failed-extraction recovery for browser recording and
    noisy single-voice takes with better preflight/noise feedback before retry.
 3. Improve PDF score export engraving fidelity to match the browser VexFlow
@@ -424,6 +428,20 @@ not legacy product surfaces.
   exist and contextual recovery hints when a retryable OMR/voice job fails.
 - Verification for this gate: API regression suite 68/68, web lint, production
   web build, and browser E2E release gate 24/24 all passed locally.
+
+## OMR Source Preview Gate - 2026-04-23
+
+- OMR job inputs retained in the asset store can be rendered to PNG through
+  `GET /api/studios/{studio_id}/jobs/{job_id}/source-preview`.
+- The route enforces the same owner-token studio access boundary as other studio
+  asset reads and also accepts the owner token as a query parameter for browser
+  image loading.
+- Candidate review shows a collapsed "원본 악보 대조" preview for score/OMR
+  candidates, letting users compare the source page with the extracted rhythm
+  and pitch candidate before approval.
+- Verification for this gate: focused API preview test, API regression suite
+  68/68, web lint, production web build, and browser E2E release gate 24/24 all
+  passed locally.
 
 ## Status Summary
 

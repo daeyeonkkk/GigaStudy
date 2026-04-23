@@ -156,6 +156,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Candidate review shows OMR/uncertain-extraction diagnostics so the user
   can compare candidates by musical and source-derived evidence rather than
   raw engine method names.
+- [x] Candidate review can open the retained OMR source page as a first-page
+  visual preview before approval.
 - [x] Pending extraction candidates can be rejected without registering notes.
 - [x] Upload into an occupied track overwrites intentionally.
 - [x] AI generation uses registered tracks as context.

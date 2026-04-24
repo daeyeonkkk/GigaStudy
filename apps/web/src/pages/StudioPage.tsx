@@ -33,17 +33,17 @@ import {
   type MicrophoneRecorder,
 } from '../lib/audio'
 import {
+  createAudioBufferPlayback,
   createTone,
-  createMediaElementPlayback,
   DEFAULT_METER,
   detectUploadKind,
   disposePlaybackSession,
+  fetchAudioArrayBuffer,
   formatSeconds,
   getNotePlaybackFrequency,
   getStudioMeter,
   isOmrUpload,
   safeDownloadName,
-  scheduleMediaElementPlayback,
   scheduleMetronomeClicks,
   startLoopingMetronomeSession,
   type PlaybackNode,
@@ -96,6 +96,7 @@ export function StudioPage() {
   const [jobOverwriteApprovals, setJobOverwriteApprovals] = useState<Record<string, boolean>>({})
   const playbackSessionRef = useRef<PlaybackSession | null>(null)
   const playbackRunIdRef = useRef(0)
+  const trackAudioFetchCacheRef = useRef<Map<string, Promise<ArrayBuffer>>>(new Map())
   const recordingMetronomeSessionRef = useRef<PlaybackSession | null>(null)
   const trackRecorderRef = useRef<MicrophoneRecorder | null>(null)
   const trackRecordingAllowOverwriteRef = useRef(false)
@@ -480,7 +481,7 @@ export function StudioPage() {
     const scoreTracks = playableTracks.filter(
       (track) => !(playbackSource === 'audio' && trackHasPlayableAudio(track)) && trackHasPlayableScore(track),
     )
-    const needsAudioContext = scoreTracks.length > 0 || includeMetronome
+    const needsAudioContext = audioTracks.length > 0 || scoreTracks.length > 0 || includeMetronome
     const nodes: PlaybackNode[] = []
     const timeoutIds: number[] = []
     let latestStop = 0
@@ -497,7 +498,7 @@ export function StudioPage() {
       try {
         context = new AudioContextConstructor()
         scheduledStart = context.currentTime + mediaStartDelaySeconds
-        void context.resume().catch(() => undefined)
+        await context.resume().catch(() => undefined)
       } catch {
         setActionState({ phase: 'error', message: '오디오 장치를 열지 못했습니다. 브라우저 권한을 확인해 주세요.' })
         return false
@@ -507,24 +508,51 @@ export function StudioPage() {
     try {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
+      const activeContext = context
 
-      audioTracks.forEach((track) => {
+      const resolvedAudioBuffers = activeContext
+        ? await Promise.all(
+            audioTracks.map(async (track) => {
+              const audioUrl = getTrackAudioUrl(studio.studio_id, track.slot_id)
+              const cached = trackAudioFetchCacheRef.current.get(audioUrl)
+              const arrayBufferPromise = cached ?? fetchAudioArrayBuffer(audioUrl)
+              if (!cached) {
+                trackAudioFetchCacheRef.current.set(audioUrl, arrayBufferPromise)
+              }
+
+              let audioData: ArrayBuffer
+              try {
+                audioData = await arrayBufferPromise
+              } catch (error) {
+                trackAudioFetchCacheRef.current.delete(audioUrl)
+                throw error
+              }
+
+              const decodedBuffer = await activeContext.decodeAudioData(audioData.slice(0))
+              return { decodedBuffer, track }
+            }),
+          )
+        : []
+
+      if (audioTracks.length > 0 && !activeContext) {
+        throw new Error('녹음 원본을 재생할 오디오 장치를 열지 못했습니다.')
+      }
+      const audioPlaybackContext = activeContext ?? undefined
+
+      resolvedAudioBuffers.forEach(({ decodedBuffer, track }) => {
         const trackStart = Math.max(0, track.sync_offset_seconds - minOffsetSeconds)
-        const node = createMediaElementPlayback(getTrackAudioUrl(studio.studio_id, track.slot_id), audioTrackVolume)
-        nodes.push(node)
-        const timeoutId = scheduleMediaElementPlayback(node, mediaStartDelaySeconds + trackStart, 0, () => {
-          if (playbackRunIdRef.current === runId) {
-            setActionState({
-              phase: 'error',
-              message: `${track.name} 녹음 원본을 재생하지 못했습니다. 브라우저 오디오 권한과 출력 장치를 확인해 주세요.`,
-            })
-          }
-        })
-        if (timeoutId !== null) {
-          timeoutIds.push(timeoutId)
+        const node = createAudioBufferPlayback(
+          audioPlaybackContext as AudioContext,
+          decodedBuffer,
+          scheduledStart + trackStart,
+          0,
+          audioTrackVolume,
+        )
+        if (node) {
+          nodes.push(node)
+          latestStop = Math.max(latestStop, trackStart + decodedBuffer.duration)
+          scheduledAnyTrack = true
         }
-        latestStop = Math.max(latestStop, trackStart + Math.max(1, track.duration_seconds + 1))
-        scheduledAnyTrack = true
 
         track.notes.forEach((note) => {
           maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
@@ -532,7 +560,7 @@ export function StudioPage() {
       })
 
       scoreTracks.forEach((track) => {
-        if (!context) {
+        if (!activeContext) {
           track.notes.forEach((note) => {
             maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
           })
@@ -547,13 +575,13 @@ export function StudioPage() {
           const noteStart =
             (note.beat - 1) * beatSeconds + track.sync_offset_seconds - minOffsetSeconds
           const normalizedStart = Math.max(0, noteStart)
-          const duration = Math.max(0.09, note.duration_beats * beatSeconds * 0.82)
-          const volume = track.slot_id === 6 ? 0.06 : 0.045
-          const toneType: OscillatorType = track.slot_id === 6 ? 'square' : 'sine'
+          const duration = Math.max(0.11, note.duration_beats * beatSeconds * 0.9)
+          const volume = track.slot_id === 6 ? 0.055 : 0.06
+          const toneType: OscillatorType | 'piano' = track.slot_id === 6 ? 'square' : 'piano'
 
           nodes.push(
             createTone(
-              context,
+              activeContext,
               scheduledStart + normalizedStart,
               duration,
               frequency,
@@ -573,15 +601,29 @@ export function StudioPage() {
         return false
       }
 
-      if (includeMetronome && context) {
+      if (includeMetronome && activeContext) {
         latestStop = Math.max(
           latestStop,
-          scheduleMetronomeClicks(context, nodes, scheduledStart, maxBeat, studio.bpm, studioMeter, 0.035),
+          scheduleMetronomeClicks(
+            activeContext,
+            nodes,
+            scheduledStart,
+            maxBeat,
+            studio.bpm,
+            studioMeter,
+            0.035,
+          ),
         )
       }
-    } catch {
+    } catch (error) {
       disposePlaybackSession({ context, nodes, timeoutIds })
-      setActionState({ phase: 'error', message: '재생을 준비하는 중 문제가 발생했습니다.' })
+      setActionState({
+        phase: 'error',
+        message:
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : '재생을 준비하는 중 문제가 발생했습니다.',
+      })
       return false
     }
 

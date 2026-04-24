@@ -118,8 +118,16 @@ async function requestBlob(path: string, fallbackMessage: string): Promise<Blob>
   }
 }
 
-export function listStudios(): Promise<StudioListItem[]> {
-  return requestJson<StudioListItem[]>('/api/studios', {}, '스튜디오 목록을 불러오지 못했습니다.')
+export function listStudios(limit = 12, offset = 0): Promise<StudioListItem[]> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  return requestJson<StudioListItem[]>(
+    `/api/studios?${params.toString()}`,
+    {},
+    '스튜디오 목록을 불러오지 못했습니다.',
+  )
 }
 
 export function createStudio(payload: CreateStudioRequest): Promise<Studio> {

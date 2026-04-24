@@ -1,6 +1,6 @@
 ﻿# Foundation Status
 
-Date: 2026-04-23
+Date: 2026-04-24
 
 ## Current Decision
 
@@ -150,12 +150,12 @@ The current implementation has a working six-track vertical slice:
 - Admin password validation also accepts the alpha keyboard aliases
   `eodus123` and `daeyeon123` so an English-keyboard entry does not block
   testers who are trying to enter `대연123`.
-- Studio list/detail/action routes are owner-token scoped by default through
-  `GIGASTUDY_API_STUDIO_ACCESS_POLICY=owner`. The browser stores a local
-  per-device owner token and sends it as `X-GigaStudy-Owner-Token`; HTML audio
-  playback uses a query-token URL because media elements cannot attach custom
-  headers. Public mode remains available only by explicitly setting the policy
-  to `public` for tests or local demos.
+- Alpha deployment now defaults studio list/detail/action routes to public
+  access through `GIGASTUDY_API_STUDIO_ACCESS_POLICY=public`, so the launch
+  screen and `/admin` can inspect and reopen existing studios without a stored
+  owner token. Owner-token headers and query-token URLs still remain in the
+  client/API contract for future private mode restoration, but alpha browsing is
+  intentionally public.
 - Studio metadata persistence is now abstracted. Local JSON remains the
   development fallback, while `GIGASTUDY_API_DATABASE_URL` enables a
   Postgres/Neon-backed `studio_documents` store.
@@ -218,6 +218,9 @@ The current implementation has a working six-track vertical slice:
   elapsed-time/input-level feedback while recording.
 - Studio toolbar includes an explicit Home navigation control so users can
   leave a studio without relying on the small titlebar app mark.
+- Launch now exposes the recent/public studio list as a first-class home-screen
+  entry point, so alpha testers can reopen an existing studio directly from the
+  homepage in addition to entering through `/admin`.
 - Web studio responsibilities are split so upload detection, browser audio
   access, WAV encoding, recorder lifecycle, timing/meter math, and playback
   scheduling live in focused `apps/web/src/lib/audio/*` and
@@ -258,6 +261,18 @@ The current implementation has a working six-track vertical slice:
 - Playback can use either retained recording audio or synthesized TrackNote
   pitch/rhythm data. In audio mode, tracks without retained audio fall back to
   score synthesis.
+- Recorded tracks now play their retained normalized source recording through
+  the Web Audio graph rather than a delayed HTML media-element path, which
+  keeps browser autoplay behavior aligned with the score/metronome scheduler and
+  restores audible playback for user-recorded tracks during single-track and
+  full-studio playback.
+- Score-mode melodic playback now uses a lightweight piano-like additive synth
+  instead of the harsher plain sine tone, while percussion keeps the simpler
+  synthetic click character.
+- Engraved score strips now rely on the VexFlow stave as the visual staff truth
+  instead of mixing a separately drawn CSS staff background, and the first
+  measure reserves extra gutter space so clefs, accidentals, and opening notes
+  stay visually attached to the staff instead of appearing clipped or detached.
 - Global playback schedules all registered tracks together so stacked
   one-person recordings can be rehearsed as an ensemble.
 - Registered tracks render as horizontally scrollable measure strips on the

@@ -709,13 +709,7 @@
   width: var(--score-width);
   min-width: var(--score-width);
   min-height: 142px;
-  background:
-    linear-gradient(#111111 0 1px, transparent 1px) var(--clef-gutter) 42px / calc(100% - var(--clef-gutter)) 1px no-repeat,
-    linear-gradient(#111111 0 1px, transparent 1px) var(--clef-gutter) 52px / calc(100% - var(--clef-gutter)) 1px no-repeat,
-    linear-gradient(#111111 0 1px, transparent 1px) var(--clef-gutter) 62px / calc(100% - var(--clef-gutter)) 1px no-repeat,
-    linear-gradient(#111111 0 1px, transparent 1px) var(--clef-gutter) 72px / calc(100% - var(--clef-gutter)) 1px no-repeat,
-    linear-gradient(#111111 0 1px, transparent 1px) var(--clef-gutter) 82px / calc(100% - var(--clef-gutter)) 1px no-repeat,
-    #ffffff;
+  background: #ffffff;
 }
 
 .track-card__score .track-card__beat-line,

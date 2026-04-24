@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     admin_token: str | None = None
     admin_username: str = "admin"
     admin_password: str = "\ub300\uc5f0123"
-    studio_access_policy: str = "owner"
+    studio_access_policy: str = "public"
     database_url: str | None = None
     storage_backend: str = "local"
     s3_bucket: str | None = None

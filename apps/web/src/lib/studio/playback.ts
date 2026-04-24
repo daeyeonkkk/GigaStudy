@@ -7,10 +7,13 @@ import {
 } from './timing'
 
 export type PlaybackNode = {
+  filters?: BiquadFilterNode[]
   media?: HTMLAudioElement
   oscillator?: OscillatorNode
+  oscillators?: OscillatorNode[]
   source?: AudioBufferSourceNode
   gain?: GainNode
+  gains?: GainNode[]
 }
 
 export type PlaybackSourceMode = 'audio' | 'score'
@@ -27,8 +30,12 @@ export function createTone(
   duration: number,
   frequency: number,
   volume: number,
-  type: OscillatorType,
+  type: OscillatorType | 'piano',
 ): PlaybackNode {
+  if (type === 'piano') {
+    return createPianoTone(context, startTime, duration, frequency, volume)
+  }
+
   const oscillator = context.createOscillator()
   const gain = context.createGain()
   const attackTime = Math.min(0.025, duration / 3)
@@ -45,6 +52,74 @@ export function createTone(
   oscillator.stop(startTime + duration + 0.03)
 
   return { oscillator, gain }
+}
+
+function createPianoTone(
+  context: AudioContext,
+  startTime: number,
+  duration: number,
+  frequency: number,
+  volume: number,
+): PlaybackNode {
+  const filter = context.createBiquadFilter()
+  const masterGain = context.createGain()
+  const attackTime = Math.min(0.012, duration / 4)
+  const decayTime = Math.min(duration * 0.42, 0.18)
+  const sustainLevel = Math.max(0.0001, volume * 0.12)
+  const releaseTime = Math.max(0.04, Math.min(0.12, duration * 0.22))
+  const oscillators: OscillatorNode[] = []
+  const gains: GainNode[] = [masterGain]
+
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(Math.min(4200, Math.max(1200, frequency * 7.8)), startTime)
+  filter.Q.setValueAtTime(0.8, startTime)
+
+  masterGain.gain.setValueAtTime(0.0001, startTime)
+  masterGain.gain.linearRampToValueAtTime(volume, startTime + attackTime)
+  masterGain.gain.exponentialRampToValueAtTime(
+    Math.max(0.0001, sustainLevel),
+    startTime + attackTime + decayTime,
+  )
+  masterGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration + releaseTime)
+
+  filter.connect(masterGain)
+  masterGain.connect(context.destination)
+
+  const partials: Array<{ ratio: number; type: OscillatorType; gain: number; releaseScale: number }> = [
+    { ratio: 1, type: 'triangle', gain: 0.9, releaseScale: 1 },
+    { ratio: 2, type: 'sine', gain: 0.22, releaseScale: 0.68 },
+    { ratio: 3, type: 'sine', gain: 0.08, releaseScale: 0.52 },
+  ]
+
+  partials.forEach((partial, index) => {
+    const oscillator = context.createOscillator()
+    const partialGain = context.createGain()
+    oscillator.type = partial.type
+    oscillator.frequency.setValueAtTime(frequency * partial.ratio, startTime)
+    partialGain.gain.setValueAtTime(0.0001, startTime)
+    partialGain.gain.linearRampToValueAtTime(volume * partial.gain, startTime + attackTime)
+    partialGain.gain.exponentialRampToValueAtTime(
+      Math.max(0.0001, volume * partial.gain * 0.12),
+      startTime + attackTime + decayTime * partial.releaseScale,
+    )
+    partialGain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      startTime + duration + releaseTime * (index === 0 ? 1 : partial.releaseScale),
+    )
+    oscillator.connect(partialGain)
+    partialGain.connect(filter)
+    oscillator.start(startTime)
+    oscillator.stop(startTime + duration + releaseTime + 0.03)
+    oscillators.push(oscillator)
+    gains.push(partialGain)
+  })
+
+  return {
+    filters: [filter],
+    gain: masterGain,
+    gains,
+    oscillators,
+  }
 }
 
 export function createAudioBufferPlayback(
@@ -175,20 +250,28 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ media, oscillator, source, gain }) => {
+  session.nodes.forEach(({ filters, media, oscillator, oscillators, source, gain, gains }) => {
     try {
       if (media) {
         media.pause()
         media.removeAttribute('src')
         media.load()
       }
-      gain?.gain.cancelScheduledValues(0)
-      gain?.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
+      ;[gain, ...(gains ?? [])].forEach((currentGain) => {
+        currentGain?.gain.cancelScheduledValues(0)
+        currentGain?.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
+      })
       oscillator?.stop()
       oscillator?.disconnect()
+      oscillators?.forEach((currentOscillator) => {
+        currentOscillator.stop()
+        currentOscillator.disconnect()
+      })
       source?.stop()
       source?.disconnect()
       gain?.disconnect()
+      gains?.forEach((currentGain) => currentGain.disconnect())
+      filters?.forEach((filter) => filter.disconnect())
     } catch {
       return
     }
@@ -221,4 +304,12 @@ export function scheduleMetronomeClicks(
     latestStop = Math.max(latestStop, clickStart + 0.045)
   }
   return latestStop
+}
+
+export async function fetchAudioArrayBuffer(audioUrl: string): Promise<ArrayBuffer> {
+  const response = await fetch(audioUrl)
+  if (!response.ok) {
+    throw new Error('녹음 원본 파일을 불러오지 못했습니다.')
+  }
+  return response.arrayBuffer()
 }

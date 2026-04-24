@@ -79,10 +79,10 @@ export function LaunchPage() {
   useEffect(() => {
     let ignore = false
 
-    listStudios()
+    listStudios(12, 0)
       .then((items) => {
         if (!ignore) {
-          setRecentStudios(items.slice(0, 4))
+          setRecentStudios(items)
         }
       })
       .catch(() => {

@@ -43,10 +43,11 @@ type DrawnNote = {
   staveNote: StaveNote
 }
 
-const SCORE_HEIGHT_PX = 190
-const STAVE_Y_PX = 58
+const SCORE_HEIGHT_PX = 186
+const STAVE_Y_PX = 42
 const TIE_EPSILON_BEATS = 0.08
 const SYNC_TRANSLATED_VEXFLOW_GROUPS = '.vf-stavenote, .vf-beam, .vf-stavetie'
+const FIRST_MEASURE_NOTE_GUTTER_PX = 14
 
 const pitchNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -309,6 +310,10 @@ export function EngravedScoreStrip({
         stave.addClef(clef)
       }
       stave.setMeasure(measure.measureNumber)
+      if (measure.measureIndex === 0) {
+        const noteStartX = stave.getNoteStartX()
+        stave.setNoteStartX(noteStartX + FIRST_MEASURE_NOTE_GUTTER_PX)
+      }
       stave.setContext(context).draw()
 
       const staveNotes: StaveNote[] = []

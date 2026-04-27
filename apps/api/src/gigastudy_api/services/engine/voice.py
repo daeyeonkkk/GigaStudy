@@ -8,12 +8,14 @@ from pathlib import Path
 from statistics import median
 
 from gigastudy_api.api.schemas.studios import TrackNote
+from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     frequency_to_midi,
     note_from_pitch,
     quantize,
 )
+from gigastudy_api.services.engine.notation import normalize_track_notes
 
 
 class VoiceTranscriptionError(ValueError):
@@ -44,11 +46,62 @@ def transcribe_voice_file(
     slot_id: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
+    backend: str | None = None,
 ) -> list[TrackNote]:
     if path.suffix.lower() != ".wav":
         msg = "Only WAV voice transcription is available in the local MVP engine."
         raise VoiceTranscriptionError(msg)
 
+    resolved_backend = (backend or get_settings().voice_transcription_backend).strip().lower()
+    if resolved_backend in {"auto", "basic_pitch"}:
+        try:
+            return _transcribe_with_basic_pitch(
+                path,
+                bpm=bpm,
+                slot_id=slot_id,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            )
+        except VoiceTranscriptionError:
+            if resolved_backend == "basic_pitch":
+                raise
+        except Exception as error:  # pragma: no cover - depends on optional model packages.
+            if resolved_backend == "basic_pitch":
+                raise VoiceTranscriptionError(f"Basic Pitch transcription failed: {error}") from error
+
+    if resolved_backend in {"auto", "librosa", "pyin", "librosa_pyin"}:
+        try:
+            return _transcribe_with_librosa_pyin(
+                path,
+                bpm=bpm,
+                slot_id=slot_id,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            )
+        except VoiceTranscriptionError:
+            if resolved_backend in {"librosa", "pyin", "librosa_pyin"}:
+                raise
+        except Exception as error:  # pragma: no cover - depends on optional audio packages.
+            if resolved_backend in {"librosa", "pyin", "librosa_pyin"}:
+                raise VoiceTranscriptionError(f"librosa pYIN transcription failed: {error}") from error
+
+    return _transcribe_with_local_autocorrelation(
+        path,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+
+
+def _transcribe_with_local_autocorrelation(
+    path: Path,
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> list[TrackNote]:
     samples, sample_rate = _read_wav_mono(path)
     if not samples:
         raise VoiceTranscriptionError("Audio file is empty.")
@@ -104,9 +157,205 @@ def transcribe_voice_file(
     return _frames_to_notes(
         stable_frame_pitches,
         bpm=bpm,
+        slot_id=slot_id,
         hop_seconds=hop_seconds,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
+        extraction_method="wav_autocorrelation_v2",
+    )
+
+
+def _transcribe_with_basic_pitch(
+    path: Path,
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> list[TrackNote]:
+    try:
+        from basic_pitch.inference import predict  # type: ignore[import-not-found]
+    except Exception as error:  # pragma: no cover - optional dependency.
+        raise VoiceTranscriptionError("Basic Pitch is not installed.") from error
+
+    try:
+        prediction = predict(str(path))
+    except TypeError:
+        prediction = predict(path)
+    except Exception as error:  # pragma: no cover - optional dependency.
+        raise VoiceTranscriptionError(f"Basic Pitch could not analyze the audio: {error}") from error
+
+    note_events = _extract_basic_pitch_note_events(prediction)
+    if not note_events:
+        raise VoiceTranscriptionError("Basic Pitch did not produce any note events.")
+
+    low_midi, high_midi = SLOT_RANGES.get(slot_id, (40, 81))
+    beat_seconds = 60 / max(1, bpm)
+    notes: list[TrackNote] = []
+    for event in note_events:
+        parsed = _parse_basic_pitch_event(event)
+        if parsed is None:
+            continue
+        onset_seconds, end_seconds, midi_note, amplitude = parsed
+        if midi_note < low_midi - 1 or midi_note > high_midi + 1:
+            continue
+        duration_seconds = max(0.05, end_seconds - onset_seconds)
+        notes.append(
+            note_from_pitch(
+                beat=quantize(onset_seconds / beat_seconds + 1, 0.25),
+                duration_beats=max(0.25, quantize(duration_seconds / beat_seconds, 0.25)),
+                bpm=bpm,
+                source="voice",
+                extraction_method="basic_pitch_amt_v1",
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+                pitch_midi=midi_note,
+                onset_seconds=onset_seconds,
+                duration_seconds=duration_seconds,
+                confidence=max(0.25, min(0.98, amplitude)),
+            )
+        )
+
+    if not notes:
+        raise VoiceTranscriptionError("Basic Pitch did not produce notes in the target track range.")
+    return normalize_track_notes(
+        notes,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+
+
+def _extract_basic_pitch_note_events(prediction: object) -> list[object]:
+    if isinstance(prediction, tuple) and len(prediction) >= 3:
+        candidate = prediction[2]
+        return list(candidate) if isinstance(candidate, list | tuple) else []
+    if isinstance(prediction, dict):
+        candidate = prediction.get("note_events") or prediction.get("notes")
+        return list(candidate) if isinstance(candidate, list | tuple) else []
+    candidate = getattr(prediction, "note_events", None)
+    return list(candidate) if isinstance(candidate, list | tuple) else []
+
+
+def _parse_basic_pitch_event(event: object) -> tuple[float, float, int, float] | None:
+    if isinstance(event, dict):
+        onset = event.get("start_time_s", event.get("start_time", event.get("onset_seconds", event.get("start"))))
+        end = event.get("end_time_s", event.get("end_time", event.get("offset_seconds", event.get("end"))))
+        midi = event.get("pitch_midi", event.get("pitch", event.get("midi_note")))
+        amplitude = event.get("amplitude", event.get("confidence", event.get("velocity", 0.75)))
+    elif isinstance(event, list | tuple) and len(event) >= 3:
+        onset, end, midi = event[:3]
+        amplitude = event[3] if len(event) >= 4 and isinstance(event[3], int | float) else 0.75
+    else:
+        return None
+
+    try:
+        onset_seconds = float(onset)
+        end_seconds = float(end)
+        midi_note = round(float(midi))
+        confidence = float(amplitude)
+    except (TypeError, ValueError):
+        return None
+
+    if not math.isfinite(onset_seconds) or not math.isfinite(end_seconds) or end_seconds <= onset_seconds:
+        return None
+    if confidence > 1:
+        confidence = min(1.0, confidence / 127)
+    return onset_seconds, end_seconds, midi_note, confidence
+
+
+def _transcribe_with_librosa_pyin(
+    path: Path,
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> list[TrackNote]:
+    try:
+        import librosa  # type: ignore[import-not-found]
+        import numpy as np  # type: ignore[import-not-found]
+    except Exception as error:  # pragma: no cover - optional dependency.
+        raise VoiceTranscriptionError("librosa is not installed.") from error
+
+    low_midi, high_midi = SLOT_RANGES.get(slot_id, (40, 81))
+    fmin = 440 * 2 ** ((max(0, low_midi - 2) - 69) / 12)
+    fmax = 440 * 2 ** ((min(127, high_midi + 2) - 69) / 12)
+    sample_rate = 22_050
+    frame_length = 4096 if low_midi < 50 else 2048
+    hop_length = 512
+
+    try:
+        samples, loaded_sample_rate = librosa.load(str(path), sr=sample_rate, mono=True)
+    except Exception as error:  # pragma: no cover - depends on audio backend.
+        raise VoiceTranscriptionError(f"librosa could not load the WAV file: {error}") from error
+
+    if len(samples) == 0:
+        raise VoiceTranscriptionError("Audio file is empty.")
+
+    try:
+        f0_values, voiced_flags, voiced_probabilities = librosa.pyin(
+            samples,
+            fmin=fmin,
+            fmax=fmax,
+            sr=loaded_sample_rate,
+            frame_length=frame_length,
+            hop_length=hop_length,
+        )
+        rms_values = librosa.feature.rms(
+            y=samples,
+            frame_length=frame_length,
+            hop_length=hop_length,
+            center=True,
+        )[0]
+    except Exception as error:
+        raise VoiceTranscriptionError(f"librosa pYIN could not track pitch: {error}") from error
+
+    frame_count = min(len(f0_values), len(voiced_flags), len(voiced_probabilities), len(rms_values))
+    if frame_count == 0:
+        raise VoiceTranscriptionError("librosa pYIN did not produce pitch frames.")
+
+    rms_list = [float(value) for value in rms_values[:frame_count]]
+    voice_threshold = _dynamic_voice_threshold(rms_list)
+    times = librosa.frames_to_time(np.arange(frame_count), sr=loaded_sample_rate, hop_length=hop_length)
+    frame_pitches: list[PitchFrame] = []
+
+    for index in range(frame_count):
+        frequency = float(f0_values[index]) if np.isfinite(f0_values[index]) else 0.0
+        if frequency <= 0:
+            continue
+        if not bool(voiced_flags[index]):
+            continue
+        rms = rms_list[index]
+        if rms < voice_threshold:
+            continue
+        probability = float(voiced_probabilities[index])
+        if probability < 0.48:
+            continue
+
+        midi_float = 69 + 12 * math.log2(frequency / 440)
+        midi_note = round(midi_float)
+        if midi_note < low_midi - 1 or midi_note > high_midi + 1:
+            continue
+        amplitude_confidence = min(1, rms / max(voice_threshold * 2.5, 0.0001))
+        frame_pitches.append(
+            PitchFrame(
+                time_seconds=max(0, float(times[index])),
+                midi_float=midi_float,
+                confidence=max(0.2, min(0.98, probability * 0.78 + amplitude_confidence * 0.22)),
+            )
+        )
+
+    stable_frame_pitches = _stabilize_pitch_frames(frame_pitches, low_midi=low_midi, high_midi=high_midi)
+    return _frames_to_notes(
+        stable_frame_pitches,
+        bpm=bpm,
+        slot_id=slot_id,
+        hop_seconds=hop_length / loaded_sample_rate,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+        extraction_method="librosa_pyin_v1",
     )
 
 
@@ -305,9 +554,11 @@ def _frames_to_notes(
     frame_pitches: list[PitchFrame],
     *,
     bpm: int,
+    slot_id: int,
     hop_seconds: float,
     time_signature_numerator: int,
     time_signature_denominator: int,
+    extraction_method: str,
 ) -> list[TrackNote]:
     if not frame_pitches:
         raise VoiceTranscriptionError("No voiced pitch contour was detected.")
@@ -351,7 +602,7 @@ def _frames_to_notes(
                 duration_beats=duration_beats,
                 bpm=bpm,
                 source="voice",
-                extraction_method="wav_autocorrelation_v2",
+                extraction_method=extraction_method,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 pitch_midi=midi_note,
@@ -360,7 +611,13 @@ def _frames_to_notes(
                 confidence=segment.confidence,
             )
         )
-    return notes
+    return normalize_track_notes(
+        notes,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
 
 
 def _build_segment(

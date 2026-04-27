@@ -19,6 +19,12 @@ type TrackRecordingMeter = {
   level: number
 }
 
+type TrackCountInState = {
+  pulsesRemaining: number
+  slotId: number
+  totalPulses: number
+}
+
 type TrackBoardProps = {
   beatsPerMeasure: number
   bpm: number
@@ -29,6 +35,7 @@ type TrackBoardProps = {
   playheadSeconds: number | null
   registeredTracks: TrackSlot[]
   recordingSlotId: number | null
+  trackCountIn: TrackCountInState | null
   trackRecordingMeter: TrackRecordingMeter
   tracks: TrackSlot[]
   onGenerate: (track: TrackSlot) => void
@@ -50,6 +57,7 @@ export function TrackBoard({
   playheadSeconds,
   registeredTracks,
   recordingSlotId,
+  trackCountIn,
   trackRecordingMeter,
   tracks,
   onGenerate,
@@ -100,12 +108,13 @@ export function TrackBoard({
           const isRegistered = track.status === 'registered'
           const needsReview = track.status === 'needs_review'
           const isRecording = recordingSlotId === track.slot_id
+          const isCountingIn = trackCountIn?.slotId === track.slot_id
           const isPlaying = globalPlaying || playingSlots.has(track.slot_id)
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
           const recordingMeterStyle = {
-            '--recording-level': `${getRecordingLevelPercent(isRecording ? trackRecordingMeter.level : 0)}%`,
+            '--recording-level': `${getRecordingLevelPercent(isRecording || isCountingIn ? trackRecordingMeter.level : 0)}%`,
           } as CSSProperties
 
           return (
@@ -147,13 +156,13 @@ export function TrackBoard({
               <div className="track-card__controls">
                 <div className="track-card__primary-actions">
                   <button
-                    className={`app-button app-button--record ${isRecording ? 'is-active' : ''}`}
+                    className={`app-button app-button--record ${isRecording || isCountingIn ? 'is-active' : ''}`}
                     data-testid={`track-record-${track.slot_id}`}
                     type="button"
                     onClick={() => onRecord(track)}
                   >
-                    <span aria-hidden="true">{isRecording ? '■' : '●'}</span>
-                    {isRecording ? '중지' : '녹음'}
+                    <span aria-hidden="true">{isRecording || isCountingIn ? '■' : '●'}</span>
+                    {isRecording ? '중지' : isCountingIn ? '취소' : '녹음'}
                   </button>
                   <label className="app-button app-button--secondary track-upload">
                     <span aria-hidden="true">↑</span>
@@ -228,7 +237,18 @@ export function TrackBoard({
                     채점
                   </button>
                 </div>
-                {isRecording ? (
+                {isCountingIn ? (
+                  <div
+                    className="track-card__count-in"
+                    data-testid={`track-count-in-${track.slot_id}`}
+                    style={recordingMeterStyle}
+                  >
+                    <span>1마디 준비</span>
+                    <strong>{trackCountIn.pulsesRemaining}</strong>
+                    <i aria-hidden="true" />
+                    <em>{metronomeEnabled ? 'metronome on' : 'silent clock'}</em>
+                  </div>
+                ) : isRecording ? (
                   <div
                     className="track-card__recording-meter"
                     data-testid={`track-recording-meter-${track.slot_id}`}

@@ -241,6 +241,20 @@ test('home music upload decodes MP3-like input to WAV before analysis', async ({
   await expect(page.getByTestId('candidate-review')).toContainText('C5')
 })
 
+test('track recording shows a one-measure count-in before capture', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Chromium project supplies fake microphone permissions.')
+
+  await createBlankStudio(page, 'Count-in recording grid', '60')
+
+  await page.getByTestId('track-record-1').click()
+  await expect(page.getByTestId('track-count-in-1')).toContainText('1마디 준비')
+  await expect(page.getByTestId('track-count-in-1')).toContainText('4')
+  await expect(page.getByTestId('track-recording-meter-1')).toHaveCount(0)
+
+  await page.getByTestId('track-record-1').click()
+  await expect(page.getByTestId('track-count-in-1')).toHaveCount(0)
+})
+
 test('admin login can inspect storage and run the engine queue trigger', async ({ page }) => {
   await page.goto('/admin')
   await page.getByLabel('ID').fill('admin')

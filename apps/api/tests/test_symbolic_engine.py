@@ -5,6 +5,7 @@ from gigastudy_api.services.engine.symbolic import (
     parse_musicxml_file,
     parse_symbolic_file_with_metadata,
 )
+from gigastudy_api.services.engine.music_theory import infer_slot_id, note_from_pitch
 
 
 MUSICXML_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
@@ -218,3 +219,49 @@ def test_midi_parser_preserves_time_signature_for_measure_grid(tmp_path: Path) -
     assert notes[3].measure_index == 2
     assert notes[3].beat == 4
     assert notes[3].beat_in_measure == 1
+
+
+def test_symbolic_mapping_uses_pitch_range_when_part_names_are_generic(tmp_path: Path) -> None:
+    musicxml_path = tmp_path / "generic-parts.musicxml"
+    musicxml_path.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Part 1</part-name></score-part>
+    <score-part id="P2"><part-name>Part 2</part-name></score-part>
+    <score-part id="P3"><part-name>Part 3</part-name></score-part>
+  </part-list>
+  <part id="P1"><measure number="1"><attributes><divisions>1</divisions></attributes>
+    <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration></note>
+    <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration></note>
+  </measure></part>
+  <part id="P2"><measure number="1"><attributes><divisions>1</divisions></attributes>
+    <note><pitch><step>G</step><octave>3</octave></pitch><duration>1</duration></note>
+    <note><pitch><step>B</step><octave>3</octave></pitch><duration>1</duration></note>
+  </measure></part>
+  <part id="P3"><measure number="1"><attributes><divisions>1</divisions></attributes>
+    <note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration></note>
+    <note><pitch><step>E</step><octave>3</octave></pitch><duration>1</duration></note>
+  </measure></part>
+</score-partwise>
+""",
+        encoding="utf-8",
+    )
+
+    parsed = parse_symbolic_file_with_metadata(musicxml_path, bpm=92)
+
+    assert set(parsed.mapped_notes) == {1, 4, 5}
+    assert [note.label for note in parsed.mapped_notes[1]] == ["E5", "G5"]
+    assert [note.label for note in parsed.mapped_notes[4]] == ["G3", "B3"]
+    assert [note.label for note in parsed.mapped_notes[5]] == ["C3", "E3"]
+    assert all(note.clef == "bass" for note in parsed.mapped_notes[5])
+
+
+def test_slot_inference_respects_bass_range_over_generic_order() -> None:
+    notes = [
+        note_from_pitch(beat=1, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=40),
+        note_from_pitch(beat=2, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=43),
+        note_from_pitch(beat=3, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=47),
+    ]
+
+    assert infer_slot_id("Track 1", notes, fallback=1) == 5

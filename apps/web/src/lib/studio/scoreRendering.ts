@@ -77,7 +77,7 @@ function getDiatonicStep(noteName: string, octave: number): number {
 }
 
 function parsePitchLabel(label: string): { octave: number; step: number; semitone: number } | null {
-  const match = /^([A-G])([#b]?)(\d)$/u.exec(label.trim())
+  const match = /^([A-G])([#b]?)(-?\d+)$/u.exec(label.trim())
   if (!match) {
     return null
   }
@@ -157,7 +157,7 @@ function getPitchStepFromMidi(pitchMidi: number): number {
 }
 
 function getStaffClef(slotId: number): 'treble' | 'bass' {
-  return slotId >= 5 ? 'bass' : 'treble'
+  return slotId >= 4 ? 'bass' : 'treble'
 }
 
 function getStaffMiddleLineStep(slotId: number): number {
@@ -174,9 +174,9 @@ function getNoteTopPx(slotId: number, note: ScoreNote): number {
     return STAFF_MIDDLE_LINE_Y - 12
   }
   if (typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi)) {
-    return getStaffTopFromStep(slotId, getPitchStepFromMidi(note.pitch_midi))
+    return getStaffTopFromStep(slotId, getPitchStepFromMidi(note.pitch_midi + (note.display_octave_shift ?? 0)))
   }
-  const parsed = parsePitchLabel(note.label)
+  const parsed = parsePitchLabel(note.spelled_label ?? note.label)
   if (parsed) {
     return getStaffTopFromStep(slotId, parsed.step)
   }
@@ -250,14 +250,14 @@ function getDurationGlyph(durationBeats: number): NoteDurationGlyph {
 function getDurationLabel(durationBeats: number): string {
   const glyph = getDurationGlyph(durationBeats)
   const labels: Record<NoteDurationGlyph, string> = {
-    whole: '온음표',
-    half: '2분음표',
-    quarter: '4분음표',
-    eighth: '8분음표',
-    sixteenth: '16분음표',
+    whole: 'whole note',
+    half: 'half note',
+    quarter: 'quarter note',
+    eighth: 'eighth note',
+    sixteenth: 'sixteenth note',
   }
   const rounded = Math.round(durationBeats * 100) / 100
-  return `${labels[glyph]} · ${Number.isInteger(rounded) ? rounded : rounded.toFixed(2)}박`
+  return `${labels[glyph]} - ${Number.isInteger(rounded) ? rounded : rounded.toFixed(2)} beats`
 }
 
 function pitchIdentity(note: ScoreNote): string {

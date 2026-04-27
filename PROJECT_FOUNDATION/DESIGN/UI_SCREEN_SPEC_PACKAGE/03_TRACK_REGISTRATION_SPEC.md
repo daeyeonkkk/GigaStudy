@@ -22,8 +22,17 @@ Each track supports:
 When Record is clicked:
 
 - Microphone turns on.
+- The selected track enters a one-measure count-in state.
+- If metronome is enabled, the count-in click is audible. If metronome is off,
+  the same internal BPM/meter clock still runs silently.
+- Record button becomes Cancel during count-in.
+- The track shows count-in pulse, browser input level feedback, and clear
+  preparation state.
+
+When the count-in reaches the next downbeat:
+
+- Actual audio capture starts.
 - The selected track enters recording state.
-- If metronome is enabled, metronome plays.
 - Record button becomes Stop.
 - The track shows elapsed recording time and browser input level feedback.
 
@@ -34,7 +43,12 @@ When Stop is clicked:
 - The WAV is sent through the single-voice extraction path.
 - Usable voice material is extracted only when sustained, stable voiced pitch is
   detected.
-- TrackNote material is generated.
+- TrackNote material is generated against the studio BPM/meter grid. The engine
+  may estimate latency or sync offset, but it must not rewrite the studio BPM.
+- Voice-derived notes are normalized into readable measure-owned notation:
+  quantized onset/duration, rest/noise cleanup, measure-boundary splitting or
+  ties only where musically valid, and track-appropriate clef/key/accidental
+  spelling.
 - The result is registered into the selected track.
 
 If the take contains only room noise, breath, handling noise, or other unstable

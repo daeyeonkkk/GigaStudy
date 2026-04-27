@@ -7,6 +7,8 @@ This checklist tracks the new six-track studio foundation only.
 ## Product Definition
 
 - [x] Product is defined as a six-track a cappella practice studio.
+- [x] Product artifact is defined as one six-track score whose paper grid is
+  studio BPM plus time signature.
 - [x] The six canonical tracks are named.
 - [x] The three core user flows are documented.
 - [x] Legacy guide/arrangement/share/ops foundation material is removed.
@@ -68,10 +70,16 @@ This checklist tracks the new six-track studio foundation only.
   measure-internal notation padding rather than sitting outside the barline.
 - [x] Soprano through Bass notation uses VexFlow clefs and ledger lines so high
   soprano and low bass notes are engraved instead of visually clamped.
-- [x] Key-signature marks are hidden in the current renderer to avoid clipped
-  or misleading notation until reliable layout support is added.
+- [x] Normalized voice/AI notes carry key signature, accidental, clef, and
+  display-octave metadata so browser engraving can reserve notation space and
+  reduce accidental clutter instead of hiding symbols.
+- [ ] If VexFlow rejects a key signature at runtime, the UI should surface an
+  explicit fallback warning rather than silently degrading.
 - [x] MusicXML/MIDI import can preserve source time signature metadata.
 - [x] Voice extraction and AI generation inherit the studio time signature.
+- [x] Voice-derived notes are normalized before trusted registration:
+  fixed-BPM quantization, measure ownership, rest/noise cleanup, valid ties, and
+  track-consistent clef/key/accidental display policy.
 - [x] Dense note runs expand score width instead of overlapping.
 - [x] Same-onset cluster offsets never move notes outside fixed measure
   boundaries.
@@ -86,7 +94,8 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Top Stop returns all tracks to synced 0 seconds.
 - [x] Top Stop does not reset per-track sync values.
 - [x] Metronome toggle is visible globally.
-- [x] Metronome participates in recording/scoring only when enabled.
+- [x] Metronome toggle controls audible click sound only; it does not disable
+  the internal BPM/meter score clock.
 - [x] Metronome uses the studio time-signature denominator pulse and accents
   measure downbeats.
 - [x] Playback source can be switched between retained recording audio and
@@ -99,7 +108,9 @@ This checklist tracks the new six-track studio foundation only.
 ## Track Registration
 
 - [x] Recording turns on the microphone for track registration.
-- [x] Recording respects metronome toggle.
+- [x] Recording shows a one-measure count-in before actual audio capture.
+- [x] Recording respects metronome toggle as audible sound only while keeping
+  the internal BPM/meter grid active.
 - [x] Recording shows elapsed time and browser input level feedback.
 - [x] Stop after recording extracts usable track material instead of fixture
   registration.
@@ -113,6 +124,9 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Voice extraction v2 high-pass filters low-frequency rumble, stabilizes
   octave/outlier pitch frames before segmentation, and rejects short tonal
   click bursts as non-singing input.
+- [x] Voice notation has synthetic preflight tests for human timing jitter,
+  room noise, hum, vibrato, attack scoop, sustained notes crossing barlines, and
+  tenor display policy before real singer testing.
 - [x] Noise-only or non-singing recordings fail as recoverable extraction
   errors instead of registering dense false notes.
 - [x] Browser upload decodes supported MP3/M4A/OGG/FLAC audio and normalizes it
@@ -338,6 +352,10 @@ This checklist tracks the new six-track studio foundation only.
   playback.
 - [x] Track, global, and scoring-reference playback all follow the same
   audio-first/source-toggle policy.
+- [x] Per-track microphone recording uses the studio BPM/meter clock: the UI
+  shows a one-measure count-in, then starts the retained WAV capture on the next
+  downbeat. The metronome toggle affects audible click sound only, not the
+  internal TrackNote timing grid.
 - [x] 2026-04-23 실사용 재생/악보 이슈 재검증: 웹 lint/build 통과,
   브라우저 E2E 21/21 통과, Playwright 로컬 브라우저에서 라이브
   스튜디오 payload 기준 VexFlow 렌더 콘솔 오류 없음, Tenor 재생 버튼이

@@ -47,12 +47,24 @@ const SCORE_HEIGHT_PX = 186
 const STAVE_Y_PX = 42
 const TIE_EPSILON_BEATS = 0.08
 const SYNC_TRANSLATED_VEXFLOW_GROUPS = '.vf-stavenote, .vf-beam, .vf-stavetie'
-const FIRST_MEASURE_NOTE_GUTTER_PX = 14
+const FIRST_MEASURE_NOTE_GUTTER_PX = 28
 
 const pitchNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-function getClef(slotId: number): Clef {
-  return slotId >= 5 ? 'bass' : 'treble'
+function getTrackClef(track: TrackSlot): Clef {
+  const notationClef = track.notes.find((note) => note.clef)?.clef
+  if (notationClef === 'bass') {
+    return 'bass'
+  }
+  if (notationClef === 'treble' || notationClef === 'treble_8vb') {
+    return 'treble'
+  }
+  return track.slot_id >= 4 ? 'bass' : 'treble'
+}
+
+function getTrackKeySignature(track: TrackSlot): string | null {
+  const keySignature = track.notes.find((note) => note.key_signature)?.key_signature
+  return keySignature && keySignature !== 'C' ? keySignature : null
 }
 
 function getSyncShiftPx(syncOffsetSeconds: number, bpm: number, pxPerBeat: number): number {
@@ -67,7 +79,7 @@ function translateElement(element: Element, xPx: number) {
 }
 
 function getLabelParts(label: string): { accidental: string | null; key: string } | null {
-  const match = /^([A-G])([#b]?)(-?\d)$/u.exec(label.trim())
+  const match = /^([A-G])([#b]?)(-?\d+)$/u.exec(label.trim())
   if (!match) {
     return null
   }
@@ -84,16 +96,36 @@ function getMidiLabel(pitchMidi: number): string {
   return `${pitchNames[pitchClass]}${octave}`
 }
 
+function shiftPitchLabelOctaves(label: string, semitoneShift: number): string | null {
+  const match = /^([A-G])([#b]?)(-?\d+)$/u.exec(label.trim())
+  if (!match || semitoneShift % 12 !== 0) {
+    return null
+  }
+  const [, pitchClass, accidental, octaveText] = match
+  return `${pitchClass}${accidental}${Number(octaveText) + semitoneShift / 12}`
+}
+
 function getVexPitch(note: ScoreNote, clef: Clef): { accidental: string | null; key: string } {
   if (note.is_rest) {
     return { accidental: null, key: clef === 'bass' ? 'd/3' : 'b/4' }
   }
 
-  if (typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi)) {
-    return getLabelParts(getMidiLabel(note.pitch_midi)) ?? { accidental: null, key: 'c/4' }
-  }
+  const displayShift = note.display_octave_shift ?? 0
+  const preferredLabel = note.spelled_label ?? note.label
+  const shiftedPreferredLabel = shiftPitchLabelOctaves(preferredLabel, displayShift)
+  const fallbackLabel =
+    typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi)
+      ? getMidiLabel(note.pitch_midi + displayShift)
+      : note.label
+  const parsed = getLabelParts(shiftedPreferredLabel ?? fallbackLabel) ?? { accidental: null, key: 'c/4' }
 
-  return getLabelParts(note.label) ?? { accidental: null, key: 'c/4' }
+  const explicitAccidental =
+    typeof note.accidental === 'string' && note.accidental.length > 0 ? note.accidental : null
+  const accidental = explicitAccidental ?? (note.key_signature ? null : parsed.accidental)
+  return {
+    accidental,
+    key: parsed.key,
+  }
 }
 
 function getVexDurationCode(duration: EngravingDuration): string {
@@ -246,7 +278,8 @@ export function EngravedScoreStrip({
     () => getTrackRenderModel(engravingTrack, bpm, beatsPerMeasure),
     [beatsPerMeasure, bpm, engravingTrack],
   )
-  const clef = getClef(track.slot_id)
+  const clef = getTrackClef(track)
+  const keySignature = getTrackKeySignature(track)
   const measureCount = Math.max(scoreModel.measureCount, engravingModel.measureCount, sharedMeasureWidths.length)
   const engravingLayout = useMemo(
     () => buildEngravingLayout(engravingModel.notes, measureCount, beatsPerMeasure, sharedMeasureWidths),
@@ -308,11 +341,18 @@ export function EngravedScoreStrip({
 
       if (measure.measureIndex === 0) {
         stave.addClef(clef)
+        if (keySignature) {
+          try {
+            stave.addKeySignature(keySignature)
+          } catch {
+            // Unknown imported key signatures should not block score rendering.
+          }
+        }
       }
       stave.setMeasure(measure.measureNumber)
       if (measure.measureIndex === 0) {
         const noteStartX = stave.getNoteStartX()
-        stave.setNoteStartX(noteStartX + FIRST_MEASURE_NOTE_GUTTER_PX)
+        stave.setNoteStartX(noteStartX + FIRST_MEASURE_NOTE_GUTTER_PX + (keySignature ? 12 : 0))
       }
       stave.setContext(context).draw()
 
@@ -383,7 +423,7 @@ export function EngravedScoreStrip({
     return () => {
       container.innerHTML = ''
     }
-  }, [beatsPerMeasure, clef, engravingLayout, scoreWidth, syncShiftPx, track.name])
+  }, [beatsPerMeasure, clef, engravingLayout, keySignature, scoreWidth, syncShiftPx, track.name])
 
   return (
     <div

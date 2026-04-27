@@ -49,8 +49,8 @@ Stop behavior:
 
 Metronome behavior:
 
-- The toggle controls whether metronome participates in recording/scoring
-  contexts.
+- The toggle controls audible metronome click sound in recording/scoring
+  contexts. It does not disable the internal BPM/meter score clock.
 - Metronome should be clearly visible as on/off.
 - Metronome clicks use the studio denominator pulse and accent measure
   downbeats.
@@ -121,14 +121,19 @@ VexFlow SVG engraving strip:
 - A 4/4 studio has four quarter-beats per measure; a 3/4 studio has three; a
   6/8 studio has three quarter-beats per measure.
 - The audible metronome follows the same time-signature grid as the visible
-  score.
+  score when it is on; when muted, the visible score still follows that same
+  internal grid.
 - Measure boundaries and measure numbers are visible through the engraving.
 - The first measure carries the appropriate VexFlow clef for the track range.
-- Soprano, Alto, and Tenor use treble engraving; Baritone and Bass use bass
-  engraving. High/low notes should use ledger lines instead of being clamped
-  into the staff.
-- Key-signature marks are intentionally hidden until they can be rendered with
-  reliable spacing and clipping behavior.
+- Soprano and Alto use treble engraving. Tenor uses a consistent tenor/treble
+  display policy without changing stored pitch. Baritone and Bass use bass
+  engraving. High/low notes should use clef policy, octave display policy, and
+  ledger lines instead of being clamped into the staff.
+- Key signatures and accidentals must be displayed with reserved notation
+  spacing when available. They should reduce accidental clutter and represent
+  tonal context, but must not be used to silently alter stored pitch. If the
+  renderer cannot display a key signature cleanly, it should fall back to
+  explicit accidentals rather than clipping or hiding broken symbols.
 - Notes are positioned by beat within the measure, not simply listed in upload
   order.
 - Notes use `TrackNote.duration_beats` to choose engraved whole, half,

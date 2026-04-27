@@ -84,6 +84,16 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
 - Keep `GIGASTUDY_API_STORAGE_ROOT` as temporary engine/cache space only.
 - Use `GIGASTUDY_API_MAX_UPLOAD_BYTES` to keep base64 JSON uploads inside the
   Cloud Run request and memory envelope.
+- OMR quality/runtime can be tuned with `GIGASTUDY_API_OMR_BACKEND`
+  (`auto`, `audiveris`, `pdf_vector`, `vector_first`) plus
+  `GIGASTUDY_API_OMR_PREPROCESS_MODE` and
+  `GIGASTUDY_API_OMR_PREPROCESS_DPI` for scanned PDF/image retry.
+  - Voice transcription can be tuned with
+    `GIGASTUDY_API_VOICE_TRANSCRIPTION_BACKEND`
+    (`auto`, `basic_pitch`, `librosa`, `pyin`, `local`). The `basic_pitch` path
+    is optional and only runs where the server Python environment has Spotify
+    Basic Pitch installed. The free-plan default uses librosa pYIN before the
+    built-in local fallback.
 
 ## Verification
 

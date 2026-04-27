@@ -1,6 +1,8 @@
 import math
 import random
 import struct
+import sys
+import types
 import wave
 from pathlib import Path
 
@@ -57,7 +59,7 @@ def test_voice_transcription_detects_separated_notes_with_silence(tmp_path: Path
         ],
     )
 
-    notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1)
+    notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1, backend="local")
 
     assert [note.label for note in notes] == ["C5", "E5", "G5"]
     assert all(note.extraction_method == "wav_autocorrelation_v2" for note in notes)
@@ -76,7 +78,7 @@ def test_voice_transcription_uses_dynamic_threshold_for_quiet_takes(tmp_path: Pa
         ],
     )
 
-    notes = transcribe_voice_file(wav_path, bpm=96, slot_id=2)
+    notes = transcribe_voice_file(wav_path, bpm=96, slot_id=2, backend="local")
 
     assert [note.label for note in notes] == ["A4"]
     assert notes[0].confidence > 0.4
@@ -93,7 +95,7 @@ def test_voice_transcription_rejects_noise_without_stable_singing(tmp_path: Path
     )
 
     with pytest.raises(VoiceTranscriptionError, match="No .*voiced|No stable voiced"):
-        transcribe_voice_file(wav_path, bpm=120, slot_id=1)
+        transcribe_voice_file(wav_path, bpm=120, slot_id=1, backend="local")
 
 
 def test_voice_transcription_rejects_short_noisy_tonal_clicks(tmp_path: Path) -> None:
@@ -113,7 +115,7 @@ def test_voice_transcription_rejects_short_noisy_tonal_clicks(tmp_path: Path) ->
     )
 
     with pytest.raises(VoiceTranscriptionError, match="No .*voiced|No stable voiced"):
-        transcribe_voice_file(wav_path, bpm=120, slot_id=1)
+        transcribe_voice_file(wav_path, bpm=120, slot_id=1, backend="local")
 
 
 def test_voice_transcription_tracks_singing_under_noise(tmp_path: Path) -> None:
@@ -129,7 +131,7 @@ def test_voice_transcription_tracks_singing_under_noise(tmp_path: Path) -> None:
         noise_amplitude=0.025,
     )
 
-    notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1)
+    notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1, backend="local")
 
     assert [note.label for note in notes] == ["C5", "E5"]
     assert min(note.confidence for note in notes) > 0.5
@@ -141,3 +143,76 @@ def test_voice_transcription_rejects_non_wav_input(tmp_path: Path) -> None:
 
     with pytest.raises(VoiceTranscriptionError, match="Only WAV"):
         transcribe_voice_file(mp3_path, bpm=120, slot_id=1)
+
+
+def test_voice_transcription_can_use_optional_basic_pitch_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wav_path = tmp_path / "basic-pitch.wav"
+    _write_mono_wav(wav_path, [(1.0, None, 0)])
+
+    package = types.ModuleType("basic_pitch")
+    inference = types.ModuleType("basic_pitch.inference")
+
+    def fake_predict(_path: str):
+        return None, None, [(0.0, 0.48, 72, 0.91), (0.5, 0.98, 76, 0.87)]
+
+    inference.predict = fake_predict  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "basic_pitch", package)
+    monkeypatch.setitem(sys.modules, "basic_pitch.inference", inference)
+
+    notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1, backend="basic_pitch")
+
+    assert [note.label for note in notes] == ["C5", "E5"]
+    assert all(note.extraction_method == "basic_pitch_amt_v1" for note in notes)
+    assert all(note.clef == "treble" for note in notes)
+
+
+def test_voice_transcription_can_use_librosa_pyin_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wav_path = tmp_path / "pyin-soprano.wav"
+    _write_mono_wav(wav_path, [(1.0, None, 0)])
+
+    fake_librosa = types.ModuleType("librosa")
+    fake_numpy = types.ModuleType("numpy")
+    frame_frequencies = (
+        [midi_to_frequency(72)] * 8
+        + [float("nan")] * 4
+        + [midi_to_frequency(76)] * 8
+    )
+    voiced_flags = [True] * 8 + [False] * 4 + [True] * 8
+    probabilities = [0.86] * len(frame_frequencies)
+
+    def fake_load(_path: str, *, sr: int, mono: bool):
+        assert mono is True
+        return [0.2] * sr, sr
+
+    def fake_pyin(_samples, *, fmin, fmax, sr, frame_length, hop_length):
+        assert fmin < midi_to_frequency(72) < fmax
+        assert sr == 22_050
+        assert frame_length == 2048
+        assert hop_length == 512
+        return frame_frequencies, voiced_flags, probabilities
+
+    def fake_frames_to_time(frames, *, sr: int, hop_length: int):
+        return [index * hop_length / sr for index in frames]
+
+    def fake_arange(count: int):
+        return list(range(count))
+
+    def fake_isfinite(value: float):
+        return math.isfinite(value)
+
+    fake_feature = types.SimpleNamespace(rms=lambda **_kwargs: [[0.2] * len(frame_frequencies)])
+    fake_librosa.load = fake_load  # type: ignore[attr-defined]
+    fake_librosa.pyin = fake_pyin  # type: ignore[attr-defined]
+    fake_librosa.frames_to_time = fake_frames_to_time  # type: ignore[attr-defined]
+    fake_librosa.feature = fake_feature  # type: ignore[attr-defined]
+    fake_numpy.arange = fake_arange  # type: ignore[attr-defined]
+    fake_numpy.isfinite = fake_isfinite  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+    monkeypatch.setitem(sys.modules, "numpy", fake_numpy)
+
+    notes = transcribe_voice_file(wav_path, bpm=120, slot_id=1, backend="librosa")
+
+    assert [note.label for note in notes] == ["C5", "E5"]
+    assert all(note.extraction_method == "librosa_pyin_v1" for note in notes)
+    assert all(note.quantization_grid == 0.25 for note in notes)

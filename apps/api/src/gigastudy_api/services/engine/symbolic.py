@@ -3,6 +3,7 @@ from __future__ import annotations
 import struct
 import zipfile
 from dataclasses import dataclass, field
+from itertools import permutations
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
@@ -14,7 +15,10 @@ from gigastudy_api.services.engine.music_theory import (
     midi_to_label,
     note_from_pitch,
     quarter_beats_per_measure,
+    rank_slot_candidates,
+    slot_assignment_diagnostics,
 )
+from gigastudy_api.services.engine.notation import annotate_track_notes_for_slot
 
 
 @dataclass
@@ -78,18 +82,67 @@ def map_tracks_to_slots(
     if target_slot_id is not None:
         exact = [track for track in non_empty_tracks if track.slot_id == target_slot_id]
         selected = exact[0] if exact else non_empty_tracks[0]
-        return {target_slot_id: selected.notes}
+        selected.slot_id = target_slot_id
+        selected.diagnostics.update(
+            slot_assignment_diagnostics(
+                selected.name,
+                selected.notes,
+                assigned_slot_id=target_slot_id,
+                fallback=target_slot_id,
+            )
+        )
+        return {target_slot_id: annotate_track_notes_for_slot(selected.notes, slot_id=target_slot_id)}
 
+    assignments = _assign_tracks_by_name_and_range(non_empty_tracks)
     mapped: dict[int, list[TrackNote]] = {}
-    fallback_slot = 1
-    for track in non_empty_tracks:
-        slot_id = track.slot_id or infer_slot_id(track.name, track.notes, fallback=fallback_slot)
-        while slot_id in mapped and fallback_slot <= 6:
-            fallback_slot += 1
-            slot_id = fallback_slot
+    for track, slot_id in assignments:
         if 1 <= slot_id <= 6:
-            mapped[slot_id] = track.notes
+            track.slot_id = slot_id
+            track.diagnostics.update(
+                slot_assignment_diagnostics(
+                    track.name,
+                    track.notes,
+                    assigned_slot_id=slot_id,
+                    fallback=slot_id,
+                )
+            )
+            mapped[slot_id] = annotate_track_notes_for_slot(track.notes, slot_id=slot_id)
     return mapped
+
+
+def _assign_tracks_by_name_and_range(parsed_tracks: list[ParsedTrack]) -> list[tuple[ParsedTrack, int]]:
+    tracks = parsed_tracks[:6]
+    if not tracks:
+        return []
+
+    allowed_slots = (1, 2, 3, 4, 5, 6)
+    score_table = {
+        id(track): {
+            score.slot_id: score.score
+            for score in rank_slot_candidates(
+                track.name,
+                track.notes,
+                fallback=min(track_index + 1, 6),
+                allowed_slots=allowed_slots,
+            )
+        }
+        for track_index, track in enumerate(tracks)
+    }
+
+    best_assignment: tuple[float, tuple[int, ...]] | None = None
+    for slot_order in permutations(allowed_slots, len(tracks)):
+        score = 0.0
+        for track_index, (track, slot_id) in enumerate(zip(tracks, slot_order, strict=False)):
+            score += score_table[id(track)].get(slot_id, -999)
+            if 1 <= slot_id <= 5:
+                # Preserve visible score order as a weak tie-breaker only; pitch/name evidence dominates.
+                score -= abs(slot_id - (track_index + 1)) * 0.05
+        if best_assignment is None or score > best_assignment[0]:
+            best_assignment = (score, slot_order)
+
+    if best_assignment is None:
+        return []
+    return list(zip(tracks, best_assignment[1], strict=False))
 
 
 def parse_musicxml_file(path: Path, *, bpm: int) -> list[ParsedTrack]:

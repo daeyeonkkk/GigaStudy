@@ -76,6 +76,14 @@ The current implementation has a working six-track vertical slice:
   `source="omr"` candidates. Audiveris subprocess timeouts are normalized into
   the same unavailable/failure path so vector fallback still runs instead of
   leaving the job as a hard failure.
+- OMR execution is now configurable through `GIGASTUDY_API_OMR_BACKEND`.
+  `auto` keeps the Audiveris-first path with vector-PDF fallback, while
+  `audiveris`, `pdf_vector`, and `vector_first` allow targeted runtime testing
+  or faster born-digital PDF validation without changing product code.
+- Audiveris now performs a scan-oriented preprocessing retry when the primary
+  pass fails. PDF/image input is rendered into a high-DPI grayscale PDF
+  workspace and retried, controlled by `GIGASTUDY_API_OMR_PREPROCESS_MODE` and
+  `GIGASTUDY_API_OMR_PREPROCESS_DPI`.
 - The vector fallback now clamps detected note positions to the valid measure
   onset grid and caps inferred durations at the owning measure boundary. The
   previously supplied `Phonecert_-_10cm.pdf` was verified locally as a
@@ -128,6 +136,12 @@ The current implementation has a working six-track vertical slice:
   normalized autocorrelation, confidence filtering, octave/outlier pitch-frame
   stabilization, pitch-stability filtering, short-click rejection, and median
   segment grouping.
+- Voice transcription is now backend-selectable through
+  `GIGASTUDY_API_VOICE_TRANSCRIPTION_BACKEND`. The default `auto` path can use
+  an installed Spotify Basic Pitch note-event adapter, then librosa pYIN, then
+  the local WAV engine; `basic_pitch`, `librosa`/`pyin`, and `local` can be
+  forced for focused tests. Basic Pitch and librosa output still flow through
+  the same TrackNote, BPM-grid, range, and notation normalization policy.
 - Noise-only or non-singing recordings are rejected instead of being registered
   as dense false notes.
 - Browser upload normalizes browser-decodable MP3/M4A/OGG/FLAC audio into mono
@@ -214,8 +228,37 @@ The current implementation has a working six-track vertical slice:
   API from Postgres-backed studio metadata and R2-backed stored assets, with
   `/api/admin/storage` reporting `s3://gigastudy-alpha` and the configured
   alpha limits.
-- Per-track browser recording plays the metronome when enabled and shows
-  elapsed-time/input-level feedback while recording.
+- Per-track browser recording now opens the microphone, shows a one-measure
+  count-in from the studio BPM/meter grid, and starts actual WAV capture on the
+  following downbeat. The metronome toggle only mutes/unmutes audible clicks;
+  the internal score clock still drives TrackNote timing. The UI shows count-in,
+  elapsed-time, and input-level feedback.
+- Voice-to-score is now a first-class engine contract, not merely raw pitch
+  detection. Voice-derived notes must be fitted onto the immutable studio
+  BPM/meter grid, cleaned for noise, assigned to measures, quantized
+  consistently across tracks, and prepared with track-appropriate clef,
+  key-signature, accidental, and range display policy before registration or
+  review.
+- Track assignment now uses a shared name-and-range scoring layer instead of a
+  legacy average-pitch threshold. MusicXML/MIDI, OMR output, and home-start
+  audio candidates are mapped by explicit labels when available and otherwise
+  by duration/confidence-weighted pitch distribution, range fit, median/average
+  pitch, percussion hints, and weak score-order tie-breaking. Multiple imported
+  parts are assigned as one score-wide mapping so extracted tracks do not
+  collide into the same slot.
+- A backend notation normalization layer now implements that contract for
+  voice-derived and rule-generated TrackNotes. It quantizes onto the studio grid,
+  resolves monophonic overlaps, splits measure-crossing notes into tied pieces,
+  estimates key signature, assigns spelling/accidentals, and applies the stable
+  S/A treble, Tenor treble-8vb display, Baritone/Bass bass policy.
+- Symbolic and OMR-derived notes now receive the same target-track notation
+  metadata after assignment without rewriting trusted imported rhythm, so all
+  six tracks render under the same clef/key/display policy.
+- A synthetic voice-notation quality gate now runs before real singer testing.
+  It generates WAV fixtures with human timing jitter, room noise, hum, vibrato,
+  attack scoops, sustained notes crossing barlines, and tenor-range material, then
+  verifies fixed-BPM quantization, measure-owned ties, clef/display metadata, and
+  stable pitch labeling.
 - Studio toolbar includes an explicit Home navigation control so users can
   leave a studio without relying on the small titlebar app mark.
 - Launch now exposes the recent/public studio list as a first-class home-screen
@@ -312,8 +355,13 @@ The current implementation has a working six-track vertical slice:
   generation group.
 - The score renderer now uses VexFlow clefs and ledger lines so Soprano through
   Bass tracks can extend above or below the staff without being clamped into
-  misleading positions. Key-signature marks are hidden until the notation layout
-  can render them without clipping.
+  misleading positions. The foundation no longer accepts hiding key signatures
+  as the canonical solution; the target behavior is reserved key-signature
+  spacing or explicit accidental fallback with warnings.
+- Browser engraving consumes normalized key-signature, accidental, clef, and
+  display-octave metadata when present. Baritone now falls under the bass-clef
+  display policy, and Tenor can display an octave higher while retaining stored
+  sounding pitch.
 
 Remaining implementation gaps are now refinements of the six-track direction,
 not legacy product surfaces.
@@ -477,5 +525,6 @@ Foundation reset: complete.
 
 Engine baseline: implemented.
 
-Implementation alignment: core vertical slice complete; extraction quality and
-UX hardening remain.
+Implementation alignment: core vertical slice complete; extraction quality is
+now centered on shared assignment, notation metadata, and source-specific OMR
+or voice reliability improvements.

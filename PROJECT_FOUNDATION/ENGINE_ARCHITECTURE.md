@@ -20,6 +20,11 @@ Recorded or uploaded voice audio may be retained as a track playback asset, but
 it is not the scoring or harmony truth source. The persisted `TrackNote` list
 remains canonical for comparison, generation, notation, and export.
 
+The product model is one six-track score. Each studio starts from a BPM/meter
+clock and the user fills Soprano, Alto, Tenor, Baritone, Bass, and Percussion
+as score tracks. Recording is one way to add material to that score; it is not a
+free-tempo waveform timeline.
+
 ## Persistence And Asset Storage Contract
 
 Studio metadata and stored binary assets are separate responsibilities.
@@ -125,6 +130,8 @@ Each note event should carry:
   `audio`
 - Extraction method
 - Rest/tie/staff/voice metadata when available
+- Optional notation metadata, such as spelled pitch, accidental, clef, octave
+  display policy, key signature, quantization grid, and warning flags
 
 ## Tempo And Meter Contract
 
@@ -156,8 +163,54 @@ For the current MVP, imported MIDI tempo does not replace the studio BPM;
 imported MIDI notes preserve beat positions and are normalized to studio BPM for
 `onset_seconds` and `duration_seconds` so playback and scoring share one clock.
 
+Voice extraction must not re-estimate or rewrite the studio BPM. Human timing
+drift, device latency, and loose entrances are handled as sync offset and
+beat-grid quantization problems. The BPM/meter grid is the paper; extracted
+notes are fitted onto it.
+
 Track rendering, playback, AI generation, and scoring must consume this schema
 rather than inventing separate note shapes.
+
+## Voice-To-Score Normalization Contract
+
+Voice-derived notation must pass through a musical normalization layer before a
+track is considered registered or rendered as a score. The goal is not merely to
+detect pitch frames; the goal is to create a readable track on the fixed studio
+score.
+
+The required pipeline is:
+
+1. Capture or load a single-track voice/audio source.
+2. Estimate stable voiced pitch frames and reject noise, breath, speech-like
+   unstable material, clicks, and non-singing room artifacts.
+3. Group frames into raw pitch segments.
+4. Convert segment onset and duration to the immutable studio BPM/meter grid.
+5. Quantize beat positions and durations with track-consistent rules.
+6. Split or tie notes only at real measure/rhythm boundaries.
+7. Choose pitch spelling, key signature, clef, and display octave policy.
+8. Validate measure ownership, range fit, density, and confidence before
+   registration or candidate review.
+
+Voice-to-score output must obey these rules:
+
+- Measure boundaries are derived only from studio BPM and time signature.
+- A note belongs to one measure or is split into tied display segments across
+  measures; it must not visually leak beyond its owning measure.
+- Short noise fragments and unstable pitch changes should be removed or merged,
+  not written as dense microscopic notes.
+- Quantization must be consistent across tracks. Track differences come from
+  range, clef, and display policy, not separate timing rules.
+- Sync offset is a playback/display layer translation for note/audio layers. It
+  never rewrites the stored `TrackNote.beat`, measure grid, or BPM.
+- Key signature and enharmonic spelling should reduce accidental clutter and
+  represent the local tonal center. Key signatures are not a pitch-correction
+  mechanism and do not change stored MIDI pitch.
+- Staff range problems are solved with clef, octave display policy, and ledger
+  lines. The renderer must not clamp pitch into the staff or silently transpose
+  stored notes just to make them look tidy.
+- If a voice-derived take cannot be turned into a readable score under these
+  rules, the engine should create a review candidate with warnings or fail
+  recoverably rather than registering misleading notation.
 
 Browser score display engraves the same `TrackNote` data into VexFlow SVG
 notation. Timing helpers may prepare measure/sync layout metadata, but the
@@ -173,6 +226,20 @@ or confidence-filtered instead of shifted forward, so the renderer does not
 invent extra timing movement. Auto-beams are conservative: they are flat,
 measure-local, rest-breaking, and disabled for dense or low-confidence voice
 measures that would otherwise produce misleading beam forests.
+
+Each track has a stable notation display policy:
+
+- Soprano and Alto prefer treble clef.
+- Tenor may use treble-8vb/tenor display semantics when supported; until then
+  it must use a consistent treble policy without changing stored pitch.
+- Baritone and Bass prefer bass clef.
+- Percussion uses percussion/rhythm notation when available, otherwise a
+  clearly marked rhythm-track fallback.
+
+Key signatures and accidentals must reserve engraving space and must not be
+hidden merely to avoid clipping. If the renderer cannot display a key signature
+cleanly, it should degrade to explicit accidentals with a warning rather than
+cropping or corrupting the staff.
 
 Track playback has two user-selectable sources:
 
@@ -204,7 +271,44 @@ time-signature denominator pulse expressed in quarter beats:
 Playback metronome clicks and looping recording/scoring metronomes should be
 scheduled from the Web Audio clock rather than accumulating plain timer drift.
 
+Per-track microphone recording is anchored to the studio clock, not to the
+button-click instant. Pressing record opens the microphone, shows a one-measure
+count-in based on the studio BPM and meter, then starts the actual retained WAV
+capture on the next downbeat. The metronome toggle controls only audible click
+sound during that count-in/recording window; even with sound muted, the
+internal BPM/meter grid remains the source used to normalize extracted
+`TrackNote.beat` and `duration_beats` values.
+
 ## Input Extraction Strategy
+
+### Common Track Assignment
+
+Every extraction path that produces one or more melodic parts must pass through
+the same track assignment policy before registration or candidate creation.
+Legacy average-pitch-only slot inference is not sufficient.
+
+The current assignment policy ranks each extracted part against the six fixed
+tracks using:
+
+- explicit part/track labels, such as Soprano, Alto, Tenor, Baritone, Bass, or
+  Percussion;
+- duration- and confidence-weighted pitch distribution;
+- range-fit ratio against each vocal track's expected range;
+- median and average pitch distance from each track's comfort center;
+- percussion label hints such as kick, snare, hat, drum, or percussion; and
+- original score order only as a weak tie-breaker when name/range evidence is
+  otherwise close.
+
+When multiple parts are imported at once, the engine solves the assignment as a
+score-wide mapping so two extracted parts do not silently occupy the same fixed
+track. A generic or badly named part is therefore placed by its major pitch
+range, while a clearly named part keeps its explicit identity unless the user
+overrides it in candidate review.
+
+After assignment, each part receives the shared notation display metadata for
+its target track: clef, tenor display octave policy, key signature, accidental
+spelling, and range warnings. This applies to MusicXML/MIDI, Audiveris OMR,
+vector-PDF fallback, AI generation, and voice/audio extraction candidates.
 
 ### First-Class Symbolic Inputs
 
@@ -234,8 +338,11 @@ The current MVP path is browser microphone capture or browser-normalized audio
 upload into local WAV transcription. The browser captures PCM audio or decodes
 browser-supported MP3/M4A/OGG/FLAC input, encodes a mono 16-bit PCM WAV data URL,
 and sends it through the same upload/transcription path. During browser
-recording, the UI may play a metronome loop and show input level feedback, but
-the persisted track content remains symbolic `TrackNote` data.
+recording, the UI opens the microphone before capture, displays the one-measure
+count-in, optionally plays audible metronome clicks, then captures from the
+downbeat. Input-level feedback is shown in both the count-in and recording
+states, but the persisted track content remains symbolic `TrackNote` data plus
+an optional retained source-audio asset for playback.
 
 Per-track voice upload and microphone recording must create durable `voice`
 engine jobs before extraction runs. The request may return while the job is
@@ -256,6 +363,23 @@ flooring, stable-pitch segment filtering, and median-based segment grouping.
 This is still a single-voice MVP, but it is expected to handle leading silence,
 quiet takes, moderate room noise, and short note gaps better than a
 fixed-threshold frame detector.
+
+The voice transcription backend is configurable through
+`GIGASTUDY_API_VOICE_TRANSCRIPTION_BACKEND`:
+
+- `auto` uses an installed Basic Pitch adapter when available, then tries
+  librosa pYIN, then falls back to the lightweight local WAV engine.
+- `basic_pitch` requires the optional Spotify Basic Pitch package and fails
+  recoverably when it is not installed or cannot produce in-range note events.
+- `librosa`, `pyin`, or `librosa_pyin` forces librosa pYIN. This is the
+  preferred free-plan server path for actual monophonic singing because it gives
+  probabilistic voiced/unvoiced pitch frames without bringing in TensorFlow.
+- `local` forces the lightweight built-in autocorrelation engine.
+
+Basic Pitch and librosa pYIN are treated as automatic music transcription
+providers, not as sources of truth by themselves. Their events/frames must still
+pass through the same BPM grid, track range, and notation normalization layer
+before becoming TrackNotes.
 
 Noise-only or non-singing recordings must fail with a recoverable extraction
 error instead of registering dense false notes. A track should be registered
@@ -289,6 +413,24 @@ package post-install scripts because they try to register desktop menu entries,
 which can fail in a headless container build. Local development may provide
 another binary path through `GIGASTUDY_API_AUDIVERIS_BIN` or through a
 PATH-discoverable `audiveris`/`Audiveris` command.
+
+The OMR backend is configurable through `GIGASTUDY_API_OMR_BACKEND`:
+
+- `auto` runs Audiveris first and falls back to vector-PDF extraction for PDF
+  inputs when Audiveris is unavailable, times out, or produces unusable output.
+- `audiveris` runs only the Audiveris path and fails recoverably on errors.
+- `pdf_vector` skips Audiveris and runs only the born-digital PDF geometry
+  extractor.
+- `vector_first` tries born-digital PDF geometry extraction first for PDFs,
+  then falls back to Audiveris if the vector path cannot read the score.
+
+Audiveris OMR also has a scan-oriented preprocessing retry. When the first
+Audiveris pass fails and `GIGASTUDY_API_OMR_PREPROCESS_MODE` is not `off`, the
+engine renders PDF/image input into a high-DPI grayscale PDF workspace, then
+retries Audiveris against that normalized input. The default DPI is controlled
+by `GIGASTUDY_API_OMR_PREPROCESS_DPI` and should stay conservative on the free
+plan because higher DPI improves scan legibility at the cost of memory and job
+time.
 
 OMR output can be wrong, so it must be treated as reviewable extraction output,
 not as unquestioned final track content.
@@ -568,6 +710,8 @@ from the same TrackNote, BPM, and meter contract used by playback and scoring.
 These code paths currently implement the contract:
 
 - API schema: `apps/api/src/gigastudy_api/api/schemas/studios.py`
+- Measure-owned notation normalization:
+  `apps/api/src/gigastudy_api/services/engine/notation.py`
 - Symbolic import: `apps/api/src/gigastudy_api/services/engine/symbolic.py`
 - Voice extraction: `apps/api/src/gigastudy_api/services/engine/voice.py`
 - Durable extraction queue:

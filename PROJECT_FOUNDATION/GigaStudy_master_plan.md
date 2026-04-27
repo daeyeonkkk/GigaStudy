@@ -44,6 +44,8 @@ signature when the source carries meter metadata.
 
 GigaStudy does not currently generate natural human voice audio. Recording,
 upload, OMR, MIDI, MusicXML, and AI generation all converge into TrackNote data.
+Voice recordings are fitted onto the studio BPM/meter score grid; they do not
+create their own drifting tempo map.
 
 Detailed engine rules live in `ENGINE_ARCHITECTURE.md`.
 
@@ -124,8 +126,9 @@ Global transport:
 - Play/Pause (`재생/일시정지`) plays or pauses all registered tracks together.
 - Stop (`중지`) returns the ensemble to 0 seconds with each track's sync offset still
   applied.
-- Metronome toggle (`메트로놈 토글`) controls whether the metronome participates in recording or
-  scoring contexts.
+- Metronome toggle (`메트로놈 토글`) controls whether the metronome is audible in
+  recording or scoring contexts. It does not disable the internal BPM/meter
+  clock.
 
 Per-track sync:
 
@@ -140,9 +143,16 @@ Per-track sync:
 
 Track fill actions:
 
-- Recording captures browser microphone audio, encodes WAV, and converts it
-  into a registered TrackNote track. When the metronome is enabled, recording
-  plays a click track and shows elapsed-time/input-level feedback.
+- Recording opens the browser microphone, runs a one-measure count-in, then
+  starts actual WAV capture on the next studio-clock downbeat. When the
+  metronome is enabled, the count-in/recording clicks are audible; when disabled
+  only the sound is muted and the same BPM/meter grid is still used for
+  TrackNote timing. The UI shows count-in, elapsed-time, and input-level
+  feedback.
+- Voice-derived TrackNotes must be cleaned into readable score material before
+  registration: stable pitch segments, consistent quantization, measure-owned
+  notes, valid ties across barlines, and track-appropriate clef/key/accidental
+  display policy.
 - Upload accepts supported audio, MIDI, or score formats and converts them into
   registered track material or reviewable extraction candidates. Browser-
   decodable MP3/M4A/OGG/FLAC audio is normalized to WAV before the local

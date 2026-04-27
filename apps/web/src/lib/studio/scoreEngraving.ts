@@ -90,7 +90,7 @@ function samePitch(left: TrackRenderNote, right: TrackRenderNote): boolean {
 }
 
 function accidentalWeight(note: TrackRenderNote): number {
-  return /[#b]/u.test(note.note.label) ? 1 : 0
+  return /[#bn]/u.test(note.note.accidental ?? note.note.spelled_label ?? note.note.label) ? 1 : 0
 }
 
 function decomposeDuration(beats: number): EngravingDuration[] {

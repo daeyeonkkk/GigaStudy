@@ -54,6 +54,7 @@ from gigastudy_api.services.engine.music_theory import (
     track_name,
 )
 from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
+from gigastudy_api.services.engine.notation import annotate_track_notes_for_slot
 from gigastudy_api.services.engine.pdf_vector_omr import (
     PdfVectorOmrError,
     parse_born_digital_pdf_score,
@@ -1226,7 +1227,7 @@ class StudioRepository:
 
         source_slot_id, notes, confidence = max(attempts, key=lambda attempt: (len(attempt[1]), attempt[2]))
         suggested_slot_id = infer_slot_id(None, notes, fallback=source_slot_id)
-        return suggested_slot_id, notes, confidence
+        return suggested_slot_id, annotate_track_notes_for_slot(notes, slot_id=suggested_slot_id), confidence
 
     def _append_initial_candidate(
         self,
@@ -1468,37 +1469,76 @@ class StudioRepository:
         job_method = "audiveris_cli"
         confidence = 0.55
         message = "OMR result requires user approval before track registration."
+        omr_backend = settings.omr_backend.strip().lower()
         try:
-            output_path = self._run_audiveris_omr(
-                input_path=input_path,
-                output_dir=self._job_output_dir(record.studio_id, record.job_id),
-                audiveris_bin=settings.audiveris_bin,
-                timeout_seconds=settings.engine_processing_timeout_seconds,
-            )
-            parsed_symbolic = parse_symbolic_file_with_metadata(
-                output_path,
-                bpm=studio.bpm,
-                target_slot_id=None if parse_all_parts else self._job_slot_id(record.studio_id, record.job_id),
-            )
-            output_reference = self._persist_generated_asset(output_path)
+            if omr_backend in {"pdf_vector", "vector_pdf"}:
+                parsed_symbolic, output_path, output_reference = self._run_pdf_vector_omr_fallback(
+                    record=record,
+                    input_path=input_path,
+                    studio=studio,
+                    source_label=source_label,
+                    primary_error="Audiveris skipped because GIGASTUDY_API_OMR_BACKEND=pdf_vector.",
+                )
+                candidate_method = "pdf_vector_omr_review"
+                extraction_method = "pdf_vector_omr_v0"
+                job_method = "pdf_vector_omr"
+                confidence = 0.46
+                message = "Vector PDF extraction produced reviewable part candidates."
+            elif omr_backend == "vector_first" and input_path.suffix.lower() == ".pdf":
+                try:
+                    parsed_symbolic, output_path, output_reference = self._run_pdf_vector_omr_fallback(
+                        record=record,
+                        input_path=input_path,
+                        studio=studio,
+                        source_label=source_label,
+                        primary_error="Vector-first OMR mode.",
+                    )
+                    candidate_method = "pdf_vector_omr_review"
+                    extraction_method = "pdf_vector_omr_v0"
+                    job_method = "pdf_vector_omr"
+                    confidence = 0.46
+                    message = "Vector PDF extraction produced reviewable part candidates."
+                except (PdfVectorOmrError, AssetStorageError):
+                    output_path = self._run_audiveris_omr(
+                        input_path=input_path,
+                        output_dir=self._job_output_dir(record.studio_id, record.job_id),
+                        audiveris_bin=settings.audiveris_bin,
+                        timeout_seconds=settings.engine_processing_timeout_seconds,
+                    )
+                    parsed_symbolic = parse_symbolic_file_with_metadata(
+                        output_path,
+                        bpm=studio.bpm,
+                        target_slot_id=None if parse_all_parts else self._job_slot_id(record.studio_id, record.job_id),
+                    )
+                    output_reference = self._persist_generated_asset(output_path)
+            else:
+                output_path = self._run_audiveris_omr(
+                    input_path=input_path,
+                    output_dir=self._job_output_dir(record.studio_id, record.job_id),
+                    audiveris_bin=settings.audiveris_bin,
+                    timeout_seconds=settings.engine_processing_timeout_seconds,
+                )
+                parsed_symbolic = parse_symbolic_file_with_metadata(
+                    output_path,
+                    bpm=studio.bpm,
+                    target_slot_id=None if parse_all_parts else self._job_slot_id(record.studio_id, record.job_id),
+                )
+                output_reference = self._persist_generated_asset(output_path)
         except (OmrUnavailableError, SymbolicParseError) as primary_error:
+            if omr_backend == "audiveris":
+                self._mark_job_failed(record.studio_id, record.job_id, message=str(primary_error))
+                return
             if input_path.suffix.lower() != ".pdf":
                 self._mark_job_failed(record.studio_id, record.job_id, message=str(primary_error))
                 return
             try:
-                parsed_symbolic = parse_born_digital_pdf_score(
-                    input_path,
-                    bpm=studio.bpm,
-                    time_signature_numerator=studio.time_signature_numerator,
-                    time_signature_denominator=studio.time_signature_denominator,
-                )
-                output_path = _write_pdf_vector_omr_summary(
-                    self._job_output_dir(record.studio_id, record.job_id),
-                    parsed_symbolic,
+                parsed_symbolic, output_path, output_reference = self._run_pdf_vector_omr_fallback(
+                    record=record,
+                    input_path=input_path,
+                    studio=studio,
                     source_label=source_label,
                     primary_error=str(primary_error),
                 )
-                output_reference = self._persist_generated_asset(output_path)
                 candidate_method = "pdf_vector_omr_review"
                 extraction_method = "pdf_vector_omr_v0"
                 job_method = "pdf_vector_omr"
@@ -1514,6 +1554,9 @@ class StudioRepository:
                     message=f"{primary_error}; PDF vector fallback failed: {fallback_error}",
                 )
                 return
+        except PdfVectorOmrError as error:
+            self._mark_job_failed(record.studio_id, record.job_id, message=str(error))
+            return
         except AssetStorageError as error:
             self._mark_job_failed(record.studio_id, record.job_id, message=str(error))
             return
@@ -1577,6 +1620,32 @@ class StudioRepository:
             message=message,
             message_by_slot=message_by_slot,
         )
+
+    def _run_pdf_vector_omr_fallback(
+        self,
+        *,
+        record: EngineQueueJob,
+        input_path: Path,
+        studio: Studio,
+        source_label: str,
+        primary_error: str,
+    ) -> tuple[ParsedSymbolicFile, Path, str]:
+        if input_path.suffix.lower() != ".pdf":
+            raise PdfVectorOmrError("Vector PDF extraction only supports PDF input.")
+        parsed_symbolic = parse_born_digital_pdf_score(
+            input_path,
+            bpm=studio.bpm,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+        )
+        output_path = _write_pdf_vector_omr_summary(
+            self._job_output_dir(record.studio_id, record.job_id),
+            parsed_symbolic,
+            source_label=source_label,
+            primary_error=primary_error,
+        )
+        output_reference = self._persist_generated_asset(output_path)
+        return parsed_symbolic, output_path, output_reference
 
     def _process_voice_queue_record(self, record: EngineQueueJob) -> None:
         studio = self.get_studio(record.studio_id)
@@ -2860,15 +2929,18 @@ def _mark_notes_as_omr(
     extraction_method: str = "audiveris_omr_v0",
 ) -> dict[int, list[TrackNote]]:
     return {
-        slot_id: [
-            note.model_copy(
-                update={
-                    "source": "omr",
-                    "extraction_method": extraction_method,
-                }
-            )
-            for note in notes
-        ]
+        slot_id: annotate_track_notes_for_slot(
+            [
+                note.model_copy(
+                    update={
+                        "source": "omr",
+                        "extraction_method": extraction_method,
+                    }
+                )
+                for note in notes
+            ],
+            slot_id=slot_id,
+        )
         for slot_id, notes in mapped_notes.items()
     }
 

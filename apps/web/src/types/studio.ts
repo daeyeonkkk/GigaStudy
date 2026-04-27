@@ -16,6 +16,11 @@ export type ScoreNote = {
   pitch_midi: number | null
   pitch_hz: number | null
   label: string
+  spelled_label?: string | null
+  accidental?: string | null
+  clef?: string | null
+  key_signature?: string | null
+  display_octave_shift?: number
   onset_seconds: number
   duration_seconds: number
   beat: number
@@ -29,6 +34,8 @@ export type ScoreNote = {
   is_tied: boolean
   voice_index: number | null
   staff_index: number | null
+  quantization_grid?: number | null
+  notation_warnings?: string[]
 }
 
 export type TrackExtractionJob = {

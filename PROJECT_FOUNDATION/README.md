@@ -15,6 +15,10 @@ upload, recording, or AI generation, synchronize those tracks, play them as an
 ensemble, and score a vocal attempt against the target track's registered
 answer notes while selected references play as context.
 
+The core artifact is one six-track score. BPM and time signature define the
+paper grid for that score. Recordings, uploads, OMR, MIDI, MusicXML, and AI
+generation are all ways to add symbolic `TrackNote` material onto that grid.
+
 Canonical track slots:
 
 1. Soprano
@@ -65,6 +69,12 @@ Each track can be filled by:
 Each registered track has score display, playback controls, stop, scoring
 (`채점`), and 0.01 second sync adjustment. The top transport plays, pauses, and
 stops the whole six-track ensemble while preserving each track's sync offset.
+
+Voice recordings are interpreted against the studio BPM/meter clock. The
+metronome toggle controls audible clicks only; the internal score clock remains
+active so extracted notes land on consistent measure boundaries. Voice-derived
+notes must be normalized into readable measure-based notation before they become
+trusted track material.
 
 ### 3. Scoring Session And Report
 

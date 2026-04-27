@@ -10,6 +10,11 @@ from gigastudy_api.services.engine.pdf_vector_omr import (
     _measure_position_for_x,
 )
 
+try:
+    import fitz
+except ImportError:  # pragma: no cover
+    fitz = None
+
 
 def test_run_audiveris_omr_converts_timeout_to_unavailable(tmp_path: Path, monkeypatch) -> None:
     def timeout_run(*args, **kwargs):
@@ -24,6 +29,42 @@ def test_run_audiveris_omr_converts_timeout_to_unavailable(tmp_path: Path, monke
             audiveris_bin=str(tmp_path / "Audiveris"),
             timeout_seconds=7,
         )
+
+
+@pytest.mark.skipif(fitz is None, reason="PyMuPDF is required for OMR preprocessing")
+def test_run_audiveris_omr_retries_with_preprocessed_pdf(tmp_path: Path, monkeypatch) -> None:
+    source_pdf = tmp_path / "scan.pdf"
+    document = fitz.open()
+    page = document.new_page(width=200, height=120)
+    page.insert_text((20, 40), "Soprano")
+    document.save(source_pdf)
+    document.close()
+
+    calls: list[Path] = []
+
+    def fake_run(command, **kwargs):
+        input_path = Path(command[-1])
+        calls.append(input_path)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="primary failed")
+        output_dir = Path(command[command.index("-output") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "retry.musicxml").write_text("<score-partwise/>", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    output = run_audiveris_omr(
+        input_path=source_pdf,
+        output_dir=tmp_path / "out",
+        audiveris_bin=str(tmp_path / "Audiveris"),
+        timeout_seconds=7,
+    )
+
+    assert output.name == "retry.musicxml"
+    assert calls[0] == source_pdf
+    assert calls[1].name == "scan-preprocessed.pdf"
+    assert calls[1].exists()
 
 
 def test_vector_omr_positions_stay_inside_measure_grid() -> None:

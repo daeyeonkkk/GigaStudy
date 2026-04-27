@@ -9,6 +9,7 @@ export type MicrophoneRecorder = {
   chunks: Float32Array[]
   sampleRate: number
   startedAt: number
+  capturing: boolean
   rmsLevel: number
   peakLevel: number
 }
@@ -17,7 +18,7 @@ export function getRecordingLevelPercent(level: number): number {
   return Math.round(Math.max(0, Math.min(1, level * 12)) * 100)
 }
 
-export async function startMicrophoneRecorder(): Promise<MicrophoneRecorder | null> {
+export async function startMicrophoneRecorder(options: { captureImmediately?: boolean } = {}): Promise<MicrophoneRecorder | null> {
   if (!navigator.mediaDevices?.getUserMedia) {
     return null
   }
@@ -42,13 +43,16 @@ export async function startMicrophoneRecorder(): Promise<MicrophoneRecorder | nu
       chunks,
       sampleRate: context.sampleRate,
       startedAt: performance.now(),
+      capturing: options.captureImmediately !== false,
       rmsLevel: 0,
       peakLevel: 0,
     }
 
     processor.onaudioprocess = (event) => {
       const input = event.inputBuffer.getChannelData(0)
-      chunks.push(new Float32Array(input))
+      if (recorder.capturing) {
+        chunks.push(new Float32Array(input))
+      }
 
       let peak = 0
       let squareTotal = 0
@@ -69,6 +73,16 @@ export async function startMicrophoneRecorder(): Promise<MicrophoneRecorder | nu
   } catch {
     return null
   }
+}
+
+export function beginMicrophoneCapture(recorder: MicrophoneRecorder | null): boolean {
+  if (!recorder) {
+    return false
+  }
+  recorder.chunks.length = 0
+  recorder.startedAt = performance.now()
+  recorder.capturing = true
+  return true
 }
 
 export async function stopMicrophoneRecorder(recorder: MicrophoneRecorder | null): Promise<string | null> {

@@ -10,6 +10,7 @@ from gigastudy_api.services.engine.music_theory import (
     note_from_pitch,
     quarter_beats_per_measure,
 )
+from gigastudy_api.services.engine.notation import normalize_track_notes
 
 VOICE_LEADING_METHOD = "rule_based_voice_leading_v1"
 PERCUSSION_METHOD = "rule_based_percussion_v0"
@@ -164,11 +165,18 @@ def generate_rule_based_harmony(
     context_notes_by_slot: dict[int, list[TrackNote]] | None = None,
 ) -> list[TrackNote]:
     if target_slot_id == 6:
-        return _generate_percussion(
-            context_tracks=context_tracks,
+        return normalize_track_notes(
+            _generate_percussion(
+                context_tracks=context_tracks,
+                bpm=bpm,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            ),
             bpm=bpm,
+            slot_id=target_slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
+            merge_adjacent_same_pitch=False,
         )
     if not context_tracks:
         return []
@@ -198,12 +206,19 @@ def generate_rule_based_harmony_candidates(
     resolved_candidate_count = max(1, min(5, candidate_count))
     if target_slot_id == 6:
         return [
-            _generate_percussion(
-                context_tracks=context_tracks,
+            normalize_track_notes(
+                _generate_percussion(
+                    context_tracks=context_tracks,
+                    bpm=bpm,
+                    time_signature_numerator=time_signature_numerator,
+                    time_signature_denominator=time_signature_denominator,
+                    variant_index=variant_index,
+                ),
                 bpm=bpm,
+                slot_id=target_slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
-                variant_index=variant_index,
+                merge_adjacent_same_pitch=False,
             )
             for variant_index in range(resolved_candidate_count)
         ]
@@ -229,7 +244,7 @@ def generate_rule_based_harmony_candidates(
     if not selected_paths:
         return []
 
-    return [
+    generated_candidates = [
         [
             note_from_pitch(
                 beat=event.beat,
@@ -247,6 +262,17 @@ def generate_rule_based_harmony_candidates(
             for event, pitch in zip(events, path.pitches, strict=False)
         ]
         for path in selected_paths
+    ]
+    return [
+        normalize_track_notes(
+            notes,
+            bpm=bpm,
+            slot_id=target_slot_id,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            merge_adjacent_same_pitch=False,
+        )
+        for notes in generated_candidates
     ]
 
 

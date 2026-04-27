@@ -25,10 +25,13 @@ The current implementation has a working vertical slice for:
   stabilization, short-click rejection, stable-pitch filtering, and
   median-based note segmentation
 - Browser MP3/M4A/OGG/FLAC audio normalization to WAV before voice extraction
-- Browser microphone recording to WAV TrackNote registration
+- Browser microphone recording to WAV TrackNote registration with a
+  one-measure BPM/meter count-in before actual capture
 - Retained recording/audio track assets for playback while TrackNote remains
   canonical for scoring, notation, export, and AI generation
-- Browser recording metronome playback and input level feedback
+- Browser recording metronome playback and input level feedback, with the
+  metronome toggle controlling audible clicks only and not the internal score
+  clock
 - Audiveris OMR job adapter
 - API Docker image now includes Audiveris 5.10.2 for Cloud Run OMR execution,
   with local development still able to override the binary path.
@@ -66,6 +69,17 @@ The current implementation has a working vertical slice for:
   that visually leak past barlines.
 - Failed extraction job rows show contextual retry guidance for noisy voice
   takes, vector fallback failure, and Audiveris timeout cases.
+- Voice-to-score output is treated as a notation-normalization problem after
+  pitch detection: stable singing segments are quantized onto the immutable
+  BPM/meter grid, cleaned for noise, assigned to measures, and prepared for
+  track-consistent clef/key/accidental engraving before registration or review.
+- The API now has a shared notation-normalization layer for voice-derived and
+  rule-generated TrackNotes. Voice notes may merge adjacent same-pitch fragments
+  created by pitch tracking, while AI/percussion notes preserve generated rhythm
+  events and only receive measure/key/clef metadata.
+- Voice notation has a pre-real-user synthetic quality gate covering timing
+  jitter, background noise, hum, vibrato, attack scoop, barline-crossing sustain,
+  and tenor display policy.
 - AI generation produces multiple reviewable candidates and rejects sibling
   candidates when one is approved
 - Rule-based symbolic vocal harmony generation with key estimation, chord
@@ -182,13 +196,18 @@ Goal: let each track be filled by user action.
 Required:
 
 - Per-track recording
-- Recording metronome playback and input level feedback
+- One-measure count-in before actual track recording capture
+- Recording metronome playback and input level feedback, with the audible
+  metronome independent from the internal BPM/meter clock
 - Per-track upload
 - Canonical TrackNote persistence
 - MusicXML/MXL/XML parser
 - MIDI parser
 - Symbolic parser preserves source time signature when available
 - Single voice WAV extraction path
+- Voice-to-score normalization that does not rewrite studio BPM, keeps note
+  ownership inside measures, removes/merges noisy micro-events, and applies the
+  same quantization rules across all vocal tracks
 - Audiveris OMR job path for PDF/image score input
 - Studio UI polls active OMR jobs until they become review candidates or fail.
 - Supported format validation
@@ -252,6 +271,9 @@ Required:
   aligned to the same measure grid on every registered track
 - Measure-based horizontal VexFlow SVG score engraving per track on the studio
   time-signature grid
+- Voice-derived notes must be fitted onto the fixed studio BPM/meter grid
+  before engraving; BPM drift is never introduced to make a recording easier to
+  parse.
 - Duration-aware browser notation for whole, half, quarter, eighth, sixteenth,
   and dotted values, plus note-to-note ties for long or explicitly tied notes.
 - Hidden spacer rests preserve rhythmic gaps while keeping noisy micro-rests out
@@ -264,10 +286,13 @@ Required:
 - Sync changes move notes across the fixed grid without moving barlines.
 - Registered tracks share measure widths so ensemble playback, barlines, and
   playhead feedback do not drift between staves.
-- Soprano/Alto/Tenor use treble engraving, Baritone/Bass use bass engraving,
-  and high/low notes rely on ledger lines instead of visual clamping.
-- Key-signature marks are hidden until the score renderer can guarantee
-  reliable spacing and clipping behavior.
+- Soprano/Alto use treble engraving, Tenor uses a consistent tenor/treble
+  display policy, Baritone/Bass use bass engraving, and high/low notes rely on
+  clef policy, octave display policy, and ledger lines instead of visual
+  clamping or silent pitch transposition.
+- Key signatures and accidentals reserve engraving space and should reduce
+  accidental clutter. If key signatures cannot be rendered cleanly, the fallback
+  is explicit accidentals with warnings, not hidden or clipped symbols.
 
 Cut line:
 
@@ -390,11 +415,14 @@ Goal: improve extraction quality without changing the product model.
 
 Required:
 
-- Harden browser microphone recording beyond the current level meter and
-  metronome loop with clearer failed-extraction recovery.
+- Harden browser microphone recording beyond count-in/level feedback with
+  clearer failed-extraction recovery.
 - Continue improving noisy-room voice extraction, especially for distinguishing
   sustained singing from speech, breath, keyboard clicks, and other unstable
   room noise.
+- Continue raising voice-to-score normalization quality beyond the current fixed
+  BPM grid, measure ownership, valid tie splitting, tonal spelling/key
+  signatures, and track-specific clef/range display baseline.
 - Harden browser audio decoding failure messages for codec-specific failures.
 - Harden OMR review beyond the current first-page source preview: add page
   navigation, candidate-to-page focus, and eventual source-note overlay for

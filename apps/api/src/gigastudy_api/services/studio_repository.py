@@ -45,6 +45,7 @@ from gigastudy_api.services.asset_storage import (
     build_asset_storage,
 )
 from gigastudy_api.services.asset_registry import AssetRecord, AssetRegistry, build_asset_registry
+from gigastudy_api.services.engine.arrangement import prepare_ensemble_registration
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
@@ -55,6 +56,11 @@ from gigastudy_api.services.engine.music_theory import (
 )
 from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
 from gigastudy_api.services.engine.notation import annotate_track_notes_for_slot
+from gigastudy_api.services.engine.notation_quality import (
+    RegistrationNotationResult,
+    apply_notation_review_instruction,
+    prepare_notes_for_track_registration,
+)
 from gigastudy_api.services.engine.pdf_vector_omr import (
     PdfVectorOmrError,
     parse_born_digital_pdf_score,
@@ -69,6 +75,11 @@ from gigastudy_api.services.engine.symbolic import (
 )
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError, transcribe_voice_file
 from gigastudy_api.services.engine_queue import EngineQueueJob, EngineQueueStore, build_engine_queue_store
+from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan, plan_harmony_with_deepseek
+from gigastudy_api.services.llm.notation_review import (
+    review_ensemble_registration_with_deepseek,
+    review_notation_with_deepseek,
+)
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
 
 
@@ -659,6 +670,16 @@ class StudioRepository:
                 detail="AI generation requires at least one registered context track.",
             )
 
+        llm_plan = plan_harmony_with_deepseek(
+            settings=get_settings(),
+            title=studio.title,
+            bpm=studio.bpm,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            target_slot_id=slot_id,
+            context_notes_by_slot=context_notes_by_slot,
+            candidate_count=request.candidate_count,
+        )
         candidate_notes = generate_rule_based_harmony_candidates(
             target_slot_id=slot_id,
             context_tracks=context_notes,
@@ -667,21 +688,36 @@ class StudioRepository:
             time_signature_denominator=studio.time_signature_denominator,
             context_notes_by_slot=context_notes_by_slot,
             candidate_count=request.candidate_count,
+            profile_names=llm_plan.profile_names() if llm_plan is not None else None,
+            harmony_plan=llm_plan,
         )
         if not candidate_notes:
             raise HTTPException(status_code=409, detail="No harmony notes could be generated.")
 
         label = "Generated percussion groove" if slot_id == 6 else "Voice-leading harmony score"
+        method = (
+            "rule_based_percussion_candidates_v0"
+            if slot_id == 6
+            else (
+                "deepseek_v4_flash_guided_voice_leading_candidates_v1"
+                if llm_plan is not None
+                else "rule_based_voice_leading_candidates_v1"
+            )
+        )
+        message = (
+            "DeepSeek V4 Flash planned candidate directions; deterministic engine generated valid TrackNote candidates."
+            if llm_plan is not None
+            else "AI generated multiple candidates. Approve one candidate to register it."
+        )
         if request.review_before_register:
             return self._add_generation_candidates(
                 studio_id,
                 slot_id,
                 candidate_notes,
                 source_label=label,
-                method="rule_based_percussion_candidates_v0"
-                if slot_id == 6
-                else "rule_based_voice_leading_candidates_v1",
-                message="AI generated multiple candidates. Approve one candidate to register it.",
+                method=method,
+                message=message,
+                llm_plan=llm_plan,
             )
 
         target_track = self._find_track(studio, slot_id)
@@ -760,7 +796,18 @@ class StudioRepository:
                     status_code=409,
                     detail="Approving this candidate would overwrite an existing registered track.",
                 )
+            registration = self._prepare_registration_notes(
+                studio,
+                target_slot_id,
+                source_kind=candidate.source_kind,
+                notes=candidate.notes,
+            )
             candidate.status = "approved"
+            candidate.notes = registration.notes
+            candidate.diagnostics = {
+                **candidate.diagnostics,
+                "registration_quality": registration.diagnostics,
+            }
             candidate.updated_at = timestamp
             track.status = "registered"
             track.source_kind = candidate.source_kind
@@ -768,8 +815,9 @@ class StudioRepository:
             track.audio_source_path = candidate.audio_source_path
             track.audio_source_label = candidate.audio_source_label
             track.audio_mime_type = candidate.audio_mime_type
-            track.duration_seconds = _track_duration_seconds(candidate.notes)
-            track.notes = candidate.notes
+            track.duration_seconds = _track_duration_seconds(registration.notes)
+            track.notes = registration.notes
+            track.diagnostics = {"registration_quality": registration.diagnostics}
             track.updated_at = timestamp
             if target_slot_id != candidate.suggested_slot_id:
                 self._release_review_track_if_empty(
@@ -865,9 +913,36 @@ class StudioRepository:
                 )
 
             timestamp = _now()
+            source_kinds = {candidate.source_kind for candidate in unique_candidates_by_slot.values()}
+            if len(source_kinds) == 1:
+                shared_source_kind = next(iter(source_kinds))
+                registrations = self._prepare_registration_batch(
+                    studio,
+                    {
+                        slot_id: candidate.notes
+                        for slot_id, candidate in unique_candidates_by_slot.items()
+                    },
+                    source_kind=shared_source_kind,
+                )
+            else:
+                registrations = {
+                    slot_id: self._prepare_registration_notes(
+                        studio,
+                        slot_id,
+                        source_kind=candidate.source_kind,
+                        notes=candidate.notes,
+                    )
+                    for slot_id, candidate in unique_candidates_by_slot.items()
+                }
             for slot_id, candidate in unique_candidates_by_slot.items():
                 track = self._find_track(studio, slot_id)
+                registration = registrations[slot_id]
                 candidate.status = "approved"
+                candidate.notes = registration.notes
+                candidate.diagnostics = {
+                    **candidate.diagnostics,
+                    "registration_quality": registration.diagnostics,
+                }
                 candidate.updated_at = timestamp
                 track.status = "registered"
                 track.source_kind = candidate.source_kind
@@ -875,8 +950,9 @@ class StudioRepository:
                 track.audio_source_path = candidate.audio_source_path
                 track.audio_source_label = candidate.audio_source_label
                 track.audio_mime_type = candidate.audio_mime_type
-                track.duration_seconds = _track_duration_seconds(candidate.notes)
-                track.notes = candidate.notes
+                track.duration_seconds = _track_duration_seconds(registration.notes)
+                track.notes = registration.notes
+                track.diagnostics = {"registration_quality": registration.diagnostics}
                 track.updated_at = timestamp
 
             for candidate in duplicate_candidates:
@@ -1054,14 +1130,21 @@ class StudioRepository:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
             track = self._find_track(studio, slot_id)
+            registration = self._prepare_registration_notes(
+                studio,
+                slot_id,
+                source_kind=source_kind,
+                notes=notes,
+            )
             track.status = "registered"
             track.source_kind = source_kind
             track.source_label = source_label
             track.audio_source_path = audio_source_path
             track.audio_source_label = audio_source_label
             track.audio_mime_type = audio_mime_type
-            track.duration_seconds = _track_duration_seconds(notes)
-            track.notes = notes
+            track.duration_seconds = _track_duration_seconds(registration.notes)
+            track.notes = registration.notes
+            track.diagnostics = {"registration_quality": registration.diagnostics}
             track.updated_at = timestamp
             studio.updated_at = timestamp
             self._save_studio(studio)
@@ -1080,20 +1163,226 @@ class StudioRepository:
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
-            for slot_id, notes in mapped_notes.items():
+            registrations = self._prepare_registration_batch(
+                studio,
+                mapped_notes,
+                source_kind=source_kind,
+            )
+            for slot_id in mapped_notes:
                 track = self._find_track(studio, slot_id)
+                registration = registrations[slot_id]
                 track.status = "registered"
                 track.source_kind = source_kind
                 track.source_label = source_label
                 track.audio_source_path = None
                 track.audio_source_label = None
                 track.audio_mime_type = None
-                track.duration_seconds = _track_duration_seconds(notes)
-                track.notes = notes
+                track.duration_seconds = _track_duration_seconds(registration.notes)
+                track.notes = registration.notes
+                track.diagnostics = {"registration_quality": registration.diagnostics}
                 track.updated_at = timestamp
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
+
+    def _prepare_registration_notes(
+        self,
+        studio: Studio,
+        slot_id: int,
+        *,
+        source_kind: SourceKind,
+        notes: list[TrackNote],
+    ) -> RegistrationNotationResult:
+        registration = self._prepare_single_track_notation(
+            studio,
+            slot_id,
+            source_kind=source_kind,
+            notes=notes,
+        )
+        return self._apply_ensemble_arrangement_gate(
+            studio,
+            slot_id,
+            registration,
+            source_kind=source_kind,
+        )
+
+    def _prepare_registration_batch(
+        self,
+        studio: Studio,
+        mapped_notes: dict[int, list[TrackNote]],
+        *,
+        source_kind: SourceKind,
+    ) -> dict[int, RegistrationNotationResult]:
+        first_pass = {
+            slot_id: self._prepare_single_track_notation(
+                studio,
+                slot_id,
+                source_kind=source_kind,
+                notes=notes,
+            )
+            for slot_id, notes in mapped_notes.items()
+        }
+        proposed_tracks_by_slot = {
+            slot_id: registration.notes
+            for slot_id, registration in first_pass.items()
+        }
+        return {
+            slot_id: self._apply_ensemble_arrangement_gate(
+                studio,
+                slot_id,
+                registration,
+                source_kind=source_kind,
+                proposed_tracks_by_slot=proposed_tracks_by_slot,
+            )
+            for slot_id, registration in first_pass.items()
+        }
+
+    def _prepare_single_track_notation(
+        self,
+        studio: Studio,
+        slot_id: int,
+        *,
+        source_kind: SourceKind,
+        notes: list[TrackNote],
+    ) -> RegistrationNotationResult:
+        reference_tracks = self._registration_reference_tracks(studio, exclude_slot_id=slot_id)
+        registration = prepare_notes_for_track_registration(
+            notes,
+            bpm=studio.bpm,
+            slot_id=slot_id,
+            source_kind=source_kind,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            reference_tracks=reference_tracks,
+        )
+        settings = get_settings()
+        instruction = review_notation_with_deepseek(
+            settings=settings,
+            title=studio.title,
+            bpm=studio.bpm,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            slot_id=slot_id,
+            source_kind=source_kind,
+            original_notes=notes,
+            prepared_notes=registration.notes,
+            diagnostics=registration.diagnostics,
+        )
+        if instruction is None:
+            return registration
+        reviewed_registration = apply_notation_review_instruction(
+            notes,
+            instruction=instruction.model_dump(exclude_none=True),
+            bpm=studio.bpm,
+            slot_id=slot_id,
+            source_kind=source_kind,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            baseline_result=registration,
+            reference_tracks=reference_tracks,
+        )
+        return reviewed_registration
+
+    def _apply_ensemble_arrangement_gate(
+        self,
+        studio: Studio,
+        slot_id: int,
+        registration: RegistrationNotationResult,
+        *,
+        source_kind: SourceKind,
+        proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
+    ) -> RegistrationNotationResult:
+        existing_tracks_by_slot = {
+            track.slot_id: track.notes
+            for track in studio.tracks
+            if track.slot_id != slot_id
+            and track.status == "registered"
+            and track.notes
+        }
+        if proposed_tracks_by_slot:
+            existing_tracks_by_slot.update(
+                {
+                    proposed_slot_id: proposed_notes
+                    for proposed_slot_id, proposed_notes in proposed_tracks_by_slot.items()
+                    if proposed_slot_id != slot_id and proposed_notes
+                }
+            )
+        ensemble_result = prepare_ensemble_registration(
+            target_slot_id=slot_id,
+            candidate_notes=registration.notes,
+            existing_tracks_by_slot=existing_tracks_by_slot,
+            bpm=studio.bpm,
+            source_kind=source_kind,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+        )
+        ensemble_registration = RegistrationNotationResult(
+            notes=ensemble_result.notes,
+            diagnostics={
+                **registration.diagnostics,
+                "ensemble_arrangement": ensemble_result.diagnostics,
+            },
+        )
+        settings = get_settings()
+        instruction = review_ensemble_registration_with_deepseek(
+            settings=settings,
+            title=studio.title,
+            bpm=studio.bpm,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            slot_id=slot_id,
+            source_kind=source_kind,
+            original_notes=registration.notes,
+            prepared_notes=ensemble_registration.notes,
+            diagnostics=ensemble_registration.diagnostics,
+            context_tracks_by_slot=existing_tracks_by_slot,
+            proposed_tracks_by_slot=proposed_tracks_by_slot,
+        )
+        if instruction is None:
+            return ensemble_registration
+
+        reviewed_registration = apply_notation_review_instruction(
+            ensemble_registration.notes,
+            instruction=instruction.model_dump(exclude_none=True),
+            bpm=studio.bpm,
+            slot_id=slot_id,
+            source_kind=source_kind,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            baseline_result=ensemble_registration,
+            reference_tracks=list(existing_tracks_by_slot.values()),
+        )
+        reviewed_ensemble_result = prepare_ensemble_registration(
+            target_slot_id=slot_id,
+            candidate_notes=reviewed_registration.notes,
+            existing_tracks_by_slot=existing_tracks_by_slot,
+            bpm=studio.bpm,
+            source_kind=source_kind,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+        )
+        return RegistrationNotationResult(
+            notes=reviewed_ensemble_result.notes,
+            diagnostics={
+                **reviewed_registration.diagnostics,
+                "ensemble_arrangement": reviewed_ensemble_result.diagnostics,
+                "pre_ensemble_llm_registration_quality": ensemble_registration.diagnostics,
+            },
+        )
+
+    def _registration_reference_tracks(
+        self,
+        studio: Studio,
+        *,
+        exclude_slot_id: int,
+    ) -> list[list[TrackNote]]:
+        return [
+            track.notes
+            for track in studio.tracks
+            if track.slot_id != exclude_slot_id
+            and track.status == "registered"
+            and track.notes
+        ]
 
     def _should_start_omr_job(
         self,
@@ -1133,13 +1422,20 @@ class StudioRepository:
                 studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
                 studio.time_signature_denominator = parsed_symbolic.time_signature_denominator
             timestamp = _now()
-            for slot_id, notes in parsed_symbolic.mapped_notes.items():
+            registrations = self._prepare_registration_batch(
+                studio,
+                parsed_symbolic.mapped_notes,
+                source_kind=registered_source_kind,
+            )
+            for slot_id in parsed_symbolic.mapped_notes:
                 track = self._find_track(studio, slot_id)
+                registration = registrations[slot_id]
                 track.status = "registered"
                 track.source_kind = registered_source_kind
                 track.source_label = source_filename
-                track.duration_seconds = _track_duration_seconds(notes)
-                track.notes = notes
+                track.duration_seconds = _track_duration_seconds(registration.notes)
+                track.notes = registration.notes
+                track.diagnostics = {"registration_quality": registration.diagnostics}
                 track.updated_at = timestamp
             studio.updated_at = timestamp
             return studio
@@ -1245,12 +1541,20 @@ class StudioRepository:
         audio_mime_type: str | None = None,
     ) -> None:
         timestamp = _now()
+        registration = self._prepare_registration_notes(
+            studio,
+            suggested_slot_id,
+            source_kind=source_kind,
+            notes=notes,
+        )
+        notes = registration.notes
         diagnostics = _candidate_diagnostics(
             suggested_slot_id,
             notes,
             method=method,
             confidence=confidence,
         )
+        diagnostics["registration_quality"] = registration.diagnostics
         candidate = ExtractionCandidate(
             candidate_id=uuid4().hex,
             suggested_slot_id=suggested_slot_id,
@@ -1723,6 +2027,13 @@ class StudioRepository:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
             for slot_id, notes in mapped_notes.items():
+                registration = self._prepare_registration_notes(
+                    studio,
+                    slot_id,
+                    source_kind=source_kind,
+                    notes=notes,
+                )
+                notes = registration.notes
                 source_diagnostics = (diagnostics_by_slot or {}).get(slot_id)
                 slot_confidence = (
                     confidence_by_slot.get(slot_id)
@@ -1742,6 +2053,7 @@ class StudioRepository:
                     confidence=slot_confidence,
                     source_diagnostics=source_diagnostics,
                 )
+                slot_diagnostics["registration_quality"] = registration.diagnostics
                 candidate = ExtractionCandidate(
                     candidate_id=uuid4().hex,
                     candidate_group_id=candidate_group_id,
@@ -1814,6 +2126,7 @@ class StudioRepository:
             track.status = "empty"
             track.source_kind = None
             track.source_label = None
+            track.diagnostics = {}
             track.updated_at = timestamp
 
     def _add_generation_candidates(
@@ -1825,6 +2138,7 @@ class StudioRepository:
         source_label: str,
         method: str,
         message: str,
+        llm_plan: DeepSeekHarmonyPlan | None = None,
     ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
@@ -1833,7 +2147,43 @@ class StudioRepository:
             timestamp = _now()
             candidate_group_id = uuid4().hex
             for index, notes in enumerate(candidate_notes, start=1):
+                registration = self._prepare_registration_notes(
+                    studio,
+                    slot_id,
+                    source_kind="ai",
+                    notes=notes,
+                )
+                notes = registration.notes
                 confidence = min((note.confidence for note in notes), default=0.65)
+                llm_direction = llm_plan.direction_for_index(index) if llm_plan is not None else None
+                diagnostics = _candidate_diagnostics(
+                    slot_id,
+                    notes,
+                    method=method,
+                    confidence=confidence,
+                )
+                diagnostics["registration_quality"] = registration.diagnostics
+                if llm_plan is not None:
+                    diagnostics["llm_provider"] = llm_plan.provider
+                    diagnostics["llm_model"] = llm_plan.model
+                    diagnostics["llm_plan_confidence"] = round(llm_plan.confidence, 3)
+                    diagnostics["llm_key"] = llm_plan.key
+                    diagnostics["llm_mode"] = llm_plan.mode
+                    diagnostics["llm_phrase_summary"] = llm_plan.phrase_summary
+                    diagnostics["llm_warnings"] = llm_plan.warnings
+                    diagnostics["llm_revision_cycles"] = llm_plan.revision_cycles
+                    diagnostics["llm_measure_intent_count"] = len(llm_plan.measures)
+                    diagnostics["llm_critique_summary"] = llm_plan.critique_summary
+                if llm_direction is not None:
+                    diagnostics["llm_profile"] = llm_direction.profile_name
+                    diagnostics["llm_goal"] = llm_direction.goal
+                    diagnostics["llm_register_bias"] = llm_direction.register_bias
+                    diagnostics["llm_motion_bias"] = llm_direction.motion_bias
+                    diagnostics["llm_rhythm_policy"] = llm_direction.rhythm_policy
+                    diagnostics["llm_chord_tone_priority"] = llm_direction.chord_tone_priority
+                    diagnostics["selection_hint"] = llm_direction.selection_hint
+                    diagnostics["candidate_role"] = llm_direction.role
+                    diagnostics["risk_tags"] = llm_direction.risk_tags
                 candidate = ExtractionCandidate(
                     candidate_id=uuid4().hex,
                     candidate_group_id=candidate_group_id,
@@ -1841,16 +2191,11 @@ class StudioRepository:
                     source_kind="ai",
                     source_label=source_label,
                     method=method,
-                    variant_label=_generation_variant_label(index, slot_id, notes),
+                    variant_label=llm_direction.title if llm_direction is not None else _generation_variant_label(index, slot_id, notes),
                     confidence=confidence,
                     notes=notes,
                     message=message,
-                    diagnostics=_candidate_diagnostics(
-                        slot_id,
-                        notes,
-                        method=method,
-                        confidence=confidence,
-                    ),
+                    diagnostics=diagnostics,
                     created_at=timestamp,
                     updated_at=timestamp,
                 )
@@ -2088,6 +2433,7 @@ class StudioRepository:
             track.audio_source_label = None
             track.audio_mime_type = None
             track.duration_seconds = 0
+            track.diagnostics = {}
         track.updated_at = timestamp
 
     def _build_admin_studio_summary(

@@ -168,6 +168,79 @@ drift, device latency, and loose entrances are handled as sync offset and
 beat-grid quantization problems. The BPM/meter grid is the paper; extracted
 notes are fitted onto it.
 
+Final track registration must pass through the shared notation registration
+quality gate in `services/engine/notation_quality.py`. This applies to direct
+registration, multi-track import application, extraction candidate approval,
+bulk OMR approval, and AI candidate approval. Voice/audio/AI material is
+rewritten onto the studio BPM/meter grid, noise-like micro-events are filtered,
+dense voice measures are simplified into readable beat cells, and all notes
+receive track display metadata before they become registered track content.
+Symbolic score inputs preserve trusted source rhythm but still receive repaired
+measure metadata, clef/key/spelling policy, and measure-boundary splitting.
+When the target studio already has registered sibling tracks, final
+registration may compare voice-like extracted material against those sibling
+track beat positions and apply only a small deterministic whole-track beat
+offset correction. This corrects capture/extraction latency that would make a
+new track slightly early or late on the shared score grid. The correction must
+not move barlines, change BPM, or force symbolic MusicXML/MIDI syncopation onto
+another track's rhythm. Explicit symbolic score timing remains authoritative
+unless later product policy adds a user-visible import repair mode.
+
+After the single-track notation gate, registration must run an ensemble
+arrangement gate against the full proposed six-track score context. Single
+track approval compares the proposed track against already registered sibling
+tracks. Multi-track import or bulk OMR approval must prepare all proposed parts
+first, then validate each target against both existing registered tracks and
+the other proposed tracks before any of them are committed. This prevents the
+first imported part from being registered blindly while later parts receive
+better context.
+
+The ensemble gate validates whether the proposed track sits coherently inside
+the six-track a cappella score: vocal range, voice crossing, adjacent voice
+spacing, parallel perfect interval motion, over-thin chord coverage, singability
+leaps, suspicious structural doubled leading tones, and bass foundation risks
+are diagnosed before the notes are committed. The result is stored under
+track/candidate registration diagnostics and target notes receive ensemble
+warning flags when a concrete note causes the issue.
+
+The gate remains conservative, but it is no longer purely passive for clear
+extractable mistakes. For voice/audio/AI material, it may apply a bounded
+contextual octave repair when a note obviously belongs in the target voice but
+has been extracted or generated in the wrong octave. This repair preserves
+pitch class, rhythm, measure ownership, ids, BPM, barlines, and source audio;
+it does not compose new harmony. Trusted symbolic MusicXML/MIDI/OMR score
+material is preserved and receives diagnostics only unless a future explicit
+import-repair mode is added. The gate is still non-blocking in alpha because
+contemporary a cappella may intentionally use unisons, open spacing,
+counterpoint, syncopation, or dissonance.
+
+When enabled, the LLM notation reviewer sits before final registration as a
+bounded conductor/checker, not as a TrackNote author. The pipeline is:
+source-specific extraction -> TrackNote candidates -> deterministic notation
+quality gate -> LLM review instruction -> deterministic repair application ->
+final validation -> track registration. The LLM may flag score readability
+issues such as excessive density, unnatural micro-fragments, suspicious ties,
+unstable voice noise, or accidental clutter. It may only return bounded repair
+directives, including `0.25` or `0.5` beat quantization, same-pitch sustain
+merging, dense-measure simplification, unstable-note suppression, isolated
+artifact removal, pitch-blip collapse, short-note-cluster collapse, phrase/tail
+gap bridging, and preferred key signature. BPM, meter, final note writing,
+pitch/rhythm validation, and all TrackNote mutations remain deterministic
+engine responsibilities. If the LLM is disabled, times out,
+returns invalid JSON, or lacks enough confidence, the pre-LLM deterministic
+registration result is preserved.
+
+When enabled, the LLM ensemble reviewer runs after the deterministic ensemble
+arrangement gate and before final commit. It receives compact summaries of the
+target track, registered sibling tracks, other parts proposed in the same
+multi-track import or OMR approval batch, and vertical beat snapshots. Its job
+is to judge whether the target will read as one practical part inside the
+six-track a cappella score. It may request only the same bounded notation
+repair directives as the single-track reviewer. It must not author notes,
+compose replacement harmony, move barlines, change BPM/meter, or override
+trusted symbolic source rhythm. The deterministic engine still applies,
+validates, and re-runs the ensemble gate before registration.
+
 Track rendering, playback, AI generation, and scoring must consume this schema
 rather than inventing separate note shapes.
 
@@ -224,22 +297,49 @@ rests instead of being collapsed; this preserves beat spacing while avoiding
 visual clutter from noisy micro-rests. Overlapping monophonic notes are trimmed
 or confidence-filtered instead of shifted forward, so the renderer does not
 invent extra timing movement. Auto-beams are conservative: they are flat,
-measure-local, rest-breaking, and disabled for dense or low-confidence voice
-measures that would otherwise produce misleading beam forests.
+measure-local, broken by rests/non-beamable values, and disabled for dense or
+low-confidence voice measures that would otherwise produce misleading beam
+forests. Duration decomposition should prefer real dotted and double-dotted
+durations before splitting one note into tied fragments, so ties remain reserved
+for measure crossings or true continuation.
+
+Voice-like registration must also run a readability polish after pitch-frame
+normalization. The engine should collapse short neighbor-tone blips when they
+look like vibrato, attack scoop, or tracker jitter between two same-pitch
+segments. Adjacent same-pitch fragments with only a tiny gap should be treated
+as one sustained sung tone when that produces a more natural score. The engine
+should remove short, low-confidence notes that are isolated from surrounding
+sung material, because those are usually room noise, breath, clicks, or pitch
+tracker artifacts rather than intentional melody. Tiny detector dropouts
+between confident adjacent sung notes should be bridged into the previous note
+duration when the gap is below the phrase-gap threshold, instead of becoming a
+visible micro-rest. A confident sung note that ends just before a barline may be
+extended to the barline when the phrase continues at or shortly after the next
+measure, preventing tiny tail gaps from creating misleading end-of-measure
+rests. Three or more low-confidence sixteenth-cell notes inside one beat may be
+collapsed into one representative sung event when their pitch span is tiny,
+because that pattern is more likely pitch-tracker chatter than intentional
+melody. The engine may compare deterministic 0.25-beat and 0.5-beat grid
+candidates and choose the more readable option when the finer grid produces
+moderate micro-note clutter. This comparison must not change BPM, meter, stored
+source audio, or final pitch validation; it only chooses a cleaner symbolic
+representation of the same recorded evidence.
 
 Each track has a stable notation display policy:
 
 - Soprano and Alto prefer treble clef.
-- Tenor may use treble-8vb/tenor display semantics when supported; until then
-  it must use a consistent treble policy without changing stored pitch.
+- Tenor uses treble-8vb display semantics: stored pitch remains sounding pitch,
+  while browser engraving may display the note one octave higher with the clef
+  annotation.
 - Baritone and Bass prefer bass clef.
 - Percussion uses percussion/rhythm notation when available, otherwise a
   clearly marked rhythm-track fallback.
 
 Key signatures and accidentals must reserve engraving space and must not be
-hidden merely to avoid clipping. If the renderer cannot display a key signature
-cleanly, it should degrade to explicit accidentals with a warning rather than
-cropping or corrupting the staff.
+hidden merely to avoid clipping. First-measure widths and note-start positions
+must include key-signature allowance before VexFlow formatting runs. If the
+renderer cannot display a key signature cleanly, it should degrade to explicit
+accidentals with a warning rather than cropping or corrupting the staff.
 
 Track playback has two user-selectable sources:
 
@@ -248,11 +348,35 @@ Track playback has two user-selectable sources:
   without retained audio.
 - `score`: synthesize the registered `TrackNote` data directly.
 
+Recorded/uploaded audio playback must use the retained media URL directly via
+browser media-element playback. It must not fetch and decode the original
+recording into an `AudioBuffer` before playback, because that adds avoidable
+preparation latency and can fail differently from normal browser media
+playback. Web Audio synthesis remains the fallback for symbolic score playback
+and tracks without retained audio.
+
 Individual playback, full-track playback, and scoring reference playback must
 use the same scheduler so one singer can layer recorded takes and hear checked
 reference parts during practice. Sync offsets shift each track as a whole in
 that scheduler. The offset never changes stored note beats or measure
 boundaries.
+
+Full-track playback must exclude empty tracks from the playback set. When
+multiple retained audio tracks are included, the browser prepares all media
+elements to a playable state first, then starts them from one shared scheduler
+start point. A not-yet-ready source must delay the whole retained-audio group
+rather than starting late by itself. Symbolic score-only tracks may join the
+same start point through Web Audio scheduling. Pre-rendered mixdown is a future
+optimization path for higher precision or export-like playback, not the default
+interactive path.
+
+For generated, OMR, MIDI, MusicXML, and other score-only registrations, playback
+is a clocked score-rendering operation: every audible `TrackNote` is converted
+to frequency and scheduled on one shared Web Audio context. Notes with the same
+canonical beat across tracks must receive the same scheduled start time so the
+tracks form a chord, not a sequence of near-simultaneous button sounds. BPM,
+meter, sync offset, and `TrackNote.beat` are the only timing inputs; engraving
+positions and playback start times must therefore remain mutually consistent.
 
 Browser playback feedback uses a single smooth playhead time derived from the
 same scheduler. Registered tracks share measure widths for a common score
@@ -552,6 +676,12 @@ MusicXML/MIDI import when the UI chooses safety over immediate registration.
 
 AI generation currently means symbolic part generation.
 
+Detailed next-generation quality design is tracked in
+`PROJECT_FOUNDATION/AI_HARMONY_GENERATION_DESIGN.md`. That document is the
+working contract for making DeepSeek affect generated notes through
+measure-level harmony intent, candidate goals, and plan-aware constrained
+search while keeping final `TrackNote` creation deterministic.
+
 Current MVP:
 
 - Tracks 1-5: symbolic vocal harmony generation from registered context notes.
@@ -560,23 +690,52 @@ Current MVP:
   studio denominator pulse, so non-4/4 studios do not inherit a hardcoded 4/4
   groove.
 
-The vocal generator is `rule_based_voice_leading_v1`.
+The vocal generator is still deterministic at the TrackNote layer. When
+configured, DeepSeek V4 Flash may run before generation as a bounded harmony
+planning layer. DeepSeek does not output TrackNote arrays, MIDI pitches, beats,
+or final notation. It may propose key/mode, measure-level harmonic intent,
+candidate goals, voice-leading profile order, rhythm policy, and short review
+metadata. The deterministic symbolic engine remains responsible for all notes,
+BPM alignment, meter boundaries, ranges, voice-leading constraints, rhythm
+normalization, and validation.
 
-It does not call a general-purpose LLM. It runs a deterministic symbolic
-pipeline:
+The LLM harmony planner must treat the requested part as one voice inside a
+six-track a cappella score. Its prompt contract includes singability, contrary
+or oblique motion where useful, candidate diversity by musical role, avoidance
+of voice crossing and repeated parallel perfect intervals, and bass-foundation
+risk. These are planning constraints only; candidate `TrackNote` data still
+comes from the deterministic constrained generator and then passes through the
+same notation and ensemble registration gates as uploaded or recorded material.
+
+Without a DeepSeek API key, or if the DeepSeek response fails JSON/schema
+validation, generation falls back to the same deterministic profile order.
+
+The pipeline:
 
 1. Build harmony events from the union of context note onsets.
 2. Preserve known context slot ids when the API can provide them.
-3. Estimate a major/minor key from pitch-class duration weights.
-4. Score diatonic triad candidates against active context notes.
-5. Bias first, penultimate, and final events toward a phrase-aware tonic to
+3. Optionally ask DeepSeek V4 Flash for a JSON-only harmony plan containing
+   measure-level function/cadence intent, candidate goals, rhythm policies,
+   candidate profile directions, short labels, and bounded warnings. The
+   request can run one bounded draft-review-revision cycle before returning the
+   final plan.
+4. Estimate a major/minor key from pitch-class duration weights and blend in a
+   high-confidence DeepSeek key suggestion only when it passes validation.
+5. Score diatonic triad candidates against active context notes, structural
+   phrase position, and the current measure's planned harmonic function or
+   preferred degrees.
+6. Bias first, penultimate, and final events toward a phrase-aware tonic to
    dominant to tonic cadence shape when the source material supports it.
-6. Run beam search over chord tones and weak-beat scale connector tones inside
-   the target vocal range.
-7. Penalize voice crossing, poor spacing, exact pitch duplication, large leaps,
+7. Run beam search over chord tones and weak-beat scale connector tones inside
+   the target vocal range. Candidate goals influence register center, chord-tone
+   priority, non-chord-tone allowance, and motion preference.
+8. Penalize voice crossing, poor spacing, exact pitch duplication, large leaps,
    unresolved leading tones, weak chord-tone coverage, and parallel perfect
    fifth/octave motion against known context voices.
-8. Produce review candidates through distinct voice-leading profiles rather
+9. Apply candidate rhythm policy, such as context-following, readable
+   simplification, melodic answer, or sustained support, without changing the
+   studio BPM/meter grid.
+10. Produce review candidates through distinct voice-leading profiles rather
    than returning the top-N near-duplicates. The current profiles bias toward
    balanced voicing, lower support, moving counterline, upper blend, and open
    voicing, then reject overly similar pitch sequences before exposing them to
@@ -588,7 +747,8 @@ This matches the current 2026-04-20 technical decision:
   controllability, and search/sampling rather than plain text generation.
 - Chord-constrained transformer work is relevant later, but the product's
   immediate need is low-latency, auditable TrackNote output.
-- General LLM prose is not part of generation or scoring.
+- General LLM prose is not part of generation or scoring. DeepSeek metadata is
+  decision support for candidate review, not a coaching report.
 
 Reference material considered for this decision:
 
@@ -610,8 +770,18 @@ Excluded from the current engine:
 - Suno/Udio-style full-song generation
 - LLM-generated explanatory feedback
 
-Future LLM or model-based generation may be added only behind the same
-`TrackNote` contract. It must return symbolic pitch/rhythm data first.
+Any LLM or model-based generation must stay behind the same `TrackNote`
+contract. It may guide candidate strategy, but deterministic code must own the
+final symbolic pitch/rhythm data.
+
+For the alpha LLM path, local API keys belong in `apps/api/.env`, which is
+ignored by git. Deployed keys belong in Cloud Run environment variables or
+Secret Manager. The current low-cost route can use OpenRouter with:
+`GIGASTUDY_API_DEEPSEEK_BASE_URL=https://openrouter.ai/api/v1` and
+`GIGASTUDY_API_DEEPSEEK_MODEL=deepseek/deepseek-v4-flash:free`. Native
+DeepSeek remains supported through `https://api.deepseek.com`. Provider-specific
+payload fields must stay compatible: native DeepSeek may receive `thinking`,
+while OpenRouter omits that native field by default.
 
 AI generation is candidate-first by default:
 
@@ -621,6 +791,9 @@ AI generation is candidate-first by default:
 4. Each candidate carries a decision-oriented variant label summarizing
    register, motion, contour, and average pitch for vocal parts, or groove feel
    for percussion.
+  When DeepSeek planning is enabled, the variant label and diagnostics may use
+  the model's bounded candidate title, role, selection hint, profile name,
+  candidate goal, rhythm policy, revision-cycle count, and risk tags.
 5. The target track is not overwritten during generation.
 6. Approving one candidate registers it into the selected target track.
 7. Other pending candidates from the same generation group are rejected
@@ -712,6 +885,8 @@ These code paths currently implement the contract:
 - API schema: `apps/api/src/gigastudy_api/api/schemas/studios.py`
 - Measure-owned notation normalization:
   `apps/api/src/gigastudy_api/services/engine/notation.py`
+- Registration notation quality gate:
+  `apps/api/src/gigastudy_api/services/engine/notation_quality.py`
 - Symbolic import: `apps/api/src/gigastudy_api/services/engine/symbolic.py`
 - Voice extraction: `apps/api/src/gigastudy_api/services/engine/voice.py`
 - Durable extraction queue:
@@ -752,6 +927,8 @@ These code paths currently implement the contract:
 - Studio presentation components:
   `apps/web/src/components/studio/*`
 - Rule-based generation: `apps/api/src/gigastudy_api/services/engine/harmony.py`
+- DeepSeek/OpenRouter harmony planner:
+  `apps/api/src/gigastudy_api/services/llm/deepseek.py`
 - OMR adapter: `apps/api/src/gigastudy_api/services/engine/omr.py`
 - Born-digital PDF vector fallback:
   `apps/api/src/gigastudy_api/services/engine/pdf_vector_omr.py`

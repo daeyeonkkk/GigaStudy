@@ -119,6 +119,31 @@ const durationAndTieMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
 </score-partwise>
 `
 
+const keySignatureMusicXmlUpload = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>2</divisions>
+        <key><fifths>-1</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>A</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>B</step><alter>-1</alter><octave>5</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>6</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>D</step><octave>6</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>E</step><octave>6</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>F</step><octave>6</octave></pitch><duration>1</duration><type>eighth</type></note>
+    </measure>
+  </part>
+</score-partwise>
+`
+
 async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.goto('/')
   const titleInput = page.getByTestId('studio-title-input')
@@ -141,6 +166,30 @@ async function uploadSopranoMusicXml(page: Page, xml: string, name: string) {
     buffer: Buffer.from(xml, 'utf-8'),
   })
   await expect(page.getByTestId('candidate-review')).toContainText('Soprano')
+}
+
+async function uploadMusicXmlToTrack(page: Page, slotId: number, xml: string, name: string) {
+  await page.locator(`[data-testid="track-card-${slotId}"] input[type="file"]`).setInputFiles({
+    name,
+    mimeType: 'application/vnd.recordare.musicxml+xml',
+    buffer: Buffer.from(xml, 'utf-8'),
+  })
+  await expect(page.getByTestId('candidate-review')).toContainText('Soprano')
+  await page.locator('[data-testid^="candidate-target-"]').first().selectOption(String(slotId))
+  await approveFirstCandidate(page)
+  await expect(page.getByTestId(`track-card-${slotId}`)).toContainText('C5')
+}
+
+async function uploadAudioToTrack(page: Page, slotId: number, filename: string) {
+  await page.locator(`[data-testid="track-card-${slotId}"] input[type="file"]`).setInputFiles({
+    name: filename,
+    mimeType: 'audio/mpeg',
+    buffer: Buffer.from(`${filename} browser audio fixture`, 'utf-8'),
+  })
+  await expect(page.getByTestId('candidate-review')).toContainText('.wav')
+  await page.locator('[data-testid^="candidate-target-"]').first().selectOption(String(slotId))
+  await approveFirstCandidate(page)
+  await expect(page.getByTestId(`track-card-${slotId}`)).toContainText('등록 완료')
 }
 
 async function installDecodedAudioUploadStub(page: Page) {
@@ -175,6 +224,200 @@ async function installDecodedAudioUploadStub(page: Page) {
 
       async close() {
         this.state = 'closed'
+      }
+    }
+
+    Object.defineProperty(window, 'AudioContext', {
+      configurable: true,
+      value: FakeAudioContext,
+      writable: true,
+    })
+    Object.defineProperty(window, 'webkitAudioContext', {
+      configurable: true,
+      value: FakeAudioContext,
+      writable: true,
+    })
+  })
+}
+
+async function installTrackAudioPlaybackStub(
+  page: Page,
+  options: { readyDelaysMs?: number[] } = {},
+) {
+  await page.addInitScript((stubOptions: { readyDelaysMs?: number[] }) => {
+    const playbackWindow = window as Window & {
+      __gigastudyAudioPlayCalls?: Array<{
+        currentTime: number
+        playedAt: number
+        src: string
+        volume: number
+      }>
+    }
+    const playCalls: Array<{ currentTime: number; playedAt: number; src: string; volume: number }> = []
+    playbackWindow.__gigastudyAudioPlayCalls = playCalls
+    const readyDelaysMs = stubOptions.readyDelaysMs ?? []
+    let mediaIndex = 0
+
+    class FakeAudio {
+      currentTime = 0
+      duration = 2
+      listeners = new Map<string, Set<() => void>>()
+      mediaIndex = mediaIndex++
+      preload = ''
+      readyState = readyDelaysMs.length > 0 ? 0 : 4
+      src: string
+      volume = 1
+
+      constructor(src = '') {
+        this.src = src
+      }
+
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+        const listeners = this.listeners.get(type) ?? new Set()
+        const callback =
+          typeof listener === 'function'
+            ? () => listener(new Event(type))
+            : () => listener.handleEvent(new Event(type))
+        listeners.add(callback)
+        this.listeners.set(type, listeners)
+      }
+
+      load() {
+        const delayMs = readyDelaysMs[this.mediaIndex] ?? 0
+        window.setTimeout(() => {
+          this.readyState = 4
+          this.dispatch('canplay')
+          this.dispatch('canplaythrough')
+        }, Math.max(0, delayMs))
+      }
+
+      pause() {
+        return undefined
+      }
+
+      play() {
+        if (this.readyState < 3) {
+          return Promise.reject(new Error('Fake media is not ready.'))
+        }
+        playCalls.push({
+          currentTime: this.currentTime,
+          playedAt: performance.now(),
+          src: this.src,
+          volume: this.volume,
+        })
+        return Promise.resolve()
+      }
+
+      removeAttribute(name: string) {
+        if (name === 'src') {
+          this.src = ''
+        }
+      }
+
+      removeEventListener(type: string) {
+        this.listeners.delete(type)
+      }
+
+      dispatch(type: string) {
+        this.listeners.get(type)?.forEach((listener) => listener())
+      }
+    }
+
+    Object.defineProperty(window, 'Audio', {
+      configurable: true,
+      value: FakeAudio,
+      writable: true,
+    })
+  }, options)
+}
+
+async function installScorePlaybackClockStub(page: Page) {
+  await page.addInitScript(() => {
+    const playbackWindow = window as Window & {
+      __gigastudyToneStarts?: Array<{ frequency: number; startTime: number }>
+    }
+    const toneStarts: Array<{ frequency: number; startTime: number }> = []
+    playbackWindow.__gigastudyToneStarts = toneStarts
+
+    class FakeAudioParam {
+      value = 0
+
+      cancelScheduledValues() {
+        return undefined
+      }
+
+      exponentialRampToValueAtTime(value: number) {
+        this.value = value
+        return undefined
+      }
+
+      linearRampToValueAtTime(value: number) {
+        this.value = value
+        return undefined
+      }
+
+      setValueAtTime(value: number) {
+        this.value = value
+        return undefined
+      }
+    }
+
+    class FakeAudioNode {
+      connect() {
+        return this
+      }
+
+      disconnect() {
+        return undefined
+      }
+    }
+
+    class FakeOscillatorNode extends FakeAudioNode {
+      frequency = new FakeAudioParam()
+      type: OscillatorType = 'sine'
+
+      start(startTime: number) {
+        toneStarts.push({ frequency: this.frequency.value, startTime })
+      }
+
+      stop() {
+        return undefined
+      }
+    }
+
+    class FakeAudioContext {
+      currentTime = 12
+      destination = new FakeAudioNode()
+      state = 'running'
+
+      createBiquadFilter() {
+        const filter = new FakeAudioNode() as FakeAudioNode & {
+          frequency: FakeAudioParam
+          Q: FakeAudioParam
+          type: BiquadFilterType
+        }
+        filter.frequency = new FakeAudioParam()
+        filter.Q = new FakeAudioParam()
+        filter.type = 'lowpass'
+        return filter
+      }
+
+      createGain() {
+        const gain = new FakeAudioNode() as FakeAudioNode & { gain: FakeAudioParam }
+        gain.gain = new FakeAudioParam()
+        return gain
+      }
+
+      createOscillator() {
+        return new FakeOscillatorNode()
+      }
+
+      async close() {
+        this.state = 'closed'
+      }
+
+      async resume() {
+        this.state = 'running'
       }
     }
 
@@ -239,6 +482,151 @@ test('home music upload decodes MP3-like input to WAV before analysis', async ({
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/, { timeout: 45_000 })
   await expect(page.getByTestId('candidate-review')).toContainText('home-voice.wav')
   await expect(page.getByTestId('candidate-review')).toContainText('C5')
+})
+
+test('registered audio track playback uses retained media URL directly', async ({ page }) => {
+  await installDecodedAudioUploadStub(page)
+  await installTrackAudioPlaybackStub(page)
+  await page.goto('/')
+  await page.getByTestId('studio-title-input').fill('Direct retained audio playback')
+  await page.getByTestId('studio-source-input').setInputFiles({
+    name: 'direct-playback.mp3',
+    mimeType: 'audio/mpeg',
+    buffer: Buffer.from('browser decodes this fixture through a stub', 'utf-8'),
+  })
+
+  await page.getByTestId('upload-and-start-button').click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/, { timeout: 45_000 })
+  await approveFirstCandidate(page)
+  await expect(page.getByTestId('track-card-1')).toContainText('C5')
+
+  await page.locator('.composer-metronome input').uncheck()
+  await page.getByTestId('global-play-button').click()
+  await expect(page.getByTestId('track-playhead-1')).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __gigastudyAudioPlayCalls?: Array<{ currentTime: number; src: string; volume: number }>
+            }
+          ).__gigastudyAudioPlayCalls ?? [],
+      ),
+    )
+    .toEqual([
+      expect.objectContaining({
+        currentTime: 0,
+        src: expect.stringContaining('/tracks/1/audio'),
+      }),
+    ])
+})
+
+test('global audio playback waits for retained tracks before starting together', async ({ page }) => {
+  await installDecodedAudioUploadStub(page)
+  await installTrackAudioPlaybackStub(page, { readyDelaysMs: [450, 0] })
+  await createBlankStudio(page, 'Prepared global audio playback')
+
+  await uploadAudioToTrack(page, 1, 'soprano-ready-late.mp3')
+  await uploadAudioToTrack(page, 2, 'alto-ready-now.mp3')
+
+  await page.locator('.composer-metronome input').uncheck()
+  await page.getByTestId('global-play-button').click()
+  await page.waitForTimeout(220)
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __gigastudyAudioPlayCalls?: Array<{
+                currentTime: number
+                playedAt: number
+                src: string
+                volume: number
+              }>
+            }
+          ).__gigastudyAudioPlayCalls ?? [],
+      ),
+    )
+    .toHaveLength(0)
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __gigastudyAudioPlayCalls?: Array<{
+                currentTime: number
+                playedAt: number
+                src: string
+                volume: number
+              }>
+            }
+          ).__gigastudyAudioPlayCalls ?? [],
+      ),
+    )
+    .toHaveLength(2)
+  const playCalls = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __gigastudyAudioPlayCalls?: Array<{
+            currentTime: number
+            playedAt: number
+            src: string
+            volume: number
+          }>
+        }
+      ).__gigastudyAudioPlayCalls ?? [],
+  )
+
+  expect(playCalls.map((call) => call.currentTime)).toEqual([0, 0])
+  expect(playCalls.some((call) => call.src.includes('/tracks/1/audio'))).toBe(true)
+  expect(playCalls.some((call) => call.src.includes('/tracks/2/audio'))).toBe(true)
+  expect(Math.abs(playCalls[0].playedAt - playCalls[1].playedAt)).toBeLessThan(80)
+})
+
+test('score playback schedules stacked track notes on the same audio clock', async ({ page }) => {
+  await installScorePlaybackClockStub(page)
+  await createBlankStudio(page, 'Score chord clock playback')
+
+  await uploadMusicXmlToTrack(page, 1, musicXmlUpload, 'soprano-clock.musicxml')
+  await uploadMusicXmlToTrack(page, 2, musicXmlUpload, 'alto-clock.musicxml')
+
+  await page.locator('.composer-metronome input').uncheck()
+  await page.getByTestId('playback-source-score').click()
+  await page.getByTestId('global-play-button').click()
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __gigastudyToneStarts?: Array<{ frequency: number; startTime: number }>
+            }
+          ).__gigastudyToneStarts ?? [],
+      ),
+    )
+    .toHaveLength(12)
+  const toneStarts = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __gigastudyToneStarts?: Array<{ frequency: number; startTime: number }>
+        }
+      ).__gigastudyToneStarts ?? [],
+  )
+
+  const startTimes = [...new Set(toneStarts.map((entry) => Number(entry.startTime.toFixed(3))))].sort(
+    (left, right) => left - right,
+  )
+  expect(startTimes).toHaveLength(2)
+  const firstChord = toneStarts.filter((entry) => Math.abs(entry.startTime - startTimes[0]) < 0.001)
+  expect(firstChord).toHaveLength(6)
+  expect(firstChord.every((entry) => Math.abs(entry.startTime - firstChord[0].startTime) < 0.001)).toBe(true)
 })
 
 test('track recording shows a one-measure count-in before capture', async ({ page, browserName }) => {
@@ -484,6 +872,29 @@ test('dense score notes stay inside their owning measure', async ({ page }) => {
     expect(center).toBeGreaterThan(layout.firstMeasureStart)
     expect(center).toBeLessThan(layout.firstMeasureEnd)
   }
+
+  const svgLayout = await page.getByTestId('track-score-strip-1').evaluate((strip) => {
+    const measureLines = [...strip.querySelectorAll('.track-card__beat-line--measure')].map((node) =>
+      node.getBoundingClientRect().x,
+    )
+    const staveNoteCenters = [...strip.querySelectorAll('.vf-stavenote')]
+      .map((node) => {
+        const rect = node.getBoundingClientRect()
+        return rect.width > 0 ? rect.x + rect.width / 2 : null
+      })
+      .filter((value): value is number => value !== null)
+    return {
+      firstMeasureStart: measureLines[0],
+      firstMeasureEnd: measureLines[1],
+      staveNoteCenters,
+    }
+  })
+
+  expect(svgLayout.staveNoteCenters.length).toBeGreaterThanOrEqual(16)
+  for (const center of svgLayout.staveNoteCenters.slice(0, 16)) {
+    expect(center).toBeGreaterThan(svgLayout.firstMeasureStart)
+    expect(center).toBeLessThan(svgLayout.firstMeasureEnd)
+  }
 })
 
 test('score rendering reflects note duration glyphs and ties', async ({ page }) => {
@@ -500,4 +911,37 @@ test('score rendering reflects note duration glyphs and ties', async ({ page }) 
   await expect(scoreStrip.locator('[data-duration="sixteenth"]')).toHaveCount(1)
   await expect(scoreStrip.locator('.track-card__note--tie-start')).toHaveCount(1)
   await expect(scoreStrip.locator('.track-card__note--tie-stop')).toHaveCount(1)
+
+  const tieCount = await scoreStrip.locator('.vf-stavetie').count()
+  expect(tieCount).toBeGreaterThanOrEqual(1)
+})
+
+test('score engraving reserves key signature space before the first note', async ({ page }) => {
+  await createBlankStudio(page, 'Key signature engraving session')
+
+  await uploadSopranoMusicXml(page, keySignatureMusicXmlUpload, 'key-signature.musicxml')
+  await approveFirstCandidate(page)
+
+  const scoreStrip = page.getByTestId('track-score-strip-1')
+  const layout = await scoreStrip.evaluate((strip) => {
+    const keySignatureCandidates = [...strip.querySelectorAll('g')].filter((node) =>
+      (node.getAttribute('class') ?? '').toLowerCase().includes('key'),
+    )
+    const keySignatureRight = Math.max(
+      0,
+      ...keySignatureCandidates.map((node) => {
+        const rect = node.getBoundingClientRect()
+        return rect.width > 0 ? rect.right : 0
+      }),
+    )
+    const firstNoteRect = strip.querySelector('.vf-stavenote')?.getBoundingClientRect()
+    return {
+      firstNoteLeft: firstNoteRect?.left ?? 0,
+      keySignatureCount: keySignatureCandidates.length,
+      keySignatureRight,
+    }
+  })
+
+  expect(layout.keySignatureCount).toBeGreaterThan(0)
+  expect(layout.firstNoteLeft).toBeGreaterThan(layout.keySignatureRight + 4)
 })

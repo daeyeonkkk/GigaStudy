@@ -40,6 +40,39 @@ const sourceDecisionLabels: Record<SourceKind, string> = {
   ai: 'AI 화음',
 }
 
+const VOICE_LEADING_PROFILE_LABELS: Record<string, string> = {
+  balanced: '균형형',
+  lower_support: '낮은 받침',
+  moving_counterline: '대선율',
+  upper_blend: '위성부 블렌드',
+  open_voicing: '넓은 간격',
+}
+
+const RISK_TAG_LABELS: Record<string, string> = {
+  range: '음역 확인',
+  motion: '진행 확인',
+  rhythm: '리듬 확인',
+  spacing: '간격 확인',
+  tension: '긴장도 확인',
+  overlap: '성부 겹침 확인',
+  leap: '도약 확인',
+}
+
+const HARMONY_GOAL_LABELS: Record<string, string> = {
+  rehearsal_safe: '연습 안정형',
+  counterline: '대선율형',
+  open_support: '넓은 받침',
+  upper_blend: '위성부 블렌드',
+  active_motion: '움직임 강조',
+}
+
+const RHYTHM_POLICY_LABELS: Record<string, string> = {
+  follow_context: '기존 리듬 추종',
+  simplify: '읽기 쉽게 단순화',
+  answer_melody: '멜로디 응답',
+  sustain_support: '길게 받치기',
+}
+
 export function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
   if (candidate.notes.length === 0) {
     return 0
@@ -90,6 +123,7 @@ export function getCandidateDecisionSummary(
   const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
   const diagnostics = getCandidateDiagnostics(candidate)
   const reviewHint = getReviewHintSummary(candidate)
+  const llmInsight = getDeepSeekDecisionInsight(candidate)
 
   if (candidate.notes.length === 0) {
     return {
@@ -114,18 +148,22 @@ export function getCandidateDecisionSummary(
   const sourceLabel = sourceDecisionLabels[candidate.source_kind]
   const title =
     candidate.source_kind === 'ai'
-      ? `${register.shortLabel} · ${movement.shortLabel}`
+      ? (llmInsight?.title ?? `${register.shortLabel} · ${movement.shortLabel}`)
       : `${sourceLabel} · ${range}`
   const headline =
     candidate.source_kind === 'ai'
-      ? `${targetTrack?.name ?? '선택 트랙'}에 ${register.headline} 후보입니다.`
+      ? (llmInsight?.headline ?? `${targetTrack?.name ?? '선택 트랙'}에 ${register.headline} 후보입니다.`)
       : `${sourceLabel} 결과를 ${targetTrack?.name ?? '선택 트랙'}에 등록할 수 있습니다.`
   const support = [
+    candidate.source_kind === 'ai' && llmInsight?.role ? `역할: ${llmInsight.role}.` : '',
     `${range} 범위, ${startEnd}.`,
     `${movement.detail}.`,
     `${rhythm.detail}.`,
+    candidate.source_kind === 'ai' && llmInsight?.selectionHint ? `선택 기준: ${llmInsight.selectionHint}` : '',
     reviewHint?.sentence ?? '',
-  ].join(' ')
+  ]
+    .filter((sentence) => sentence.length > 0)
+    .join(' ')
 
   return {
     title,
@@ -133,10 +171,12 @@ export function getCandidateDecisionSummary(
     support,
     tags: [
       sourceLabel,
+      llmInsight?.profileLabel ?? '',
       register.tag,
       movement.tag,
       rhythm.tag,
       contour.tag,
+      ...(llmInsight?.riskTags ?? []),
       reviewHint?.tag ?? '',
     ].filter((tag) => tag.length > 0),
     phrasePreview: getCandidatePhrasePreview(candidate),
@@ -372,9 +412,76 @@ function getCandidatePhrasePreview(candidate: ExtractionCandidate): string {
   return `${labels.join(' -> ')}${suffix}`
 }
 
+function getDeepSeekDecisionInsight(candidate: ExtractionCandidate): {
+  headline: string | null
+  profileLabel: string
+  riskTags: string[]
+  role: string | null
+  selectionHint: string | null
+  title: string | null
+} | null {
+  if (candidate.source_kind !== 'ai') {
+    return null
+  }
+  const diagnostics = candidate.diagnostics ?? {}
+  const profileName = getDiagnosticString(diagnostics, 'llm_profile')
+  const profileLabel = profileName ? formatVoiceLeadingProfile(profileName) : ''
+  const role = getDiagnosticString(diagnostics, 'candidate_role')
+  const selectionHint = getDiagnosticString(diagnostics, 'selection_hint')
+  const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
+  const title = candidate.variant_label || (profileLabel ? `${profileLabel} 후보` : null)
+  const headline =
+    role && selectionHint
+      ? `${role} ${selectionHint}`
+      : role || selectionHint || (profileLabel ? `${profileLabel} 방향으로 만든 화음 후보입니다.` : null)
+
+  if (!profileLabel && !role && !selectionHint && riskTags.length === 0 && !title) {
+    return null
+  }
+  return { headline, profileLabel, riskTags, role, selectionHint, title }
+}
+
 function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetric[] {
   const diagnostics = candidate.diagnostics ?? {}
   const metrics: CandidateMetric[] = []
+  const llmRole = getDiagnosticString(diagnostics, 'candidate_role')
+  const llmSelectionHint = getDiagnosticString(diagnostics, 'selection_hint')
+  const llmProfile = getDiagnosticString(diagnostics, 'llm_profile')
+  const llmGoal = getDiagnosticString(diagnostics, 'llm_goal')
+  const llmRhythmPolicy = getDiagnosticString(diagnostics, 'llm_rhythm_policy')
+  const llmPhraseSummary = getDiagnosticString(diagnostics, 'llm_phrase_summary')
+  const llmPlanConfidence = getDiagnosticNumber(diagnostics, 'llm_plan_confidence')
+  const llmRevisionCycles = getDiagnosticNumber(diagnostics, 'llm_revision_cycles')
+  const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
+
+  if (llmProfile) {
+    metrics.push({ label: '생성 방향', value: formatVoiceLeadingProfile(llmProfile) })
+  }
+  if (llmGoal) {
+    metrics.push({ label: '후보 목표', value: formatHarmonyGoal(llmGoal) })
+  }
+  if (llmRhythmPolicy) {
+    metrics.push({ label: '리듬 정책', value: formatRhythmPolicy(llmRhythmPolicy) })
+  }
+  if (llmRole) {
+    metrics.push({ label: '화음 역할', value: llmRole })
+  }
+  if (llmSelectionHint) {
+    metrics.push({ label: '선택 이유', value: llmSelectionHint })
+  }
+  if (llmPhraseSummary) {
+    metrics.push({ label: '곡 흐름', value: llmPhraseSummary })
+  }
+  if (llmPlanConfidence !== null) {
+    metrics.push({ label: '계획 신뢰도', value: formatRatio(llmPlanConfidence) })
+  }
+  if (llmRevisionCycles !== null && llmRevisionCycles > 0) {
+    metrics.push({ label: '내부 수정', value: `${llmRevisionCycles}회` })
+  }
+  if (riskTags.length > 0) {
+    metrics.push({ label: '확인 포인트', value: riskTags.join(', ') })
+  }
+
   const documentPageCount = getDiagnosticNumber(diagnostics, 'document_page_count')
   const candidatePageCount = getDiagnosticNumber(diagnostics, 'candidate_page_count')
   if (documentPageCount !== null || candidatePageCount !== null) {
@@ -466,6 +573,21 @@ function getTechnicalDiagnostics(candidate: ExtractionCandidate): CandidateMetri
     getDiagnosticString(diagnostics, 'review_hint')
       ? { label: 'review hint', value: getDiagnosticString(diagnostics, 'review_hint') ?? '' }
       : null,
+    getDiagnosticString(diagnostics, 'llm_provider')
+      ? { label: 'llm provider', value: getDiagnosticString(diagnostics, 'llm_provider') ?? '' }
+      : null,
+    getDiagnosticString(diagnostics, 'llm_model')
+      ? { label: 'llm model', value: getDiagnosticString(diagnostics, 'llm_model') ?? '' }
+      : null,
+    getDiagnosticString(diagnostics, 'llm_key')
+      ? { label: 'llm key', value: getDiagnosticString(diagnostics, 'llm_key') ?? '' }
+      : null,
+    getDiagnosticString(diagnostics, 'llm_mode')
+      ? { label: 'llm mode', value: getDiagnosticString(diagnostics, 'llm_mode') ?? '' }
+      : null,
+    getDiagnosticStringList(diagnostics, 'llm_warnings').length > 0
+      ? { label: 'llm warnings', value: getDiagnosticStringList(diagnostics, 'llm_warnings').join(', ') }
+      : null,
   ].filter((metric): metric is CandidateMetric => metric !== null)
 }
 
@@ -477,6 +599,29 @@ function getDiagnosticNumber(diagnostics: Record<string, unknown>, key: string):
 function getDiagnosticString(diagnostics: Record<string, unknown>, key: string): string | null {
   const value = diagnostics[key]
   return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function getDiagnosticStringList(diagnostics: Record<string, unknown>, key: string): string[] {
+  const value = diagnostics[key]
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : []
+}
+
+function formatVoiceLeadingProfile(profileName: string): string {
+  return VOICE_LEADING_PROFILE_LABELS[profileName] ?? profileName
+}
+
+function formatRiskTag(tag: string): string {
+  return RISK_TAG_LABELS[tag] ?? tag
+}
+
+function formatHarmonyGoal(goal: string): string {
+  return HARMONY_GOAL_LABELS[goal] ?? goal
+}
+
+function formatRhythmPolicy(policy: string): string {
+  return RHYTHM_POLICY_LABELS[policy] ?? policy
 }
 
 function formatRatio(value: number): string {

@@ -247,10 +247,11 @@ def accidental_for_key(spelled_label: str, key_signature: str) -> str | None:
 
 def _normalize_intervals(notes: list[TrackNote], quantization_grid: float) -> list[_NoteInterval]:
     intervals: list[_NoteInterval] = []
+    minimum_duration = max(MIN_NOTATED_DURATION_BEATS, quantization_grid)
     for note in notes:
         start_beat = max(1.0, quantize(note.beat, quantization_grid))
-        duration_beats = max(MIN_NOTATED_DURATION_BEATS, quantize(note.duration_beats, quantization_grid))
-        end_beat = max(start_beat + MIN_NOTATED_DURATION_BEATS, quantize(start_beat + duration_beats, quantization_grid))
+        duration_beats = max(minimum_duration, quantize(note.duration_beats, quantization_grid))
+        end_beat = max(start_beat + minimum_duration, quantize(start_beat + duration_beats, quantization_grid))
         intervals.append(
             _NoteInterval(
                 note=note,
@@ -339,13 +340,17 @@ def _split_interval_at_measure_boundaries(
     source_note = interval.note
     pieces: list[tuple[float, float]] = []
     cursor = interval.start_beat
+    minimum_duration = max(MIN_NOTATED_DURATION_BEATS, quantization_grid)
     while cursor < interval.end_beat - OVERLAP_EPSILON_BEATS:
         measure_index = int((cursor - 1) // beats_per_measure)
         measure_end = 1 + (measure_index + 1) * beats_per_measure
         piece_end = min(interval.end_beat, measure_end)
-        piece_duration = max(MIN_NOTATED_DURATION_BEATS, quantize(piece_end - cursor, quantization_grid))
+        piece_duration = max(minimum_duration, quantize(piece_end - cursor, quantization_grid))
         pieces.append((cursor, piece_duration))
-        cursor = quantize(cursor + piece_duration, quantization_grid)
+        next_cursor = quantize(cursor + piece_duration, quantization_grid)
+        if next_cursor <= cursor + OVERLAP_EPSILON_BEATS:
+            next_cursor = round(cursor + piece_duration, 4)
+        cursor = next_cursor
 
     if not pieces:
         return []

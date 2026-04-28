@@ -22,6 +22,7 @@ import {
   getEngravingXForSeconds,
   getEngravingMarkerNoteStyle,
   getEngravingMeasureLineStyle,
+  getKeySignatureAccidentalCount,
   getTrackRenderModel,
 } from '../../lib/studio'
 import type { EngravingDuration, EngravingEvent } from '../../lib/studio'
@@ -37,6 +38,10 @@ type EngravedScoreStripProps = {
 }
 
 type Clef = 'treble' | 'bass'
+type ClefProfile = {
+  annotation?: string
+  vexClef: Clef
+}
 
 type DrawnNote = {
   event: EngravingEvent
@@ -47,19 +52,22 @@ const SCORE_HEIGHT_PX = 186
 const STAVE_Y_PX = 42
 const TIE_EPSILON_BEATS = 0.08
 const SYNC_TRANSLATED_VEXFLOW_GROUPS = '.vf-stavenote, .vf-beam, .vf-stavetie'
-const FIRST_MEASURE_NOTE_GUTTER_PX = 28
+const FIRST_MEASURE_NOTE_GUTTER_PX = 18
 
 const pitchNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-function getTrackClef(track: TrackSlot): Clef {
+function getTrackClefProfile(track: TrackSlot): ClefProfile {
   const notationClef = track.notes.find((note) => note.clef)?.clef
   if (notationClef === 'bass') {
-    return 'bass'
+    return { vexClef: 'bass' }
   }
-  if (notationClef === 'treble' || notationClef === 'treble_8vb') {
-    return 'treble'
+  if (notationClef === 'treble_8vb' || track.slot_id === 3) {
+    return { annotation: '8vb', vexClef: 'treble' }
   }
-  return track.slot_id >= 4 ? 'bass' : 'treble'
+  if (notationClef === 'treble') {
+    return { vexClef: 'treble' }
+  }
+  return track.slot_id >= 4 ? { vexClef: 'bass' } : { vexClef: 'treble' }
 }
 
 function getTrackKeySignature(track: TrackSlot): string | null {
@@ -132,6 +140,12 @@ function getVexDurationCode(duration: EngravingDuration): string {
   return `${duration.duration}${'d'.repeat(duration.dots)}`
 }
 
+function attachDots(staveNote: StaveNote, duration: EngravingDuration) {
+  for (let dotIndex = 0; dotIndex < duration.dots; dotIndex += 1) {
+    Dot.buildAndAttach([staveNote], { all: true })
+  }
+}
+
 function createStaveNote(note: ScoreNote, duration: EngravingDuration, clef: Clef): StaveNote {
   const pitch = getVexPitch(note, clef)
   const staveNote = new StaveNote({
@@ -141,9 +155,7 @@ function createStaveNote(note: ScoreNote, duration: EngravingDuration, clef: Cle
     type: note.is_rest ? 'r' : undefined,
   })
 
-  if (duration.dots > 0) {
-    Dot.buildAndAttach([staveNote], { all: true })
-  }
+  attachDots(staveNote, duration)
   if (!note.is_rest && pitch.accidental) {
     staveNote.addModifier(new Accidental(pitch.accidental), 0)
   }
@@ -158,13 +170,41 @@ function createRest(duration: EngravingDuration, clef: Clef, hidden = false): St
     keys: [clef === 'bass' ? 'd/3' : 'b/4'],
     type: 'r',
   })
-  if (duration.dots > 0) {
-    Dot.buildAndAttach([rest], { all: true })
-  }
+  attachDots(rest, duration)
   if (hidden) {
     rest.setStyle({ fillStyle: 'transparent', strokeStyle: 'transparent' })
   }
   return rest
+}
+
+function getOpeningNotePaddingPx(keySignature: string | null): number {
+  return FIRST_MEASURE_NOTE_GUTTER_PX + getKeySignatureAccidentalCount(keySignature) * 3
+}
+
+function isBeamableNote(event: EngravingEvent): boolean {
+  return event.kind === 'note' && !event.renderNote?.note.is_rest && event.duration.beats <= 0.5
+}
+
+function getBeamableGroups(staveNotes: StaveNote[], events: EngravingEvent[]): StaveNote[][] {
+  const groups: StaveNote[][] = []
+  let currentGroup: StaveNote[] = []
+  const flushGroup = () => {
+    if (currentGroup.length >= 2) {
+      groups.push(currentGroup)
+    }
+    currentGroup = []
+  }
+
+  events.forEach((event, index) => {
+    if (!isBeamableNote(event)) {
+      flushGroup()
+      return
+    }
+    currentGroup.push(staveNotes[index])
+  })
+  flushGroup()
+
+  return groups
 }
 
 function shouldBeamMeasure(events: EngravingEvent[]): boolean {
@@ -194,14 +234,16 @@ function drawBeamsForMeasure(staveNotes: StaveNote[], events: EngravingEvent[], 
   }
 
   try {
-    Beam.generateBeams(staveNotes, {
-      beamRests: false,
-      flatBeams: true,
-      groups: [new Fraction(1, 4)],
-      maintainStemDirections: false,
-      showStemlets: false,
-    }).forEach((beam) => {
-      beam.setContext(context).draw()
+    getBeamableGroups(staveNotes, events).forEach((group) => {
+      Beam.generateBeams(group, {
+        beamRests: false,
+        flatBeams: true,
+        groups: [new Fraction(1, 4)],
+        maintainStemDirections: false,
+        showStemlets: false,
+      }).forEach((beam) => {
+        beam.setContext(context).draw()
+      })
     })
   } catch {
     // Beam construction is best-effort. A bad imported rhythm should never blank the score.
@@ -278,12 +320,13 @@ export function EngravedScoreStrip({
     () => getTrackRenderModel(engravingTrack, bpm, beatsPerMeasure),
     [beatsPerMeasure, bpm, engravingTrack],
   )
-  const clef = getTrackClef(track)
+  const clefProfile = getTrackClefProfile(track)
+  const clef = clefProfile.vexClef
   const keySignature = getTrackKeySignature(track)
   const measureCount = Math.max(scoreModel.measureCount, engravingModel.measureCount, sharedMeasureWidths.length)
   const engravingLayout = useMemo(
-    () => buildEngravingLayout(engravingModel.notes, measureCount, beatsPerMeasure, sharedMeasureWidths),
-    [beatsPerMeasure, engravingModel.notes, measureCount, sharedMeasureWidths],
+    () => buildEngravingLayout(engravingModel.notes, measureCount, beatsPerMeasure, sharedMeasureWidths, keySignature),
+    [beatsPerMeasure, engravingModel.notes, keySignature, measureCount, sharedMeasureWidths],
   )
   const scoreWidth = engravingLayout.scoreWidth
   const syncShiftPx = getSyncShiftPx(track.sync_offset_seconds, bpm, engravingLayout.syncPxPerBeat)
@@ -340,7 +383,7 @@ export function EngravedScoreStrip({
       })
 
       if (measure.measureIndex === 0) {
-        stave.addClef(clef)
+        stave.addClef(clefProfile.vexClef, undefined, clefProfile.annotation)
         if (keySignature) {
           try {
             stave.addKeySignature(keySignature)
@@ -352,7 +395,7 @@ export function EngravedScoreStrip({
       stave.setMeasure(measure.measureNumber)
       if (measure.measureIndex === 0) {
         const noteStartX = stave.getNoteStartX()
-        stave.setNoteStartX(noteStartX + FIRST_MEASURE_NOTE_GUTTER_PX + (keySignature ? 12 : 0))
+        stave.setNoteStartX(noteStartX + getOpeningNotePaddingPx(keySignature))
       }
       stave.setContext(context).draw()
 
@@ -423,7 +466,7 @@ export function EngravedScoreStrip({
     return () => {
       container.innerHTML = ''
     }
-  }, [beatsPerMeasure, clef, engravingLayout, keySignature, scoreWidth, syncShiftPx, track.name])
+  }, [beatsPerMeasure, clef, clefProfile.annotation, clefProfile.vexClef, engravingLayout, keySignature, scoreWidth, syncShiftPx, track.name])
 
   return (
     <div

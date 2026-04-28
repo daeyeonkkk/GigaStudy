@@ -48,11 +48,31 @@ const MIN_MEASURE_WIDTH_PX = 260
 const MAX_MEASURE_WIDTH_PX = 1080
 const MIN_SCORE_WIDTH_PX = 1040
 const WHOLE_REST: EngravingDuration = { beats: 4, duration: 'w', dots: 0 }
+const SHARP_KEY_ACCIDENTAL_COUNTS: Record<string, number> = {
+  G: 1,
+  D: 2,
+  A: 3,
+  E: 4,
+  B: 5,
+  'F#': 6,
+  'C#': 7,
+}
+const FLAT_KEY_ACCIDENTAL_COUNTS: Record<string, number> = {
+  F: 1,
+  Bb: 2,
+  Eb: 3,
+  Ab: 4,
+  Db: 5,
+  Gb: 6,
+  Cb: 7,
+}
 
 const durationCandidates: EngravingDuration[] = [
   { beats: 4, duration: 'w', dots: 0 },
+  { beats: 3.5, duration: 'h', dots: 2 },
   { beats: 3, duration: 'h', dots: 1 },
   { beats: 2, duration: 'h', dots: 0 },
+  { beats: 1.75, duration: 'q', dots: 2 },
   { beats: 1.5, duration: 'q', dots: 1 },
   { beats: 1, duration: 'q', dots: 0 },
   { beats: 0.75, duration: '8', dots: 1 },
@@ -73,6 +93,21 @@ function roundToGrid(value: number): number {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value))
+}
+
+export function getKeySignatureAccidentalCount(keySignature: string | null | undefined): number {
+  if (!keySignature || keySignature === 'C') {
+    return 0
+  }
+  return SHARP_KEY_ACCIDENTAL_COUNTS[keySignature] ?? FLAT_KEY_ACCIDENTAL_COUNTS[keySignature] ?? 0
+}
+
+function getKeySignatureWidthAllowance(keySignature: string | null | undefined): number {
+  const accidentalCount = getKeySignatureAccidentalCount(keySignature)
+  if (accidentalCount === 0) {
+    return 0
+  }
+  return 22 + accidentalCount * 11
 }
 
 function samePitch(left: TrackRenderNote, right: TrackRenderNote): boolean {
@@ -118,7 +153,8 @@ function normalizeMeasureNotes(
   measureNotes
     .filter((renderNote) => renderNote.note.is_rest !== true)
     .map((renderNote) => {
-      const startBeat = clamp(roundToGrid(renderNote.displayBeat), measureStartBeat, measureEndBeat)
+      const latestStartBeat = Math.max(measureStartBeat, measureEndBeat - GRID_BEATS)
+      const startBeat = clamp(roundToGrid(renderNote.displayBeat), measureStartBeat, latestStartBeat)
       const durationBeats = Math.max(GRID_BEATS, roundToGrid(renderNote.displayDurationBeats))
       return {
         renderNote,
@@ -126,7 +162,7 @@ function normalizeMeasureNotes(
         endBeat: clamp(startBeat + durationBeats, startBeat + GRID_BEATS, measureEndBeat),
       }
     })
-    .filter((entry) => entry.endBeat <= measureEndBeat + EPSILON_BEATS)
+    .filter((entry) => entry.endBeat > entry.startBeat + EPSILON_BEATS && entry.endBeat <= measureEndBeat + EPSILON_BEATS)
     .sort((left, right) => left.startBeat - right.startBeat || left.renderNote.renderKey.localeCompare(right.renderNote.renderKey))
     .forEach((entry) => {
       const previous = normalized[normalized.length - 1]
@@ -268,7 +304,7 @@ function buildMeasureEvents(
   return events
 }
 
-function getMeasureWidth(events: EngravingEvent[], measureIndex: number): number {
+function getMeasureWidth(events: EngravingEvent[], measureIndex: number, keySignature: string | null = null): number {
   const noteEvents = events.filter((event) => event.kind === 'note')
   const shortEvents = events.filter((event) => event.duration.beats <= 0.5)
   const visibleRestEvents = events.filter((event) => event.kind === 'rest' && !event.hidden)
@@ -283,7 +319,7 @@ function getMeasureWidth(events: EngravingEvent[], measureIndex: number): number
     shortEvents.length * 14 +
     accidentalCount * 12 +
     tieCount * 10 +
-    (measureIndex === 0 ? FIRST_MEASURE_EXTRA_WIDTH_PX : 0)
+    (measureIndex === 0 ? FIRST_MEASURE_EXTRA_WIDTH_PX + getKeySignatureWidthAllowance(keySignature) : 0)
   return Math.round(clamp(rawWidth, MIN_MEASURE_WIDTH_PX, MAX_MEASURE_WIDTH_PX))
 }
 
@@ -292,6 +328,7 @@ export function buildEngravingLayout(
   measureCount: number,
   beatsPerMeasure: number,
   preferredMeasureWidths: number[] = [],
+  keySignature: string | null = null,
 ): EngravingLayout {
   const safeBeatsPerMeasure = Math.max(GRID_BEATS, beatsPerMeasure)
   let cursorX = 0
@@ -306,7 +343,7 @@ export function buildEngravingLayout(
     const width =
       typeof preferredWidth === 'number' && Number.isFinite(preferredWidth)
         ? Math.round(clamp(preferredWidth, MIN_MEASURE_WIDTH_PX, MAX_MEASURE_WIDTH_PX))
-        : getMeasureWidth(events, measureIndex)
+        : getMeasureWidth(events, measureIndex, keySignature)
     const measure: EngravingMeasure = {
       endBeat: measureEndBeat,
       events,
@@ -336,6 +373,7 @@ export function buildEngravingMeasureWidths(
   notes: TrackRenderNote[],
   measureCount: number,
   beatsPerMeasure: number,
+  keySignature: string | null = null,
 ): number[] {
   const safeBeatsPerMeasure = Math.max(GRID_BEATS, beatsPerMeasure)
 
@@ -345,7 +383,11 @@ export function buildEngravingMeasureWidths(
     const measureNotes = notes.filter(
       (note) => note.displayBeat >= measureStartBeat - EPSILON_BEATS && note.displayBeat < measureEndBeat - EPSILON_BEATS,
     )
-    return getMeasureWidth(buildMeasureEvents(measureNotes, measureStartBeat, measureEndBeat, measureIndex), measureIndex)
+    return getMeasureWidth(
+      buildMeasureEvents(measureNotes, measureStartBeat, measureEndBeat, measureIndex),
+      measureIndex,
+      keySignature,
+    )
   })
 }
 

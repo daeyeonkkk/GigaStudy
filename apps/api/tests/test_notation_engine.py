@@ -5,6 +5,7 @@ from gigastudy_api.services.engine.notation import (
     normalize_track_notes,
     spell_midi_label,
 )
+from gigastudy_api.services.engine.notation_quality import prepare_notes_for_track_registration
 
 
 def test_notation_normalization_uses_studio_bpm_as_absolute_grid() -> None:
@@ -72,3 +73,121 @@ def test_notation_spelling_uses_key_signature_for_accidentals() -> None:
         for index, midi in enumerate([65, 67, 69, 70, 72, 74, 76, 77])
     ]
     assert estimate_key_signature(f_major_material) in {"F", "Bb"}
+
+
+def test_registration_quality_simplifies_dense_voice_noise_to_score_grid() -> None:
+    noisy_notes = [
+        note_from_pitch(
+            beat=1 + index * 0.13,
+            duration_beats=0.11,
+            bpm=80,
+            source="voice",
+            extraction_method="test_noise",
+            pitch_midi=60 + (index % 8),
+            confidence=0.72 if index % 3 else 0.28,
+        )
+        for index in range(28)
+    ]
+
+    result = prepare_notes_for_track_registration(
+        noisy_notes,
+        bpm=92,
+        slot_id=1,
+        source_kind="recording",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    assert result.notes
+    assert result.diagnostics["source_kind"] == "recording"
+    assert result.diagnostics["registered_note_count"] < len(noisy_notes)
+    assert result.diagnostics["max_notes_per_measure"] <= 8
+    assert result.diagnostics["timing_grid_ratio"] == 1
+    assert all(note.quantization_grid in {0.25, 0.5} for note in result.notes)
+    assert all(note.measure_index == 1 for note in result.notes)
+
+
+def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated() -> None:
+    note = note_from_pitch(
+        beat=4.5,
+        duration_beats=1,
+        bpm=120,
+        source="musicxml",
+        extraction_method="test_symbolic",
+        pitch_midi=67,
+    )
+
+    result = prepare_notes_for_track_registration(
+        [note],
+        bpm=90,
+        slot_id=3,
+        source_kind="score",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    assert [(entry.beat, entry.duration_beats, entry.measure_index) for entry in result.notes] == [
+        (4.5, 0.5, 1),
+        (5.0, 0.5, 2),
+    ]
+    assert all(entry.clef == "treble_8vb" for entry in result.notes)
+    assert all(entry.key_signature for entry in result.notes)
+    assert result.diagnostics["cross_measure_note_count"] == 0
+
+
+def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() -> None:
+    reference = [
+        note_from_pitch(beat=beat, duration_beats=1, bpm=92, source="musicxml", extraction_method="reference", pitch_midi=72)
+        for beat in [1.25, 2.25, 3.25, 4.25]
+    ]
+    slightly_late_audio = [
+        note_from_pitch(
+            beat=beat,
+            duration_beats=0.5,
+            bpm=92,
+            source="voice",
+            extraction_method="late_take",
+            pitch_midi=pitch_midi,
+        )
+        for beat, pitch_midi in zip([1.5, 2.5, 3.5, 4.5], [60, 62, 64, 65], strict=True)
+    ]
+
+    result = prepare_notes_for_track_registration(
+        slightly_late_audio,
+        bpm=92,
+        slot_id=2,
+        source_kind="audio",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+        reference_tracks=[reference],
+    )
+
+    assert [note.beat for note in result.notes] == [1.25, 2.25, 3.25, 4.25]
+    assert result.diagnostics["reference_alignment"]["applied"] is True
+    assert result.diagnostics["reference_alignment"]["offset_beats"] == -0.25
+    assert "reference_track_grid_alignment" in result.diagnostics["actions"]
+
+
+def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> None:
+    reference = [
+        note_from_pitch(beat=beat, duration_beats=1, bpm=92, source="musicxml", extraction_method="reference", pitch_midi=72)
+        for beat in [1.25, 2.25, 3.25, 4.25]
+    ]
+    syncopated_symbolic = [
+        note_from_pitch(beat=beat, duration_beats=0.5, bpm=92, source="musicxml", extraction_method="symbolic", pitch_midi=67)
+        for beat in [1.5, 2.5, 3.5, 4.5]
+    ]
+
+    result = prepare_notes_for_track_registration(
+        syncopated_symbolic,
+        bpm=92,
+        slot_id=3,
+        source_kind="score",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+        reference_tracks=[reference],
+    )
+
+    assert [note.beat for note in result.notes] == [1.5, 2.5, 3.5, 4.5]
+    assert "reference_alignment" not in result.diagnostics
+    assert "reference_track_grid_alignment" not in result.diagnostics["actions"]

@@ -41,6 +41,20 @@ class Settings(BaseSettings):
     omr_preprocess_dpi: int = 300
     voice_transcription_backend: str = "auto"
     engine_processing_timeout_seconds: int = 120
+    deepseek_harmony_enabled: bool = False
+    deepseek_notation_review_enabled: bool = False
+    deepseek_ensemble_review_enabled: bool = False
+    deepseek_api_key: str | None = None
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-v4-flash"
+    deepseek_site_url: str | None = None
+    deepseek_app_title: str = "GigaStudy"
+    deepseek_timeout_seconds: float = 8.0
+    deepseek_max_retries: int = 1
+    deepseek_revision_cycles: int = 1
+    deepseek_thinking_enabled: bool = False
+    deepseek_temperature: float = 0.2
+    deepseek_max_tokens: int = 1800
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://127.0.0.1:5173",
         "http://localhost:5173",

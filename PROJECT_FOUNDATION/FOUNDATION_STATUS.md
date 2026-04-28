@@ -15,6 +15,11 @@ The canonical product is:
 
 The canonical engine rule is now documented in `ENGINE_ARCHITECTURE.md`.
 
+The a cappella arrangement fit audit is documented in
+`ACAPPELLA_ARRANGEMENT_AUDIT.md`: the current shared-score/grid model is
+directionally correct, but the next quality bar is ensemble-aware validation
+and explicit arrangement roles.
+
 The canonical work rule is now documented in `WORKING_PROTOCOL.md`: every task
 must consult and update `PROJECT_FOUNDATION` when behavior, contracts, UI,
 roadmap, or checklist state changes.
@@ -142,6 +147,28 @@ The current implementation has a working six-track vertical slice:
   the local WAV engine; `basic_pitch`, `librosa`/`pyin`, and `local` can be
   forced for focused tests. Basic Pitch and librosa output still flow through
   the same TrackNote, BPM-grid, range, and notation normalization policy.
+- Final voice-like track registration now compares the prepared notes against
+  already registered sibling tracks and can apply a small deterministic
+  reference-grid offset before committing TrackNotes. This is a latency/drift
+  correction for extracted audio/voice/OMR-like material on the shared score
+  paper, not a tempo rewrite. MusicXML/MIDI-style symbolic syncopation is left
+  untouched so imported rhythm is not destroyed by another track's grid.
+- Final registration now also runs an ensemble arrangement gate before commit.
+  The gate checks the proposed track against already registered sibling tracks
+  for range, voice crossing, adjacent spacing, parallel perfect motion, and
+  overly thin chord coverage. It stores diagnostics on registered tracks and
+  candidates, and annotates concrete target notes with ensemble warning flags.
+  The gate is diagnostic-first in alpha so intentional contemporary a cappella
+  choices are not silently overwritten.
+- Ensemble registration now evaluates multi-track imports as one proposed
+  score. MusicXML/MIDI startup imports, direct multi-track application, and bulk
+  OMR approval prepare all incoming parts first, then validate each part against
+  both existing registered tracks and the other incoming parts before writing
+  them. For voice/audio/AI material, the gate can apply a bounded contextual
+  octave repair when a note clearly sits in the wrong octave relative to sibling
+  voices; symbolic score material is preserved and receives diagnostics only.
+  Additional diagnostics now cover melodic singability, doubled leading-tone
+  risk, and bass foundation height on structural downbeats.
 - Noise-only or non-singing recordings are rejected instead of being registered
   as dense false notes.
 - Browser upload normalizes browser-decodable MP3/M4A/OGG/FLAC audio into mono
@@ -519,6 +546,243 @@ not legacy product surfaces.
   68/68, web lint, production web build, and browser E2E release gate 24/24 all
   passed locally.
 
+## DeepSeek Harmony Planner Gate - 2026-04-28
+
+- DeepSeek V4 Flash is the selected single LLM model for alpha harmony planning
+  when LLM assistance is enabled.
+- The LLM is bounded to planning only. It may choose voice-leading profile
+  order and provide compact candidate labels, roles, selection hints, and risk
+  tags. It must not output TrackNote arrays or final score notation.
+- Candidate review surfaces DeepSeek-provided direction, musical role,
+  selection reason, phrase summary, confidence, and review points as
+  user-facing choice evidence while keeping provider/model details in the
+  technical disclosure.
+- `GIGASTUDY_API_DEEPSEEK_HARMONY_ENABLED=true` and
+  `GIGASTUDY_API_DEEPSEEK_API_KEY` are required before the API calls DeepSeek.
+  Local and test environments remain deterministic unless explicitly enabled.
+- DeepSeek requests use JSON mode and non-thinking mode by default to control
+  latency and cost. Thinking mode is configurable but not the default alpha
+  path.
+- If DeepSeek times out, returns empty content, invalid JSON, or an unsupported
+  profile, the API logs the failure and continues with deterministic
+  rule-based harmony generation.
+- The deterministic engine still owns BPM, time signature, measure boundaries,
+  voice ranges, no-crossing constraints, candidate distinctness, and TrackNote
+  normalization.
+- Verification for this gate: API regression suite 87/87, web lint, and
+  production web build passed locally on 2026-04-28.
+
+## Plan-Aware Harmony Generation Gate - 2026-04-28
+
+- The DeepSeek planner has moved beyond profile ordering. It can now return
+  measure-level harmony intent, candidate goals, register/motion/rhythm policy,
+  chord-tone priority, and bounded review metadata.
+- The API can run a limited DeepSeek draft-review-revision cycle through
+  `GIGASTUDY_API_DEEPSEEK_REVISION_CYCLES` before handing a sanitized plan to
+  the deterministic engine.
+- The deterministic harmony engine now consumes the plan in key resolution,
+  chord ranking, pitch cost, transition cost, melodic connector allowance, and
+  candidate rhythm shaping. Final TrackNote output is still deterministic code,
+  not model-authored notes.
+- Candidate review diagnostics expose the candidate goal, rhythm policy,
+  revision cycle count, measure intent count, role, selection reason, and risk
+  tags so users can compare practical harmony choices.
+- Verification for this gate: focused DeepSeek/harmony tests 13/13, API
+  regression suite 89/89, web lint, and production web build passed locally on
+  2026-04-28.
+
+## Track Registration Quality Gate - 2026-04-28
+
+- A backend registration quality gate now runs at the final write boundary for
+  direct track registration, multi-track import application, extraction
+  candidate approval, bulk OMR approval, and AI candidate approval.
+- Voice/audio/recording material is treated as noisy evidence until it passes
+  BPM-locked score normalization. The gate filters low-confidence micro-events,
+  snaps notes to the studio beat grid, simplifies over-dense voice measures
+  into readable cells, splits measure-crossing notes, and reapplies the
+  Soprano/Alto/Tenor/Baritone/Bass clef/key/display policy.
+- Symbolic score material keeps imported rhythm where possible, but the gate
+  repairs measure metadata, seconds derived from the studio BPM, clef/key
+  annotation, and measure-boundary ownership before registration.
+- Candidate diagnostics now carry a `registration_quality` block so review and
+  admin/debug paths can see the note count, range fit, timing-grid fit, density,
+  measure ownership, and repair actions that produced the final candidate.
+- DeepSeek/OpenRouter configuration is explicit: local keys belong in ignored
+  `apps/api/.env`; deployed keys belong in Cloud Run env vars or Secret
+  Manager. The OpenRouter route uses
+  `GIGASTUDY_API_DEEPSEEK_BASE_URL=https://openrouter.ai/api/v1` and
+  `GIGASTUDY_API_DEEPSEEK_MODEL=deepseek/deepseek-v4-flash:free`.
+- OpenRouter requests omit the native DeepSeek `thinking` field by default,
+  while native DeepSeek requests keep the existing non-thinking JSON-mode
+  payload. This keeps the single DeepSeek model choice compatible with both
+  provider routes.
+- DeepSeek notation review is now wired into the final registration path as a
+  bounded checker. It receives compact original/prepared TrackNote summaries,
+  current diagnostics, meter, BPM, source kind, and target track policy. It may
+  return only validated repair instructions such as coarser quantization,
+  sustain merging, dense-measure simplification, unstable-note suppression, and
+  key-spelling preference.
+- The local notation quality gate applies those instructions deterministically
+  and preserves the pre-LLM registration result when the LLM is disabled,
+  unavailable, invalid, low-confidence, or gives no repair directive. The LLM
+  never writes final TrackNotes directly.
+- Voice-like registration now has an additional readability polish stage. It
+  collapses short neighbor-pitch blips between same-pitch notes, merges tiny-gap
+  same-pitch fragments into sustained sung tones, and compares deterministic
+  0.25-beat versus 0.5-beat grid candidates when fine quantization creates
+  moderate micro-note clutter.
+- Voice-like registration now removes short, low-confidence notes that are
+  isolated from surrounding sung material, reducing false notation from room
+  noise, breath, clicks, or pitch tracker artifacts before the result reaches
+  the visible score.
+- The DeepSeek notation reviewer receives deterministic quality-option
+  summaries, including the current prepared result and a coarser 0.5-beat
+  candidate for voice-like sources, plus isolated-artifact counts, so its
+  instructions can choose among concrete engine repairs instead of issuing vague
+  prose feedback.
+- Verification for this gate: API regression suite 98/98, web lint,
+  production web build, and Chromium release gate 10/10 passed locally on
+  2026-04-28.
+
+## Score Engraving Quality Gate - 2026-04-28
+
+- Browser score engraving now gives key signatures a first-measure width
+  allowance and a note-start gutter before VexFlow `Formatter` placement, so
+  clef/key modifiers do not collide with the first note.
+- Tenor rendering now uses actual treble-8vb clef annotation in the VexFlow
+  stave while retaining the stored sounding pitch plus display-octave policy.
+- Measure-local note normalization now prevents notes rounded to the right
+  barline from being placed on or outside the measure boundary. The latest
+  valid onset is the final sixteenth-cell inside the owning measure.
+- Beaming now uses contiguous beamable note groups only. Rests, quarter-or-
+  longer values, and hidden spacer rests break beam groups before VexFlow beam
+  generation, reducing misleading beam forests from noisy voice material.
+- E2E regression now checks the visible VexFlow SVG itself, not only the hidden
+  layout marker layer: dense noteheads must remain inside their owning measure,
+  VexFlow ties must be produced for tied material, and key signatures must
+  appear before the first note with reserved space.
+- Verification for this gate: web lint passed, production web build passed,
+  API regression suite passed 98/98, focused notation/voice API tests passed
+  16/16, and Chromium browser E2E release gate passed 10/10.
+
+## Voice Artifact Cleanup Gate - 2026-04-28
+
+- Voice-like registration now treats isolated short low-confidence notes as
+  likely artifacts when they are separated from surrounding sung material. This
+  catches common non-singing noise such as breath, clicks, room tones, and pitch
+  tracker false positives before they become visible notes.
+- Voice-like registration now bridges tiny detector dropouts between confident
+  adjacent sung notes by extending the previous note up to the next onset. This
+  keeps short extraction gaps from becoming visible micro-rests when the singer
+  is effectively continuing one phrase.
+- Voice-like registration now extends confident sung notes to a nearby barline
+  when they end just before the measure boundary and the phrase continues in the
+  next measure. This removes misleading end-of-measure micro-rests without
+  changing BPM, meter, or source audio.
+- The cleanup is bounded and conservative: it does not remove the only pitched
+  material in a take, and it only runs inside the final deterministic notation
+  quality gate for voice-like evidence.
+- DeepSeek notation review now sees isolated-artifact, short-phrase-gap, and
+  measure-tail-gap counts in its compact quality summaries and may request
+  `remove_isolated_artifacts`, `bridge_short_phrase_gaps`, or
+  `bridge_measure_tail_gaps`, but the actual note cleanup is still performed by
+  deterministic engine code.
+- LLM-directed voice repairs now pass back through the deterministic readability
+  optimizer, so a model instruction cannot bypass the same 0.25/0.5 grid
+  comparison and polish checks used by the base registration path.
+- Verification for this gate: focused notation/voice API tests passed 19/19,
+  API regression suite passed 101/101, web lint passed, production web build
+  passed, `git diff --check` passed, and Chromium browser E2E release gate
+  passed 10/10.
+
+## Short-Cluster Notation Cleanup Gate - 2026-04-28
+
+- Voice-like registration now detects three-or-more note clusters of
+  low-confidence sixteenth-cell fragments inside one beat when their pitch span
+  is tiny. Those clusters are collapsed into one representative sung event
+  before registration, reducing pitch-tracker chatter from becoming visibly
+  mechanical notation.
+- DeepSeek notation review now receives `short_note_cluster_count` in the same
+  compact quality summaries as isolated artifacts, phrase gaps, and measure-tail
+  gaps. It may request `collapse_short_note_clusters`, but the actual TrackNote
+  rewrite remains deterministic engine code.
+- Browser engraving now includes double-dotted half and quarter duration
+  candidates and attaches the correct number of augmentation dots in VexFlow.
+  This reduces avoidable intra-measure ties for 3.5-beat and 1.75-beat values.
+- Verification for this gate: focused notation/voice API tests passed 20/20,
+  API regression suite passed 102/102, web lint passed, production web build
+  passed, `git diff --check` passed, and Chromium browser E2E release gate
+  passed 10/10.
+
+## Direct Audio Playback And Playhead Gate - 2026-04-28
+
+- Studio audio-mode playback now uses retained recording/upload URLs directly
+  through browser media elements. Recorded takes no longer block on
+  `fetch -> decodeAudioData -> AudioBufferSource` before the user hears the
+  source; score synthesis remains the fallback for AI/generated tracks and
+  audio-less tracks.
+- Pure original-audio playback no longer opens a Web Audio context just to play
+  retained media. Web Audio is only required when score synthesis or the
+  metronome is part of the scheduled playback.
+- Full-track audio playback now has a media readiness barrier: empty tracks are
+  excluded, retained-audio tracks are all prepared to browser-playable state,
+  and only then are they scheduled from one shared start point. This prevents
+  one already-loaded track from starting while another retained take is still
+  buffering.
+- The smooth score playhead remains scheduler-driven and updates through the
+  browser animation frame loop. Shared measure widths keep global playback
+  lines vertically aligned across tracks, while per-track sync shifts only that
+  track's note/audio layer.
+- Score-only playback for generated/OMR/MIDI/MusicXML registrations is
+  verified against a fake Web Audio clock: same-beat notes across tracks are
+  scheduled at the exact same clock time, so stacked TrackNotes sound as a
+  chord.
+- Verification for this gate: web lint passed, production web build passed,
+  targeted Chromium audio playback E2E passed, and Chromium browser E2E
+  release gate passed 13/13 on 2026-04-28.
+
+## A Cappella Ensemble Polish Gate - 2026-04-28
+
+- Final registration now validates against the whole proposed ensemble context.
+  Single-track approval compares against registered sibling tracks; multi-track
+  import and bulk OMR approval prepare all incoming parts first, then validate
+  each part against the other incoming parts before any track is committed.
+- Voice/audio/AI material can receive conservative contextual octave repair
+  when a note clearly sits in the wrong octave relative to sibling voices. The
+  repair preserves pitch class, rhythm, measure ownership, BPM, barlines, ids,
+  and source audio. Symbolic score material is preserved and receives
+  diagnostics only.
+- Ensemble diagnostics now include melodic singability, structural doubled
+  leading-tone risk, and bass foundation height in addition to crossing,
+  adjacent spacing, parallel perfect motion, range, and thin chord coverage.
+- Verification for this gate: arrangement tests 6/6, focused notation/API tests
+  15/15, API regression suite 111/111, py_compile, and `git diff --check`
+  passed locally on 2026-04-28.
+
+## LLM Ensemble Registration Gate - 2026-04-28
+
+- DeepSeek now has two bounded review roles around final track registration:
+  single-track notation readability and six-track a cappella ensemble fit.
+- The ensemble reviewer receives registered sibling tracks, other parts from
+  the same proposed import/OMR batch, and compact vertical beat snapshots. This
+  lets it judge the target as part of one a cappella score instead of as an
+  isolated melody.
+- The LLM still cannot write TrackNotes. It can only request validated repair
+  directives such as coarser quantization, same-pitch sustain merging, dense
+  measure simplification, noise cleanup, gap bridging, and key-spelling
+  preference. The deterministic engine applies the instruction and re-runs the
+  ensemble arrangement gate before registration.
+- DeepSeek harmony planning prompts now explicitly include six-track a cappella
+  arrangement rules: singability, independent motion, candidate diversity,
+  voice-crossing/parallel-perfect avoidance, and bass-foundation awareness.
+- AI-generated candidates therefore flow through the same a cappella
+  registration contract as uploaded, recorded, symbolic, and OMR material.
+- Verification for this gate: py_compile passed for the modified LLM,
+  repository, harmony-plan, and config modules; focused DeepSeek/notation/
+  harmony/arrangement tests passed 32/32, API regression suite passed 113/113,
+  web lint passed, production web build passed, and Chromium release gate
+  passed 13/13 locally on 2026-04-28.
+
 ## Status Summary
 
 Foundation reset: complete.
@@ -527,4 +791,6 @@ Engine baseline: implemented.
 
 Implementation alignment: core vertical slice complete; extraction quality is
 now centered on shared assignment, notation metadata, and source-specific OMR
-or voice reliability improvements.
+or voice reliability improvements. Track registration quality is now enforced
+at the repository write boundary rather than relying on each extraction source
+to be correct by itself.

@@ -47,6 +47,11 @@ type TrackBoardProps = {
   onUpload: (track: TrackSlot, file: File | null) => void
 }
 
+function getRegisteredTrackKeySignature(track: TrackSlot): string | null {
+  const keySignature = track.notes.find((note) => note.key_signature)?.key_signature
+  return keySignature && keySignature !== 'C' ? keySignature : null
+}
+
 export function TrackBoard({
   beatsPerMeasure,
   bpm,
@@ -80,9 +85,15 @@ export function TrackBoard({
       ),
     )
     const measureCount = Math.max(1, ...registeredModels.map((model) => model.measureCount))
-    const widthSets = registeredModels.map((model) =>
-      buildEngravingMeasureWidths(model.notes, measureCount, beatsPerMeasure),
-    )
+    const widthSets = registeredModels.map((model, index) => {
+      const track = registeredTracks[index]
+      return buildEngravingMeasureWidths(
+        model.notes,
+        measureCount,
+        beatsPerMeasure,
+        track ? getRegisteredTrackKeySignature(track) : null,
+      )
+    })
 
     return Array.from({ length: measureCount }, (_, measureIndex) =>
       Math.max(260, ...widthSets.map((widths) => widths[measureIndex] ?? 0)),

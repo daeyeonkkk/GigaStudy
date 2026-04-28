@@ -64,8 +64,9 @@ This checklist tracks the new six-track studio foundation only.
   adjacent same-pitch timing supports a real continuation.
 - [x] Short rhythmic gaps are kept as hidden spacer rests so engraving spacing
   follows the beat grid without filling noisy takes with visible micro-rests.
-- [x] Auto-beaming is conservative and measure-local, with flat beams disabled
-  for dense or low-confidence voice-derived measures.
+- [x] Auto-beaming is conservative and measure-local, with flat beams split by
+  rests/non-beamable values and disabled for dense or low-confidence
+  voice-derived measures.
 - [x] Note centers remain inside their owning measure; downbeat notes use
   measure-internal notation padding rather than sitting outside the barline.
 - [x] Soprano through Bass notation uses VexFlow clefs and ledger lines so high
@@ -73,6 +74,13 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Normalized voice/AI notes carry key signature, accidental, clef, and
   display-octave metadata so browser engraving can reserve notation space and
   reduce accidental clutter instead of hiding symbols.
+- [x] First-measure VexFlow engraving reserves key-signature space before the
+  first note; regression tests verify the actual SVG key signature and note
+  order.
+- [x] Tenor browser engraving uses treble-8vb clef annotation while preserving
+  the stored sounding pitch.
+- [x] Visible VexFlow SVG noteheads, not only hidden layout markers, are checked
+  to remain inside their owning measures.
 - [ ] If VexFlow rejects a key signature at runtime, the UI should surface an
   explicit fallback warning rather than silently degrading.
 - [x] MusicXML/MIDI import can preserve source time signature metadata.
@@ -80,6 +88,37 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Voice-derived notes are normalized before trusted registration:
   fixed-BPM quantization, measure ownership, rest/noise cleanup, valid ties, and
   track-consistent clef/key/accidental display policy.
+- [x] Voice-derived registration collapses short neighbor-pitch blips that look
+  like vibrato/scoop/tracker jitter between two same-pitch sung segments.
+- [x] Voice-derived registration merges tiny-gap same-pitch fragments into
+  sustained notes when that produces a more natural sung score.
+- [x] Voice-derived registration can compare deterministic 0.25-beat and
+  0.5-beat candidates and choose the more readable grid for moderate
+  micro-note clutter.
+- [x] Voice-derived registration removes short, low-confidence notes that are
+  isolated from surrounding sung material before they become visible notation.
+- [x] Voice-derived registration bridges tiny detector dropouts between
+  confident adjacent sung notes so they do not become visible micro-rests.
+- [x] Voice-derived registration extends confident note tails to a nearby
+  barline when a tiny end-of-measure gap is likely extraction loss.
+- [x] All final registration paths share the same backend quality gate before
+  writing TrackNotes into a track: direct registration, multi-track import,
+  candidate approval, bulk OMR approval, and AI candidate approval.
+- [x] DeepSeek notation review can act as a bounded checker before final track
+  registration, receiving compact TrackNote diagnostics and returning only
+  validated deterministic repair instructions.
+- [x] DeepSeek notation review receives concrete deterministic quality-option
+  summaries so it can choose among bounded engine repairs instead of writing
+  final notes or vague feedback.
+- [x] LLM notation review cannot write final TrackNotes directly; BPM, meter,
+  pitch/rhythm mutation, and validation remain deterministic engine work.
+- [x] If LLM notation review is disabled, unavailable, invalid, or
+  low-confidence, registration preserves the deterministic pre-LLM result.
+- [x] DeepSeek ensemble registration review can inspect registered sibling
+  tracks, same-batch proposed parts, and vertical beat snapshots before final
+  commit while still returning only bounded deterministic repair instructions.
+- [x] LLM ensemble review cannot compose replacement notes, rewrite BPM/meter,
+  or bypass the deterministic ensemble gate.
 - [x] Dense note runs expand score width instead of overlapping.
 - [x] Same-onset cluster offsets never move notes outside fixed measure
   boundaries.
@@ -87,6 +126,22 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Sync adjustment keeps measure lines fixed and shifts only the note layer.
 - [x] Registered track score strips share measure widths across tracks, so
   barlines stay vertically aligned during ensemble playback.
+- [x] Final voice/audio-style track registration can correct a small
+  whole-track beat offset against already registered sibling tracks, while
+  preserving BPM, barlines, sync controls, and trusted symbolic import rhythm.
+- [x] Final track registration runs an ensemble arrangement gate against
+  registered sibling tracks before commit, diagnosing range, voice crossing,
+  adjacent spacing, parallel perfect motion, and thin chord coverage.
+- [x] Multi-track import and bulk OMR approval validate each incoming part
+  against the whole proposed score, not only against previously committed
+  tracks.
+- [x] Ensemble registration can apply bounded contextual octave repair for
+  voice/audio/AI material while preserving pitch class, rhythm, BPM, barlines,
+  and trusted symbolic score input.
+- [x] Ensemble diagnostics include singability, doubled-leading-tone, and bass
+  foundation checks in addition to crossing/spacing/parallel/chord coverage.
+- [x] Track and candidate registration diagnostics persist the ensemble
+  arrangement result, and concrete target notes receive ensemble warning flags.
 
 ## Global Transport
 
@@ -199,6 +254,34 @@ This checklist tracks the new six-track studio foundation only.
   filtering so generated candidates differ by register, motion, and contour.
 - [x] AI generation candidate labels summarize musical choice information
   instead of generic Candidate 1/2/3 labels.
+- [x] DeepSeek V4 Flash can be configured as the single LLM harmony planner for
+  low-cost alpha use.
+- [x] DeepSeek/OpenRouter API keys are configured outside source control:
+  local `apps/api/.env`, deployed Cloud Run env vars or Secret Manager.
+- [x] OpenRouter `deepseek/deepseek-v4-flash:free` payloads omit native
+  DeepSeek `thinking` fields by default while keeping JSON-mode responses.
+- [x] DeepSeek planning is bounded to candidate direction, profile ordering,
+  labels, and diagnostics; deterministic code still generates and validates all
+  TrackNote data.
+- [x] DeepSeek failures or disabled configuration fall back to deterministic
+  harmony generation without blocking AI generation.
+- [x] DeepSeek-guided candidates expose musical role, selection reason, phrase
+  summary, confidence, and review points in the candidate approval UI.
+- [x] AI harmony quality upgrade design is documented as a next-stage contract:
+  DeepSeek V4 Flash should move from profile ordering to measure-level harmony
+  intent, candidate goals, rhythm policy, and plan-aware constrained search.
+- [x] DeepSeek can return measure-level harmony intent and candidate-specific
+  goal/register/motion/rhythm/chord-tone policy.
+- [x] DeepSeek planning can run a bounded internal draft-review-revision cycle
+  before deterministic generation.
+- [x] DeepSeek harmony planning prompts include explicit six-track a cappella
+  arrangement rules: singability, candidate diversity, independent motion,
+  voice-crossing/parallel-perfect avoidance, and bass-foundation awareness.
+- [x] Vocal AI generation cost now uses plan-aware key resolution, chord
+  ranking, pitch choice, transition motion, melodic connector allowance, and
+  candidate rhythm shaping.
+- [x] AI candidate diagnostics expose candidate goal, rhythm policy, revision
+  cycles, and measure intent count for approval decisions.
 - [x] Approving one AI candidate registers it and rejects sibling candidates
   from the same generation run.
 - [x] AI candidate approval into an occupied track requires overwrite
@@ -207,6 +290,9 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Percussion generation resets rhythm patterns on each studio measure
   downbeat.
 - [x] AI generation produces symbolic TrackNote data, not natural voice audio.
+- [x] AI-generated vocal candidates pass through the same notation quality,
+  ensemble arrangement, and optional LLM ensemble review path before approved
+  candidates become registered tracks.
 
 ## Scoring
 
@@ -347,9 +433,34 @@ This checklist tracks the new six-track studio foundation only.
   converts normalized `TrackNote` data into measure-local VexFlow events with
   variable measure widths, real dotted durations, beam groups, rests, and
   adjacent-segment ties.
+- [x] Browser engraving prefers dotted/double-dotted durations before splitting
+  a single note into tied fragments, so ties are reserved for measure crossings
+  and true continuation.
+- [x] Voice-like registration collapses low-confidence short-note clusters that
+  look like pitch-tracker chatter into one representative sung event before the
+  track is registered.
 - [x] Studio playback in audio mode uses retained recording/upload media URLs
   directly instead of decoding recorded files into Web Audio buffers before
   playback.
+- [x] 2026-04-28 재검증: registered audio track playback calls the retained
+  `/tracks/{slot}/audio` media URL through `HTMLMediaElement.play()` and keeps
+  score synthesis as fallback only for audio-less or score-mode tracks.
+- [x] Full-track audio playback excludes empty tracks, waits until all retained
+  media tracks are browser-playable, then starts the prepared sources from one
+  shared scheduler point.
+- [x] Generated, OMR, MIDI, and MusicXML score-only tracks synthesize
+  `TrackNote` playback on one shared Web Audio clock; same-beat notes across
+  tracks are scheduled at the same start time so they form chords.
+- [x] 2026-04-28 registration reference-grid gate passed: API 104/104,
+  including regression tests that extracted audio can be nudged onto an
+  existing sibling-track beat grid and symbolic syncopation is not shifted.
+- [x] 2026-04-28 ensemble arrangement registration gate passed: API 108/108,
+  including regression tests for voice crossing, adjacent spacing, parallel
+  perfect interval detection, and API persistence of registration diagnostics.
+- [x] 2026-04-28 a cappella ensemble polish gate passed: API 111/111,
+  including contextual octave repair for extractable audio/AI material,
+  symbolic-source preservation, singability diagnostics, and whole-proposed-score
+  validation for batch registration.
 - [x] Track, global, and scoring-reference playback all follow the same
   audio-first/source-toggle policy.
 - [x] Per-track microphone recording uses the studio BPM/meter clock: the UI

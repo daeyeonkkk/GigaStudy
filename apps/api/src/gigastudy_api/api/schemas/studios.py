@@ -107,6 +107,7 @@ class TrackSlot(BaseModel):
     audio_mime_type: str | None = None
     duration_seconds: float = 0
     notes: list[TrackNote] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
     updated_at: str
 
 

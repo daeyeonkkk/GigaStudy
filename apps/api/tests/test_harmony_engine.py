@@ -2,6 +2,11 @@ from gigastudy_api.services.engine.harmony import (
     generate_rule_based_harmony,
     generate_rule_based_harmony_candidates,
 )
+from gigastudy_api.services.engine.harmony_plan import (
+    DeepSeekCandidateDirection,
+    DeepSeekHarmonyPlan,
+    MeasureHarmonyIntent,
+)
 from gigastudy_api.services.engine.music_theory import note_from_pitch
 
 
@@ -183,6 +188,64 @@ def test_vocal_generation_candidates_are_distinct_arrangements() -> None:
         _sequence_difference_score(sequences[0], sequence) >= 0.22
         for sequence in sequences[1:]
     )
+
+
+def test_harmony_plan_changes_notes_and_rhythm_policy() -> None:
+    soprano = [
+        _context_note(1, "C5"),
+        _context_note(1.5, "D5"),
+        _context_note(2, "E5"),
+        _context_note(2.5, "F5"),
+        _context_note(3, "G5"),
+        _context_note(3.5, "A5"),
+        _context_note(4, "G5"),
+    ]
+    baseline = generate_rule_based_harmony_candidates(
+        target_slot_id=3,
+        context_tracks=soprano,
+        context_notes_by_slot={1: soprano},
+        bpm=120,
+        candidate_count=1,
+    )[0]
+    plan = DeepSeekHarmonyPlan(
+        key="C",
+        mode="major",
+        confidence=0.9,
+        measures=[
+            MeasureHarmonyIntent(
+                measure_index=1,
+                function="dominant",
+                preferred_degrees=[5],
+                target_motion="stable",
+            )
+        ],
+        candidate_directions=[
+            DeepSeekCandidateDirection(
+                candidate_index=1,
+                profile_name="lower_support",
+                title="넓은 받침",
+                goal="open_support",
+                register_bias="low",
+                motion_bias="stable",
+                rhythm_policy="sustain_support",
+                chord_tone_priority=["root", "fifth", "third"],
+            )
+        ],
+    )
+
+    planned = generate_rule_based_harmony_candidates(
+        target_slot_id=3,
+        context_tracks=soprano,
+        context_notes_by_slot={1: soprano},
+        bpm=120,
+        candidate_count=1,
+        profile_names=plan.profile_names(),
+        harmony_plan=plan,
+    )[0]
+
+    assert tuple(note.pitch_midi for note in planned) != tuple(note.pitch_midi for note in baseline)
+    assert len(planned) < len(baseline)
+    assert planned[0].duration_beats > baseline[0].duration_beats
 
 
 def _has_parallel_perfects(first_voice, second_voice) -> bool:

@@ -73,6 +73,11 @@ The current implementation has a working vertical slice for:
   pitch detection: stable singing segments are quantized onto the immutable
   BPM/meter grid, cleaned for noise, assigned to measures, and prepared for
   track-consistent clef/key/accidental engraving before registration or review.
+- Final TrackNote registration is protected by a shared backend quality gate.
+  Every direct registration, multi-track import, candidate approval, bulk OMR
+  approval, and AI candidate approval path now rechecks fixed-BPM timing,
+  measure ownership, readable density, range fit, clef/key/spelling metadata,
+  and source-specific noise cleanup before writing to a track.
 - The API now has a shared notation-normalization layer for voice-derived and
   rule-generated TrackNotes. Voice notes may merge adjacent same-pitch fragments
   created by pitch tracking, while AI/percussion notes preserve generated rhythm
@@ -240,6 +245,21 @@ Required:
   and obvious SATB-style voice-leading errors.
 - Percussion rhythm generation for track 6
 - Meter-aware percussion downbeats for non-4/4 studios
+- Optional DeepSeek V4 Flash harmony planner for low-cost alpha candidate
+  direction, profile ordering, labels, and diagnostics
+- OpenRouter is supported as the low-cost DeepSeek route through
+  `GIGASTUDY_API_DEEPSEEK_BASE_URL=https://openrouter.ai/api/v1` and
+  `GIGASTUDY_API_DEEPSEEK_MODEL=deepseek/deepseek-v4-flash:free`; keys stay in
+  ignored local `.env` files or Cloud Run/Secret Manager, never in source.
+- DeepSeek output is JSON-only planning metadata; deterministic generation
+  still owns TrackNote output and validation
+- Plan-aware quality step: `AI_HARMONY_GENERATION_DESIGN.md` is now partially
+  implemented. DeepSeek returns measure-level harmony intent and candidate
+  goals that directly feed chord ranking, pitch cost, transition cost, melodic
+  connector allowance, and rhythm policy. Candidate quality report depth can
+  still expand further.
+- DeepSeek failures fall back to deterministic generation without blocking the
+  user flow
 - Clear generation status
 - Generated TrackNote candidates can be approved into the target track
 - Approving one candidate rejects sibling candidates from the same generation
@@ -248,6 +268,9 @@ Required:
 Cut line:
 
 - With one registered track, AI generation can create a plausible second track.
+- When DeepSeek is configured, candidates should expose clearer musical
+  differences without allowing the model to bypass BPM, meter, or voice-leading
+  constraints.
 - Percussion generation follows BPM and meter rather than harmony-note
   behavior.
 - Natural voice audio generation is not required.
@@ -423,6 +446,9 @@ Required:
 - Continue raising voice-to-score normalization quality beyond the current fixed
   BPM grid, measure ownership, valid tie splitting, tonal spelling/key
   signatures, and track-specific clef/range display baseline.
+- Add an optional LLM notation critic only after the deterministic registration
+  quality gate remains stable under real recordings. The LLM may suggest repair
+  policy, but final TrackNotes must still pass deterministic validation.
 - Harden browser audio decoding failure messages for codec-specific failures.
 - Harden OMR review beyond the current first-page source preview: add page
   navigation, candidate-to-page focus, and eventual source-note overlay for

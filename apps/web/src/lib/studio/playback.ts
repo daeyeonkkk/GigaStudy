@@ -156,6 +156,87 @@ export function createMediaElementPlayback(audioUrl: string, volume: number): Pl
   return { media }
 }
 
+export function prepareMediaElementPlayback(
+  node: PlaybackNode,
+  timeoutMilliseconds = 3500,
+): Promise<void> {
+  if (!node.media) {
+    return Promise.resolve()
+  }
+
+  const media = node.media
+  const hasPlayableBuffer = () => media.readyState >= 3
+  if (hasPlayableBuffer()) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let timeoutId: number | null = null
+
+    const cleanup = () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+      media.removeEventListener('canplay', handleReady)
+      media.removeEventListener('canplaythrough', handleReady)
+      media.removeEventListener('loadeddata', handleLoadedData)
+      media.removeEventListener('progress', handleLoadedData)
+      media.removeEventListener('error', handleError)
+    }
+
+    const finish = () => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve()
+    }
+
+    const fail = (error: unknown) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      reject(error)
+    }
+
+    const handleReady = () => finish()
+    const handleLoadedData = () => {
+      if (hasPlayableBuffer()) {
+        finish()
+      }
+    }
+    const handleError = () => fail(new Error('Track audio media could not be loaded.'))
+
+    media.addEventListener('canplay', handleReady)
+    media.addEventListener('canplaythrough', handleReady)
+    media.addEventListener('loadeddata', handleLoadedData)
+    media.addEventListener('progress', handleLoadedData)
+    media.addEventListener('error', handleError)
+
+    timeoutId = window.setTimeout(() => {
+      if (hasPlayableBuffer()) {
+        finish()
+        return
+      }
+      fail(new Error('Track audio media was not ready before playback timeout.'))
+    }, timeoutMilliseconds)
+
+    try {
+      media.load()
+    } catch (error) {
+      fail(error)
+    }
+
+    if (hasPlayableBuffer()) {
+      finish()
+    }
+  })
+}
+
 export function scheduleMediaElementPlayback(
   node: PlaybackNode,
   delaySeconds: number,

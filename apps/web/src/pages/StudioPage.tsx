@@ -34,19 +34,20 @@ import {
   type MicrophoneRecorder,
 } from '../lib/audio'
 import {
-  createAudioBufferPlayback,
+  createMediaElementPlayback,
   createTone,
   DEFAULT_METER,
   detectUploadKind,
   disposePlaybackSession,
-  fetchAudioArrayBuffer,
   formatSeconds,
   getBeatSeconds,
   getNotePlaybackFrequency,
   getStudioMeter,
   isOmrUpload,
+  prepareMediaElementPlayback,
   safeDownloadName,
   scheduleMetronomeClicks,
+  scheduleMediaElementPlayback,
   startLoopingMetronomeSession,
   type PlaybackNode,
   type PlaybackSession,
@@ -105,7 +106,6 @@ export function StudioPage() {
   const [jobOverwriteApprovals, setJobOverwriteApprovals] = useState<Record<string, boolean>>({})
   const playbackSessionRef = useRef<PlaybackSession | null>(null)
   const playbackRunIdRef = useRef(0)
-  const trackAudioFetchCacheRef = useRef<Map<string, Promise<ArrayBuffer>>>(new Map())
   const trackCountInRunIdRef = useRef(0)
   const trackCountInTimeoutIdsRef = useRef<number[]>([])
   const recordingMetronomeSessionRef = useRef<PlaybackSession | null>(null)
@@ -118,6 +118,11 @@ export function StudioPage() {
     [studio],
   )
   const studioBeatsPerMeasure = studioMeter.beatsPerMeasure
+
+  function clearTrackCountInTimers() {
+    trackCountInTimeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
+    trackCountInTimeoutIdsRef.current = []
+  }
 
   useEffect(() => {
     let ignore = false
@@ -443,11 +448,6 @@ export function StudioPage() {
     }
   }
 
-  function clearTrackCountInTimers() {
-    trackCountInTimeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
-    trackCountInTimeoutIdsRef.current = []
-  }
-
   function cancelTrackCountIn(message = '녹음 준비를 취소했습니다.') {
     trackCountInRunIdRef.current += 1
     clearTrackCountInTimers()
@@ -542,6 +542,17 @@ export function StudioPage() {
     return Boolean(track.audio_source_path)
   }
 
+  function getTrackTimelineDurationSeconds(track: TrackSlot, beatSeconds: number): number {
+    const noteEndSeconds = Math.max(
+      0,
+      ...track.notes.map((note) => (note.beat - 1 + note.duration_beats) * beatSeconds),
+    )
+    if (Number.isFinite(track.duration_seconds) && track.duration_seconds > 0) {
+      return Math.max(track.duration_seconds, noteEndSeconds)
+    }
+    return Math.max(0.25, noteEndSeconds)
+  }
+
   async function startPlaybackSession(
     tracksToPlay: TrackSlot[],
     includeMetronome = metronomeEnabled,
@@ -574,7 +585,7 @@ export function StudioPage() {
     const scoreTracks = playableTracks.filter(
       (track) => !(playbackSource === 'audio' && trackHasPlayableAudio(track)) && trackHasPlayableScore(track),
     )
-    const needsAudioContext = audioTracks.length > 0 || scoreTracks.length > 0 || includeMetronome
+    const needsAudioContext = scoreTracks.length > 0 || includeMetronome
     const nodes: PlaybackNode[] = []
     const timeoutIds: number[] = []
     let latestStop = 0
@@ -602,54 +613,63 @@ export function StudioPage() {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
       const activeContext = context
+      const preparedAudioTracks: Array<{ node: PlaybackNode; track: TrackSlot; trackStart: number }> = []
 
-      const resolvedAudioBuffers = activeContext
-        ? await Promise.all(
-            audioTracks.map(async (track) => {
-              const audioUrl = getTrackAudioUrl(studio.studio_id, track.slot_id)
-              const cached = trackAudioFetchCacheRef.current.get(audioUrl)
-              const arrayBufferPromise = cached ?? fetchAudioArrayBuffer(audioUrl)
-              if (!cached) {
-                trackAudioFetchCacheRef.current.set(audioUrl, arrayBufferPromise)
-              }
-
-              let audioData: ArrayBuffer
-              try {
-                audioData = await arrayBufferPromise
-              } catch (error) {
-                trackAudioFetchCacheRef.current.delete(audioUrl)
-                throw error
-              }
-
-              const decodedBuffer = await activeContext.decodeAudioData(audioData.slice(0))
-              return { decodedBuffer, track }
-            }),
-          )
-        : []
-
-      if (audioTracks.length > 0 && !activeContext) {
-        throw new Error('녹음 원본을 재생할 오디오 장치를 열지 못했습니다.')
-      }
-      const audioPlaybackContext = activeContext ?? undefined
-
-      resolvedAudioBuffers.forEach(({ decodedBuffer, track }) => {
+      audioTracks.forEach((track) => {
+        const audioUrl = getTrackAudioUrl(studio.studio_id, track.slot_id)
         const trackStart = Math.max(0, track.sync_offset_seconds - minOffsetSeconds)
-        const node = createAudioBufferPlayback(
-          audioPlaybackContext as AudioContext,
-          decodedBuffer,
-          scheduledStart + trackStart,
-          0,
-          audioTrackVolume,
-        )
-        if (node) {
-          nodes.push(node)
-          latestStop = Math.max(latestStop, trackStart + decodedBuffer.duration)
-          scheduledAnyTrack = true
-        }
+        const node = createMediaElementPlayback(audioUrl, audioTrackVolume)
+        nodes.push(node)
+        preparedAudioTracks.push({ node, track, trackStart })
+        latestStop = Math.max(latestStop, trackStart + getTrackTimelineDurationSeconds(track, beatSeconds))
+        scheduledAnyTrack = true
 
         track.notes.forEach((note) => {
           maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
         })
+      })
+
+      if (preparedAudioTracks.length > 0) {
+        setActionState({
+          phase: 'busy',
+          message:
+            preparedAudioTracks.length > 1
+              ? '등록된 원음들을 동시에 시작할 수 있도록 준비합니다.'
+              : '등록된 원음을 재생할 수 있도록 준비합니다.',
+        })
+        await Promise.all(
+          preparedAudioTracks.map(({ node, track }) =>
+            prepareMediaElementPlayback(node).catch((error: unknown) => {
+              throw new Error(`${track.name} 녹음 원본을 불러오지 못했습니다.`, {
+                cause: error,
+              })
+            }),
+          ),
+        )
+      }
+
+      if (playbackRunIdRef.current !== runId) {
+        disposePlaybackSession({ context, nodes, timeoutIds })
+        return false
+      }
+
+      scheduledStart = activeContext ? activeContext.currentTime + mediaStartDelaySeconds : 0
+
+      preparedAudioTracks.forEach(({ node, track, trackStart }) => {
+        const timeoutId = scheduleMediaElementPlayback(
+          node,
+          mediaStartDelaySeconds + trackStart,
+          0,
+          () => {
+            setActionState({
+              phase: 'error',
+              message: `${track.name} 녹음 원본을 재생하지 못했습니다. 브라우저 권한이나 파일 상태를 확인해 주세요.`,
+            })
+          },
+        )
+        if (timeoutId !== null) {
+          timeoutIds.push(timeoutId)
+        }
       })
 
       scoreTracks.forEach((track) => {
@@ -715,7 +735,7 @@ export function StudioPage() {
         message:
           error instanceof Error && error.message.trim()
             ? error.message
-            : '재생을 준비하는 중 문제가 발생했습니다.',
+            : '재생을 시작하지 못했습니다.',
       })
       return false
     }

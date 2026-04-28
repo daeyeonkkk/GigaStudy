@@ -10,6 +10,12 @@ from gigastudy_api.services.engine.music_theory import (
     note_from_pitch,
     quarter_beats_per_measure,
 )
+from gigastudy_api.services.engine.harmony_plan import (
+    DeepSeekCandidateDirection,
+    DeepSeekHarmonyPlan,
+    MeasureHarmonyIntent,
+    key_tonic_from_name,
+)
 from gigastudy_api.services.engine.notation import normalize_track_notes
 
 VOICE_LEADING_METHOD = "rule_based_voice_leading_v1"
@@ -163,6 +169,7 @@ def generate_rule_based_harmony(
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
     context_notes_by_slot: dict[int, list[TrackNote]] | None = None,
+    harmony_plan: DeepSeekHarmonyPlan | None = None,
 ) -> list[TrackNote]:
     if target_slot_id == 6:
         return normalize_track_notes(
@@ -189,6 +196,7 @@ def generate_rule_based_harmony(
         time_signature_denominator=time_signature_denominator,
         context_notes_by_slot=context_notes_by_slot,
         candidate_count=1,
+        harmony_plan=harmony_plan,
     )
     return candidates[0] if candidates else []
 
@@ -202,6 +210,8 @@ def generate_rule_based_harmony_candidates(
     time_signature_denominator: int = 4,
     context_notes_by_slot: dict[int, list[TrackNote]] | None = None,
     candidate_count: int = 3,
+    profile_names: list[str] | None = None,
+    harmony_plan: DeepSeekHarmonyPlan | None = None,
 ) -> list[list[TrackNote]]:
     resolved_candidate_count = max(1, min(5, candidate_count))
     if target_slot_id == 6:
@@ -234,34 +244,29 @@ def generate_rule_based_harmony_candidates(
     if not events:
         return []
 
-    key = _estimate_key(events)
+    key = _resolve_generation_key(_estimate_key(events), harmony_plan)
     selected_paths = _select_voice_leading_paths(
         target_slot_id=target_slot_id,
         events=events,
         key=key,
         candidate_count=resolved_candidate_count,
+        profile_names=profile_names,
+        harmony_plan=harmony_plan,
     )
     if not selected_paths:
         return []
 
     generated_candidates = [
-        [
-            note_from_pitch(
-                beat=event.beat,
-                duration_beats=event.duration_beats,
-                bpm=bpm,
-                source="ai",
-                extraction_method=VOICE_LEADING_METHOD,
-                time_signature_numerator=time_signature_numerator,
-                time_signature_denominator=time_signature_denominator,
-                pitch_midi=pitch,
-                confidence=_generation_confidence(path.cost, len(events), key.confidence),
-                measure_index=event.reference.measure_index,
-                beat_in_measure=event.reference.beat_in_measure,
-            )
-            for event, pitch in zip(events, path.pitches, strict=False)
-        ]
-        for path in selected_paths
+        _notes_from_harmony_path(
+            events=events,
+            path=path,
+            bpm=bpm,
+            key=key,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            candidate_goal=harmony_plan.direction_for_index(index) if harmony_plan is not None else None,
+        )
+        for index, path in enumerate(selected_paths, start=1)
     ]
     return [
         normalize_track_notes(
@@ -351,6 +356,99 @@ def _build_harmony_events(
     return events
 
 
+def _notes_from_harmony_path(
+    *,
+    events: list[HarmonyEvent],
+    path: HarmonyPath,
+    bpm: int,
+    key: KeyEstimate,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+    candidate_goal: DeepSeekCandidateDirection | None,
+) -> list[TrackNote]:
+    notes = [
+        note_from_pitch(
+            beat=event.beat,
+            duration_beats=event.duration_beats,
+            bpm=bpm,
+            source="ai",
+            extraction_method=VOICE_LEADING_METHOD,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            pitch_midi=pitch,
+            confidence=_generation_confidence(path.cost, len(events), key.confidence),
+            measure_index=event.reference.measure_index,
+            beat_in_measure=event.reference.beat_in_measure,
+        )
+        for event, pitch in zip(events, path.pitches, strict=False)
+    ]
+    return _apply_candidate_rhythm_policy(notes, candidate_goal)
+
+
+def _apply_candidate_rhythm_policy(
+    notes: list[TrackNote],
+    candidate_goal: DeepSeekCandidateDirection | None,
+) -> list[TrackNote]:
+    if candidate_goal is None or candidate_goal.rhythm_policy in {"follow_context", "answer_melody"}:
+        return notes
+    if candidate_goal.rhythm_policy == "simplify":
+        return _merge_weak_repeated_notes(notes)
+    if candidate_goal.rhythm_policy == "sustain_support":
+        return _sustain_support_notes(notes)
+    return notes
+
+
+def _merge_weak_repeated_notes(notes: list[TrackNote]) -> list[TrackNote]:
+    merged: list[TrackNote] = []
+    for note in notes:
+        if (
+            merged
+            and note.pitch_midi == merged[-1].pitch_midi
+            and note.measure_index == merged[-1].measure_index
+        ):
+            previous = merged[-1]
+            new_duration = (note.beat + note.duration_beats) - previous.beat
+            merged[-1] = _copy_note_duration(previous, new_duration)
+        else:
+            merged.append(note)
+    return merged
+
+
+def _sustain_support_notes(notes: list[TrackNote]) -> list[TrackNote]:
+    if len(notes) < 3:
+        return notes
+    sustained: list[TrackNote] = []
+    for note in notes:
+        if not sustained:
+            sustained.append(note)
+            continue
+        previous = sustained[-1]
+        weak_beat = note.beat_in_measure is not None and abs(note.beat_in_measure - round(note.beat_in_measure)) > 0.001
+        small_motion = (
+            note.pitch_midi is not None
+            and previous.pitch_midi is not None
+            and abs(note.pitch_midi - previous.pitch_midi) <= 2
+        )
+        same_measure = note.measure_index == previous.measure_index
+        if weak_beat and small_motion and same_measure:
+            new_duration = (note.beat + note.duration_beats) - previous.beat
+            sustained[-1] = _copy_note_duration(previous, new_duration)
+            continue
+        sustained.append(note)
+    return sustained
+
+
+def _copy_note_duration(note: TrackNote, duration_beats: float) -> TrackNote:
+    duration_beats = round(max(0.25, duration_beats), 4)
+    duration_seconds = duration_beats * (note.duration_seconds / max(0.0001, note.duration_beats))
+    return note.model_copy(
+        update={
+            "duration_beats": duration_beats,
+            "duration_seconds": round(duration_seconds, 4),
+        }
+    )
+
+
 def _active_notes_at_beat(
     context_by_slot: dict[int, list[TrackNote]],
     beat: float,
@@ -410,6 +508,30 @@ def _estimate_key(events: list[HarmonyEvent]) -> KeyEstimate:
     return KeyEstimate(tonic=tonic, mode=mode, scale=scale, confidence=confidence)
 
 
+def _resolve_generation_key(local_key: KeyEstimate, harmony_plan: DeepSeekHarmonyPlan | None) -> KeyEstimate:
+    if harmony_plan is None or harmony_plan.confidence < 0.62:
+        return local_key
+    planned_tonic = key_tonic_from_name(harmony_plan.key)
+    planned_mode = (harmony_plan.mode or "").strip().lower()
+    if planned_tonic is None or planned_mode not in SCALE_STEPS:
+        return local_key
+    if planned_tonic == local_key.tonic and planned_mode == local_key.mode:
+        return KeyEstimate(
+            tonic=local_key.tonic,
+            mode=local_key.mode,
+            scale=local_key.scale,
+            confidence=max(local_key.confidence, harmony_plan.confidence),
+        )
+    if harmony_plan.confidence < 0.78:
+        return local_key
+    return KeyEstimate(
+        tonic=planned_tonic,
+        mode=planned_mode,
+        scale=tuple((planned_tonic + step) % 12 for step in SCALE_STEPS[planned_mode]),
+        confidence=max(0.5, min(0.88, (local_key.confidence + harmony_plan.confidence) / 2)),
+    )
+
+
 def _profile_score(histogram: list[float], tonic: int, profile: tuple[float, ...]) -> float:
     return sum(histogram[(tonic + step) % 12] * profile[step] for step in range(12))
 
@@ -420,6 +542,7 @@ def _chord_candidates_for_event(
     previous_chord: ChordCandidate | None,
     event_index: int,
     event_count: int,
+    measure_intent: MeasureHarmonyIntent | None = None,
 ) -> list[ChordCandidate]:
     pitch_class_weights = _event_pitch_class_weights(event)
     candidates: list[ChordCandidate] = []
@@ -436,6 +559,7 @@ def _chord_candidates_for_event(
             previous_chord=previous_chord,
             event_index=event_index,
             event_count=event_count,
+            measure_intent=measure_intent,
         )
         candidates.append(
             ChordCandidate(
@@ -470,6 +594,7 @@ def _chord_fit_cost(
     previous_chord: ChordCandidate | None,
     event_index: int,
     event_count: int,
+    measure_intent: MeasureHarmonyIntent | None = None,
 ) -> float:
     cost = 0.0
     for pitch_class, weight in pitch_class_weights.items():
@@ -491,6 +616,11 @@ def _chord_fit_cost(
         event=event,
         event_index=event_index,
         event_count=event_count,
+    )
+    cost += _measure_intent_chord_cost(
+        degree=degree,
+        function=function,
+        measure_intent=measure_intent,
     )
 
     if previous_chord is not None:
@@ -549,24 +679,65 @@ def _structural_chord_cost(
     return cost
 
 
+def _measure_intent_chord_cost(
+    *,
+    degree: int,
+    function: str,
+    measure_intent: MeasureHarmonyIntent | None,
+) -> float:
+    if measure_intent is None:
+        return 0.0
+
+    cost = 0.0
+    if measure_intent.function != "unknown":
+        if function == measure_intent.function:
+            cost -= 0.72
+        elif measure_intent.function == "tonic" and function == "dominant":
+            cost += 0.45
+        elif measure_intent.function == "dominant" and function == "tonic":
+            cost += 0.35
+        elif measure_intent.function == "predominant" and function == "dominant":
+            cost += 0.18
+        else:
+            cost += 0.24
+
+    if measure_intent.preferred_degrees:
+        if degree in measure_intent.preferred_degrees:
+            cost -= 0.48
+        else:
+            cost += 0.16
+
+    if measure_intent.cadence_role == "final":
+        cost += -0.85 if degree == 1 else 0.42
+    elif measure_intent.cadence_role == "cadence":
+        cost += -0.65 if degree in {5, 7} or function == "dominant" else 0.18
+    elif measure_intent.cadence_role == "opening":
+        cost += -0.38 if function == "tonic" else 0.12
+    return cost
+
+
 def _select_voice_leading_paths(
     *,
     target_slot_id: int,
     events: list[HarmonyEvent],
     key: KeyEstimate,
     candidate_count: int,
+    profile_names: list[str] | None = None,
+    harmony_plan: DeepSeekHarmonyPlan | None = None,
 ) -> list[HarmonyPath]:
     selected: list[HarmonyPath] = []
-    profiles = _voice_leading_profiles_for_count(candidate_count)
+    profiles = _voice_leading_profiles_for_count(candidate_count, profile_names=profile_names)
     pool_size = max(8, candidate_count * 4)
 
-    for profile in profiles:
+    for candidate_index, profile in enumerate(profiles, start=1):
         profile_paths = _search_voice_leading_paths(
             target_slot_id=target_slot_id,
             events=events,
             key=key,
             max_paths=pool_size,
             profile=profile,
+            harmony_plan=harmony_plan,
+            candidate_goal=harmony_plan.direction_for_index(candidate_index) if harmony_plan is not None else None,
         )
         path = _pick_distinct_path(profile_paths, selected)
         if path is not None:
@@ -580,6 +751,8 @@ def _select_voice_leading_paths(
         key=key,
         max_paths=max(pool_size, candidate_count * 8),
         profile=DEFAULT_VOICE_LEADING_PROFILE,
+        harmony_plan=harmony_plan,
+        candidate_goal=None,
     )
     for path in fallback_paths:
         distinct_path = _pick_distinct_path([path], selected)
@@ -591,11 +764,29 @@ def _select_voice_leading_paths(
     return selected
 
 
-def _voice_leading_profiles_for_count(candidate_count: int) -> tuple[VoiceLeadingProfile, ...]:
-    if candidate_count <= len(VOICE_LEADING_PROFILES):
-        return VOICE_LEADING_PROFILES[:candidate_count]
-    extra_count = candidate_count - len(VOICE_LEADING_PROFILES)
-    return VOICE_LEADING_PROFILES + VOICE_LEADING_PROFILES[:extra_count]
+def _voice_leading_profiles_for_count(
+    candidate_count: int,
+    *,
+    profile_names: list[str] | None = None,
+) -> tuple[VoiceLeadingProfile, ...]:
+    profile_by_name = {profile.name: profile for profile in VOICE_LEADING_PROFILES}
+    requested_profiles: list[VoiceLeadingProfile] = []
+    for profile_name in profile_names or []:
+        profile = profile_by_name.get(profile_name)
+        if profile is not None and profile not in requested_profiles:
+            requested_profiles.append(profile)
+
+    for profile in VOICE_LEADING_PROFILES:
+        if len(requested_profiles) >= candidate_count:
+            break
+        if profile not in requested_profiles:
+            requested_profiles.append(profile)
+
+    if candidate_count <= len(requested_profiles):
+        return tuple(requested_profiles[:candidate_count])
+
+    extra_count = candidate_count - len(requested_profiles)
+    return tuple(requested_profiles + requested_profiles[:extra_count])
 
 
 def _pick_distinct_path(paths: list[HarmonyPath], selected: list[HarmonyPath]) -> HarmonyPath | None:
@@ -653,6 +844,8 @@ def _search_voice_leading_paths(
     key: KeyEstimate,
     max_paths: int,
     profile: VoiceLeadingProfile,
+    harmony_plan: DeepSeekHarmonyPlan | None = None,
+    candidate_goal: DeepSeekCandidateDirection | None = None,
 ) -> list[HarmonyPath]:
     paths = [HarmonyPath(cost=0.0, pitches=(), chords=())]
     previous_event: HarmonyEvent | None = None
@@ -660,9 +853,17 @@ def _search_voice_leading_paths(
 
     for event_index, event in enumerate(events):
         next_paths: list[HarmonyPath] = []
+        measure_intent = _measure_intent_for_event(harmony_plan, event)
         for path in paths:
             previous_chord = path.chords[-1] if path.chords else None
-            for chord in _chord_candidates_for_event(event, key, previous_chord, event_index, len(events)):
+            for chord in _chord_candidates_for_event(
+                event,
+                key,
+                previous_chord,
+                event_index,
+                len(events),
+                measure_intent=measure_intent,
+            ):
                 pitch_candidates = _candidate_pitches_for_slot(
                     target_slot_id=target_slot_id,
                     chord=chord,
@@ -670,6 +871,8 @@ def _search_voice_leading_paths(
                     event=event,
                     is_final_event=event_index == len(events) - 1,
                     profile=profile,
+                    measure_intent=measure_intent,
+                    candidate_goal=candidate_goal,
                 )
                 for pitch in pitch_candidates:
                     local_cost = _pitch_cost(
@@ -679,6 +882,8 @@ def _search_voice_leading_paths(
                         key=key,
                         event=event,
                         profile=profile,
+                        measure_intent=measure_intent,
+                        candidate_goal=candidate_goal,
                     )
                     if math.isinf(local_cost):
                         continue
@@ -690,6 +895,8 @@ def _search_voice_leading_paths(
                         event=event,
                         target_slot_id=target_slot_id,
                         profile=profile,
+                        measure_intent=measure_intent,
+                        candidate_goal=candidate_goal,
                     )
                     if math.isinf(transition_cost):
                         continue
@@ -725,6 +932,15 @@ def _unique_paths_by_pitch(paths: list[HarmonyPath], max_paths: int) -> list[Har
     return unique_paths
 
 
+def _measure_intent_for_event(
+    harmony_plan: DeepSeekHarmonyPlan | None,
+    event: HarmonyEvent,
+) -> MeasureHarmonyIntent | None:
+    if harmony_plan is None:
+        return None
+    return harmony_plan.measure_intent_for_index(event.reference.measure_index)
+
+
 def _candidate_pitches_for_slot(
     *,
     target_slot_id: int,
@@ -733,11 +949,13 @@ def _candidate_pitches_for_slot(
     event: HarmonyEvent,
     is_final_event: bool,
     profile: VoiceLeadingProfile,
+    measure_intent: MeasureHarmonyIntent | None = None,
+    candidate_goal: DeepSeekCandidateDirection | None = None,
 ) -> list[int]:
     low, high = SLOT_RANGES[target_slot_id]
     chord_tones = [pitch for pitch in range(low, high + 1) if pitch % 12 in chord.tones]
     melodic_connectors: list[int] = []
-    if event.strength < 0.95 and not is_final_event:
+    if _allows_melodic_connectors(event, is_final_event, measure_intent, candidate_goal):
         melodic_connectors = [
             pitch
             for pitch in range(low, high + 1)
@@ -751,8 +969,27 @@ def _candidate_pitches_for_slot(
     if not candidates:
         return [max(low, min(high, VOICE_COMFORT_CENTER.get(target_slot_id, (low + high) // 2)))]
 
-    center = _profile_center(target_slot_id, profile)
+    center = _goal_center(target_slot_id, profile, candidate_goal)
     return sorted(set(candidates), key=lambda pitch: (abs(pitch - center), pitch))
+
+
+def _allows_melodic_connectors(
+    event: HarmonyEvent,
+    is_final_event: bool,
+    measure_intent: MeasureHarmonyIntent | None,
+    candidate_goal: DeepSeekCandidateDirection | None,
+) -> bool:
+    if is_final_event:
+        return False
+    if candidate_goal is not None and candidate_goal.rhythm_policy == "sustain_support":
+        return False
+    if measure_intent is not None and measure_intent.target_motion == "stable":
+        return False
+    if candidate_goal is not None and candidate_goal.goal in {"counterline", "active_motion"}:
+        return event.strength < 1.35
+    if measure_intent is not None and "passing" in measure_intent.allowed_tensions:
+        return event.strength < 1.2
+    return event.strength < 0.95
 
 
 def _pitch_cost(
@@ -763,12 +1000,14 @@ def _pitch_cost(
     key: KeyEstimate,
     event: HarmonyEvent,
     profile: VoiceLeadingProfile,
+    measure_intent: MeasureHarmonyIntent | None = None,
+    candidate_goal: DeepSeekCandidateDirection | None = None,
 ) -> float:
     if _crosses_known_voice(target_slot_id, pitch, event):
         return math.inf
 
     cost = 0.0
-    center = _profile_center(target_slot_id, profile)
+    center = _goal_center(target_slot_id, profile, candidate_goal)
     cost += abs(pitch - center) * 0.055 * profile.register_focus
     cost += _spacing_cost(target_slot_id, pitch, event)
 
@@ -781,6 +1020,7 @@ def _pitch_cost(
 
     chord_tone_counts = _chord_tone_counts(event, chord)
     chord_degree = _tone_degree(target_pitch_class, chord)
+    cost += _candidate_goal_chord_tone_cost(chord_degree, candidate_goal, target_slot_id)
     if chord_degree == "third":
         cost -= 0.35 if chord_tone_counts["third"] == 0 else 0.05
         cost += profile.third_delta
@@ -797,6 +1037,11 @@ def _pitch_cost(
         cost += 0.25
     if _duplicates_exact_context_pitch(pitch, event):
         cost += 0.8
+    if measure_intent is not None:
+        if "large_leap" in measure_intent.avoid and candidate_goal is not None and candidate_goal.motion_bias != "active":
+            cost += 0.08
+        if measure_intent.target_motion == "stable" and chord_degree == "other":
+            cost += 0.4
     return cost
 
 
@@ -890,6 +1135,45 @@ def _profile_center(target_slot_id: int, profile: VoiceLeadingProfile) -> int:
     return max(low, min(high, center))
 
 
+def _goal_center(
+    target_slot_id: int,
+    profile: VoiceLeadingProfile,
+    candidate_goal: DeepSeekCandidateDirection | None,
+) -> int:
+    low, high = SLOT_RANGES[target_slot_id]
+    center = _profile_center(target_slot_id, profile)
+    if candidate_goal is None:
+        return center
+    if candidate_goal.register_bias == "low":
+        center -= 5
+    elif candidate_goal.register_bias == "high":
+        center += 5
+    elif candidate_goal.register_bias == "open":
+        center += -6 if target_slot_id in {4, 5} else 4
+    elif candidate_goal.register_bias == "middle":
+        center = VOICE_COMFORT_CENTER.get(target_slot_id, center)
+    return max(low, min(high, center))
+
+
+def _candidate_goal_chord_tone_cost(
+    chord_degree: str,
+    candidate_goal: DeepSeekCandidateDirection | None,
+    target_slot_id: int,
+) -> float:
+    if candidate_goal is None or chord_degree == "other":
+        return 0.0
+    try:
+        priority_index = candidate_goal.chord_tone_priority.index(chord_degree)
+    except ValueError:
+        priority_index = 3
+    cost = (-0.22, -0.1, 0.0, 0.08)[min(priority_index, 3)]
+    if candidate_goal.goal == "open_support" and target_slot_id in {4, 5} and chord_degree in {"root", "fifth"}:
+        cost -= 0.16
+    if candidate_goal.goal == "counterline" and chord_degree == "third":
+        cost -= 0.08
+    return cost
+
+
 def _transition_cost(
     *,
     pitch: int,
@@ -899,6 +1183,8 @@ def _transition_cost(
     event: HarmonyEvent,
     target_slot_id: int,
     profile: VoiceLeadingProfile,
+    measure_intent: MeasureHarmonyIntent | None = None,
+    candidate_goal: DeepSeekCandidateDirection | None = None,
 ) -> tuple[float, int]:
     if path.previous_pitch is None:
         return 0.0, 0
@@ -922,6 +1208,15 @@ def _transition_cost(
 
     if path.previous_leap > 5 and leap > 2 and _same_direction(move, path.previous_move):
         cost += 0.85
+
+    cost += _candidate_goal_motion_cost(
+        move=move,
+        leap=leap,
+        previous_event=previous_event,
+        event=event,
+        candidate_goal=candidate_goal,
+        measure_intent=measure_intent,
+    )
 
     previous_pitch_class = path.previous_pitch % 12
     if previous_pitch_class == _leading_tone(key) and pitch % 12 != key.tonic:
@@ -947,6 +1242,48 @@ def _transition_cost(
 
 def _same_direction(current_move: int, previous_move: int) -> bool:
     return current_move != 0 and previous_move != 0 and _motion_direction(0, current_move) == _motion_direction(0, previous_move)
+
+
+def _candidate_goal_motion_cost(
+    *,
+    move: int,
+    leap: int,
+    previous_event: HarmonyEvent | None,
+    event: HarmonyEvent,
+    candidate_goal: DeepSeekCandidateDirection | None,
+    measure_intent: MeasureHarmonyIntent | None,
+) -> float:
+    if candidate_goal is None and measure_intent is None:
+        return 0.0
+
+    motion_bias = candidate_goal.motion_bias if candidate_goal is not None else "mostly_stepwise"
+    target_motion = measure_intent.target_motion if measure_intent is not None else "unknown"
+    cost = 0.0
+
+    if motion_bias == "stable" or target_motion == "stable":
+        if leap == 0:
+            cost -= 0.08
+        elif leap <= 2:
+            cost -= 0.04
+        else:
+            cost += leap * 0.08
+    elif motion_bias == "mostly_stepwise" or target_motion == "stepwise":
+        cost += -0.12 if leap <= 2 else min(0.7, leap * 0.07)
+    elif motion_bias == "active" or target_motion == "active":
+        if 2 <= leap <= 5:
+            cost -= 0.12
+        elif leap == 0:
+            cost += 0.12
+
+    if motion_bias == "contrary" or target_motion == "contrary":
+        reference_motion = _reference_motion(previous_event, event) if previous_event is not None else 0
+        target_motion_direction = _motion_direction(0, move)
+        if reference_motion != 0 and target_motion_direction != 0:
+            cost += -0.28 if target_motion_direction == -reference_motion else 0.2
+
+    if measure_intent is not None and "large_leap" in measure_intent.avoid and leap > 5:
+        cost += 0.7
+    return cost
 
 
 def _contrary_motion_cost(

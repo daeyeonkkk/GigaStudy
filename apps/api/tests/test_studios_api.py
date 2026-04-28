@@ -574,6 +574,28 @@ def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatc
     assert soprano["notes"][0]["pitch_midi"] == 72
 
 
+def test_track_registration_stores_ensemble_arrangement_diagnostics(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Ensemble gate",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id, slot_id=1, filename="soprano.musicxml")
+
+    alto_response = upload_musicxml_track(client, studio_id, slot_id=2, filename="alto.musicxml")
+
+    alto = alto_response.json()["tracks"][1]
+    ensemble = alto["diagnostics"]["registration_quality"]["ensemble_arrangement"]
+    assert ensemble["evaluated"] is True
+    assert ensemble["issue_code_counts"]["voice_crossing"] >= 1
+    assert any("ensemble_voice_crossing" in note["notation_warnings"] for note in alto["notes"])
+
+
 def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

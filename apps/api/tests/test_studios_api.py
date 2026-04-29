@@ -1740,3 +1740,38 @@ def test_ai_generation_creates_candidates_and_approval_requires_overwrite_confir
     )
     assert overwrite_response.status_code == 200
     assert overwrite_response.json()["tracks"][1]["status"] == "registered"
+
+
+def test_ai_generation_uses_sync_adjusted_context_timing(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "AI sync context",
+            "bpm": 60,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+
+    sync_response = client.patch(
+        f"/api/studios/{studio_id}/tracks/1/sync",
+        json={"sync_offset_seconds": 1.0},
+    )
+    assert sync_response.status_code == 200
+
+    generate_response = client.post(
+        f"/api/studios/{studio_id}/tracks/2/generate",
+        json={"context_slot_ids": [1]},
+    )
+
+    assert generate_response.status_code == 200
+    alto_candidates = [
+        candidate
+        for candidate in generate_response.json()["candidates"]
+        if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
+    ]
+    assert len(alto_candidates) == 3
+    assert [note["beat"] for note in alto_candidates[0]["notes"][:2]] == [2, 3]
+    assert [note["onset_seconds"] for note in alto_candidates[0]["notes"][:2]] == [1, 2]

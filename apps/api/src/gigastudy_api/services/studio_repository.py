@@ -653,17 +653,21 @@ class StudioRepository:
         self._find_track(studio, slot_id)
         registered_tracks = [track for track in studio.tracks if track.status == "registered"]
         context_slot_ids = request.context_slot_ids or [track.slot_id for track in registered_tracks]
-        context_notes = [
-            note
-            for track in registered_tracks
-            if track.slot_id in context_slot_ids and track.slot_id != slot_id
-            for note in track.notes
-        ]
         context_notes_by_slot = {
-            track.slot_id: track.notes
+            track.slot_id: _notes_with_sync_offset(
+                track.notes,
+                track.sync_offset_seconds,
+                studio.bpm,
+                voice_index=track.slot_id,
+            )
             for track in registered_tracks
             if track.slot_id in context_slot_ids and track.slot_id != slot_id
         }
+        context_notes = [
+            note
+            for notes in context_notes_by_slot.values()
+            for note in notes
+        ]
         if not context_notes:
             raise HTTPException(
                 status_code=409,
@@ -1323,13 +1327,7 @@ class StudioRepository:
         source_kind: SourceKind,
         proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
     ) -> RegistrationNotationResult:
-        existing_tracks_by_slot = {
-            track.slot_id: track.notes
-            for track in studio.tracks
-            if track.slot_id != slot_id
-            and track.status == "registered"
-            and track.notes
-        }
+        existing_tracks_by_slot = self._registration_reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
         if proposed_tracks_by_slot:
             existing_tracks_by_slot.update(
                 {
@@ -1408,7 +1406,12 @@ class StudioRepository:
         exclude_slot_id: int,
     ) -> list[list[TrackNote]]:
         return [
-            track.notes
+            _notes_with_sync_offset(
+                track.notes,
+                track.sync_offset_seconds,
+                studio.bpm,
+                voice_index=track.slot_id,
+            )
             for track in studio.tracks
             if track.slot_id != exclude_slot_id
             and track.status == "registered"
@@ -1422,7 +1425,12 @@ class StudioRepository:
         exclude_slot_id: int,
     ) -> dict[int, list[TrackNote]]:
         return {
-            track.slot_id: track.notes
+            track.slot_id: _notes_with_sync_offset(
+                track.notes,
+                track.sync_offset_seconds,
+                studio.bpm,
+                voice_index=track.slot_id,
+            )
             for track in studio.tracks
             if track.slot_id != exclude_slot_id
             and track.status == "registered"

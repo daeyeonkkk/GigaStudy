@@ -128,6 +128,8 @@ gcloud run deploy gigastudy-api-alpha \
   --image asia-northeast3-docker.pkg.dev/gigastudy-alpha-493208/gigastudy-alpha/gigastudy-api:latest \
   --region asia-northeast3 \
   --platform managed \
+  --concurrency 4 \
+  --max-instances 3 \
   --update-env-vars GIGASTUDY_API_APP_ENV=production \
   --allow-unauthenticated
 ```

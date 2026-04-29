@@ -194,6 +194,33 @@ async function uploadAudioToTrack(page: Page, slotId: number, filename: string) 
 
 async function installDecodedAudioUploadStub(page: Page) {
   await page.addInitScript(() => {
+    const playbackWindow = window as Window & {
+      __gigastudyAudioFetchCalls?: string[]
+      __gigastudyBufferPlayCalls?: Array<{
+        bufferDuration: number
+        durationSeconds: number | undefined
+        offsetSeconds: number
+        startTime: number
+      }>
+      __gigastudyToneStarts?: Array<{ frequency: number; startTime: number }>
+    }
+    playbackWindow.__gigastudyAudioFetchCalls = []
+    playbackWindow.__gigastudyBufferPlayCalls = []
+    playbackWindow.__gigastudyToneStarts = []
+    const originalFetch = window.fetch.bind(window)
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url
+      if (url.includes('/tracks/') && url.includes('/audio')) {
+        playbackWindow.__gigastudyAudioFetchCalls?.push(url)
+      }
+      return originalFetch(input, init)
+    }
+
     class FakeAudioParam {
       value = 0
 
@@ -231,8 +258,26 @@ async function installDecodedAudioUploadStub(page: Page) {
       frequency = new FakeAudioParam()
       type: OscillatorType = 'sine'
 
-      start() {
+      start(startTime: number) {
+        playbackWindow.__gigastudyToneStarts?.push({ frequency: this.frequency.value, startTime })
         return undefined
+      }
+
+      stop() {
+        return undefined
+      }
+    }
+
+    class FakeBufferSourceNode extends FakeAudioNode {
+      buffer: AudioBuffer | null = null
+
+      start(startTime: number, offsetSeconds = 0, durationSeconds?: number) {
+        playbackWindow.__gigastudyBufferPlayCalls?.push({
+          bufferDuration: this.buffer?.duration ?? 0,
+          durationSeconds,
+          offsetSeconds,
+          startTime,
+        })
       }
 
       stop() {
@@ -265,6 +310,10 @@ async function installDecodedAudioUploadStub(page: Page) {
 
       createOscillator() {
         return new FakeOscillatorNode()
+      }
+
+      createBufferSource() {
+        return new FakeBufferSourceNode()
       }
 
       async decodeAudioData() {
@@ -558,9 +607,8 @@ test('home music upload decodes MP3-like input to WAV before analysis', async ({
   await expect(page.getByTestId('candidate-review')).toContainText('C5')
 })
 
-test('registered audio track playback uses retained media URL directly', async ({ page }) => {
+test('registered audio track playback uses retained audio buffer', async ({ page }) => {
   await installDecodedAudioUploadStub(page)
-  await installTrackAudioPlaybackStub(page)
   await page.goto('/')
   await page.getByTestId('studio-title-input').fill('Direct retained audio playback')
   await page.getByTestId('studio-source-input').setInputFiles({
@@ -583,22 +631,31 @@ test('registered audio track playback uses retained media URL directly', async (
         () =>
           (
             window as Window & {
-              __gigastudyAudioPlayCalls?: Array<{ currentTime: number; src: string; volume: number }>
+              __gigastudyBufferPlayCalls?: Array<{
+                bufferDuration: number
+                durationSeconds: number | undefined
+                offsetSeconds: number
+                startTime: number
+              }>
             }
-          ).__gigastudyAudioPlayCalls ?? [],
+          ).__gigastudyBufferPlayCalls ?? [],
       ),
     )
     .toEqual([
       expect.objectContaining({
-        currentTime: 0,
-        src: expect.stringContaining('/tracks/1/audio'),
+        bufferDuration: 2,
+        offsetSeconds: 0,
+        startTime: 12.08,
       }),
     ])
+  const fetchCalls = await page.evaluate(
+    () => (window as Window & { __gigastudyAudioFetchCalls?: string[] }).__gigastudyAudioFetchCalls ?? [],
+  )
+  expect(fetchCalls.some((url) => url.includes('/tracks/1/audio'))).toBe(true)
 })
 
-test('global audio playback waits for retained tracks before starting together', async ({ page }) => {
+test('global audio playback schedules retained tracks on the same audio clock', async ({ page }) => {
   await installDecodedAudioUploadStub(page)
-  await installTrackAudioPlaybackStub(page, { readyDelaysMs: [450, 0] })
   await createBlankStudio(page, 'Prepared global audio playback')
 
   await uploadAudioToTrack(page, 1, 'soprano-ready-late.mp3')
@@ -606,39 +663,15 @@ test('global audio playback waits for retained tracks before starting together',
 
   await page.locator('.composer-metronome input').uncheck()
   await page.getByTestId('global-play-button').click()
-  await page.waitForTimeout(220)
   await expect
     .poll(() =>
       page.evaluate(
         () =>
           (
             window as Window & {
-              __gigastudyAudioPlayCalls?: Array<{
-                currentTime: number
-                playedAt: number
-                src: string
-                volume: number
-              }>
+              __gigastudyBufferPlayCalls?: Array<{ offsetSeconds: number; startTime: number }>
             }
-          ).__gigastudyAudioPlayCalls ?? [],
-      ),
-    )
-    .toHaveLength(0)
-
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (
-            window as Window & {
-              __gigastudyAudioPlayCalls?: Array<{
-                currentTime: number
-                playedAt: number
-                src: string
-                volume: number
-              }>
-            }
-          ).__gigastudyAudioPlayCalls ?? [],
+          ).__gigastudyBufferPlayCalls ?? [],
       ),
     )
     .toHaveLength(2)
@@ -646,25 +679,22 @@ test('global audio playback waits for retained tracks before starting together',
     () =>
       (
         window as Window & {
-          __gigastudyAudioPlayCalls?: Array<{
-            currentTime: number
-            playedAt: number
-            src: string
-            volume: number
-          }>
+          __gigastudyBufferPlayCalls?: Array<{ offsetSeconds: number; startTime: number }>
         }
-      ).__gigastudyAudioPlayCalls ?? [],
+      ).__gigastudyBufferPlayCalls ?? [],
   )
 
-  expect(playCalls.map((call) => call.currentTime)).toEqual([0, 0])
-  expect(playCalls.some((call) => call.src.includes('/tracks/1/audio'))).toBe(true)
-  expect(playCalls.some((call) => call.src.includes('/tracks/2/audio'))).toBe(true)
-  expect(Math.abs(playCalls[0].playedAt - playCalls[1].playedAt)).toBeLessThan(80)
+  expect(playCalls.map((call) => call.offsetSeconds)).toEqual([0, 0])
+  expect(Math.abs(playCalls[0].startTime - playCalls[1].startTime)).toBeLessThan(0.001)
+  const fetchCalls = await page.evaluate(
+    () => (window as Window & { __gigastudyAudioFetchCalls?: string[] }).__gigastudyAudioFetchCalls ?? [],
+  )
+  expect(fetchCalls.some((url) => url.includes('/tracks/1/audio'))).toBe(true)
+  expect(fetchCalls.some((url) => url.includes('/tracks/2/audio'))).toBe(true)
 })
 
-test('retained audio waits for metronome before synchronized playback starts', async ({ page }) => {
+test('retained audio shares the metronome audio clock', async ({ page }) => {
   await installDecodedAudioUploadStub(page)
-  await installTrackAudioPlaybackStub(page, { readyDelaysMs: [450] })
   await page.goto('/')
   await page.getByTestId('studio-title-input').fill('Metronome synchronized audio playback')
   await page.getByTestId('studio-source-input').setInputFiles({
@@ -678,20 +708,23 @@ test('retained audio waits for metronome before synchronized playback starts', a
   await approveFirstCandidate(page)
 
   await page.getByTestId('global-play-button').click()
-  await expect(page.getByText(/같은 시작점/)).toBeVisible()
-  await page.waitForTimeout(220)
   await expect
     .poll(() =>
       page.evaluate(
         () =>
           (
             window as Window & {
-              __gigastudyAudioPlayCalls?: Array<{ currentTime: number; playedAt: number; src: string }>
+              __gigastudyBufferPlayCalls?: Array<{ offsetSeconds: number; startTime: number }>
             }
-          ).__gigastudyAudioPlayCalls ?? [],
+          ).__gigastudyBufferPlayCalls ?? [],
       ),
     )
-    .toHaveLength(0)
+    .toEqual([
+      expect.objectContaining({
+        offsetSeconds: 0,
+        startTime: 12.08,
+      }),
+    ])
 
   await expect
     .poll(() =>
@@ -699,17 +732,21 @@ test('retained audio waits for metronome before synchronized playback starts', a
         () =>
           (
             window as Window & {
-              __gigastudyAudioPlayCalls?: Array<{ currentTime: number; playedAt: number; src: string }>
+              __gigastudyToneStarts?: Array<{ frequency: number; startTime: number }>
             }
-          ).__gigastudyAudioPlayCalls ?? [],
+          ).__gigastudyToneStarts ?? [],
       ),
     )
-    .toEqual([
-      expect.objectContaining({
-        currentTime: 0,
-        src: expect.stringContaining('/tracks/1/audio'),
-      }),
-    ])
+    .not.toHaveLength(0)
+  const firstToneStart = await page.evaluate(
+    () => (window as Window & { __gigastudyToneStarts?: Array<{ startTime: number }> }).__gigastudyToneStarts?.[0]?.startTime,
+  )
+  const firstBufferStart = await page.evaluate(
+    () =>
+      (window as Window & { __gigastudyBufferPlayCalls?: Array<{ startTime: number }> })
+        .__gigastudyBufferPlayCalls?.[0]?.startTime,
+  )
+  expect(firstToneStart).toBe(firstBufferStart)
 })
 
 test('score playback schedules stacked track notes on the same audio clock', async ({ page }) => {

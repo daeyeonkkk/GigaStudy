@@ -1501,6 +1501,67 @@ def test_voice_retry_rehydrates_direct_register_mode_without_queue_record(
     assert retry_payload["candidates"] == []
 
 
+def test_studio_poll_does_not_wake_queued_engine_job(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def pass_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackNote(
+                pitch_midi=72,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                duration_beats=1,
+                beat=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        pass_transcribe_voice_file,
+    )
+    monkeypatch.setattr(
+        studio_repository.StudioRepository,
+        "_schedule_engine_queue_processing",
+        lambda self, background_tasks: None,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Queued poll does not process",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(b"RIFF\x24\x00\x00\x00WAVEfmt ").decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "voice.wav",
+            "content_base64": encoded,
+            "review_before_register": False,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    queued_payload = upload_response.json()
+    assert queued_payload["jobs"][0]["status"] == "queued"
+    assert queued_payload["tracks"][0]["status"] == "extracting"
+
+    polled_payload = client.get(f"/api/studios/{studio_id}").json()
+
+    assert polled_payload["jobs"][0]["status"] == "queued"
+    assert polled_payload["tracks"][0]["status"] == "extracting"
+
+
 def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

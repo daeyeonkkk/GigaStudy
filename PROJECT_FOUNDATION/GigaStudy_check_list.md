@@ -418,6 +418,9 @@ This checklist tracks the new six-track studio foundation only.
   raised above one instance.
 - [x] Admin/scheduler endpoint can drain a bounded number of queued or expired
   OMR/voice extraction jobs without requiring a studio page poll.
+- [x] Studio detail polling can rebuild missing queue records for recovery, but
+  it does not start heavy OMR/voice extraction work. Upload, retry, admin drain,
+  or scheduler drain must be the processing wake-up surface.
 - [x] 2026-04-23 런타임 보강 게이트를 통과했다: API 68/68, 웹
   lint/build, 브라우저 E2E 24/24.
 - [x] External unattended scheduler configuration exists for alpha:
@@ -460,15 +463,16 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Voice-like registration collapses low-confidence short-note clusters that
   look like pitch-tracker chatter into one representative sung event before the
   track is registered.
-- [x] Studio playback in audio mode uses retained recording/upload media URLs
-  directly instead of decoding recorded files into Web Audio buffers before
-  playback.
-- [x] 2026-04-28 재검증: registered audio track playback calls the retained
-  `/tracks/{slot}/audio` media URL through `HTMLMediaElement.play()` and keeps
-  score synthesis as fallback only for audio-less or score-mode tracks.
+- [x] Studio playback in audio mode preserves retained recording/upload audio as
+  the audible source, then decodes it into Web Audio buffers so original takes,
+  synthesized score tones, metronome clicks, and the playhead share one clock.
+- [x] 2026-04-29 재검증: registered audio track playback fetches the retained
+  `/tracks/{slot}/audio` endpoint, schedules the decoded source with
+  `AudioBufferSourceNode.start()`, and keeps score synthesis as fallback only
+  for audio-less or score-mode tracks.
 - [x] Full-track audio playback excludes empty tracks, waits until all retained
-  media tracks are browser-playable, then starts the prepared sources from one
-  shared scheduler point.
+  sources are decoded, then starts the prepared sources from one shared Web
+  Audio scheduler point.
 - [x] Generated, OMR, MIDI, and MusicXML score-only tracks synthesize
   `TrackNote` playback on one shared Web Audio clock; same-beat notes across
   tracks are scheduled at the same start time so they form chords.
@@ -492,10 +496,9 @@ This checklist tracks the new six-track studio foundation only.
   browser-side review dialog with source-audio preview, explicit Track Register,
   and Delete Recording actions. Voice extraction is queued only after the user
   confirms registration.
-- [x] 2026-04-23 실사용 재생/악보 이슈 재검증: 웹 lint/build 통과,
-  브라우저 E2E 21/21 통과, Playwright 로컬 브라우저에서 라이브
-  스튜디오 payload 기준 VexFlow 렌더 콘솔 오류 없음, Tenor 재생 버튼이
-  실제 track audio URL을 `HTMLMediaElement.play()`로 호출함을 확인.
+- [x] 2026-04-29 실사용 재생/queue 이슈 재검증: 웹 lint/build 통과,
+  API regression 통과, 브라우저 release gate 통과, retained audio와
+  metronome이 같은 Web Audio clock에서 시작함을 확인.
 - [x] 2026-04-23 전체 프로세스 점검: API 65/65, 웹 lint, 프로덕션
   빌드, 브라우저 E2E 21/21 통과. 실제 `Phonecert_-_10cm.pdf`는
   `pdf_vector_omr` 경로로 Soprano~Bass 후보를 모두 생성했고, live

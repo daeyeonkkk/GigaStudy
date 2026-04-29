@@ -412,8 +412,9 @@ Required:
   studio creation/promotion.
 - App-level staged upload lifecycle cleanup, triggered during upload-target
   creation and configurable through retention/interval settings.
-- Durable engine queue for OMR and per-track voice extraction before Cloud Run
-  maxScale is raised above one.
+- Durable engine queue for OMR and per-track voice extraction, with studio
+  polling separated from engine wake-ups so Cloud Run can safely run a small
+  multi-instance alpha configuration while keeping one active engine lane.
 - R2/S3 bucket CORS must allow direct browser `PUT` from the deployed Pages
   origin before the presigned path can carry production traffic without falling
   back to base64.

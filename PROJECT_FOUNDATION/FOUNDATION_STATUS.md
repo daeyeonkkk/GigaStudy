@@ -814,12 +814,11 @@ not legacy product surfaces.
   with missing display metadata as treble-8vb by default, so stored sounding
   pitch remains unchanged while the rendered notes sit on the intended Tenor
   staff instead of falling below it.
-- Single retained-audio track playback no longer fails just because the browser
-  delays `canplay`/`canplaythrough` readiness events. The player still prepares
-  media optimistically, but for a single original recording it proceeds to
-  `HTMLMediaElement.play()` and lets the browser buffer normally. Multi-track
-  retained-audio playback keeps the stricter readiness barrier so simultaneous
-  ensemble starts remain protected.
+- Retained-audio track playback no longer depends on `canplay`/
+  `canplaythrough` readiness events. Original recording/upload assets are still
+  the audible source, but playback decodes them into Web Audio buffers so
+  original takes, synthesized score tones, metronome clicks, and the smooth
+  playhead share the same clock.
 - Recording count-in and audible metronome now share the metronome session's
   first scheduled pulse timestamp. The one-measure count-in reaches visible `0`
   on the recording-start downbeat, then the `0` flash remains briefly while the
@@ -829,6 +828,25 @@ not legacy product surfaces.
   focused Chromium playback/count-in E2E passed 3/3, focused downbeat-zero
   count-in E2E passed, and full Chromium release gate passed 13/13 locally on
   2026-04-29.
+
+## Live Queue And Playback Clock Patch - 2026-04-29
+
+- Studio detail polling no longer wakes heavy OMR/voice extraction processing.
+  Polling can still rebuild missing durable queue records from studio metadata,
+  but actual work now starts from upload, retry, admin drain, or scheduler drain
+  paths. This keeps frequent UI refreshes from occupying the limited Cloud Run
+  request lanes.
+- Upload/retry wake-ups drain a bounded batch of queue jobs instead of a single
+  job, so a second recording that is queued while the first extraction is
+  running can be picked up as soon as the lane is free.
+- Retained audio playback now fetches the track audio endpoint, decodes the
+  source to an `AudioBuffer`, and schedules it on the same `AudioContext` clock
+  as score synthesis and metronome clicks. This replaces the previous
+  `HTMLMediaElement.play()` path that could drift against the metronome and fail
+  differently from score playback under load.
+- Verification for this patch: API regression suite passed 129/129, web lint
+  passed, production web build passed, and Playwright release gate passed 40/40
+  with 2 browser-permission skips locally on 2026-04-29.
 
 ## Dual Scoring Mode Patch - 2026-04-29
 

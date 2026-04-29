@@ -259,8 +259,6 @@ class StudioRepository:
         if enforce_owner:
             self._require_studio_access(studio, owner_token)
         self._ensure_queue_records_for_active_jobs(studio)
-        if background_tasks is not None and self._engine_queue.has_runnable(studio_id=studio_id):
-            self._schedule_engine_queue_processing(background_tasks)
         return studio
 
     def export_score_pdf(self, studio_id: str, *, owner_token: str | None = None) -> tuple[str, bytes]:
@@ -2266,9 +2264,16 @@ class StudioRepository:
 
     def _schedule_engine_queue_processing(self, background_tasks: BackgroundTasks | None) -> None:
         if background_tasks is None:
-            self.process_engine_queue_once()
+            self._process_engine_queue_until_idle()
             return
-        background_tasks.add_task(self.process_engine_queue_once)
+        background_tasks.add_task(self._process_engine_queue_until_idle)
+
+    def _process_engine_queue_until_idle(self) -> None:
+        settings = get_settings()
+        job_limit = max(1, min(settings.engine_drain_max_jobs, 20))
+        for _ in range(job_limit):
+            if self.process_engine_queue_once() is None:
+                break
 
     def _ensure_queue_records_for_active_jobs(self, studio: Studio) -> None:
         for job in studio.jobs:

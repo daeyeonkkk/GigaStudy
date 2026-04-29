@@ -106,6 +106,11 @@ Studio metadata and stored binary assets are separate responsibilities.
   scheduler-compatible wake-up surface for Cloud Run. The live alpha deployment
   wires this to Cloud Scheduler job `gigastudy-engine-drain`, running every 5
   minutes in `Asia/Seoul` with a 300 second attempt deadline.
+- Studio detail polling must not wake heavy OMR/voice extraction. Polling may
+  rebuild missing queue records from studio metadata for recovery, but actual
+  processing is triggered by upload, retry, admin drain, or scheduler drain.
+  This keeps UI refresh traffic from occupying Cloud Run's limited request
+  lanes.
 - Track audio playback resolves retained audio through the asset storage layer.
   In object-storage mode, a missing local file is downloaded into the local
   cache before `FileResponse` serves it.
@@ -352,29 +357,27 @@ Track playback has two user-selectable sources:
   without retained audio.
 - `score`: synthesize the registered `TrackNote` data directly.
 
-Recorded/uploaded audio playback must use the retained media URL directly via
-browser media-element playback. It must not fetch and decode the original
-recording into an `AudioBuffer` before playback, because that adds avoidable
-preparation latency and can fail differently from normal browser media
-playback. Web Audio synthesis remains the fallback for symbolic score playback
-and tracks without retained audio.
+Recorded/uploaded audio playback must preserve the retained media asset as the
+audible source, but scheduled playback decodes that source into a Web Audio
+`AudioBuffer` before start. The reason is musical synchronization: retained
+takes, generated score tones, metronome clicks, scoring references, and the
+smooth playhead must share one `AudioContext` clock. Web Audio synthesis remains
+the fallback for score-only tracks, but original takes and synthesized notes now
+meet on the same clock.
 
 Individual playback, full-track playback, and scoring reference playback must
-use the same scheduler so one singer can layer recorded takes and hear checked
-reference parts during practice. Sync offsets shift each track as a whole in
-that scheduler. The offset never changes stored note beats or measure
-boundaries.
+use the same Web Audio scheduler so one singer can layer recorded takes and hear
+checked reference parts during practice. Sync offsets shift each track's source
+audio and note layer as a whole in that scheduler. The offset never changes
+stored note beats or measure boundaries.
 
-Full-track playback must exclude empty tracks from the playback set. When
-multiple retained audio tracks are included, or when retained audio must start
-with score-synthesized tracks or the metronome, the browser prepares all required
-media elements to a playable state first, then starts the whole playback set from
-one scheduler start point. A not-yet-ready retained source must delay the whole
-group rather than starting late by itself. A single retained-audio track without
-score/metronome companions may use a lighter readiness barrier for low latency.
-Symbolic score-only tracks join the same start point through Web Audio
-scheduling. Pre-rendered mixdown is a future optimization path for higher
-precision or export-like playback, not the default interactive path.
+Full-track playback must exclude empty tracks from the playback set. When any
+retained audio tracks are included, the browser fetches and decodes the required
+source assets before scheduling. A not-yet-ready retained source must delay the
+whole group rather than starting late by itself. Symbolic score-only tracks and
+metronome clicks join the same start point through Web Audio scheduling.
+Pre-rendered mixdown is a future optimization path for higher precision or
+export-like playback, not the default interactive path.
 
 For generated, OMR, MIDI, MusicXML, and other score-only registrations, playback
 is a clocked score-rendering operation: every audible `TrackNote` is converted

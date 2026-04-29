@@ -39,6 +39,7 @@ import {
   DEFAULT_METER,
   detectUploadKind,
   disposePlaybackSession,
+  formatDurationSeconds,
   formatSeconds,
   getBeatSeconds,
   getNotePlaybackFrequency,
@@ -83,6 +84,15 @@ type TrackCountInState = {
   totalPulses: number
 }
 
+type PendingTrackRecording = {
+  allowOverwrite: boolean
+  audioDataUrl: string
+  durationSeconds: number
+  filename: string
+  slotId: number
+  trackName: string
+}
+
 const COUNT_IN_FIRST_PULSE_DELAY_MS = 80
 const COUNT_IN_ZERO_HOLD_MS = 220
 
@@ -103,6 +113,7 @@ export function StudioPage() {
     durationSeconds: 0,
     level: 0,
   })
+  const [pendingTrackRecording, setPendingTrackRecording] = useState<PendingTrackRecording | null>(null)
   const [scoreSession, setScoreSession] = useState<ScoreSessionState | null>(null)
   const [candidateTargetSlots, setCandidateTargetSlots] = useState<Record<string, number>>({})
   const [candidateOverwriteApprovals, setCandidateOverwriteApprovals] = useState<Record<string, boolean>>({})
@@ -662,13 +673,20 @@ export function StudioPage() {
       })
 
       if (preparedAudioTracks.length > 0) {
-        const canStartWithoutStrictMediaBarrier = preparedAudioTracks.length === 1
+        const requiresSynchronizedStart =
+          preparedAudioTracks.length > 1 || scoreTracks.length > 0 || includeMetronome
+        const canStartWithoutStrictMediaBarrier = !requiresSynchronizedStart
+        const synchronizedParts = [
+          `원음 ${preparedAudioTracks.length}개`,
+          scoreTracks.length > 0 ? `악보 음 ${scoreTracks.length}개` : null,
+          includeMetronome ? '메트로놈' : null,
+        ].filter(Boolean)
         setActionState({
           phase: 'busy',
           message:
-            preparedAudioTracks.length > 1
-              ? '등록된 원음들을 동시에 시작할 수 있도록 준비합니다.'
-              : '등록된 원음을 재생할 수 있도록 준비합니다.',
+            requiresSynchronizedStart
+              ? `${synchronizedParts.join(', ')}을 같은 시작점에 맞춰 준비합니다.`
+              : '녹음 원본을 여는 중입니다. 준비되면 즉시 재생합니다.',
         })
         const preparationResults = await Promise.allSettled(
           preparedAudioTracks.map(({ node }) =>
@@ -820,9 +838,9 @@ export function StudioPage() {
     setActionState({
       phase: 'busy',
       message:
-        playbackSource === 'audio'
-          ? '등록된 녹음 원본을 바로 재생합니다.'
-          : '등록된 트랙을 악보 음 기준으로 재생합니다.',
+          playbackSource === 'audio'
+            ? '재생 후보를 모으고 원음과 악보 음의 시작점을 맞춥니다.'
+            : '등록된 트랙을 악보 음 기준으로 재생합니다.',
     })
     if (await startPlaybackSession(registeredTracks)) {
       setPlayingSlots(new Set())
@@ -831,7 +849,7 @@ export function StudioPage() {
         phase: 'success',
         message:
           playbackSource === 'audio'
-            ? '등록된 트랙 전체를 녹음 원본 우선으로 합쳐 재생합니다.'
+            ? '등록된 트랙 전체를 같은 시작점에서 재생합니다.'
             : '등록된 트랙 전체를 악보 음 기준으로 동시에 재생합니다.',
       })
     }
@@ -877,9 +895,9 @@ export function StudioPage() {
     setActionState({
       phase: 'busy',
       message:
-        playbackSource === 'audio' && track.audio_source_path
-          ? `${track.name} 녹음 원본을 바로 재생합니다.`
-          : `${track.name} 트랙을 악보 음 기준으로 재생합니다.`,
+          playbackSource === 'audio' && track.audio_source_path
+            ? `${track.name} 녹음 원본을 준비합니다. 메트로놈이나 악보 음이 있으면 함께 맞춰 시작합니다.`
+            : `${track.name} 트랙을 악보 음 기준으로 재생합니다.`,
     })
     if (await startPlaybackSession([track])) {
       setGlobalPlaying(false)
@@ -912,6 +930,7 @@ export function StudioPage() {
     if (recordingSlotId === track.slot_id) {
       const recorder = trackRecorderRef.current
       const allowOverwrite = trackRecordingAllowOverwriteRef.current
+      const recordedDurationSeconds = trackRecordingMeter.durationSeconds
       trackCountInRunIdRef.current += 1
       clearTrackCountInTimers()
       trackCountInEpochMsRef.current = null
@@ -922,23 +941,30 @@ export function StudioPage() {
       recordingMetronomeSessionRef.current = null
       setRecordingSlotId(null)
       setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
-      await runStudioAction(
-        async () => {
-          const recordedAudioBase64 = await stopMicrophoneRecorder(recorder)
-          if (!recordedAudioBase64) {
-            throw new Error('녹음된 오디오가 비어 있습니다. 마이크 입력을 확인하고 다시 녹음해 주세요.')
-          }
-          return uploadTrack(studio.studio_id, track.slot_id, {
-            source_kind: 'audio',
-            filename: `${track.name}-recorded-take.wav`,
-            content_base64: recordedAudioBase64,
-            review_before_register: false,
-            allow_overwrite: allowOverwrite,
-          })
-        },
-        `${track.name} 녹음을 악보화하는 중입니다.`,
-        `${track.name} 녹음의 음성 추출 작업을 시작했습니다. 완료되면 트랙에 등록됩니다.`,
-      )
+      setActionState({ phase: 'busy', message: `${track.name} 녹음을 정리하는 중입니다.` })
+      try {
+        const recordedAudioBase64 = await stopMicrophoneRecorder(recorder)
+        if (!recordedAudioBase64) {
+          throw new Error('녹음된 오디오가 비어 있습니다. 마이크 입력을 확인하고 다시 녹음해 주세요.')
+        }
+        setPendingTrackRecording({
+          allowOverwrite,
+          audioDataUrl: recordedAudioBase64,
+          durationSeconds: recordedDurationSeconds,
+          filename: `${track.name}-recorded-take.wav`,
+          slotId: track.slot_id,
+          trackName: track.name,
+        })
+        setActionState({
+          phase: 'success',
+          message: `${track.name} 녹음을 보류했습니다. 들어본 뒤 트랙에 등록하거나 삭제하세요.`,
+        })
+      } catch (error) {
+        setActionState({
+          phase: 'error',
+          message: error instanceof Error ? error.message : '녹음을 정리하지 못했습니다.',
+        })
+      }
       return
     }
 
@@ -959,6 +985,14 @@ export function StudioPage() {
       setActionState({
         phase: 'error',
         message: '이미 녹음 중인 트랙이 있습니다. 먼저 현재 녹음을 중지해 주세요.',
+      })
+      return
+    }
+
+    if (pendingTrackRecording !== null) {
+      setActionState({
+        phase: 'error',
+        message: '등록 여부를 기다리는 녹음이 있습니다. 먼저 등록하거나 삭제해 주세요.',
       })
       return
     }
@@ -996,6 +1030,41 @@ export function StudioPage() {
       phase: 'success',
       message: `${track.name} 녹음 준비 중입니다. 1마디 count-in 후 내부 메트로놈 기준으로 기록합니다.`,
     })
+  }
+
+  async function handleRegisterPendingRecording() {
+    if (!studio || !pendingTrackRecording) {
+      return
+    }
+
+    const pendingRecording = pendingTrackRecording
+    const succeeded = await runStudioAction(
+      () =>
+        uploadTrack(studio.studio_id, pendingRecording.slotId, {
+          source_kind: 'audio',
+          filename: pendingRecording.filename,
+          content_base64: pendingRecording.audioDataUrl,
+          review_before_register: false,
+          allow_overwrite: pendingRecording.allowOverwrite,
+        }),
+      `${pendingRecording.trackName} 녹음을 악보화하는 중입니다.`,
+      `${pendingRecording.trackName} 녹음의 음성 추출 작업을 시작했습니다. 완료되면 트랙에 등록됩니다.`,
+    )
+    if (succeeded) {
+      setPendingTrackRecording(null)
+    }
+  }
+
+  function handleDiscardPendingRecording() {
+    if (!pendingTrackRecording) {
+      return
+    }
+
+    setActionState({
+      phase: 'success',
+      message: `${pendingTrackRecording.trackName} 녹음을 삭제했습니다. 트랙에는 아무 작업도 등록하지 않았습니다.`,
+    })
+    setPendingTrackRecording(null)
   }
 
   async function handleUpload(track: TrackSlot, file: File | null) {
@@ -1100,16 +1169,42 @@ export function StudioPage() {
   }
 
   function openScoreSession(track: TrackSlot) {
-    if (track.status !== 'registered') {
-      setActionState({ phase: 'error', message: '등록된 트랙만 채점할 수 있습니다.' })
+    const references = registeredSlotIds.filter((slotId) => slotId !== track.slot_id)
+    if (track.status !== 'registered' && references.length === 0) {
+      setActionState({
+        phase: 'error',
+        message: '정답 채점은 등록된 트랙이 필요하고, 화음 채점은 기준 트랙이 하나 이상 필요합니다.',
+      })
       return
     }
-    const references = registeredSlotIds.filter((slotId) => slotId !== track.slot_id)
+    const scoreMode = track.status === 'registered' ? 'answer' : 'harmony'
     setScoreSession({
       targetSlotId: track.slot_id,
+      scoreMode,
       selectedReferenceIds: references,
-      includeMetronome: metronomeEnabled || references.length === 0,
+      includeMetronome: scoreMode === 'answer' ? metronomeEnabled || references.length === 0 : metronomeEnabled,
       phase: 'ready',
+    })
+  }
+
+  function updateScoreMode(scoreMode: ScoreSessionState['scoreMode']) {
+    setScoreSession((current) => {
+      if (!current) {
+        return current
+      }
+      const references = registeredSlotIds.filter((slotId) => slotId !== current.targetSlotId)
+      return {
+        ...current,
+        scoreMode,
+        selectedReferenceIds:
+          scoreMode === 'harmony' && current.selectedReferenceIds.length === 0
+            ? references
+            : current.selectedReferenceIds,
+        includeMetronome:
+          scoreMode === 'answer'
+            ? current.includeMetronome || current.selectedReferenceIds.length === 0
+            : current.includeMetronome,
+      }
     })
   }
 
@@ -1139,8 +1234,16 @@ export function StudioPage() {
       })
       return
     }
-    if (scoreSession.selectedReferenceIds.length === 0 && !scoreSession.includeMetronome) {
-      setActionState({ phase: 'error', message: '기준 트랙이나 메트로놈을 하나 이상 선택하세요.' })
+    if (scoreSession.scoreMode === 'answer' && scoreTargetTrack?.status !== 'registered') {
+      setActionState({ phase: 'error', message: '정답 채점은 먼저 대상 트랙이 등록되어 있어야 합니다.' })
+      return
+    }
+    if (scoreSession.scoreMode === 'answer' && scoreSession.selectedReferenceIds.length === 0 && !scoreSession.includeMetronome) {
+      setActionState({ phase: 'error', message: '정답 채점 기준으로 트랙이나 메트로놈을 하나 이상 선택하세요.' })
+      return
+    }
+    if (scoreSession.scoreMode === 'harmony' && scoreSession.selectedReferenceIds.length === 0) {
+      setActionState({ phase: 'error', message: '화음 채점은 기준 트랙을 하나 이상 선택해야 합니다.' })
       return
     }
     const referenceTracks = studio.tracks.filter((track) =>
@@ -1172,7 +1275,10 @@ export function StudioPage() {
     setScoreSession({ ...scoreSession, phase: 'listening' })
     setActionState({
       phase: 'success',
-      message: '선택한 기준 트랙을 재생하고 이후 채점 입력을 받습니다.',
+      message:
+        scoreSession.scoreMode === 'harmony'
+          ? '선택한 트랙 위에 새 파트를 얹어 부르면 화음 완성도를 채점합니다.'
+          : '선택한 기준 트랙을 재생하고 이후 채점 입력을 받습니다.',
     })
     const recorder = await startMicrophoneRecorder()
     if (scoreRunIdRef.current !== runId) {
@@ -1194,13 +1300,27 @@ export function StudioPage() {
     }
 
     const session = scoreSession
-    if (session.selectedReferenceIds.length === 0 && !session.includeMetronome) {
-      setActionState({ phase: 'error', message: '기준 트랙이나 메트로놈을 하나 이상 선택하세요.' })
+    if (session.scoreMode === 'answer' && scoreTargetTrack?.status !== 'registered') {
+      setActionState({ phase: 'error', message: '정답 채점은 먼저 대상 트랙이 등록되어 있어야 합니다.' })
+      return
+    }
+    if (session.scoreMode === 'answer' && session.selectedReferenceIds.length === 0 && !session.includeMetronome) {
+      setActionState({ phase: 'error', message: '정답 채점 기준으로 트랙이나 메트로놈을 하나 이상 선택하세요.' })
+      return
+    }
+    if (session.scoreMode === 'harmony' && session.selectedReferenceIds.length === 0) {
+      setActionState({ phase: 'error', message: '화음 채점은 기준 트랙을 하나 이상 선택해야 합니다.' })
       return
     }
 
     setScoreSession({ ...session, phase: 'analyzing' })
-    setActionState({ phase: 'busy', message: '0.01s 단위로 박자와 음정을 채점하는 중입니다.' })
+    setActionState({
+      phase: 'busy',
+      message:
+        session.scoreMode === 'harmony'
+          ? '새 파트가 기준 트랙들과 어울리는지 분석하는 중입니다.'
+          : '0.01s 단위로 박자와 음정을 채점하는 중입니다.',
+    })
     try {
       scoreRunIdRef.current += 1
       const performanceAudioBase64 = await stopMicrophoneRecorder(scoreRecorderRef.current)
@@ -1209,6 +1329,7 @@ export function StudioPage() {
       setGlobalPlaying(false)
       setPlayingSlots(new Set())
       const nextStudio = await scoreTrack(studio.studio_id, session.targetSlotId, {
+        score_mode: session.scoreMode,
         reference_slot_ids: session.selectedReferenceIds,
         include_metronome: session.includeMetronome,
         ...(performanceAudioBase64
@@ -1220,7 +1341,13 @@ export function StudioPage() {
       })
       setStudio(nextStudio)
       setScoreSession(null)
-      setActionState({ phase: 'success', message: '채점 리포트를 하단 피드에 등록했습니다.' })
+      setActionState({
+        phase: 'success',
+        message:
+          session.scoreMode === 'harmony'
+            ? '화음 채점 리포트를 하단 피드에 등록했습니다.'
+            : '채점 리포트를 하단 피드에 등록했습니다.',
+      })
     } catch (error) {
       setScoreSession({ ...session, phase: 'ready' })
       setActionState({
@@ -1384,10 +1511,62 @@ export function StudioPage() {
             setScoreSession({ ...scoreSession, includeMetronome })
           }
         }}
+        onScoreModeChange={updateScoreMode}
         onStart={() => void startScoreListening()}
         onStop={() => void stopScoreListening()}
         onToggleReference={toggleScoreReference}
       />
+
+      {pendingTrackRecording ? (
+        <section
+          aria-labelledby="pending-recording-title"
+          aria-modal="true"
+          className="recording-review-backdrop"
+          data-testid="pending-recording-dialog"
+          role="dialog"
+        >
+          <div className="recording-review-panel">
+            <p className="eyebrow">Recording review</p>
+            <h2 id="pending-recording-title">{pendingTrackRecording.trackName} 녹음 확인</h2>
+            <p>
+              아직 트랙에 등록하지 않았습니다. 원음을 확인한 뒤 악보화 작업을 시작하거나 녹음을 삭제하세요.
+            </p>
+            <dl>
+              <div>
+                <dt>대상 트랙</dt>
+                <dd>{pendingTrackRecording.trackName}</dd>
+              </div>
+              <div>
+                <dt>녹음 길이</dt>
+                <dd>{formatDurationSeconds(pendingTrackRecording.durationSeconds)}</dd>
+              </div>
+            </dl>
+            <audio controls src={pendingTrackRecording.audioDataUrl}>
+              녹음 미리듣기를 지원하지 않는 브라우저입니다.
+            </audio>
+            <div className="recording-review-panel__actions">
+              <button
+                className="app-button app-button--secondary"
+                data-testid="pending-recording-discard"
+                disabled={actionState.phase === 'busy'}
+                type="button"
+                onClick={handleDiscardPendingRecording}
+              >
+                녹음 삭제
+              </button>
+              <button
+                className="app-button"
+                data-testid="pending-recording-register"
+                disabled={actionState.phase === 'busy'}
+                type="button"
+                onClick={() => void handleRegisterPendingRecording()}
+              >
+                트랙 등록
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </main>
   )
 }

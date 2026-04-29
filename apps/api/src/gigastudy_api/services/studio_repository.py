@@ -52,6 +52,7 @@ from gigastudy_api.services.engine.music_theory import (
     TRACKS,
     infer_slot_id,
     midi_to_label,
+    seconds_per_beat,
     track_name,
 )
 from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
@@ -66,7 +67,7 @@ from gigastudy_api.services.engine.pdf_vector_omr import (
     parse_born_digital_pdf_score,
 )
 from gigastudy_api.services.engine.pdf_export import ScorePdfExportError, build_studio_score_pdf
-from gigastudy_api.services.engine.scoring import build_scoring_report
+from gigastudy_api.services.engine.scoring import build_harmony_scoring_report, build_scoring_report
 from gigastudy_api.services.engine.score_preview import ScorePreviewError, render_score_source_preview
 from gigastudy_api.services.engine.symbolic import (
     ParsedSymbolicFile,
@@ -1015,7 +1016,7 @@ class StudioRepository:
     ) -> Studio:
         studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         target_track = self._find_track(studio, slot_id)
-        if target_track.status != "registered" or not target_track.notes:
+        if request.score_mode == "answer" and (target_track.status != "registered" or not target_track.notes):
             raise HTTPException(status_code=409, detail="Scoring requires a registered answer track.")
 
         valid_reference_ids = {
@@ -1026,10 +1027,15 @@ class StudioRepository:
             for reference_id in request.reference_slot_ids
             if reference_id in valid_reference_ids and reference_id != slot_id
         ]
-        if not reference_slot_ids and not request.include_metronome:
+        if request.score_mode == "answer" and not reference_slot_ids and not request.include_metronome:
             raise HTTPException(
                 status_code=422,
                 detail="Choose at least one reference track or the metronome.",
+            )
+        if request.score_mode == "harmony" and not reference_slot_ids:
+            raise HTTPException(
+                status_code=422,
+                detail="Harmony scoring requires at least one registered reference track.",
             )
 
         performance_notes = list(request.performance_notes)
@@ -1045,15 +1051,39 @@ class StudioRepository:
             )
 
         timestamp = _now()
-        report = build_scoring_report(
-            target_slot_id=slot_id,
-            target_track_name=target_track.name,
-            reference_slot_ids=reference_slot_ids,
-            include_metronome=request.include_metronome,
-            created_at=timestamp,
-            answer_notes=target_track.notes,
-            performance_notes=performance_notes,
-        )
+        if request.score_mode == "harmony":
+            reference_tracks_by_slot = {
+                track.slot_id: _notes_with_sync_offset(
+                    track.notes,
+                    track.sync_offset_seconds,
+                    studio.bpm,
+                    voice_index=track.slot_id,
+                )
+                for track in studio.tracks
+                if track.slot_id in reference_slot_ids
+            }
+            report = build_harmony_scoring_report(
+                target_slot_id=slot_id,
+                target_track_name=target_track.name,
+                reference_slot_ids=reference_slot_ids,
+                include_metronome=request.include_metronome,
+                created_at=timestamp,
+                reference_tracks_by_slot=reference_tracks_by_slot,
+                performance_notes=performance_notes,
+                bpm=studio.bpm,
+                time_signature_numerator=studio.time_signature_numerator,
+                time_signature_denominator=studio.time_signature_denominator,
+            )
+        else:
+            report = build_scoring_report(
+                target_slot_id=slot_id,
+                target_track_name=target_track.name,
+                reference_slot_ids=reference_slot_ids,
+                include_metronome=request.include_metronome,
+                created_at=timestamp,
+                answer_notes=target_track.notes,
+                performance_notes=performance_notes,
+            )
 
         with self._lock:
             studio = self._load_studio(studio_id)
@@ -1246,6 +1276,7 @@ class StudioRepository:
         notes: list[TrackNote],
     ) -> RegistrationNotationResult:
         reference_tracks = self._registration_reference_tracks(studio, exclude_slot_id=slot_id)
+        reference_tracks_by_slot = self._registration_reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
         registration = prepare_notes_for_track_registration(
             notes,
             bpm=studio.bpm,
@@ -1267,6 +1298,7 @@ class StudioRepository:
             original_notes=notes,
             prepared_notes=registration.notes,
             diagnostics=registration.diagnostics,
+            context_tracks_by_slot=reference_tracks_by_slot,
         )
         if instruction is None:
             return registration
@@ -1383,6 +1415,20 @@ class StudioRepository:
             and track.status == "registered"
             and track.notes
         ]
+
+    def _registration_reference_tracks_by_slot(
+        self,
+        studio: Studio,
+        *,
+        exclude_slot_id: int,
+    ) -> dict[int, list[TrackNote]]:
+        return {
+            track.slot_id: track.notes
+            for track in studio.tracks
+            if track.slot_id != exclude_slot_id
+            and track.status == "registered"
+            and track.notes
+        }
 
     def _should_start_omr_job(
         self,
@@ -3015,6 +3061,26 @@ def _track_duration_seconds(notes: list[TrackNote]) -> float:
     if not notes:
         return 0
     return round(max(note.onset_seconds + note.duration_seconds for note in notes), 4)
+
+
+def _notes_with_sync_offset(
+    notes: list[TrackNote],
+    sync_offset_seconds: float,
+    bpm: int,
+    *,
+    voice_index: int | None = None,
+) -> list[TrackNote]:
+    beat_offset = sync_offset_seconds / seconds_per_beat(bpm)
+    return [
+        note.model_copy(
+            update={
+                "onset_seconds": round(max(0, note.onset_seconds + sync_offset_seconds), 4),
+                "beat": round(max(1, note.beat + beat_offset), 4),
+                "voice_index": voice_index if note.voice_index is None else note.voice_index,
+            }
+        )
+        for note in notes
+    ]
 
 
 def _parsed_track_diagnostics_by_slot(

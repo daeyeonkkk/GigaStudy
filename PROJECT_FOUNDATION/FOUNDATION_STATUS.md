@@ -10,8 +10,9 @@ The canonical product is:
 
 1. Create or seed a six-track studio.
 2. Fill, sync, and play Soprano, Alto, Tenor, Baritone, Bass, and Percussion.
-3. Score a vocal attempt against the target track's registered answer notes
-   while selected references play as context, then append a quantitative report.
+3. Score a vocal attempt either against the target track's registered answer
+   notes or as a new harmony part against selected reference tracks, then append
+   a quantitative report.
 
 The canonical engine rule is now documented in `ENGINE_ARCHITECTURE.md`.
 
@@ -176,7 +177,9 @@ The current implementation has a working six-track vertical slice:
 - NWC is not advertised as an accepted upload format until an NWC-to-TrackNote
   parser is connected.
 - Per-track browser recording captures microphone audio, encodes WAV, and
-  registers TrackNotes through the queued voice extraction path.
+  holds the recorded take in a browser-side review state. The user must either
+  register the take, which starts the queued voice extraction path, or delete
+  it. A stopped recording must not silently become a TrackNote extraction job.
 - Registered voice/audio tracks retain their normalized source audio as a
   playback asset while keeping TrackNote data as the canonical scoring and
   generation source.
@@ -375,6 +378,10 @@ The current implementation has a working six-track vertical slice:
   context while the target take is recorded.
 - Scoring uses the target track as the answer sheet, extracts/accepts
   performance notes, auto-aligns global sync, and reports quantitative errors.
+- Scoring also has a harmony mode. It can run without a registered target
+  answer when at least one selected registered reference track exists, then
+  grades the new take for ensemble fit, rhythm-grid alignment, target range,
+  and basic voice-leading.
 - Studio report feed shows compact report title/date links; full quantitative
   report details live on a separate report page.
 - AI generation now creates multiple pending candidates first; approving one
@@ -611,17 +618,19 @@ not legacy product surfaces.
   `apps/api/.env`; deployed keys belong in Cloud Run env vars or Secret
   Manager. The OpenRouter route uses
   `GIGASTUDY_API_DEEPSEEK_BASE_URL=https://openrouter.ai/api/v1` and
-  `GIGASTUDY_API_DEEPSEEK_MODEL=deepseek/deepseek-v4-flash:free`.
+  `GIGASTUDY_API_DEEPSEEK_MODEL=deepseek/deepseek-v4-flash`; the `:free`
+  variant is not assumed to be available for production routing.
 - OpenRouter requests omit the native DeepSeek `thinking` field by default,
   while native DeepSeek requests keep the existing non-thinking JSON-mode
   payload. This keeps the single DeepSeek model choice compatible with both
   provider routes.
 - DeepSeek notation review is now wired into the final registration path as a
-  bounded checker. It receives compact original/prepared TrackNote summaries,
-  current diagnostics, meter, BPM, source kind, and target track policy. It may
-  return only validated repair instructions such as coarser quantization,
-  sustain merging, dense-measure simplification, unstable-note suppression, and
-  key-spelling preference.
+  bounded registration planner. It receives compact original/prepared TrackNote
+  summaries, deterministic quality options, current diagnostics, meter, BPM,
+  source kind, target track policy, and any registered sibling-track summaries
+  before the target is committed. It may return only validated repair
+  instructions such as coarser quantization, sustain merging, dense-measure
+  simplification, unstable-note suppression, and key-spelling preference.
 - The local notation quality gate applies those instructions deterministically
   and preserves the pre-LLM registration result when the LLM is disabled,
   unavailable, invalid, low-confidence, or gives no repair directive. The LLM
@@ -737,6 +746,10 @@ not legacy product surfaces.
   verified against a fake Web Audio clock: same-beat notes across tracks are
   scheduled at the exact same clock time, so stacked TrackNotes sound as a
   chord.
+- Retained-audio playback now distinguishes low-latency single-source playback
+  from synchronized playback. If retained audio is combined with another retained
+  audio track, score-synthesized notes, or the metronome, the original audio
+  waits at the readiness barrier and the whole set starts from one shared point.
 - Verification for this gate: web lint passed, production web build passed,
   targeted Chromium audio playback E2E passed, and Chromium browser E2E
   release gate passed 13/13 on 2026-04-28.
@@ -783,6 +796,17 @@ not legacy product surfaces.
   web lint passed, production web build passed, and Chromium release gate
   passed 13/13 locally on 2026-04-28.
 
+## Track Registration LLM Planning Patch - 2026-04-29
+
+- Single-track registration planning now sends registered sibling-track context
+  to DeepSeek before the target track is committed. This applies to recording,
+  per-track upload, extraction candidate approval, and any other repository path
+  that passes through the shared final registration boundary.
+- The LLM remains bounded to plan directives only. It may use sibling context to
+  choose cleanup direction, key spelling, octave/range caution, and score
+  readability risk, but deterministic code still owns all TrackNote mutation,
+  BPM/meter invariants, validation, and fallback behavior.
+
 ## Live Recording Playback And Count-In Patch - 2026-04-29
 
 - Live studio smoke data showed old Tenor voice registrations can be missing
@@ -805,6 +829,85 @@ not legacy product surfaces.
   focused Chromium playback/count-in E2E passed 3/3, focused downbeat-zero
   count-in E2E passed, and full Chromium release gate passed 13/13 locally on
   2026-04-29.
+
+## Dual Scoring Mode Patch - 2026-04-29
+
+- Studio scoring is now product-mode explicit: Answer Scoring uses the target
+  track's registered notes as the answer sheet, while Harmony Scoring records a
+  new part against selected registered reference tracks without requiring a
+  target answer.
+- The harmony scoring engine evaluates deterministic ensemble fit: vertical
+  consonance against active/nearest references, chord-fit against inferred
+  vertical sonority, rhythm-grid/reference entrance fit, target vocal range,
+  SATB-like spacing, voice-leading continuity, obvious voice crossing, and
+  repeated parallel perfect fifth/octave motion. LLMs remain optional
+  planning/review support, not numeric scoring authority.
+- The studio scoring drawer exposes the two modes, disables impossible choices,
+  and sends `score_mode` to the API. Report feed/detail views label the mode and
+  show mode-appropriate metrics.
+- Verification for this patch: API regression suite passed 118/118, focused
+  scoring engine/API tests passed 7/7, web lint passed, production web build
+  passed, and Playwright release gate passed 40/40 with 2 browser-permission
+  skips locally on 2026-04-29.
+
+## Arranger-Grade Harmony Scoring Patch - 2026-04-29
+
+- Harmony Scoring now separates raw interval consonance from chord-fit,
+  spacing, voice-leading, and arrangement scores. This makes the report closer
+  to a practical a cappella arranger review instead of a single dissonance
+  detector.
+- The engine infers a compact vertical sonority at each performed note, scores
+  whether the new part can be explained as a normal chord tone, tolerates short
+  weak-beat passing dissonance, and penalizes strong-beat unresolved clashes.
+- The engine now detects upper-voice spacing problems, low-register crowding,
+  obvious voice crossing, and repeated parallel perfect fifth/octave motion
+  against selected reference tracks.
+- Harmony reports now expose Chord, Spacing, and Arrangement metrics and can
+  emit `chord_fit`, `spacing`, and `parallel_motion` issues with specific
+  timestamps.
+- Verification for this patch: focused scoring engine tests passed 7/7, API
+  regression suite passed 121/121, web lint passed, and production web build
+  passed locally on 2026-04-29.
+
+## Harmony Scoring Calibration Patch - 2026-04-29
+
+- Harmony Scoring is now less eager to warn when there is not enough musical
+  evidence. Sparse one-note reference context uses a lower chord-fit warning
+  threshold, and strong chord-fit warnings are reserved for clearer vertical
+  sonorities.
+- The chord-fit pass now treats short weak-beat connector tones and common color
+  tones over a stable triad as practical a cappella material rather than
+  immediate errors.
+- Spacing and voice-leading penalties were softened for usable contemporary
+  arrangements, while extreme upper/lower separation and out-of-range leaps still
+  surface as warnings.
+- Parallel fifth/octave warnings now require sustained structural notes in both
+  the new part and the reference part, so quick passing motion does not create
+  noisy arranger warnings.
+- Verification for this patch: focused scoring engine tests passed 10/10, API
+  regression suite passed 124/124, web lint passed, production web build passed,
+  and Playwright release gate passed 40/40 with 2 browser-permission skips
+  locally on 2026-04-29.
+
+## Structural Harmony Scoring Push - 2026-04-29
+
+- Harmony Scoring now includes structural arranger checks beyond raw vertical
+  consonance: unresolved sustained non-chord tensions, overly thin strong-beat
+  chord coverage, and Bass parts that sit too high to support the ensemble.
+- These checks affect `arrangement_score` with capped penalties and appear as
+  separate report issue types: `tension_resolution`, `chord_coverage`, and
+  `bass_foundation`.
+- The guardrails remain intentionally bounded. Resolved stepwise tensions,
+  common color tones over a clear triad, short weak-beat connectors, and quick
+  non-structural parallel motion are tolerated.
+- This pushes the deterministic engine to the current useful limit. The next
+  meaningful quality jump needs real singing data and human arranger labels,
+  because further tuning would start deciding stylistic preference rather than
+  clear structural risk.
+- Verification for this push: focused scoring engine tests passed 14/14, API
+  regression suite passed 128/128, web lint passed, production web build passed,
+  and Playwright release gate passed 40/40 with 2 browser-permission skips
+  locally on 2026-04-29.
 
 ## Status Summary
 

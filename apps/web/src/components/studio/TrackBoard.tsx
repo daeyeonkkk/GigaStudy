@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { Suspense, lazy, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
@@ -12,7 +12,10 @@ import {
   statusLabels,
 } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
-import { EngravedScoreStrip } from './EngravedScoreStrip'
+
+const EngravedScoreStrip = lazy(() =>
+  import('./EngravedScoreStrip').then((module) => ({ default: module.EngravedScoreStrip })),
+)
 
 type TrackRecordingMeter = {
   durationSeconds: number
@@ -50,6 +53,16 @@ type TrackBoardProps = {
 function getRegisteredTrackKeySignature(track: TrackSlot): string | null {
   const keySignature = track.notes.find((note) => note.key_signature)?.key_signature
   return keySignature && keySignature !== 'C' ? keySignature : null
+}
+
+function EngravingFallback({ track }: { track: TrackSlot }) {
+  return (
+    <div
+      aria-label={`${track.name} 악보 엔진을 불러오는 중입니다`}
+      className="track-card__measure-strip track-card__engraved-strip track-card__engraved-strip--loading"
+      data-testid={`track-score-strip-loading-${track.slot_id}`}
+    />
+  )
 }
 
 export function TrackBoard({
@@ -124,6 +137,9 @@ export function TrackBoard({
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
+          const canScoreTrack =
+            isRegistered ||
+            registeredTracks.some((registeredTrack) => registeredTrack.slot_id !== track.slot_id)
           const recordingMeterStyle = {
             '--recording-level': `${getRecordingLevelPercent(isRecording || isCountingIn ? trackRecordingMeter.level : 0)}%`,
           } as CSSProperties
@@ -152,13 +168,15 @@ export function TrackBoard({
 
               <div className="track-card__score" aria-label={`${track.name} 악보`}>
                 {isRegistered ? (
-                  <EngravedScoreStrip
-                    beatsPerMeasure={beatsPerMeasure}
-                    bpm={bpm}
-                    playheadSeconds={isPlaying ? playheadSeconds : null}
-                    sharedMeasureWidths={sharedMeasureWidths}
-                    track={track}
-                  />
+                  <Suspense fallback={<EngravingFallback track={track} />}>
+                    <EngravedScoreStrip
+                      beatsPerMeasure={beatsPerMeasure}
+                      bpm={bpm}
+                      playheadSeconds={isPlaying ? playheadSeconds : null}
+                      sharedMeasureWidths={sharedMeasureWidths}
+                      track={track}
+                    />
+                  </Suspense>
                 ) : (
                   <p>{needsReview ? '검토 대기 트랙' : '공란 트랙'}</p>
                 )}
@@ -241,7 +259,7 @@ export function TrackBoard({
                   <button
                     className="app-button app-button--secondary"
                     data-testid={`track-score-${track.slot_id}`}
-                    disabled={!isRegistered}
+                    disabled={!canScoreTrack}
                     type="button"
                     onClick={() => onOpenScore(track)}
                   >

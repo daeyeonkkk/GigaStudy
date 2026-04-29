@@ -76,6 +76,25 @@ class NotationReviewInstruction(BaseModel):
                 cleaned.append(index)
         return cleaned
 
+    @field_validator("quantization_grid", mode="before")
+    @classmethod
+    def _clean_quantization_grid(cls, value: Any) -> AllowedReviewGrid | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "null", "none"}:
+                return None
+            try:
+                value = float(normalized)
+            except ValueError:
+                return value
+        if value == 0.25:
+            return 0.25
+        if value == 0.5:
+            return 0.5
+        return value
+
     @field_validator("reasons", "warnings", mode="before")
     @classmethod
     def _clean_text_list(cls, value: Any) -> list[str]:
@@ -119,6 +138,7 @@ def review_notation_with_deepseek(
     original_notes: list[TrackNote],
     prepared_notes: list[TrackNote],
     diagnostics: dict[str, Any],
+    context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
 ) -> NotationReviewInstruction | None:
     if not settings.deepseek_notation_review_enabled or not settings.deepseek_api_key:
         return None
@@ -137,6 +157,8 @@ def review_notation_with_deepseek(
         original_notes=original_notes,
         prepared_notes=prepared_notes,
         diagnostics=diagnostics,
+        review_scope="single_track_registration_plan",
+        context_tracks_by_slot=context_tracks_by_slot,
     )
 
     last_error: Exception | None = None
@@ -252,12 +274,13 @@ def _build_notation_review_payload(
     original_notes: list[TrackNote],
     prepared_notes: list[TrackNote],
     diagnostics: dict[str, Any],
-    review_scope: str = "single_track_notation",
+    review_scope: str = "single_track_registration_plan",
     context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
     proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
 ) -> dict[str, Any]:
     review_checklist = [
         "BPM and time signature are immutable.",
+        "Plan registration cleanup before final commit; the deterministic engine will apply and validate the plan.",
         "Find unnatural note density, fragmented ties, excessive accidentals, and noise-like micro events.",
         "Prefer 0.25-beat grid for expressive but readable singing, 0.5-beat grid for noisy or too-dense input.",
         "Prefer sustain/merge for repeated same-pitch fragments that look like one held vocal tone.",
@@ -269,6 +292,14 @@ def _build_notation_review_payload(
         "Suggest a key signature only when it reduces accidental clutter.",
         "For symbolic score imports, avoid rhythm rewrites unless the notation clearly looks like extraction noise.",
     ]
+    if review_scope == "single_track_registration_plan":
+        review_checklist.extend(
+            [
+                "Use sibling-track context when available to choose cleanup direction, key spelling, octave warnings, and readability risk.",
+                "Do not copy sibling rhythms into the target; only align unreadable extracted material to the fixed studio BPM/meter grid.",
+                "If sibling context is absent, enforce standalone track notation quality without inventing ensemble assumptions.",
+            ]
+        )
     if review_scope == "a_cappella_ensemble_registration":
         review_checklist.extend(
             [
@@ -280,8 +311,8 @@ def _build_notation_review_payload(
         )
     context = {
         "product_rule": (
-            "The reviewer must not generate TrackNote arrays or change BPM/meter. "
-            "It may only choose bounded repair directives for the deterministic notation engine."
+            "The LLM must not generate TrackNote arrays or change BPM/meter. "
+            "It may only choose bounded registration-plan directives for the deterministic notation engine."
         ),
         "review_scope": review_scope,
         "studio": {
@@ -348,8 +379,8 @@ def _build_notation_review_payload(
             "role": "system",
             "content": (
                 "You are GigaStudy's notation review conductor. Return JSON only. "
-                "You review whether extracted TrackNotes will read like a real score, then choose bounded repair "
-                "directives for the deterministic engine. Never output notes, melodies, markdown, or prose. "
+                "You plan whether extracted TrackNotes will read like a real score at registration time, then choose "
+                "bounded repair directives for the deterministic engine. Never output notes, melodies, markdown, or prose. "
                 "Do not change BPM or meter. Write reasons and warnings in Korean."
             ),
         },

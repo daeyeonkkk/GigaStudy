@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   timeout: 90_000,
+  workers: 1,
   expect: {
     timeout: 10_000,
   },
@@ -55,6 +56,10 @@ export default defineConfig({
         GIGASTUDY_API_STORAGE_ROOT: '../../test-results/e2e-api-storage',
         GIGASTUDY_API_DATABASE_URL: '',
         GIGASTUDY_API_STORAGE_BACKEND: 'local',
+        GIGASTUDY_API_DEEPSEEK_HARMONY_ENABLED: 'false',
+        GIGASTUDY_API_DEEPSEEK_NOTATION_REVIEW_ENABLED: 'false',
+        GIGASTUDY_API_DEEPSEEK_ENSEMBLE_REVIEW_ENABLED: 'false',
+        GIGASTUDY_API_DEEPSEEK_API_KEY: '',
       },
     },
     {

@@ -4,6 +4,7 @@ import type {
   AdminStorageSummary,
   CreateStudioRequest,
   DirectUploadTarget,
+  ScoreMode,
   ScoreNote,
   Studio,
   StudioListItem,
@@ -320,6 +321,7 @@ export function scoreTrack(
   studioId: string,
   slotId: number,
   payload: {
+    score_mode?: ScoreMode
     reference_slot_ids: number[]
     include_metronome: boolean
     performance_notes?: ScoreNote[]

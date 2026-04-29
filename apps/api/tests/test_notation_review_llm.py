@@ -515,6 +515,82 @@ def test_deepseek_notation_review_parses_bounded_json_instruction(monkeypatch) -
     ]
 
 
+def test_deepseek_notation_registration_plan_sends_sibling_context(monkeypatch) -> None:
+    captured_payload: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self) -> bytes:
+            content = json.dumps(
+                {
+                    "confidence": 0.8,
+                    "quantization_grid": "0.5",
+                    "merge_adjacent_same_pitch": True,
+                    "reasons": ["기존 트랙 맥락상 더 읽기 쉬운 등록 계획입니다."],
+                }
+            )
+            return json.dumps({"choices": [{"message": {"content": content}}]}).encode("utf-8")
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001
+        captured_payload["timeout"] = timeout
+        captured_payload["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr("gigastudy_api.services.llm.notation_review.urlopen", fake_urlopen)
+    settings = Settings(
+        deepseek_notation_review_enabled=True,
+        deepseek_api_key="test-key",
+        deepseek_base_url="https://openrouter.ai/api/v1",
+        deepseek_model="deepseek/deepseek-v4-flash",
+    )
+    soprano = note_from_pitch(
+        beat=1,
+        duration_beats=2,
+        bpm=92,
+        source="musicxml",
+        extraction_method="test_context",
+        pitch_midi=72,
+        confidence=0.95,
+    )
+    tenor_take = note_from_pitch(
+        beat=1,
+        duration_beats=0.5,
+        bpm=92,
+        source="voice",
+        extraction_method="test_target",
+        pitch_midi=55,
+        confidence=0.78,
+    )
+
+    instruction = review_notation_with_deepseek(
+        settings=settings,
+        title="test",
+        bpm=92,
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+        slot_id=3,
+        source_kind="recording",
+        original_notes=[tenor_take],
+        prepared_notes=[tenor_take],
+        diagnostics={"max_notes_per_measure": 8},
+        context_tracks_by_slot={1: [soprano]},
+    )
+
+    assert instruction is not None
+    assert instruction.quantization_grid == 0.5
+    user_context = json.loads(captured_payload["body"]["messages"][1]["content"])
+    assert user_context["review_scope"] == "single_track_registration_plan"
+    assert user_context["ensemble_context"]["available"] is True
+    assert user_context["ensemble_context"]["registered_or_reference_tracks"][0]["slot_id"] == 1
+    assert user_context["ensemble_context"]["target_slot_id"] == 3
+    assert any("sibling-track context" in item for item in user_context["review_checklist"])
+
+
 def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monkeypatch) -> None:
     captured_payload: dict[str, object] = {}
 

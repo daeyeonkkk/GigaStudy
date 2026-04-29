@@ -10,6 +10,7 @@ export type TrackStatus =
 
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'score' | 'music' | 'ai'
 export type NoteSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
+export type ScoreMode = 'answer' | 'harmony'
 
 export type ScoreNote = {
   id: string
@@ -97,7 +98,22 @@ export type TrackSlot = {
 
 export type ReportIssue = {
   at_seconds: number
-  issue_type: 'pitch' | 'rhythm' | 'pitch_rhythm' | 'missing' | 'extra'
+  issue_type:
+    | 'pitch'
+    | 'rhythm'
+    | 'pitch_rhythm'
+    | 'missing'
+    | 'extra'
+    | 'harmony'
+    | 'chord_fit'
+    | 'range'
+    | 'spacing'
+    | 'voice_leading'
+    | 'crossing'
+    | 'parallel_motion'
+    | 'tension_resolution'
+    | 'bass_foundation'
+    | 'chord_coverage'
   severity: 'info' | 'warn' | 'error'
   answer_note_id: string | null
   performance_note_id: string | null
@@ -113,6 +129,7 @@ export type ReportIssue = {
 
 export type ScoringReport = {
   report_id: string
+  score_mode: ScoreMode
   target_slot_id: number
   target_track_name: string
   reference_slot_ids: number[]
@@ -127,10 +144,17 @@ export type ScoringReport = {
   overall_score: number
   pitch_score: number
   rhythm_score: number
+  harmony_score: number | null
+  chord_fit_score: number | null
+  range_score: number | null
+  spacing_score: number | null
+  voice_leading_score: number | null
+  arrangement_score: number | null
   mean_abs_pitch_error_semitones: number | null
   mean_abs_timing_error_seconds: number | null
   pitch_summary: string
   rhythm_summary: string
+  harmony_summary: string
   issues: ReportIssue[]
 }
 

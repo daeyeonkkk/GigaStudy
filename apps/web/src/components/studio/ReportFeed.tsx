@@ -1,15 +1,16 @@
 import { Link } from 'react-router-dom'
 
-import {
-  describeReferences,
-  formatDate,
-} from '../../lib/studio'
+import { describeReferences, formatDate } from '../../lib/studio'
 import type { ScoringReport, TrackSlot } from '../../types/studio'
 
 type ReportFeedProps = {
   reports: ScoringReport[]
   studioId: string
   tracks: TrackSlot[]
+}
+
+function reportTitle(report: ScoringReport): string {
+  return `${report.target_track_name} ${report.score_mode === 'harmony' ? '화음 채점' : '정답 채점'}`
 }
 
 export function ReportFeed({ reports, studioId, tracks }: ReportFeedProps) {
@@ -23,7 +24,7 @@ export function ReportFeed({ reports, studioId, tracks }: ReportFeedProps) {
       {reports.length === 0 ? (
         <div className="report-empty">
           <strong>아직 리포트가 없습니다.</strong>
-          <p>등록된 트랙에서 채점을 시작하면 제목과 시간이 여기에 쌓입니다.</p>
+          <p>트랙에서 채점을 시작하면 제목과 시간이 여기에 쌓입니다.</p>
         </div>
       ) : (
         <div className="report-list">
@@ -32,7 +33,7 @@ export function ReportFeed({ reports, studioId, tracks }: ReportFeedProps) {
               <header>
                 <div>
                   <span>{formatDate(report.created_at)}</span>
-                  <h3>{report.target_track_name} 채점</h3>
+                  <h3>{reportTitle(report)}</h3>
                 </div>
                 <p>{describeReferences(report, tracks)}</p>
               </header>

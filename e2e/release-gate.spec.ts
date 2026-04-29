@@ -194,8 +194,78 @@ async function uploadAudioToTrack(page: Page, slotId: number, filename: string) 
 
 async function installDecodedAudioUploadStub(page: Page) {
   await page.addInitScript(() => {
+    class FakeAudioParam {
+      value = 0
+
+      cancelScheduledValues() {
+        return undefined
+      }
+
+      exponentialRampToValueAtTime(value: number) {
+        this.value = value
+        return undefined
+      }
+
+      linearRampToValueAtTime(value: number) {
+        this.value = value
+        return undefined
+      }
+
+      setValueAtTime(value: number) {
+        this.value = value
+        return undefined
+      }
+    }
+
+    class FakeAudioNode {
+      connect() {
+        return this
+      }
+
+      disconnect() {
+        return undefined
+      }
+    }
+
+    class FakeOscillatorNode extends FakeAudioNode {
+      frequency = new FakeAudioParam()
+      type: OscillatorType = 'sine'
+
+      start() {
+        return undefined
+      }
+
+      stop() {
+        return undefined
+      }
+    }
+
     class FakeAudioContext {
+      currentTime = 12
+      destination = new FakeAudioNode()
       state = 'running'
+
+      createBiquadFilter() {
+        const filter = new FakeAudioNode() as FakeAudioNode & {
+          frequency: FakeAudioParam
+          Q: FakeAudioParam
+          type: BiquadFilterType
+        }
+        filter.frequency = new FakeAudioParam()
+        filter.Q = new FakeAudioParam()
+        filter.type = 'lowpass'
+        return filter
+      }
+
+      createGain() {
+        const gain = new FakeAudioNode() as FakeAudioNode & { gain: FakeAudioParam }
+        gain.gain = new FakeAudioParam()
+        return gain
+      }
+
+      createOscillator() {
+        return new FakeOscillatorNode()
+      }
 
       async decodeAudioData() {
         const sampleRate = 16_000
@@ -224,6 +294,10 @@ async function installDecodedAudioUploadStub(page: Page) {
 
       async close() {
         this.state = 'closed'
+      }
+
+      async resume() {
+        this.state = 'running'
       }
     }
 
@@ -588,6 +662,56 @@ test('global audio playback waits for retained tracks before starting together',
   expect(Math.abs(playCalls[0].playedAt - playCalls[1].playedAt)).toBeLessThan(80)
 })
 
+test('retained audio waits for metronome before synchronized playback starts', async ({ page }) => {
+  await installDecodedAudioUploadStub(page)
+  await installTrackAudioPlaybackStub(page, { readyDelaysMs: [450] })
+  await page.goto('/')
+  await page.getByTestId('studio-title-input').fill('Metronome synchronized audio playback')
+  await page.getByTestId('studio-source-input').setInputFiles({
+    name: 'metronome-sync.mp3',
+    mimeType: 'audio/mpeg',
+    buffer: Buffer.from('browser decodes this fixture through a stub', 'utf-8'),
+  })
+
+  await page.getByTestId('upload-and-start-button').click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/, { timeout: 45_000 })
+  await approveFirstCandidate(page)
+
+  await page.getByTestId('global-play-button').click()
+  await expect(page.getByText(/같은 시작점/)).toBeVisible()
+  await page.waitForTimeout(220)
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __gigastudyAudioPlayCalls?: Array<{ currentTime: number; playedAt: number; src: string }>
+            }
+          ).__gigastudyAudioPlayCalls ?? [],
+      ),
+    )
+    .toHaveLength(0)
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __gigastudyAudioPlayCalls?: Array<{ currentTime: number; playedAt: number; src: string }>
+            }
+          ).__gigastudyAudioPlayCalls ?? [],
+      ),
+    )
+    .toEqual([
+      expect.objectContaining({
+        currentTime: 0,
+        src: expect.stringContaining('/tracks/1/audio'),
+      }),
+    ])
+})
+
 test('score playback schedules stacked track notes on the same audio clock', async ({ page }) => {
   await installScorePlaybackClockStub(page)
   await createBlankStudio(page, 'Score chord clock playback')
@@ -641,6 +765,11 @@ test('track recording shows zero on the count-in downbeat before capture continu
 
   await page.waitForFunction(() => document.querySelector('[data-testid="track-count-in-1"]')?.textContent?.includes('0'))
   await expect(page.getByTestId('track-recording-meter-1')).toBeVisible()
+  await page.waitForTimeout(250)
+  await page.getByTestId('track-record-1').click()
+  await expect(page.getByTestId('pending-recording-dialog')).toBeVisible()
+  await page.getByTestId('pending-recording-discard').click()
+  await expect(page.getByTestId('pending-recording-dialog')).toHaveCount(0)
 })
 
 test('admin login can inspect storage and run the engine queue trigger', async ({ page }) => {

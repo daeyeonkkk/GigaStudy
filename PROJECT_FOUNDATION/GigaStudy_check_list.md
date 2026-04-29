@@ -58,8 +58,13 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Registered track notes render duration-aware engraved notation for whole,
   half, quarter, eighth, sixteenth, and dotted values when the TrackNote rhythm
   supports it.
+- [x] Retained-audio tracks wait for other retained-audio, score-synthesized, or
+  metronome sources before synchronized playback starts.
 - [x] Long notes that cross measure boundaries render display-only tied
   segments without mutating the stored TrackNote.
+- [x] Recording/upload track registration can use LLM registration planning with
+  existing sibling-track context before final TrackNote commit, while
+  deterministic code still owns BPM, meter, and final notation mutation.
 - [x] Explicit `TrackNote.is_tied` metadata renders note-to-note ties only when
   adjacent same-pitch timing supports a real continuation.
 - [x] Short rhythmic gaps are kept as hidden spacer rests so engraving spacing
@@ -296,9 +301,21 @@ This checklist tracks the new six-track studio foundation only.
 
 ## Scoring
 
-- [x] Scoring is enabled only after a track is registered.
-- [x] Scoring requires the target track's TrackNotes as the answer sheet.
-- [x] Other tracks are references, not the scoring truth source.
+- [x] Scoring offers explicit Answer Scoring and Harmony Scoring modes.
+- [x] Answer Scoring is enabled when the target track is registered.
+- [x] Answer Scoring requires the target track's TrackNotes as the answer sheet.
+- [x] Harmony Scoring can run without a registered target answer when at least
+  one selected registered reference track exists.
+- [x] Harmony Scoring evaluates ensemble fit, chord-fit, rhythm-grid fit,
+  target range, spacing, voice crossing, parallel perfect motion, and
+  voice-leading against the selected reference tracks.
+- [x] Harmony Scoring avoids over-warning sparse contexts: short weak-beat
+  passing tones, common color tones over clear triads, and non-structural quick
+  parallel motion are tolerated.
+- [x] Harmony Scoring includes structural arranger warnings for unresolved
+  sustained tensions, thin strong-beat chord coverage, and high Bass foundation.
+- [x] Other tracks are references in Answer Scoring, and the comparison context
+  in Harmony Scoring.
 - [x] Scoring opens a checklist.
 - [x] Checklist includes Track 1 through Track 6.
 - [x] Checklist includes Metronome.
@@ -315,6 +332,10 @@ This checklist tracks the new six-track studio foundation only.
 - [x] Scoring checks rhythm at 0.01 second resolution.
 - [x] Report says where the user drifted.
 - [x] Report says how the user drifted using quantitative error fields.
+- [x] Harmony reports include mode-aware Harmony, Chord, Rhythm, Spacing,
+  Range, Voice Lead, Arrangement, Auto Sync, and Notes metrics.
+- [x] Harmony reports can surface chord-fit, spacing, and parallel-motion
+  issues as separate arranger-style warnings.
 - [x] Compact report title/date appears at the bottom of the studio as a feed
   item.
 - [x] Full report opens on a separate report detail page.
@@ -467,6 +488,10 @@ This checklist tracks the new six-track studio foundation only.
   shows a one-measure count-in, then starts the retained WAV capture on the next
   downbeat. The metronome toggle affects audible click sound only, not the
   internal TrackNote timing grid.
+- [x] 2026-04-29 녹음 종료 UX: stopping a track recording now opens a
+  browser-side review dialog with source-audio preview, explicit Track Register,
+  and Delete Recording actions. Voice extraction is queued only after the user
+  confirms registration.
 - [x] 2026-04-23 실사용 재생/악보 이슈 재검증: 웹 lint/build 통과,
   브라우저 E2E 21/21 통과, Playwright 로컬 브라우저에서 라이브
   스튜디오 payload 기준 VexFlow 렌더 콘솔 오류 없음, Tenor 재생 버튼이

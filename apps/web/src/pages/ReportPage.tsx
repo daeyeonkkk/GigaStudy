@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { getStudio } from '../lib/api'
+import {
+  describeReferences,
+  formatNullableSeconds,
+  formatNullableSemitones,
+  formatScore,
+  formatSeconds,
+  getIssueLabel,
+} from '../lib/studio'
 import type { ReportIssue, ScoringReport, Studio, TrackSlot } from '../types/studio'
 import './ReportPage.css'
 
@@ -9,6 +17,11 @@ type LoadState =
   | { phase: 'loading' }
   | { phase: 'ready' }
   | { phase: 'error'; message: string }
+
+type MetricCard = {
+  label: string
+  value: string
+}
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -19,51 +32,90 @@ function formatDateTime(value: string): string {
   }).format(new Date(value))
 }
 
-function formatScore(value: number): string {
-  return Number.isFinite(value) ? value.toFixed(1) : '0.0'
+function formatNullableScore(value: number | null): string {
+  return value === null ? '-' : formatScore(value)
 }
 
-function formatSeconds(value: number): string {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}s`
+function reportTitle(report: ScoringReport): string {
+  return `${report.target_track_name} ${report.score_mode === 'harmony' ? '화음 채점' : '정답 채점'}`
 }
 
-function formatNullableSeconds(value: number | null): string {
-  return value === null ? '-' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}s`
-}
-
-function formatNullableSemitones(value: number | null): string {
-  return value === null ? '-' : `${value >= 0 ? '+' : ''}${value.toFixed(2)} st`
-}
-
-function getIssueLabel(issue: ReportIssue): string {
-  const labels: Record<ReportIssue['issue_type'], string> = {
-    pitch: 'Pitch',
-    rhythm: 'Rhythm',
-    pitch_rhythm: 'Pitch + Rhythm',
-    missing: 'Missing',
-    extra: 'Extra',
-  }
-  return labels[issue.issue_type]
-}
-
-function describeReferences(report: ScoringReport, tracks: TrackSlot[]): string {
-  const referenceNames = report.reference_slot_ids
-    .map((slotId) => tracks.find((track) => track.slot_id === slotId)?.name)
-    .filter(Boolean)
-
-  if (report.include_metronome) {
-    referenceNames.push('Metronome')
+function buildMetricCards(report: ScoringReport): MetricCard[] {
+  if (report.score_mode === 'harmony') {
+    return [
+      { label: 'Harmony', value: formatNullableScore(report.harmony_score) },
+      { label: 'Chord', value: formatNullableScore(report.chord_fit_score) },
+      { label: 'Rhythm', value: formatScore(report.rhythm_score) },
+      { label: 'Spacing', value: formatNullableScore(report.spacing_score) },
+      { label: 'Range', value: formatNullableScore(report.range_score) },
+      { label: 'Voice lead', value: formatNullableScore(report.voice_leading_score) },
+      { label: 'Arrangement', value: formatNullableScore(report.arrangement_score) },
+      { label: 'Auto Sync', value: formatSeconds(report.alignment_offset_seconds) },
+      { label: 'Notes', value: String(report.performance_note_count) },
+    ]
   }
 
-  return referenceNames.length > 0 ? referenceNames.join(', ') : '기준 없음'
+  return [
+    { label: 'Pitch', value: formatScore(report.pitch_score) },
+    { label: 'Rhythm', value: formatScore(report.rhythm_score) },
+    { label: 'Auto Sync', value: formatSeconds(report.alignment_offset_seconds) },
+    { label: 'Matched', value: `${report.matched_note_count}/${report.answer_note_count}` },
+    { label: 'Missing', value: String(report.missing_note_count) },
+    { label: 'Extra', value: String(report.extra_note_count) },
+  ]
 }
 
 function getIssueDetail(issue: ReportIssue): string {
+  if (
+    issue.message &&
+    [
+      'harmony',
+      'chord_fit',
+      'range',
+      'spacing',
+      'voice_leading',
+      'crossing',
+      'parallel_motion',
+      'tension_resolution',
+      'bass_foundation',
+      'chord_coverage',
+    ].includes(issue.issue_type)
+  ) {
+    return issue.message
+  }
+
   const expected = issue.answer_label ?? '-'
   const actual = issue.performance_label ?? '-'
   return `expected ${expected} / actual ${actual} / time ${formatNullableSeconds(
     issue.timing_error_seconds,
   )} / pitch ${formatNullableSemitones(issue.pitch_error_semitones)}`
+}
+
+function ReportRouteState({
+  eyebrow,
+  title,
+  body,
+  to,
+  buttonLabel,
+}: {
+  eyebrow: string
+  title: string
+  body?: string
+  to?: string
+  buttonLabel?: string
+}) {
+  return (
+    <main className="app-shell report-route-state">
+      <p className="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      {body ? <p>{body}</p> : null}
+      {to && buttonLabel ? (
+        <Link className="app-button" to={to}>
+          {buttonLabel}
+        </Link>
+      ) : null}
+    </main>
+  )
 }
 
 export function ReportPage() {
@@ -108,38 +160,33 @@ export function ReportPage() {
 
   if (!studioId) {
     return (
-      <main className="app-shell report-route-state">
-        <p className="eyebrow">Report error</p>
-        <h1>리포트를 열 수 없습니다</h1>
-        <p>스튜디오 주소가 올바르지 않습니다.</p>
-        <Link className="app-button" to="/">
-          홈으로
-        </Link>
-      </main>
+      <ReportRouteState
+        eyebrow="Report error"
+        title="리포트를 찾을 수 없습니다"
+        body="스튜디오 주소가 올바르지 않습니다."
+        to="/"
+        buttonLabel="홈으로"
+      />
     )
   }
 
   if (loadState.phase === 'loading') {
-    return (
-      <main className="app-shell report-route-state">
-        <p className="eyebrow">Report loading</p>
-        <h1>리포트를 불러오는 중입니다</h1>
-      </main>
-    )
+    return <ReportRouteState eyebrow="Report loading" title="리포트를 불러오는 중입니다" />
   }
 
   if (loadState.phase === 'error' || !studio || !report) {
     return (
-      <main className="app-shell report-route-state">
-        <p className="eyebrow">Report error</p>
-        <h1>리포트를 열 수 없습니다</h1>
-        <p>{loadState.phase === 'error' ? loadState.message : '존재하지 않는 리포트입니다.'}</p>
-        <Link className="app-button" to={studioId ? `/studios/${studioId}` : '/'}>
-          스튜디오로
-        </Link>
-      </main>
+      <ReportRouteState
+        eyebrow="Report error"
+        title="리포트를 찾을 수 없습니다"
+        body={loadState.phase === 'error' ? loadState.message : '존재하지 않는 리포트입니다.'}
+        to={studioId ? `/studios/${studioId}` : '/'}
+        buttonLabel="스튜디오로"
+      />
     )
   }
+
+  const metricCards = buildMetricCards(report)
 
   return (
     <main className="app-shell report-page" data-testid="report-detail">
@@ -150,7 +197,7 @@ export function ReportPage() {
           </Link>
           <div>
             <p className="eyebrow">Scoring report</p>
-            <h1>{report.target_track_name} 채점 리포트</h1>
+            <h1>{reportTitle(report)}</h1>
           </div>
           <Link className="app-button app-button--secondary" to={`/studios/${studio.studio_id}`}>
             스튜디오
@@ -161,38 +208,21 @@ export function ReportPage() {
           <div>
             <span>{formatDateTime(report.created_at)}</span>
             <h2>{report.target_track_name}</h2>
-            <p>{describeReferences(report, studio.tracks)}</p>
+            <p>{describeReferences(report, studio.tracks as TrackSlot[])}</p>
+            {report.score_mode === 'harmony' && report.harmony_summary ? (
+              <p>{report.harmony_summary}</p>
+            ) : null}
           </div>
           <strong>{formatScore(report.overall_score)}</strong>
         </section>
 
         <section className="report-metrics" aria-label="리포트 지표">
-          <div>
-            <span>Pitch</span>
-            <strong>{formatScore(report.pitch_score)}</strong>
-          </div>
-          <div>
-            <span>Rhythm</span>
-            <strong>{formatScore(report.rhythm_score)}</strong>
-          </div>
-          <div>
-            <span>Auto Sync</span>
-            <strong>{formatSeconds(report.alignment_offset_seconds)}</strong>
-          </div>
-          <div>
-            <span>Matched</span>
-            <strong>
-              {report.matched_note_count}/{report.answer_note_count}
-            </strong>
-          </div>
-          <div>
-            <span>Missing</span>
-            <strong>{report.missing_note_count}</strong>
-          </div>
-          <div>
-            <span>Extra</span>
-            <strong>{report.extra_note_count}</strong>
-          </div>
+          {metricCards.map((metric) => (
+            <div key={metric.label}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+            </div>
+          ))}
         </section>
 
         <section className="report-issues" data-testid="report-issues">
@@ -204,7 +234,7 @@ export function ReportPage() {
           {report.issues.length === 0 ? (
             <div className="report-issues__empty">
               <strong>표시할 오차가 없습니다.</strong>
-              <p>이번 시도는 등록된 답안지와 안정적으로 일치했습니다.</p>
+              <p>이번 시도는 등록된 기준과 안정적으로 맞았습니다.</p>
             </div>
           ) : (
             <ol>

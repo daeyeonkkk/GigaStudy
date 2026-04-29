@@ -9,6 +9,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.api.schemas.studios import TrackNote
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.omr import OmrUnavailableError
+from gigastudy_api.services.engine.music_theory import note_from_pitch
 from gigastudy_api.services.engine.pdf_vector_omr import PdfVectorOmrError
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, ParsedTrack
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
@@ -449,10 +450,99 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     assert score_response.status_code == 200
     reports = score_response.json()["reports"]
     assert len(reports) == 1
+    assert reports[0]["score_mode"] == "answer"
     assert reports[0]["target_track_name"] == "Soprano"
     assert reports[0]["reference_slot_ids"] == [6]
     assert reports[0]["alignment_offset_seconds"] == 0.42
     assert reports[0]["overall_score"] == 100
+
+
+def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Harmony scoring",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id, slot_id=1)
+
+    performance_notes = [
+        note_from_pitch(
+            beat=1,
+            duration_beats=1,
+            bpm=120,
+            source="voice",
+            extraction_method="test",
+            pitch_midi=76,
+        ).model_dump(mode="json"),
+        note_from_pitch(
+            beat=2,
+            duration_beats=1,
+            bpm=120,
+            source="voice",
+            extraction_method="test",
+            pitch_midi=71,
+        ).model_dump(mode="json"),
+    ]
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/2/score",
+        json={
+            "score_mode": "harmony",
+            "reference_slot_ids": [1],
+            "include_metronome": True,
+            "performance_notes": performance_notes,
+        },
+    )
+
+    assert score_response.status_code == 200
+    reports = score_response.json()["reports"]
+    assert len(reports) == 1
+    assert reports[0]["score_mode"] == "harmony"
+    assert reports[0]["target_track_name"] == "Alto"
+    assert reports[0]["reference_slot_ids"] == [1]
+    assert reports[0]["harmony_score"] is not None
+    assert reports[0]["range_score"] is not None
+    assert reports[0]["voice_leading_score"] is not None
+
+
+def test_harmony_score_requires_registered_reference_track(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Harmony scoring needs context",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/2/score",
+        json={
+            "score_mode": "harmony",
+            "reference_slot_ids": [],
+            "include_metronome": True,
+            "performance_notes": [
+                note_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=120,
+                    source="voice",
+                    extraction_method="test",
+                    pitch_midi=64,
+                ).model_dump(mode="json")
+            ],
+        },
+    )
+
+    assert score_response.status_code == 422
+    assert "reference track" in score_response.json()["detail"]
 
 
 def test_pdf_export_requires_registered_track(tmp_path: Path, monkeypatch) -> None:

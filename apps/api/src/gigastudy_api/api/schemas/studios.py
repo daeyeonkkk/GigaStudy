@@ -14,6 +14,7 @@ TrackStatus = Literal[
     "failed",
 ]
 SourceKind = Literal["recording", "audio", "midi", "score", "music", "ai"]
+ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["score", "music"]
 NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
@@ -113,7 +114,23 @@ class TrackSlot(BaseModel):
 
 class ReportIssue(BaseModel):
     at_seconds: float
-    issue_type: Literal["pitch", "rhythm", "pitch_rhythm", "missing", "extra"]
+    issue_type: Literal[
+        "pitch",
+        "rhythm",
+        "pitch_rhythm",
+        "missing",
+        "extra",
+        "harmony",
+        "chord_fit",
+        "range",
+        "spacing",
+        "voice_leading",
+        "crossing",
+        "parallel_motion",
+        "tension_resolution",
+        "bass_foundation",
+        "chord_coverage",
+    ]
     severity: Literal["info", "warn", "error"] = "warn"
     answer_note_id: str | None = None
     performance_note_id: str | None = None
@@ -129,6 +146,7 @@ class ReportIssue(BaseModel):
 
 class ScoringReport(BaseModel):
     report_id: str
+    score_mode: ScoreMode = "answer"
     target_slot_id: int
     target_track_name: str
     reference_slot_ids: list[int]
@@ -143,10 +161,17 @@ class ScoringReport(BaseModel):
     overall_score: float = 0
     pitch_score: float = 0
     rhythm_score: float = 0
+    harmony_score: float | None = None
+    chord_fit_score: float | None = None
+    range_score: float | None = None
+    spacing_score: float | None = None
+    voice_leading_score: float | None = None
+    arrangement_score: float | None = None
     mean_abs_pitch_error_semitones: float | None = None
     mean_abs_timing_error_seconds: float | None = None
     pitch_summary: str = ""
     rhythm_summary: str = ""
+    harmony_summary: str = ""
     issues: list[ReportIssue]
 
 
@@ -256,6 +281,7 @@ class SyncTrackRequest(BaseModel):
 
 
 class ScoreTrackRequest(BaseModel):
+    score_mode: ScoreMode = "answer"
     reference_slot_ids: list[int] = Field(default_factory=list)
     include_metronome: bool = False
     performance_notes: list[TrackNote] = Field(default_factory=list)

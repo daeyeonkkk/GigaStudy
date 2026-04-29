@@ -214,19 +214,23 @@ import-repair mode is added. The gate is still non-blocking in alpha because
 contemporary a cappella may intentionally use unisons, open spacing,
 counterpoint, syncopation, or dissonance.
 
-When enabled, the LLM notation reviewer sits before final registration as a
-bounded conductor/checker, not as a TrackNote author. The pipeline is:
+When enabled, the LLM notation layer sits before final registration as a bounded
+registration planner/conductor, not as a TrackNote author. The pipeline is:
 source-specific extraction -> TrackNote candidates -> deterministic notation
-quality gate -> LLM review instruction -> deterministic repair application ->
-final validation -> track registration. The LLM may flag score readability
-issues such as excessive density, unnatural micro-fragments, suspicious ties,
-unstable voice noise, or accidental clutter. It may only return bounded repair
-directives, including `0.25` or `0.5` beat quantization, same-pitch sustain
-merging, dense-measure simplification, unstable-note suppression, isolated
-artifact removal, pitch-blip collapse, short-note-cluster collapse, phrase/tail
-gap bridging, and preferred key signature. BPM, meter, final note writing,
-pitch/rhythm validation, and all TrackNote mutations remain deterministic
-engine responsibilities. If the LLM is disabled, times out,
+quality first pass -> LLM registration-plan instruction -> deterministic repair
+application -> ensemble validation -> track registration. The LLM receives the
+target track summaries, deterministic candidate options, diagnostics, and any
+already registered sibling-track summaries before the target is committed. It may
+flag score readability issues such as excessive density, unnatural
+micro-fragments, suspicious ties, unstable voice noise, or accidental clutter,
+and it may use sibling-track context to choose cleanup direction, key spelling,
+octave/range caution, and ensemble readability risk. It may only return bounded
+repair directives, including `0.25` or `0.5` beat quantization, same-pitch
+sustain merging, dense-measure simplification, unstable-note suppression,
+isolated artifact removal, pitch-blip collapse, short-note-cluster collapse,
+phrase/tail gap bridging, and preferred key signature. BPM, meter, final note
+writing, pitch/rhythm validation, and all TrackNote mutations remain
+deterministic engine responsibilities. If the LLM is disabled, times out,
 returns invalid JSON, or lacks enough confidence, the pre-LLM deterministic
 registration result is preserved.
 
@@ -362,13 +366,15 @@ that scheduler. The offset never changes stored note beats or measure
 boundaries.
 
 Full-track playback must exclude empty tracks from the playback set. When
-multiple retained audio tracks are included, the browser prepares all media
-elements to a playable state first, then starts them from one shared scheduler
-start point. A not-yet-ready source must delay the whole retained-audio group
-rather than starting late by itself. Symbolic score-only tracks may join the
-same start point through Web Audio scheduling. Pre-rendered mixdown is a future
-optimization path for higher precision or export-like playback, not the default
-interactive path.
+multiple retained audio tracks are included, or when retained audio must start
+with score-synthesized tracks or the metronome, the browser prepares all required
+media elements to a playable state first, then starts the whole playback set from
+one scheduler start point. A not-yet-ready retained source must delay the whole
+group rather than starting late by itself. A single retained-audio track without
+score/metronome companions may use a lighter readiness barrier for low latency.
+Symbolic score-only tracks join the same start point through Web Audio
+scheduling. Pre-rendered mixdown is a future optimization path for higher
+precision or export-like playback, not the default interactive path.
 
 For generated, OMR, MIDI, MusicXML, and other score-only registrations, playback
 is a clocked score-rendering operation: every audible `TrackNote` is converted
@@ -774,6 +780,28 @@ Any LLM or model-based generation must stay behind the same `TrackNote`
 contract. It may guide candidate strategy, but deterministic code must own the
 final symbolic pitch/rhythm data.
 
+LLM assistance is valuable only where it reduces the musical review work a
+human arranger or copyist would otherwise do after extraction:
+
+1. Notation review: inspect extracted `TrackNote` candidates and request
+   deterministic cleanup instructions such as coarser quantization, repeated-note
+   sustain merging, noise-note pruning, rest simplification, key/accidental
+   normalization, and measure-boundary tie repair.
+2. Ensemble review: inspect the proposed track against registered sibling
+   tracks and request deterministic registration hints for octave repair,
+   crossing/spacing warnings, chord coverage, singability, and downbeat bass
+   support.
+3. Harmony planning: before AI generation, summarize the existing six-track
+   context into a bounded plan for target role, register, motion profile, chord
+   tones to prefer/avoid, rhythm density, and candidate variety. The rule engine
+   still produces the final notes and validates them before registration.
+4. Candidate ranking: label and order candidates with user-meaningful musical
+   differences, not opaque system metadata.
+
+The model must not directly commit notes to a track. It returns structured
+instructions/diagnostics; deterministic normalization, arrangement gates, and
+schema validation decide whether those instructions are applied.
+
 For the alpha LLM path, local API keys belong in `apps/api/.env`, which is
 ignored by git. Deployed keys belong in Cloud Run environment variables or
 Secret Manager. The current low-cost route can use OpenRouter with:
@@ -807,13 +835,69 @@ path.
 
 ## Scoring Contract
 
-Scoring requires an answer sheet.
+Scoring has two explicit product modes.
+
+### Answer Scoring
+
+Answer scoring requires an answer sheet.
 
 The answer sheet is the registered `TrackNote` list on the target track. It can
 come from user upload, user recording, OMR, MIDI, MusicXML, or AI generation.
+The engine aligns the user's extracted performance to that target answer and
+evaluates pitch/rhythm accuracy.
 
 Selected reference tracks and the metronome are playback context only. They are
-not the truth source for judging the target part.
+not the truth source for judging answer accuracy.
+
+### Harmony Scoring
+
+Harmony scoring does not require a registered target-track answer. It requires
+at least one registered reference track. The user records a new part while the
+selected reference tracks play, and the engine judges whether the extracted
+performance fits the existing ensemble.
+
+Harmony scoring evaluates:
+
+- Vertical harmonic fit against active or nearest reference notes
+- Chord-tone fit against an inferred vertical sonority instead of only pairwise
+  intervals
+- Rhythm/grid fit against the studio BPM/meter and reference entrances
+- Target vocal range fit
+- SATB-like upper-voice spacing and low-register crowding
+- Voice-leading continuity, obvious voice crossing, and repeated parallel
+  perfect fifth/octave motion against reference parts
+- Structural tension resolution: sustained strong-beat non-chord tones should
+  either be explainable as usable color tones or resolve stepwise into the
+  inferred sonority
+- Structural chord coverage: strong beats with enough active voices should not
+  collapse into only one or two pitch classes unless the user intentionally
+  accepts a sparse contemporary texture
+- Bass foundation: a Bass target part that stays high on structural beats is
+  reported as a foundation risk even when it is technically inside the bass
+  range
+
+Harmony scoring is deterministic and quantitative in alpha. It should behave
+like a conservative arranger review pass: strong-beat dissonance is penalized
+more heavily, short weak-beat passing dissonance is tolerated, and spacing or
+parallel-perfect issues are surfaced separately from the raw harmony score. An
+LLM may later provide bounded diagnostic labels or reviewer-style cautions, but
+it must not become the numeric authority, invent notes, move the BPM/meter
+grid, or produce user-facing coaching prose.
+
+The scoring pass must not over-warn when the musical evidence is thin. A single
+reference note is treated as a weak context, short weak-beat connector tones are
+accepted as passing material, and common color tones over a clear triad are not
+reported as chord-fit failures. Chord-fit warnings become stricter only when
+there are enough simultaneous reference parts to infer a useful sonority.
+Parallel fifth/octave warnings are reserved for structural sustained notes, not
+for short ornamental motion.
+
+The current deterministic line should be pushed until it needs real singing data:
+it may flag structural unresolved tension, thin downbeat chord coverage, and high
+bass foundation, but it must not claim human-level arrangement judgment. Once
+these diagnostics start deciding between plausible stylistic choices rather than
+clear structural risks, the next improvement requires live a cappella test
+recordings and human arranger ratings.
 
 When scoring starts, checked reference tracks must be audible through the same
 playback-source choice used by normal studio playback. In `audio` mode this
@@ -828,10 +912,11 @@ The engine must handle microphone/browser/user latency by aligning after the
 take:
 
 1. Extract the user's performance into `TrackNote` objects.
-2. Estimate the global timing offset between answer notes and performance
-   notes.
+2. Estimate the global timing offset between answer/reference note anchors and
+   performance notes.
 3. Apply that offset.
-4. Compare pitch and rhythm.
+4. Compare pitch/rhythm in answer mode, or ensemble fit/range/voice-leading in
+   harmony mode.
 
 The report should expose the detected alignment offset so the user can
 understand that global latency was compensated.
@@ -842,6 +927,7 @@ Reports are quantitative practice records, not prose coaching.
 
 Each scoring report should include:
 
+- `score_mode` (`answer` or `harmony`)
 - Target track
 - Reference tracks and metronome flag
 - Answer note count
@@ -853,10 +939,12 @@ Each scoring report should include:
 - Overall score
 - Pitch score
 - Rhythm score
+- Harmony score, chord-fit score, range score, spacing score, voice-leading
+  score, arrangement score, and harmony summary when `score_mode="harmony"`
 - Mean absolute pitch error
 - Mean absolute timing error
-- Issue list with timestamps, expected/actual labels, timing error, and pitch
-  error
+- Issue list with timestamps, expected/actual labels or harmony/chord/spacing/
+  range/voice issue messages, timing error, and pitch error
 
 Do not require:
 

@@ -43,10 +43,24 @@ export function formatPercent(value: number): string {
 }
 
 export function getIssueLabel(issue: ReportIssue): string {
-  if (issue.issue_type === 'pitch_rhythm') {
-    return 'Pitch + Rhythm'
+  const labels: Record<ReportIssue['issue_type'], string> = {
+    pitch: 'Pitch',
+    rhythm: 'Rhythm',
+    pitch_rhythm: 'Pitch + Rhythm',
+    missing: 'Missing',
+    extra: 'Extra',
+    harmony: 'Harmony',
+    chord_fit: 'Chord fit',
+    range: 'Range',
+    spacing: 'Spacing',
+    voice_leading: 'Voice leading',
+    crossing: 'Voice crossing',
+    parallel_motion: 'Parallel motion',
+    tension_resolution: 'Tension resolution',
+    bass_foundation: 'Bass foundation',
+    chord_coverage: 'Chord coverage',
   }
-  return issue.issue_type.charAt(0).toUpperCase() + issue.issue_type.slice(1)
+  return labels[issue.issue_type]
 }
 
 export function describeReferences(report: ScoringReport, tracks: TrackSlot[]): string {

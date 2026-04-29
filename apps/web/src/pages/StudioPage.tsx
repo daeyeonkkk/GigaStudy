@@ -23,6 +23,7 @@ import {
   retryExtractionJob,
   scoreTrack,
   updateTrackSync,
+  updateTrackVolume,
   uploadTrack,
 } from '../lib/api'
 import {
@@ -127,6 +128,7 @@ export function StudioPage() {
   const [candidateOverwriteApprovals, setCandidateOverwriteApprovals] = useState<Record<string, boolean>>({})
   const [jobOverwriteApprovals, setJobOverwriteApprovals] = useState<Record<string, boolean>>({})
   const playbackSessionRef = useRef<PlaybackSession | null>(null)
+  const playbackTrackGainsRef = useRef<Map<number, GainNode>>(new Map())
   const playbackRunIdRef = useRef(0)
   const trackCountInRunIdRef = useRef(0)
   const trackCountInTimeoutIdsRef = useRef<number[]>([])
@@ -596,6 +598,7 @@ export function StudioPage() {
   function disposeCurrentPlaybackSession() {
     disposePlaybackSession(playbackSessionRef.current)
     playbackSessionRef.current = null
+    playbackTrackGainsRef.current = new Map()
     setPlaybackTimeline(null)
     setPlayheadSeconds(null)
   }
@@ -611,6 +614,11 @@ export function StudioPage() {
 
   function trackHasPlayableAudio(track: TrackSlot): boolean {
     return Boolean(track.audio_source_path)
+  }
+
+  function getTrackVolumeScale(track: TrackSlot): number {
+    const volumePercent = Number.isFinite(track.volume_percent) ? track.volume_percent : 100
+    return Math.max(0, Math.min(100, Math.round(volumePercent))) / 100
   }
 
   function getTrackTimelineDurationSeconds(track: TrackSlot, beatSeconds: number): number {
@@ -704,6 +712,7 @@ export function StudioPage() {
     let maxBeat = 1
     let context: AudioContext | undefined
     let scheduledStart = 0
+    const trackVolumeGains = new Map<number, GainNode>()
 
     const AudioContextConstructor = getBrowserAudioContextConstructor()
     if (needsAudioContext) {
@@ -726,6 +735,22 @@ export function StudioPage() {
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
+
+      function getTrackOutput(track: TrackSlot): AudioNode | null {
+        if (!activeContext) {
+          return null
+        }
+        const existingGain = trackVolumeGains.get(track.slot_id)
+        if (existingGain) {
+          return existingGain
+        }
+        const trackGain = activeContext.createGain()
+        trackGain.gain.setValueAtTime(getTrackVolumeScale(track), activeContext.currentTime)
+        trackGain.connect(activeContext.destination)
+        trackVolumeGains.set(track.slot_id, trackGain)
+        nodes.push({ gain: trackGain })
+        return trackGain
+      }
 
       if (audioTracks.length > 0) {
         if (!activeContext) {
@@ -778,6 +803,7 @@ export function StudioPage() {
           scheduledStart + relativeStartSeconds,
           sourceOffsetSeconds,
           audioTrackVolume,
+          getTrackOutput(track) ?? activeContext.destination,
         )
         if (!node) {
           return
@@ -835,6 +861,7 @@ export function StudioPage() {
               frequency,
               volume,
               toneType,
+              getTrackOutput(track) ?? activeContext.destination,
             ),
           )
           latestStop = Math.max(latestStop, relativeStartSeconds + remainingDuration)
@@ -899,6 +926,7 @@ export function StudioPage() {
 
     playbackSession.timeoutIds.push(timeoutId)
     playbackSessionRef.current = playbackSession
+    playbackTrackGainsRef.current = trackVolumeGains
     setPlaybackTimeline({
       maxSeconds: Math.max(timelineEndSeconds, startSeconds + latestStop),
       minSeconds: minTimelineSeconds,
@@ -1328,6 +1356,24 @@ export function StudioPage() {
     )
   }
 
+  async function handleVolume(track: TrackSlot, nextVolumePercent: number) {
+    if (!studio) {
+      return
+    }
+    const volumePercent = Math.max(0, Math.min(100, Math.round(nextVolumePercent)))
+    const activeTrackGain = playbackTrackGainsRef.current.get(track.slot_id)
+    if (activeTrackGain) {
+      const currentTime = activeTrackGain.context.currentTime
+      activeTrackGain.gain.cancelScheduledValues(currentTime)
+      activeTrackGain.gain.setTargetAtTime(volumePercent / 100, currentTime, 0.015)
+    }
+    await runStudioAction(
+      () => updateTrackVolume(studio.studio_id, track.slot_id, volumePercent),
+      `${track.name} 음량을 저장하는 중입니다.`,
+      `${track.name} 음량을 ${volumePercent}%로 맞췄습니다.`,
+    )
+  }
+
   function openScoreSession(track: TrackSlot) {
     const references = registeredSlotIds.filter((slotId) => slotId !== track.slot_id)
     if (track.status !== 'registered' && references.length === 0) {
@@ -1638,6 +1684,7 @@ export function StudioPage() {
               onSync={(track, nextOffset) => void handleSync(track, nextOffset)}
               onTogglePlayback={(track) => void toggleTrackPlayback(track)}
               onUpload={(track, file) => void handleUpload(track, file)}
+              onVolumeChange={(track, nextVolume) => void handleVolume(track, nextVolume)}
             />
             <ExtractionJobsPanel
               activeJobCount={activeExtractionJobs.length}

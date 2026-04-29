@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
@@ -48,6 +48,7 @@ type TrackBoardProps = {
   onSync: (track: TrackSlot, nextOffset: number) => void
   onTogglePlayback: (track: TrackSlot) => void
   onUpload: (track: TrackSlot, file: File | null) => void
+  onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }
 
 function getRegisteredTrackKeySignature(track: TrackSlot): string | null {
@@ -58,6 +59,97 @@ function getRegisteredTrackKeySignature(track: TrackSlot): string | null {
 function formatSyncStep(seconds: number): string {
   const rounded = Number(seconds.toFixed(3))
   return rounded.toString()
+}
+
+function clampVolumePercent(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 100
+  }
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function getTrackVolumePercent(track: TrackSlot): number {
+  return clampVolumePercent(track.volume_percent)
+}
+
+function TrackVolumeControl({
+  track,
+  onVolumeChange,
+}: {
+  track: TrackSlot
+  onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
+}) {
+  const volumePercent = getTrackVolumePercent(track)
+  const [draftVolume, setDraftVolume] = useState(() => String(volumePercent))
+  const draftParsedVolume = Number.parseFloat(draftVolume)
+  const rangeVolume = Number.isFinite(draftParsedVolume)
+    ? clampVolumePercent(draftParsedVolume)
+    : volumePercent
+
+  useEffect(() => {
+    setDraftVolume(String(volumePercent))
+  }, [volumePercent])
+
+  function commitVolume(rawValue = draftVolume) {
+    const parsedValue = Number.parseFloat(rawValue)
+    if (!Number.isFinite(parsedValue)) {
+      setDraftVolume(String(volumePercent))
+      return
+    }
+    const nextVolumePercent = clampVolumePercent(parsedValue)
+    setDraftVolume(String(nextVolumePercent))
+    if (nextVolumePercent !== volumePercent) {
+      onVolumeChange(track, nextVolumePercent)
+    }
+  }
+
+  return (
+    <label className="track-volume-control">
+      <span>Vol</span>
+      <input
+        aria-label={`${track.name} volume`}
+        data-testid={`track-volume-range-${track.slot_id}`}
+        max="100"
+        min="0"
+        step="1"
+        type="range"
+        value={rangeVolume}
+        onChange={(event) => setDraftVolume(event.currentTarget.value)}
+        onKeyUp={(event) => {
+          if (
+            event.key === 'ArrowLeft' ||
+            event.key === 'ArrowRight' ||
+            event.key === 'Home' ||
+            event.key === 'End' ||
+            event.key === 'PageUp' ||
+            event.key === 'PageDown' ||
+            event.key === 'Enter'
+          ) {
+            commitVolume(event.currentTarget.value)
+          }
+        }}
+        onPointerUp={(event) => commitVolume(event.currentTarget.value)}
+      />
+      <input
+        aria-label={`${track.name} volume percent`}
+        data-testid={`track-volume-input-${track.slot_id}`}
+        inputMode="numeric"
+        max="100"
+        min="0"
+        step="1"
+        type="number"
+        value={draftVolume}
+        onBlur={() => commitVolume()}
+        onChange={(event) => setDraftVolume(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitVolume(event.currentTarget.value)
+          }
+        }}
+      />
+      <span>%</span>
+    </label>
+  )
 }
 
 function EngravingFallback({ track }: { track: TrackSlot }) {
@@ -90,6 +182,7 @@ export function TrackBoard({
   onSync,
   onTogglePlayback,
   onUpload,
+  onVolumeChange,
 }: TrackBoardProps) {
   const sharedMeasureWidths = useMemo(() => {
     const registeredModels = registeredTracks.map((track) =>
@@ -168,6 +261,7 @@ export function TrackBoard({
                 <div className="track-card__state">
                   <strong>{statusLabels[track.status]}</strong>
                   <span>sync {formatSeconds(track.sync_offset_seconds)}</span>
+                  <span>vol {getTrackVolumePercent(track)}%</span>
                 </div>
               </header>
 
@@ -243,6 +337,7 @@ export function TrackBoard({
                   >
                     +{formatSyncStep(syncStepSeconds)}
                   </button>
+                  <TrackVolumeControl track={track} onVolumeChange={onVolumeChange} />
                   <button
                     aria-label={isPlaying ? `${track.name} 일시정지` : `${track.name} 재생`}
                     className="studio-icon-button"

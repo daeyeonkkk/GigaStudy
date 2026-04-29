@@ -37,6 +37,7 @@ from gigastudy_api.api.schemas.studios import (
     TrackNote,
     TrackSlot,
     UploadTrackRequest,
+    VolumeTrackRequest,
 )
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.asset_storage import (
@@ -754,6 +755,27 @@ class StudioRepository:
             timestamp = _now()
             track = self._find_track(studio, slot_id)
             track.sync_offset_seconds = round(request.sync_offset_seconds, SYNC_OFFSET_PRECISION)
+            track.updated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+        return studio
+
+    def update_volume(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: VolumeTrackRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            self._require_studio_access(studio, owner_token)
+            timestamp = _now()
+            track = self._find_track(studio, slot_id)
+            track.volume_percent = request.volume_percent
             track.updated_at = timestamp
             studio.updated_at = timestamp
             self._save_studio(studio)

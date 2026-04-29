@@ -14,6 +14,7 @@ from gigastudy_api.api.schemas.studios import (
     StudioSeedUploadRequest,
     SyncTrackRequest,
     UploadTrackRequest,
+    VolumeTrackRequest,
 )
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
 
@@ -212,6 +213,17 @@ def update_track_sync(
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> Studio:
     return repository.update_sync(studio_id, slot_id, request, owner_token=owner_token)
+
+
+@router.patch("/{studio_id}/tracks/{slot_id}/volume", response_model=Studio)
+def update_track_volume(
+    studio_id: str,
+    slot_id: int,
+    request: VolumeTrackRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> Studio:
+    return repository.update_volume(studio_id, slot_id, request, owner_token=owner_token)
 
 
 @router.post("/{studio_id}/candidates/{candidate_id}/approve", response_model=Studio)

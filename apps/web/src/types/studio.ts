@@ -86,6 +86,7 @@ export type TrackSlot = {
   name: string
   status: TrackStatus
   sync_offset_seconds: number
+  volume_percent: number
   source_kind: SourceKind | null
   source_label: string | null
   audio_source_path: string | null

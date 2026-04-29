@@ -893,6 +893,9 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   await page.getByTestId('sync-step-input').fill('0.025')
   await page.getByTestId('track-sync-later-2').click()
   await expect(page.getByTestId('track-card-2')).toContainText('sync +0.025s')
+  await page.getByTestId('track-volume-input-2').fill('42')
+  await page.getByTestId('track-volume-input-2').press('Enter')
+  await expect(page.getByTestId('track-card-2')).toContainText('vol 42%')
   const altoFirstNoteAfterSync = await page
     .locator('[data-testid="track-score-strip-2"] .track-card__measure-note')
     .first()

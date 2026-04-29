@@ -317,6 +317,21 @@ export function updateTrackSync(
   )
 }
 
+export function updateTrackVolume(
+  studioId: string,
+  slotId: number,
+  volumePercent: number,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/tracks/${slotId}/volume`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ volume_percent: volumePercent }),
+    },
+    '트랙 음량을 저장하지 못했습니다.',
+  )
+}
+
 export function scoreTrack(
   studioId: string,
   slotId: number,

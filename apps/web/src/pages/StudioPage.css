@@ -917,6 +917,37 @@
   min-width: 0;
 }
 
+.track-volume-control {
+  display: inline-grid;
+  grid-template-columns: auto minmax(92px, 132px) 50px auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #a9b4bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1c2c3a;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.track-volume-control input[type='range'] {
+  width: 100%;
+  accent-color: var(--track-accent);
+}
+
+.track-volume-control input[type='number'] {
+  width: 50px;
+  min-height: 24px;
+  padding: 0 5px;
+  border: 1px solid #aeb8c1;
+  border-radius: 3px;
+  background: #f8fafb;
+  color: #111111;
+  font: inherit;
+}
+
 .track-card__recording-meter {
   display: grid;
   grid-template-columns: auto minmax(110px, 220px) auto;

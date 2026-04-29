@@ -101,6 +101,7 @@ class TrackSlot(BaseModel):
     name: str
     status: TrackStatus
     sync_offset_seconds: float = 0
+    volume_percent: int = Field(default=100, ge=0, le=100)
     source_kind: SourceKind | None = None
     source_label: str | None = None
     audio_source_path: str | None = None
@@ -278,6 +279,10 @@ class GenerateTrackRequest(BaseModel):
 
 class SyncTrackRequest(BaseModel):
     sync_offset_seconds: float = Field(ge=-30, le=30)
+
+
+class VolumeTrackRequest(BaseModel):
+    volume_percent: int = Field(ge=0, le=100)
 
 
 class ScoreTrackRequest(BaseModel):

@@ -434,6 +434,20 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     )
     assert sync_response.status_code == 200
     assert sync_response.json()["tracks"][5]["sync_offset_seconds"] == 0.025
+    assert sync_response.json()["tracks"][5]["volume_percent"] == 100
+
+    volume_response = client.patch(
+        f"/api/studios/{studio_id}/tracks/6/volume",
+        json={"volume_percent": 37},
+    )
+    assert volume_response.status_code == 200
+    assert volume_response.json()["tracks"][5]["volume_percent"] == 37
+
+    invalid_volume_response = client.patch(
+        f"/api/studios/{studio_id}/tracks/6/volume",
+        json={"volume_percent": 101},
+    )
+    assert invalid_volume_response.status_code == 422
 
     performance_notes = soprano_response.json()["tracks"][0]["notes"]
     for note in performance_notes:

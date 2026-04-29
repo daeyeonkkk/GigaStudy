@@ -32,9 +32,10 @@ export function createTone(
   frequency: number,
   volume: number,
   type: OscillatorType | 'piano',
+  destination: AudioNode = context.destination,
 ): PlaybackNode {
   if (type === 'piano') {
-    return createPianoTone(context, startTime, duration, frequency, volume)
+    return createPianoTone(context, startTime, duration, frequency, volume, destination)
   }
 
   const oscillator = context.createOscillator()
@@ -48,7 +49,7 @@ export function createTone(
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
 
   oscillator.connect(gain)
-  gain.connect(context.destination)
+  gain.connect(destination)
   oscillator.start(startTime)
   oscillator.stop(startTime + duration + 0.03)
 
@@ -61,6 +62,7 @@ function createPianoTone(
   duration: number,
   frequency: number,
   volume: number,
+  destination: AudioNode,
 ): PlaybackNode {
   const filter = context.createBiquadFilter()
   const masterGain = context.createGain()
@@ -84,7 +86,7 @@ function createPianoTone(
   masterGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration + releaseTime)
 
   filter.connect(masterGain)
-  masterGain.connect(context.destination)
+  masterGain.connect(destination)
 
   const partials: Array<{ ratio: number; type: OscillatorType; gain: number; releaseScale: number }> = [
     { ratio: 1, type: 'triangle', gain: 0.9, releaseScale: 1 },
@@ -129,6 +131,7 @@ export function createAudioBufferPlayback(
   startTime: number,
   offsetSeconds: number,
   volume: number,
+  destination: AudioNode = context.destination,
 ): PlaybackNode | null {
   if (offsetSeconds >= buffer.duration) {
     return null
@@ -143,7 +146,7 @@ export function createAudioBufferPlayback(
   gain.gain.setValueAtTime(volume, startTime)
 
   source.connect(gain)
-  gain.connect(context.destination)
+  gain.connect(destination)
   source.start(startTime, safeOffsetSeconds, duration)
   source.stop(startTime + duration + 0.03)
 

@@ -1,6 +1,6 @@
 import { AUDIO_UPLOAD_EXTENSIONS, isAudioUploadFile } from '../audio/audioUpload'
 
-export type UploadKind = 'audio' | 'midi' | 'score'
+type UploadKind = 'audio' | 'midi' | 'score'
 
 const SCORE_UPLOAD_EXTENSIONS = [
   '.musicxml',

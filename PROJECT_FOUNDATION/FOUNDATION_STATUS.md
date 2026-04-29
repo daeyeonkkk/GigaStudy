@@ -939,13 +939,19 @@ not legacy product surfaces.
 - Compatibility readers for historical stored studio payloads remain
   intentionally. They are not product behavior, but deleting them would make old
   saved studios less recoverable while alpha data may still exist.
+- The earlier CSS timeline score renderer surface was removed from the browser
+  score-rendering module. The remaining browser score path is the VexFlow
+  engraving model plus marker/playhead overlay used by the current studio UI.
+- Frontend barrel exports were narrowed so unused historical helpers and
+  incidental internal types are not exposed as callable project API.
 - Generated local caches and disposable runtime artifacts are safe to clean from
   the workspace. Secrets, local virtualenvs, and package dependency directories
   are not treated as legacy cleanup targets.
-- Verification for this cleanup: API regression suite passed 129/129, web lint
-  passed, production web build passed, `git diff --check` passed, and
-  Playwright release gate passed 40/40 with 2 browser-permission skips locally
-  on 2026-04-29.
+- Verification for this cleanup: API regression suite passed 129/129,
+  `uvx vulture apps/api/src apps/api/tests --min-confidence 80` passed, web
+  lint passed, production web build passed, `npx --yes knip --workspace
+  apps/web` passed, `git diff --check` passed, and Playwright release gate
+  passed 40/40 with 2 browser-permission skips locally on 2026-04-29.
 
 ## Status Summary
 

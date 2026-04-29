@@ -413,7 +413,7 @@ def test_deepseek_notation_review_parses_bounded_json_instruction(monkeypatch) -
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, traceback):
+        def __exit__(self, *_args):
             return False
 
         def read(self) -> bytes:
@@ -522,7 +522,7 @@ def test_deepseek_notation_registration_plan_sends_sibling_context(monkeypatch) 
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, traceback):
+        def __exit__(self, *_args):
             return False
 
         def read(self) -> bytes:
@@ -598,7 +598,7 @@ def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monke
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, traceback):
+        def __exit__(self, *_args):
             return False
 
         def read(self) -> bytes:

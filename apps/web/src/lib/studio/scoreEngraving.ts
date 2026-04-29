@@ -20,7 +20,7 @@ export type EngravingEvent = {
   tieStop: boolean
 }
 
-export type EngravingMeasure = {
+type EngravingMeasure = {
   endBeat: number
   events: EngravingEvent[]
   measureIndex: number
@@ -30,7 +30,7 @@ export type EngravingMeasure = {
   x: number
 }
 
-export type EngravingLayout = {
+type EngravingLayout = {
   measures: EngravingMeasure[]
   scoreWidth: number
   syncPxPerBeat: number

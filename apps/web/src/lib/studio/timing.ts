@@ -5,7 +5,7 @@ export type MeterContext = {
   pulseQuarterBeats: number
 }
 
-export const DEFAULT_BEATS_PER_MEASURE = 4
+const DEFAULT_BEATS_PER_MEASURE = 4
 export const DEFAULT_METER: MeterContext = {
   beatsPerMeasure: DEFAULT_BEATS_PER_MEASURE,
   pulseQuarterBeats: 1,
@@ -15,15 +15,15 @@ export function getBeatSeconds(bpm: number): number {
   return 60 / Math.max(1, bpm)
 }
 
-export function getQuarterBeatsPerMeasure(numerator: number, denominator: number): number {
+function getQuarterBeatsPerMeasure(numerator: number, denominator: number): number {
   return Math.max(0.25, numerator * (4 / Math.max(1, denominator)))
 }
 
-export function getPulseQuarterBeats(denominator: number): number {
+function getPulseQuarterBeats(denominator: number): number {
   return Math.max(0.125, 4 / Math.max(1, denominator))
 }
 
-export function getStudioBeatsPerMeasure(studio: Studio): number {
+function getStudioBeatsPerMeasure(studio: Studio): number {
   return getQuarterBeatsPerMeasure(studio.time_signature_numerator ?? 4, studio.time_signature_denominator ?? 4)
 }
 
@@ -47,7 +47,7 @@ export function getMeasureIndexFromBeat(beat: number, beatsPerMeasure: number): 
   return Math.floor((Math.max(1, beat) - 1) / beatsPerMeasure) + 1
 }
 
-export function getBeatInMeasureFromBeat(beat: number, beatsPerMeasure: number): number {
+function getBeatInMeasureFromBeat(beat: number, beatsPerMeasure: number): number {
   return ((Math.max(1, beat) - 1) % beatsPerMeasure) + 1
 }
 

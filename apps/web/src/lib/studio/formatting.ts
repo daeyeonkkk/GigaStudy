@@ -37,13 +37,6 @@ export function formatNullableSemitones(value: number | null): string {
   return value === null ? '-' : `${value >= 0 ? '+' : ''}${value.toFixed(2)} st`
 }
 
-export function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return '0%'
-  }
-  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`
-}
-
 export function getIssueLabel(issue: ReportIssue): string {
   const labels: Record<ReportIssue['issue_type'], string> = {
     pitch: 'Pitch',

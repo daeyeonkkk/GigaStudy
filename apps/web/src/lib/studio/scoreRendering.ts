@@ -1,5 +1,3 @@
-import type { CSSProperties } from 'react'
-
 import type { ScoreNote, TrackSlot } from '../../types/studio'
 import {
   formatBeatInMeasure,
@@ -23,33 +21,17 @@ export type TrackRenderNote = {
   clusterSize: number
 }
 
-export type NoteDurationGlyph = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
+type NoteDurationGlyph = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
 
-export type TrackRenderModel = {
+type TrackRenderModel = {
   beatsPerMeasure: number
   measureCount: number
-  measures: number[]
   beatGuideOffsets: number[]
   measureBoundaryOffsets: number[]
   notes: TrackRenderNote[]
-  pxPerBeat: number
-  measureWidth: number
-  timelineWidth: number
 }
 
-export const SCORE_CLEF_GUTTER_PX = 126
-
-const SCORE_END_PADDING_PX = 48
-const MEASURE_INSET_PX = 32
-const NOTE_CENTER_GUARD_PX = 28
-const MIN_SCORE_PX_PER_BEAT = 180
-const MAX_SCORE_PX_PER_BEAT = 920
-const NOTE_READABLE_GAP_PX = 64
 const SAME_ONSET_CLUSTER_EPSILON_BEATS = 0.035
-const STAFF_MIDDLE_LINE_Y = 62
-const STAFF_STEP_PX = 5
-const STAFF_NOTE_MIN_TOP = 18
-const STAFF_NOTE_MAX_TOP = 98
 const DURATION_EPSILON_BEATS = 0.001
 
 const noteSemitones: Record<string, number> = {
@@ -62,21 +44,7 @@ const noteSemitones: Record<string, number> = {
   B: 11,
 }
 
-const noteSteps: Record<string, number> = {
-  C: 0,
-  D: 1,
-  E: 2,
-  F: 3,
-  G: 4,
-  A: 5,
-  B: 6,
-}
-
-function getDiatonicStep(noteName: string, octave: number): number {
-  return octave * 7 + noteSteps[noteName]
-}
-
-function parsePitchLabel(label: string): { octave: number; step: number; semitone: number } | null {
+function parsePitchLabel(label: string): { octave: number; semitone: number } | null {
   const match = /^([A-G])([#b]?)(-?\d+)$/u.exec(label.trim())
   if (!match) {
     return null
@@ -93,12 +61,11 @@ function parsePitchLabel(label: string): { octave: number; step: number; semiton
 
   return {
     octave,
-    step: getDiatonicStep(noteName, octave),
     semitone: ((semitone % 12) + 12) % 12,
   }
 }
 
-export function getNoteFrequency(label: string): number | null {
+function getNoteFrequency(label: string): number | null {
   const parsed = parsePitchLabel(label)
   if (!parsed) {
     return null
@@ -136,99 +103,9 @@ export function getNotePlaybackFrequency(note: ScoreNote): number | null {
   return getNoteFrequency(note.label)
 }
 
-function getPitchStepFromMidi(pitchMidi: number): number {
-  const octave = Math.floor(pitchMidi / 12) - 1
-  const pitchClass = ((pitchMidi % 12) + 12) % 12
-  const pitchClassToStep: Record<number, number> = {
-    0: 0,
-    1: 0,
-    2: 1,
-    3: 1,
-    4: 2,
-    5: 3,
-    6: 3,
-    7: 4,
-    8: 4,
-    9: 5,
-    10: 5,
-    11: 6,
-  }
-  return octave * 7 + pitchClassToStep[pitchClass]
-}
-
-function getStaffClef(slotId: number): 'treble' | 'bass' {
-  return slotId >= 4 ? 'bass' : 'treble'
-}
-
-function getStaffMiddleLineStep(slotId: number): number {
-  return getStaffClef(slotId) === 'bass' ? getDiatonicStep('D', 3) : getDiatonicStep('B', 4)
-}
-
-function getStaffTopFromStep(slotId: number, step: number): number {
-  const top = STAFF_MIDDLE_LINE_Y - (step - getStaffMiddleLineStep(slotId)) * STAFF_STEP_PX
-  return Math.max(STAFF_NOTE_MIN_TOP, Math.min(STAFF_NOTE_MAX_TOP, top))
-}
-
-function getNoteTopPx(slotId: number, note: ScoreNote): number {
-  if (note.is_rest === true) {
-    return STAFF_MIDDLE_LINE_Y - 12
-  }
-  if (typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi)) {
-    return getStaffTopFromStep(slotId, getPitchStepFromMidi(note.pitch_midi + (note.display_octave_shift ?? 0)))
-  }
-  const parsed = parsePitchLabel(note.spelled_label ?? note.label)
-  if (parsed) {
-    return getStaffTopFromStep(slotId, parsed.step)
-  }
-  return STAFF_MIDDLE_LINE_Y
-}
-
-export function getClefSymbol(slotId: number): string {
-  return String.fromCodePoint(getStaffClef(slotId) === 'bass' ? 0x1d122 : 0x1d11e)
-}
-
-function getScorePxPerBeat(displayBeats: number[]): number {
-  const uniqueBeats = [...new Set(displayBeats.map((beat) => Math.round(beat * 1000) / 1000))].sort(
-    (left, right) => left - right,
-  )
-  const smallestGap = uniqueBeats.reduce<number | null>((currentSmallest, beat, index) => {
-    if (index === 0) {
-      return currentSmallest
-    }
-    const gap = beat - uniqueBeats[index - 1]
-    if (gap <= 0.001) {
-      return currentSmallest
-    }
-    return currentSmallest === null ? gap : Math.min(currentSmallest, gap)
-  }, null)
-
-  if (smallestGap === null) {
-    return MIN_SCORE_PX_PER_BEAT
-  }
-
-  const densityAwareWidth = NOTE_READABLE_GAP_PX / smallestGap + 18
-  return Math.round(Math.max(MIN_SCORE_PX_PER_BEAT, Math.min(MAX_SCORE_PX_PER_BEAT, densityAwareWidth)))
-}
-
-function getMeasureStartPx(measureIndex: number, model: TrackRenderModel): number {
-  return SCORE_CLEF_GUTTER_PX + measureIndex * model.measureWidth
-}
-
 function getMeasureIndexFromDisplayBeat(displayBeat: number, beatsPerMeasure: number): number {
   const normalizedBeat = Math.max(1, displayBeat)
   return Math.floor((normalizedBeat - 1) / Math.max(0.25, beatsPerMeasure))
-}
-
-function getBeatOffsetWithinMeasure(displayBeat: number, beatsPerMeasure: number): number {
-  const normalizedBeat = Math.max(1, displayBeat)
-  const safeBeatsPerMeasure = Math.max(0.25, beatsPerMeasure)
-  return (normalizedBeat - 1) - getMeasureIndexFromDisplayBeat(normalizedBeat, safeBeatsPerMeasure) * safeBeatsPerMeasure
-}
-
-function clampToMeasureInterior(leftPx: number, measureIndex: number, model: TrackRenderModel): number {
-  const measureStart = getMeasureStartPx(measureIndex, model)
-  const measureEnd = measureStart + model.measureWidth
-  return Math.max(measureStart + NOTE_CENTER_GUARD_PX, Math.min(measureEnd - NOTE_CENTER_GUARD_PX, leftPx))
 }
 
 function getDurationGlyph(durationBeats: number): NoteDurationGlyph {
@@ -388,8 +265,6 @@ export function getTrackRenderModel(
   bpm: number,
   beatsPerMeasure: number,
 ): TrackRenderModel {
-  const displayBeats = track.notes.map((note) => getDisplayBeat(note, track.sync_offset_seconds, bpm))
-  const pxPerBeat = getScorePxPerBeat(displayBeats)
   const notes = getClusteredRenderNotes(track.notes, track.sync_offset_seconds, bpm, beatsPerMeasure)
   const baseMaxBeatEnd = Math.max(
     beatsPerMeasure,
@@ -401,7 +276,6 @@ export function getTrackRenderModel(
   )
   const baseMeasureCount = getMeasureIndexFromBeat(baseMaxBeatEnd, beatsPerMeasure) + 1
   const measureCount = Math.max(1, baseMeasureCount, getMeasureIndexFromBeat(syncedMaxBeatEnd, beatsPerMeasure))
-  const measureWidth = MEASURE_INSET_PX * 2 + pxPerBeat * beatsPerMeasure
   const totalQuarterBeats = measureCount * beatsPerMeasure
   const beatGuideOffsets = Array.from({ length: Math.floor(totalQuarterBeats) + 1 }, (_, index) => index).filter(
     (beatOffset) => !isMeasureDownbeat(beatOffset, beatsPerMeasure),
@@ -411,80 +285,10 @@ export function getTrackRenderModel(
   return {
     beatsPerMeasure,
     measureCount,
-    measures: Array.from({ length: measureCount }, (_, index) => index + 1),
     beatGuideOffsets,
     measureBoundaryOffsets,
     notes,
-    pxPerBeat,
-    measureWidth,
-    timelineWidth: SCORE_CLEF_GUTTER_PX + measureCount * measureWidth + SCORE_END_PADDING_PX,
   }
-}
-
-export function getScoreTimelineStyle(model: TrackRenderModel): CSSProperties {
-  return {
-    '--score-width': `${model.timelineWidth}px`,
-    '--measure-width': `${model.measureWidth}px`,
-    '--clef-gutter': `${SCORE_CLEF_GUTTER_PX}px`,
-  } as CSSProperties
-}
-
-export function getScoreLineStyle(leftPx: number): CSSProperties {
-  return {
-    '--line-left': `${Math.round(leftPx)}px`,
-  } as CSSProperties
-}
-
-export function getScoreBeatLineStyle(beatOffset: number, model: TrackRenderModel): CSSProperties {
-  const measureIndex = Math.floor(beatOffset / Math.max(0.25, model.beatsPerMeasure))
-  const beatWithinMeasure = beatOffset - measureIndex * model.beatsPerMeasure
-  return getScoreLineStyle(
-    getMeasureStartPx(measureIndex, model) + MEASURE_INSET_PX + beatWithinMeasure * model.pxPerBeat,
-  )
-}
-
-export function getScoreMeasureBoundaryStyle(beatOffset: number, model: TrackRenderModel): CSSProperties {
-  const measureIndex = Math.round(beatOffset / Math.max(0.25, model.beatsPerMeasure))
-  return getScoreLineStyle(getMeasureStartPx(measureIndex, model))
-}
-
-export function getScoreMeasureLabelStyle(measureIndex: number, model: TrackRenderModel): CSSProperties {
-  return {
-    '--label-left': `${SCORE_CLEF_GUTTER_PX + (measureIndex - 1) * model.measureWidth + 8}px`,
-  } as CSSProperties
-}
-
-export function getTimelineNoteStyle(slotId: number, renderNote: TrackRenderNote, model: TrackRenderModel): CSSProperties {
-  const measureIndex = Math.min(
-    model.measureCount - 1,
-    getMeasureIndexFromDisplayBeat(renderNote.displayBeat, model.beatsPerMeasure),
-  )
-  const beatWithinMeasure = getBeatOffsetWithinMeasure(renderNote.displayBeat, model.beatsPerMeasure)
-  const clusterOffset = (renderNote.clusterIndex - (renderNote.clusterSize - 1) / 2) * 22
-  const rawLeft = getMeasureStartPx(measureIndex, model) + MEASURE_INSET_PX + beatWithinMeasure * model.pxPerBeat + clusterOffset
-  const left = clampToMeasureInterior(rawLeft, measureIndex, model)
-  const visualDurationPx = Math.max(28, renderNote.displayDurationBeats * model.pxPerBeat)
-  return {
-    '--note-top': `${getNoteTopPx(slotId, renderNote.note)}px`,
-    '--note-left': `${Math.round(left)}px`,
-    '--note-duration-width': `${Math.round(visualDurationPx)}px`,
-    '--note-tie-width': `${Math.round(Math.max(34, visualDurationPx - 6))}px`,
-    '--note-tie-stop-width': `${Math.round(Math.max(26, visualDurationPx * 0.36))}px`,
-  } as CSSProperties
-}
-
-export function getTimelineNoteClass(renderNote: TrackRenderNote): string {
-  const classes = ['track-card__measure-note', `track-card__note--${renderNote.durationGlyph}`]
-  if (renderNote.note.is_rest === true) {
-    classes.push('track-card__note--rest')
-  }
-  if (renderNote.tieStart) {
-    classes.push('track-card__note--tie-start')
-  }
-  if (renderNote.tieStop) {
-    classes.push('track-card__note--tie-stop')
-  }
-  return classes.join(' ')
 }
 
 export { formatBeatInMeasure }

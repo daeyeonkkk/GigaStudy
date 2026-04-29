@@ -29,7 +29,7 @@ export function encodeAudioChunksToWavDataUrl(chunks: Float32Array[], sampleRate
   return encodeMonoPcm16WavDataUrl(samples, sampleRate)
 }
 
-export function encodeMonoPcm16WavDataUrl(samples: Float32Array, sampleRate: number): string {
+function encodeMonoPcm16WavDataUrl(samples: Float32Array, sampleRate: number): string {
   const bytesPerSample = 2
   const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample)
   const view = new DataView(buffer)

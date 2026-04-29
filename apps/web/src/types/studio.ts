@@ -1,4 +1,4 @@
-export type TrackStatus =
+type TrackStatus =
   | 'empty'
   | 'recording'
   | 'uploading'
@@ -9,7 +9,7 @@ export type TrackStatus =
   | 'failed'
 
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'score' | 'music' | 'ai'
-export type NoteSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
+type NoteSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
 export type ScoreMode = 'answer' | 'harmony'
 
 export type ScoreNote = {
@@ -232,7 +232,7 @@ export type AdminStudioSummary = {
   assets: AdminAssetSummary[]
 }
 
-export type AdminLimitSummary = {
+type AdminLimitSummary = {
   studio_soft_limit: number
   studio_hard_limit: number
   asset_warning_bytes: number

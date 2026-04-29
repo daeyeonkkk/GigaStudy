@@ -14,7 +14,7 @@ const defaultApiBaseUrl = import.meta.env.PROD
   ? 'https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app'
   : 'http://127.0.0.1:8000'
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
 const OWNER_TOKEN_STORAGE_KEY = 'gigastudy.ownerToken.v1'
 
 export type AdminCredentials = {
@@ -22,7 +22,7 @@ export type AdminCredentials = {
   password: string
 }
 
-export type AdminStorageQuery = {
+type AdminStorageQuery = {
   studioLimit?: number
   studioOffset?: number
   assetLimit?: number

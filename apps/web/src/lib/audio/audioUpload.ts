@@ -7,7 +7,7 @@ export const AUDIO_UPLOAD_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.flac']
 const AUDIO_UPLOAD_EXTENSION_SET = new Set<string>(AUDIO_UPLOAD_EXTENSIONS)
 const AUDIO_DECODE_TIMEOUT_MS = 30_000
 
-export type PreparedAudioUpload = {
+type PreparedAudioUpload = {
   filename: string
   contentBase64: string
   blob: Blob

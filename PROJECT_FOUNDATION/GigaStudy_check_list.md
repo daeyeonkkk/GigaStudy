@@ -197,6 +197,8 @@ This checklist tracks the new six-track studio foundation only.
   playback while TrackNote data remains the scoring/generation truth source.
 - [x] Obsolete browser-media-element playback helpers and tests are removed; all
   retained audio playback now goes through the shared Web Audio scheduling path.
+- [x] Obsolete pre-VexFlow CSS timeline score-rendering helpers are removed; the
+  browser score path is VexFlow engraving plus aligned marker/playhead overlay.
 - [x] Upload accepts supported MIDI formats.
 - [x] Upload accepts supported score formats.
 - [x] PDF/image score upload is fully covered by OMR job tests.

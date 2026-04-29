@@ -5,13 +5,13 @@ type CandidateMetric = {
   value: string
 }
 
-export type CandidateContourPoint = {
+type CandidateContourPoint = {
   label: string
   x: number
   y: number
 }
 
-export type CandidateDecisionSummary = {
+type CandidateDecisionSummary = {
   title: string
   headline: string
   support: string
@@ -73,14 +73,14 @@ const RHYTHM_POLICY_LABELS: Record<string, string> = {
   sustain_support: '길게 받치기',
 }
 
-export function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
+function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
   if (candidate.notes.length === 0) {
     return 0
   }
   return Math.max(...candidate.notes.map((note) => note.onset_seconds + note.duration_seconds))
 }
 
-export function getCandidatePitchRange(candidate: ExtractionCandidate): string {
+function getCandidatePitchRange(candidate: ExtractionCandidate): string {
   const pitchedNotes = candidate.notes.filter((note) => note.is_rest !== true)
   if (pitchedNotes.length === 0) {
     return '-'

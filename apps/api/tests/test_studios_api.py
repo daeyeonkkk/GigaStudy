@@ -430,10 +430,10 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
 
     sync_response = client.patch(
         f"/api/studios/{studio_id}/tracks/6/sync",
-        json={"sync_offset_seconds": 0.03},
+        json={"sync_offset_seconds": 0.025},
     )
     assert sync_response.status_code == 200
-    assert sync_response.json()["tracks"][5]["sync_offset_seconds"] == 0.03
+    assert sync_response.json()["tracks"][5]["sync_offset_seconds"] == 0.025
 
     performance_notes = soprano_response.json()["tracks"][0]["notes"]
     for note in performance_notes:

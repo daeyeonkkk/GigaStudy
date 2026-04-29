@@ -45,10 +45,11 @@ import {
   getBeatSeconds,
   getNotePlaybackFrequency,
   getStudioMeter,
+  isMeasureDownbeat,
   isOmrUpload,
   safeDownloadName,
-  scheduleMetronomeClicks,
   startLoopingMetronomeSession,
+  type MeterContext,
   type PlaybackNode,
   type PlaybackSession,
   type PlaybackSourceMode,
@@ -72,9 +73,14 @@ type ActionState =
   | { phase: 'error'; message: string }
 
 type PlaybackTimeline = {
-  durationSeconds: number
-  minOffsetSeconds: number
+  maxSeconds: number
+  minSeconds: number
+  startSeconds: number
   startedAtMs: number
+}
+
+type PlaybackStartOptions = {
+  startSeconds?: number
 }
 
 type TrackCountInState = {
@@ -102,6 +108,9 @@ export function StudioPage() {
   const [actionState, setActionState] = useState<ActionState>({ phase: 'idle' })
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const [playbackSource, setPlaybackSource] = useState<PlaybackSourceMode>('audio')
+  const [playbackPickerOpen, setPlaybackPickerOpen] = useState(false)
+  const [selectedPlaybackSlotIds, setSelectedPlaybackSlotIds] = useState<Set<number>>(() => new Set())
+  const [syncStepSeconds, setSyncStepSeconds] = useState(0.01)
   const [globalPlaying, setGlobalPlaying] = useState(false)
   const [playingSlots, setPlayingSlots] = useState<Set<number>>(() => new Set())
   const [playbackTimeline, setPlaybackTimeline] = useState<PlaybackTimeline | null>(null)
@@ -192,8 +201,12 @@ export function StudioPage() {
     let animationFrameId = 0
     const updatePlayhead = () => {
       const elapsedSeconds = (performance.now() - playbackTimeline.startedAtMs) / 1000
-      setPlayheadSeconds(elapsedSeconds + playbackTimeline.minOffsetSeconds)
-      if (elapsedSeconds <= playbackTimeline.durationSeconds + 0.2) {
+      const nextPlayheadSeconds = Math.min(
+        playbackTimeline.maxSeconds,
+        playbackTimeline.startSeconds + elapsedSeconds,
+      )
+      setPlayheadSeconds(nextPlayheadSeconds)
+      if (playbackTimeline.startSeconds + elapsedSeconds <= playbackTimeline.maxSeconds + 0.2) {
         animationFrameId = window.requestAnimationFrame(updatePlayhead)
       }
     }
@@ -269,6 +282,22 @@ export function StudioPage() {
         : null,
     [scoreSession, studio],
   )
+
+  useEffect(() => {
+    setSelectedPlaybackSlotIds((current) => {
+      const registeredSlotIdSet = new Set(registeredSlotIds)
+      const retainedSlotIds = new Set(
+        [...current].filter((slotId) => registeredSlotIdSet.has(slotId)),
+      )
+      if (current.size === 0 && registeredSlotIds.length > 0) {
+        return new Set(registeredSlotIds)
+      }
+      if (retainedSlotIds.size === current.size) {
+        return current
+      }
+      return retainedSlotIds
+    })
+  }, [registeredSlotIds])
 
   useEffect(() => {
     if (!studioId || activeExtractionJobs.length === 0) {
@@ -595,9 +624,48 @@ export function StudioPage() {
     return Math.max(0.25, noteEndSeconds)
   }
 
+  function scheduleMetronomeClicksFromTimeline(
+    context: AudioContext,
+    nodes: PlaybackNode[],
+    scheduledStart: number,
+    startSeconds: number,
+    maxBeat: number,
+    bpm: number,
+    meter: MeterContext,
+    volume: number,
+  ): number {
+    const beatSeconds = getBeatSeconds(bpm)
+    let latestStop = 0
+    for (
+      let quarterBeatOffset = 0;
+      quarterBeatOffset <= Math.max(0, maxBeat - 1) + 0.001;
+      quarterBeatOffset += meter.pulseQuarterBeats
+    ) {
+      const clickStartSeconds = quarterBeatOffset * beatSeconds
+      if (clickStartSeconds + 0.045 < startSeconds) {
+        continue
+      }
+      const relativeStartSeconds = Math.max(0, clickStartSeconds - startSeconds)
+      const frequency = isMeasureDownbeat(quarterBeatOffset, meter.beatsPerMeasure) ? 960 : 720
+      nodes.push(
+        createTone(
+          context,
+          scheduledStart + relativeStartSeconds,
+          0.045,
+          frequency,
+          volume,
+          'square',
+        ),
+      )
+      latestStop = Math.max(latestStop, relativeStartSeconds + 0.045)
+    }
+    return latestStop
+  }
+
   async function startPlaybackSession(
     tracksToPlay: TrackSlot[],
     includeMetronome = metronomeEnabled,
+    options: PlaybackStartOptions = {},
   ): Promise<boolean> {
     if (!studio) {
       return false
@@ -621,7 +689,8 @@ export function StudioPage() {
     disposeCurrentPlaybackSession()
 
     const beatSeconds = 60 / studio.bpm
-    const minOffsetSeconds = Math.min(0, ...playableTracks.map((track) => track.sync_offset_seconds))
+    const minTimelineSeconds = Math.min(0, ...playableTracks.map((track) => track.sync_offset_seconds))
+    const startSeconds = Math.max(minTimelineSeconds, options.startSeconds ?? minTimelineSeconds)
     const mediaStartDelaySeconds = 0.08
     const audioTracks = playbackSource === 'audio' ? playableTracks.filter(trackHasPlayableAudio) : []
     const scoreTracks = playableTracks.filter(
@@ -631,6 +700,7 @@ export function StudioPage() {
     const nodes: PlaybackNode[] = []
     const timeoutIds: number[] = []
     let latestStop = 0
+    let timelineEndSeconds = Math.max(startSeconds, minTimelineSeconds + 0.25)
     let maxBeat = 1
     let context: AudioContext | undefined
     let scheduledStart = 0
@@ -655,7 +725,7 @@ export function StudioPage() {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
       const activeContext = context
-      const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStart: number }> = []
+      const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
 
       if (audioTracks.length > 0) {
         if (!activeContext) {
@@ -682,7 +752,7 @@ export function StudioPage() {
             return {
               buffer,
               track,
-              trackStart: Math.max(0, track.sync_offset_seconds - minOffsetSeconds),
+              trackStartSeconds: track.sync_offset_seconds,
             }
           }),
         )
@@ -696,25 +766,31 @@ export function StudioPage() {
 
       scheduledStart = activeContext ? activeContext.currentTime + mediaStartDelaySeconds : 0
 
-      preparedAudioTracks.forEach(({ buffer, track, trackStart }) => {
+      preparedAudioTracks.forEach(({ buffer, track, trackStartSeconds }) => {
         if (!activeContext) {
           return
         }
+        const sourceOffsetSeconds = Math.max(0, startSeconds - trackStartSeconds)
+        const relativeStartSeconds = Math.max(0, trackStartSeconds - startSeconds)
         const node = createAudioBufferPlayback(
           activeContext,
           buffer,
-          scheduledStart + trackStart,
-          0,
+          scheduledStart + relativeStartSeconds,
+          sourceOffsetSeconds,
           audioTrackVolume,
         )
         if (!node) {
           return
         }
         nodes.push(node)
+        const trackDurationSeconds = Math.max(buffer.duration, getTrackTimelineDurationSeconds(track, beatSeconds))
+        const trackEndSeconds = trackStartSeconds + trackDurationSeconds
         latestStop = Math.max(
           latestStop,
-          trackStart + Math.max(buffer.duration, getTrackTimelineDurationSeconds(track, beatSeconds)),
+          Math.max(0, trackEndSeconds - startSeconds),
         )
+        timelineEndSeconds = Math.max(timelineEndSeconds, trackEndSeconds)
+        maxBeat = Math.max(maxBeat, Math.ceil(trackEndSeconds / beatSeconds) + 1)
         scheduledAnyTrack = true
 
         track.notes.forEach((note) => {
@@ -735,24 +811,33 @@ export function StudioPage() {
           if (frequency === null) {
             return
           }
-          const noteStart =
-            (note.beat - 1) * beatSeconds + track.sync_offset_seconds - minOffsetSeconds
-          const normalizedStart = Math.max(0, noteStart)
+          const noteStartSeconds = (note.beat - 1) * beatSeconds + track.sync_offset_seconds
           const duration = Math.max(0.11, note.duration_beats * beatSeconds * 0.9)
+          const noteEndSeconds = noteStartSeconds + duration
+          timelineEndSeconds = Math.max(timelineEndSeconds, noteEndSeconds)
+          if (noteEndSeconds <= startSeconds) {
+            maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
+            return
+          }
+          const relativeStartSeconds = Math.max(0, noteStartSeconds - startSeconds)
+          const remainingDuration = Math.max(
+            0.05,
+            noteEndSeconds - Math.max(noteStartSeconds, startSeconds),
+          )
           const volume = track.slot_id === 6 ? 0.055 : 0.06
           const toneType: OscillatorType | 'piano' = track.slot_id === 6 ? 'square' : 'piano'
 
           nodes.push(
             createTone(
               activeContext,
-              scheduledStart + normalizedStart,
-              duration,
+              scheduledStart + relativeStartSeconds,
+              remainingDuration,
               frequency,
               volume,
               toneType,
             ),
           )
-          latestStop = Math.max(latestStop, normalizedStart + duration)
+          latestStop = Math.max(latestStop, relativeStartSeconds + remainingDuration)
           maxBeat = Math.max(maxBeat, note.beat + note.duration_beats - 1)
           scheduledAnyTrack = true
         })
@@ -765,12 +850,14 @@ export function StudioPage() {
       }
 
       if (includeMetronome && activeContext) {
+        timelineEndSeconds = Math.max(timelineEndSeconds, maxBeat * beatSeconds)
         latestStop = Math.max(
           latestStop,
-          scheduleMetronomeClicks(
+          scheduleMetronomeClicksFromTimeline(
             activeContext,
             nodes,
             scheduledStart,
+            startSeconds,
             maxBeat,
             studio.bpm,
             studioMeter,
@@ -796,6 +883,7 @@ export function StudioPage() {
     }
 
     const playbackSession: PlaybackSession = { context, nodes, timeoutIds }
+    const sessionDurationSeconds = Math.max(0.1, latestStop + 0.45)
     const timeoutId = window.setTimeout(() => {
       if (playbackSessionRef.current !== playbackSession) {
         return
@@ -807,16 +895,89 @@ export function StudioPage() {
       setPlayheadSeconds(null)
       setGlobalPlaying(false)
       setPlayingSlots(new Set())
-    }, Math.ceil((latestStop + 0.45) * 1000))
+    }, Math.ceil(sessionDurationSeconds * 1000))
 
     playbackSession.timeoutIds.push(timeoutId)
     playbackSessionRef.current = playbackSession
     setPlaybackTimeline({
-      durationSeconds: latestStop + 0.45,
-      minOffsetSeconds,
+      maxSeconds: Math.max(timelineEndSeconds, startSeconds + latestStop),
+      minSeconds: minTimelineSeconds,
+      startSeconds,
       startedAtMs: performance.now() + mediaStartDelaySeconds * 1000,
     })
     return true
+  }
+
+  function togglePlaybackSelection(slotId: number) {
+    setSelectedPlaybackSlotIds((current) => {
+      const next = new Set(current)
+      if (next.has(slotId)) {
+        next.delete(slotId)
+      } else {
+        next.add(slotId)
+      }
+      return next
+    })
+  }
+
+  function selectAllPlaybackTracks() {
+    setSelectedPlaybackSlotIds(new Set(registeredSlotIds))
+  }
+
+  function openPlaybackPicker() {
+    if (registeredTracks.length === 0) {
+      setPlaybackPickerOpen(true)
+      setActionState({ phase: 'error', message: '재생할 등록 트랙이 없습니다.' })
+      return
+    }
+    setSelectedPlaybackSlotIds(new Set(registeredSlotIds))
+    setPlaybackPickerOpen(true)
+    setActionState({ phase: 'success', message: '동시 재생할 트랙을 선택하세요.' })
+  }
+
+  function updateSyncStep(nextStepSeconds: number) {
+    if (!Number.isFinite(nextStepSeconds) || nextStepSeconds <= 0) {
+      return
+    }
+    setSyncStepSeconds(Math.round(Math.min(10, Math.max(0.001, nextStepSeconds)) * 1000) / 1000)
+  }
+
+  function getSelectedPlaybackTracks(): TrackSlot[] {
+    if (!studio) {
+      return []
+    }
+    return studio.tracks.filter(
+      (track) => track.status === 'registered' && selectedPlaybackSlotIds.has(track.slot_id),
+    )
+  }
+
+  async function startSelectedPlayback(startSeconds?: number) {
+    const selectedTracks = getSelectedPlaybackTracks()
+    if (selectedTracks.length === 0) {
+      setPlaybackPickerOpen(true)
+      setActionState({ phase: 'error', message: '동시 재생할 등록 트랙을 하나 이상 선택하세요.' })
+      return
+    }
+
+    setActionState({
+      phase: 'busy',
+      message:
+          playbackSource === 'audio'
+            ? '선택한 트랙의 원음과 악보 음 시작점을 맞춥니다.'
+            : '선택한 트랙을 악보 음 기준으로 재생합니다.',
+    })
+    if (await startPlaybackSession(selectedTracks, metronomeEnabled, { startSeconds })) {
+      setPlaybackPickerOpen(true)
+      setPlayingSlots(new Set(selectedTracks.map((track) => track.slot_id)))
+      setGlobalPlaying(true)
+      setActionState({
+        phase: 'success',
+        message:
+          playbackSource === 'audio'
+            ? `${selectedTracks.length}개 트랙을 같은 오디오 clock에서 재생합니다.`
+            : `${selectedTracks.length}개 트랙을 악보 음 기준으로 동시에 재생합니다.`,
+      })
+    }
   }
 
   async function toggleGlobalPlayback() {
@@ -824,7 +985,7 @@ export function StudioPage() {
       stopPlaybackSession()
       setGlobalPlaying(false)
       setPlayingSlots(new Set())
-      setActionState({ phase: 'success', message: '전체 재생을 일시정지했습니다.' })
+      setActionState({ phase: 'success', message: '선택 재생을 일시정지했습니다.' })
       return
     }
 
@@ -833,24 +994,24 @@ export function StudioPage() {
       return
     }
 
-    setActionState({
-      phase: 'busy',
-      message:
-          playbackSource === 'audio'
-            ? '재생 후보를 모으고 원음과 악보 음의 시작점을 맞춥니다.'
-            : '등록된 트랙을 악보 음 기준으로 재생합니다.',
-    })
-    if (await startPlaybackSession(registeredTracks)) {
-      setPlayingSlots(new Set())
-      setGlobalPlaying(true)
-      setActionState({
-        phase: 'success',
-        message:
-          playbackSource === 'audio'
-            ? '등록된 트랙 전체를 같은 시작점에서 재생합니다.'
-            : '등록된 트랙 전체를 악보 음 기준으로 동시에 재생합니다.',
-      })
+    if (!playbackPickerOpen) {
+      setPlaybackPickerOpen(true)
+      setActionState({ phase: 'success', message: '동시 재생할 트랙을 선택하세요.' })
+      return
     }
+
+    await startSelectedPlayback()
+  }
+
+  function seekSelectedPlayback(nextSeconds: number) {
+    if (!globalPlaying || !playbackTimeline) {
+      return
+    }
+    const clampedSeconds = Math.max(
+      playbackTimeline.minSeconds,
+      Math.min(playbackTimeline.maxSeconds, nextSeconds),
+    )
+    void startSelectedPlayback(clampedSeconds)
   }
 
   function stopGlobalPlayback() {
@@ -859,7 +1020,7 @@ export function StudioPage() {
     setPlayingSlots(new Set())
     setActionState({
       phase: 'success',
-      message: '전체 트랙이 싱크가 반영된 0s 지점으로 돌아왔습니다.',
+      message: '선택한 트랙이 싱크가 반영된 0s 지점으로 돌아왔습니다.',
     })
   }
 
@@ -885,6 +1046,7 @@ export function StudioPage() {
 
     if (playingSlots.has(track.slot_id)) {
       stopPlaybackSession()
+      setGlobalPlaying(false)
       setPlayingSlots(new Set())
       setActionState({ phase: 'success', message: `${track.name} 트랙 재생을 일시정지했습니다.` })
       return
@@ -1158,7 +1320,7 @@ export function StudioPage() {
     if (!studio) {
       return
     }
-    const roundedOffset = Math.round(nextOffset * 100) / 100
+    const roundedOffset = Math.round(nextOffset * 1000) / 1000
     await runStudioAction(
       () => updateTrackSync(studio.studio_id, track.slot_id, roundedOffset),
       `${track.name} 싱크를 저장하는 중입니다.`,
@@ -1421,13 +1583,29 @@ export function StudioPage() {
           actionState={actionState}
           globalPlaying={globalPlaying}
           metronomeEnabled={metronomeEnabled}
+          playbackPickerOpen={playbackPickerOpen}
+          playbackRange={
+            playbackTimeline
+              ? { maxSeconds: playbackTimeline.maxSeconds, minSeconds: playbackTimeline.minSeconds }
+              : null
+          }
           playbackSource={playbackSource}
+          playheadSeconds={playheadSeconds}
           registeredTrackCount={registeredTracks.length}
+          registeredTracks={registeredTracks}
+          selectedPlaybackSlotIds={selectedPlaybackSlotIds}
           studioTitle={studio.title}
+          syncStepSeconds={syncStepSeconds}
           onExportPdf={() => void handleExportPdf()}
           onMetronomeChange={setMetronomeEnabled}
           onPlaybackSourceChange={changePlaybackSource}
+          onSeekPlayback={seekSelectedPlayback}
+          onSelectAllPlaybackTracks={selectAllPlaybackTracks}
+          onStartSelectedPlayback={() => void startSelectedPlayback()}
           onStopGlobalPlayback={stopGlobalPlayback}
+          onSyncStepChange={updateSyncStep}
+          onTogglePlaybackPicker={openPlaybackPicker}
+          onTogglePlaybackSelection={togglePlaybackSelection}
           onToggleGlobalPlayback={() => void toggleGlobalPlayback()}
         />
         <section className="composer-score-viewport">
@@ -1443,12 +1621,12 @@ export function StudioPage() {
             <TrackBoard
               beatsPerMeasure={studioBeatsPerMeasure}
               bpm={studio.bpm}
-              globalPlaying={globalPlaying}
               metronomeEnabled={metronomeEnabled}
               pendingCandidateCount={pendingCandidates.length}
               playingSlots={playingSlots}
               playheadSeconds={playheadSeconds}
               registeredTracks={registeredTracks}
+              syncStepSeconds={syncStepSeconds}
               trackCountIn={trackCountIn}
               recordingSlotId={recordingSlotId}
               trackRecordingMeter={trackRecordingMeter}
@@ -1492,8 +1670,11 @@ export function StudioPage() {
         <footer className="composer-statusbar">
           <span>{globalPlaying || playingSlots.size > 0 ? 'Playing' : 'Ready'}</span>
           <span>Bar 1</span>
-          <span>0:00 / 0:08</span>
-          <span>Sync step 0.01s</span>
+          <span>
+            {playheadSeconds === null ? '0:00' : formatDurationSeconds(playheadSeconds)} /{' '}
+            {playbackTimeline ? formatDurationSeconds(playbackTimeline.maxSeconds) : '0:00'}
+          </span>
+          <span>Sync step {formatSeconds(syncStepSeconds).replace(/^\+/, '')}</span>
         </footer>
       </section>
 

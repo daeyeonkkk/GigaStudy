@@ -101,6 +101,7 @@ def _empty_tracks(timestamp: str) -> list[TrackSlot]:
 
 
 DEFAULT_UPLOAD_BPM = 92
+SYNC_OFFSET_PRECISION = 3
 OMR_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
 AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
@@ -748,7 +749,7 @@ class StudioRepository:
             self._require_studio_access(studio, owner_token)
             timestamp = _now()
             track = self._find_track(studio, slot_id)
-            track.sync_offset_seconds = round(request.sync_offset_seconds, 2)
+            track.sync_offset_seconds = round(request.sync_offset_seconds, SYNC_OFFSET_PRECISION)
             track.updated_at = timestamp
             studio.updated_at = timestamp
             self._save_studio(studio)

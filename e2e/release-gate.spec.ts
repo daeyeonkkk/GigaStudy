@@ -168,6 +168,13 @@ async function uploadSopranoMusicXml(page: Page, xml: string, name: string) {
   await expect(page.getByTestId('candidate-review')).toContainText('Soprano')
 }
 
+async function expectTrackScoreNote(page: Page, slotId: number, label: string) {
+  await expect(page.getByTestId(`track-score-strip-${slotId}`)).toBeVisible()
+  await expect(
+    page.locator(`[data-testid="track-score-strip-${slotId}"] .track-card__engraving-marker[aria-label^="${label} "]`),
+  ).not.toHaveCount(0)
+}
+
 async function uploadMusicXmlToTrack(page: Page, slotId: number, xml: string, name: string) {
   await page.locator(`[data-testid="track-card-${slotId}"] input[type="file"]`).setInputFiles({
     name,
@@ -177,7 +184,7 @@ async function uploadMusicXmlToTrack(page: Page, slotId: number, xml: string, na
   await expect(page.getByTestId('candidate-review')).toContainText('Soprano')
   await page.locator('[data-testid^="candidate-target-"]').first().selectOption(String(slotId))
   await approveFirstCandidate(page)
-  await expect(page.getByTestId(`track-card-${slotId}`)).toContainText('C5')
+  await expectTrackScoreNote(page, slotId, 'C5')
 }
 
 async function uploadAudioToTrack(page: Page, slotId: number, filename: string) {
@@ -588,7 +595,7 @@ test('home keeps upload and blank start flows separate', async ({ page }) => {
 
   await page.getByTestId('upload-and-start-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
-  await expect(page.getByTestId('track-card-1')).toContainText('C5')
+  await expectTrackScoreNote(page, 1, 'C5')
 })
 
 test('home music upload decodes MP3-like input to WAV before analysis', async ({ page }) => {
@@ -620,10 +627,11 @@ test('registered audio track playback uses retained audio buffer', async ({ page
   await page.getByTestId('upload-and-start-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/, { timeout: 45_000 })
   await approveFirstCandidate(page)
-  await expect(page.getByTestId('track-card-1')).toContainText('C5')
+  await expectTrackScoreNote(page, 1, 'C5')
 
   await page.locator('.composer-metronome input').uncheck()
   await page.getByTestId('global-play-button').click()
+  await page.getByTestId('selected-play-button').click()
   await expect(page.getByTestId('track-playhead-1')).toBeVisible()
   await expect
     .poll(() =>
@@ -663,6 +671,7 @@ test('global audio playback schedules retained tracks on the same audio clock', 
 
   await page.locator('.composer-metronome input').uncheck()
   await page.getByTestId('global-play-button').click()
+  await page.getByTestId('selected-play-button').click()
   await expect
     .poll(() =>
       page.evaluate(
@@ -708,6 +717,7 @@ test('retained audio shares the metronome audio clock', async ({ page }) => {
   await approveFirstCandidate(page)
 
   await page.getByTestId('global-play-button').click()
+  await page.getByTestId('selected-play-button').click()
   await expect
     .poll(() =>
       page.evaluate(
@@ -759,6 +769,7 @@ test('score playback schedules stacked track notes on the same audio clock', asy
   await page.locator('.composer-metronome input').uncheck()
   await page.getByTestId('playback-source-score').click()
   await page.getByTestId('global-play-button').click()
+  await page.getByTestId('selected-play-button').click()
 
   await expect
     .poll(() =>
@@ -829,7 +840,7 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   await expect(page.getByTestId('candidate-review')).toContainText('C5@1')
   await expect(page.getByTestId('candidate-review')).toContainText('선택 기준')
   await approveFirstCandidate(page)
-  await expect(page.getByTestId('track-card-1')).toContainText('C5')
+  await expectTrackScoreNote(page, 1, 'C5')
   await expect(page.getByTestId('track-generate-1')).toBeDisabled()
 
   const pdfDownloadPromise = page.waitForEvent('download')
@@ -879,8 +890,9 @@ test('six-track studio supports create, register, generate, sync, play, and scor
     .locator('[data-testid="track-score-strip-2"] .track-card__beat-line--measure')
     .first()
     .boundingBox()
+  await page.getByTestId('sync-step-input').fill('0.025')
   await page.getByTestId('track-sync-later-2').click()
-  await expect(page.getByTestId('track-card-2')).toContainText('sync +0.01s')
+  await expect(page.getByTestId('track-card-2')).toContainText('sync +0.025s')
   const altoFirstNoteAfterSync = await page
     .locator('[data-testid="track-score-strip-2"] .track-card__measure-note')
     .first()
@@ -900,9 +912,19 @@ test('six-track studio supports create, register, generate, sync, play, and scor
     () => Boolean(window.AudioContext || ('webkitAudioContext' in window)),
   )
   await page.getByTestId('global-play-button').click()
+  await expect(page.getByTestId('selected-playback-panel')).toBeVisible()
+  await page.getByTestId('playback-track-checkbox-1').uncheck()
+  await page.getByTestId('selected-play-button').click()
   await expect(page.getByTestId('global-stop-button')).toBeEnabled()
   if (browserSupportsScoreAudio) {
-    await expect(page.getByTestId('track-playhead-1')).toBeVisible()
+    await expect(page.getByTestId('track-playhead-2')).toBeVisible()
+    await expect(page.getByTestId('track-playhead-1')).toHaveCount(0)
+    await page.getByTestId('selected-playback-seek').evaluate((element) => {
+      const input = element as HTMLInputElement
+      input.value = '0.25'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+    })
     await expect(page.getByTestId('track-playhead-2')).toBeVisible()
     const playheadBefore = await page.evaluate(() => {
       const getRect = (testId: string) => {
@@ -911,7 +933,6 @@ test('six-track studio supports create, register, generate, sync, play, and scor
       }
       return {
         alto: getRect('track-playhead-2'),
-        soprano: getRect('track-playhead-1'),
       }
     })
     await page.waitForTimeout(250)
@@ -922,16 +943,11 @@ test('six-track studio supports create, register, generate, sync, play, and scor
       }
       return {
         alto: getRect('track-playhead-2'),
-        soprano: getRect('track-playhead-1'),
       }
     })
-    expect(playheadBefore.soprano).not.toBeNull()
     expect(playheadBefore.alto).not.toBeNull()
-    expect(playheadAfter.soprano).not.toBeNull()
     expect(playheadAfter.alto).not.toBeNull()
-    expect(Math.abs(playheadBefore.soprano!.x - playheadBefore.alto!.x)).toBeLessThan(1)
-    expect(Math.abs(playheadAfter.soprano!.x - playheadAfter.alto!.x)).toBeLessThan(1)
-    expect(playheadAfter.soprano!.x).toBeGreaterThan(playheadBefore.soprano!.x + 2)
+    expect(playheadAfter.alto!.x).toBeGreaterThan(playheadBefore.alto!.x + 2)
   } else {
     await expect(page.getByText(/오디오 장치|audio/i)).toBeVisible()
   }
@@ -963,8 +979,8 @@ test('track upload can create and approve an extraction candidate', async ({ pag
   await page.locator('[data-testid^="candidate-target-"]').selectOption('2')
   await approveFirstCandidate(page)
 
-  await expect(page.getByTestId('track-card-2')).toContainText('C5')
-  await expect(page.getByTestId('track-card-2')).toContainText('G5')
+  await expectTrackScoreNote(page, 2, 'C5')
+  await expectTrackScoreNote(page, 2, 'G5')
 })
 
 test('symbolic upload drives the studio time-signature score grid', async ({ page }) => {

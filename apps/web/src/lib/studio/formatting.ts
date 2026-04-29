@@ -7,7 +7,9 @@ export function safeDownloadName(value: string): string {
 
 export function formatSeconds(seconds: number): string {
   const sign = seconds > 0 ? '+' : ''
-  return `${sign}${seconds.toFixed(2)}s`
+  const centisecond = Math.round(seconds * 100) / 100
+  const precision = Math.abs(seconds - centisecond) < 0.0005 ? 2 : 3
+  return `${sign}${seconds.toFixed(precision)}s`
 }
 
 export function formatDurationSeconds(seconds: number): string {

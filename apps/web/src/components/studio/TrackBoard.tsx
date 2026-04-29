@@ -31,13 +31,13 @@ type TrackCountInState = {
 type TrackBoardProps = {
   beatsPerMeasure: number
   bpm: number
-  globalPlaying: boolean
   metronomeEnabled: boolean
   pendingCandidateCount: number
   playingSlots: Set<number>
   playheadSeconds: number | null
   registeredTracks: TrackSlot[]
   recordingSlotId: number | null
+  syncStepSeconds: number
   trackCountIn: TrackCountInState | null
   trackRecordingMeter: TrackRecordingMeter
   tracks: TrackSlot[]
@@ -55,6 +55,11 @@ function getRegisteredTrackKeySignature(track: TrackSlot): string | null {
   return keySignature && keySignature !== 'C' ? keySignature : null
 }
 
+function formatSyncStep(seconds: number): string {
+  const rounded = Number(seconds.toFixed(3))
+  return rounded.toString()
+}
+
 function EngravingFallback({ track }: { track: TrackSlot }) {
   return (
     <div
@@ -68,13 +73,13 @@ function EngravingFallback({ track }: { track: TrackSlot }) {
 export function TrackBoard({
   beatsPerMeasure,
   bpm,
-  globalPlaying,
   metronomeEnabled,
   pendingCandidateCount,
   playingSlots,
   playheadSeconds,
   registeredTracks,
   recordingSlotId,
+  syncStepSeconds,
   trackCountIn,
   trackRecordingMeter,
   tracks,
@@ -123,7 +128,7 @@ export function TrackBoard({
         <div className="studio-tracks__summary">
           <span>{registeredTracks.length} registered</span>
           <span>{pendingCandidateCount} review</span>
-          <span>{playingSlots.size + (globalPlaying ? registeredTracks.length : 0)} playing</span>
+          <span>{playingSlots.size} playing</span>
         </div>
       </div>
 
@@ -133,7 +138,7 @@ export function TrackBoard({
           const needsReview = track.status === 'needs_review'
           const isRecording = recordingSlotId === track.slot_id
           const isCountingIn = trackCountIn?.slotId === track.slot_id
-          const isPlaying = globalPlaying || playingSlots.has(track.slot_id)
+          const isPlaying = playingSlots.has(track.slot_id)
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
@@ -221,22 +226,22 @@ export function TrackBoard({
 
                 <div className="track-card__secondary-actions">
                   <button
-                    aria-label={`${track.name} 싱크 0.01초 빠르게`}
+                    aria-label={`${track.name} 싱크 ${formatSyncStep(syncStepSeconds)}초 빠르게`}
                     className="studio-step-button"
                     data-testid={`track-sync-earlier-${track.slot_id}`}
                     type="button"
-                    onClick={() => onSync(track, track.sync_offset_seconds - 0.01)}
+                    onClick={() => onSync(track, track.sync_offset_seconds - syncStepSeconds)}
                   >
-                    -0.01
+                    -{formatSyncStep(syncStepSeconds)}
                   </button>
                   <button
-                    aria-label={`${track.name} 싱크 0.01초 느리게`}
+                    aria-label={`${track.name} 싱크 ${formatSyncStep(syncStepSeconds)}초 느리게`}
                     className="studio-step-button"
                     data-testid={`track-sync-later-${track.slot_id}`}
                     type="button"
-                    onClick={() => onSync(track, track.sync_offset_seconds + 0.01)}
+                    onClick={() => onSync(track, track.sync_offset_seconds + syncStepSeconds)}
                   >
-                    +0.01
+                    +{formatSyncStep(syncStepSeconds)}
                   </button>
                   <button
                     aria-label={isPlaying ? `${track.name} 일시정지` : `${track.name} 재생`}

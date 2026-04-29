@@ -131,6 +131,32 @@
   font-size: 0.88rem;
 }
 
+.composer-sync-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin-left: 4px;
+  padding: 0 8px;
+  border: 1px solid #b6c0c8;
+  border-radius: 4px;
+  background: #f8fafb;
+  color: #1c2c3a;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.composer-sync-step input {
+  width: 64px;
+  min-height: 22px;
+  padding: 0 5px;
+  border: 1px solid #a8b2bb;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #111111;
+  font: inherit;
+}
+
 .composer-metronome input {
   width: 16px;
   height: 16px;
@@ -167,6 +193,103 @@
 .composer-source-toggle button.is-active {
   background: #082fbd;
   color: #ffffff;
+}
+
+.composer-playback-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(280px, 0.8fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #a8b2bb;
+  background: #eef3f7;
+}
+
+.composer-track-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.composer-track-picker p {
+  color: #52606b;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.composer-track-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid #b6c0c8;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1c2c3a;
+  font-size: 0.8rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.composer-track-picker input {
+  width: 15px;
+  height: 15px;
+  accent-color: #082fbd;
+}
+
+.composer-playback-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.composer-mini-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #9aa7b3;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1c2c3a;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.composer-mini-button--primary {
+  border-color: #173fb3;
+  background: #082fbd;
+  color: #ffffff;
+}
+
+.composer-mini-button:disabled {
+  border-color: #c8d0d7;
+  background: #edf1f4;
+  color: #87939d;
+  cursor: not-allowed;
+}
+
+.composer-seek {
+  display: grid;
+  grid-template-columns: auto minmax(130px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  color: #1c2c3a;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.composer-seek input {
+  width: 100%;
+  accent-color: #082fbd;
+}
+
+.composer-seek input:disabled {
+  opacity: 0.5;
 }
 
 .studio-status-line {
@@ -1832,6 +1955,15 @@
   .composer-menubar {
     gap: 10px;
     overflow-x: auto;
+  }
+
+  .composer-playback-panel {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .composer-playback-actions {
+    justify-content: flex-start;
   }
 
   .composer-score-viewport {

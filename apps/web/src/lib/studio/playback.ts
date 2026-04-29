@@ -20,6 +20,7 @@ export type PlaybackSourceMode = 'audio' | 'score'
 
 export type PlaybackSession = {
   context?: AudioContext
+  firstPulseAtMs?: number
   nodes: PlaybackNode[]
   timeoutIds: number[]
 }
@@ -286,11 +287,13 @@ export function startLoopingMetronomeSession(
 
   const beatSeconds = getBeatSeconds(bpm)
   const pulseSeconds = Math.max(0.04, beatSeconds * meter.pulseQuarterBeats)
+  const firstPulseDelaySeconds = Math.max(0.02, startDelaySeconds)
+  const firstPulseAtMs = performance.now() + firstPulseDelaySeconds * 1000
   const lookaheadMilliseconds = 25
   const scheduleAheadSeconds = 0.12
-  const session: PlaybackSession = { context, nodes: [], timeoutIds: [] }
+  const session: PlaybackSession = { context, firstPulseAtMs, nodes: [], timeoutIds: [] }
   let pulseIndex = 0
-  let nextClickTime = context.currentTime + Math.max(0.02, startDelaySeconds)
+  let nextClickTime = context.currentTime + firstPulseDelaySeconds
 
   const scheduleClicks = () => {
     if (context.state === 'closed') {

@@ -83,6 +83,9 @@ type TrackCountInState = {
   totalPulses: number
 }
 
+const COUNT_IN_FIRST_PULSE_DELAY_MS = 80
+const COUNT_IN_ZERO_HOLD_MS = 220
+
 export function StudioPage() {
   const { studioId } = useParams()
   const [studio, setStudio] = useState<Studio | null>(null)
@@ -108,6 +111,7 @@ export function StudioPage() {
   const playbackRunIdRef = useRef(0)
   const trackCountInRunIdRef = useRef(0)
   const trackCountInTimeoutIdsRef = useRef<number[]>([])
+  const trackCountInEpochMsRef = useRef<number | null>(null)
   const recordingMetronomeSessionRef = useRef<PlaybackSession | null>(null)
   const trackRecorderRef = useRef<MicrophoneRecorder | null>(null)
   const trackRecordingAllowOverwriteRef = useRef(false)
@@ -157,6 +161,7 @@ export function StudioPage() {
   useEffect(() => {
     return () => {
       clearTrackCountInTimers()
+      trackCountInEpochMsRef.current = null
       disposePlaybackSession(playbackSessionRef.current)
       playbackSessionRef.current = null
       disposePlaybackSession(recordingMetronomeSessionRef.current)
@@ -451,6 +456,7 @@ export function StudioPage() {
   function cancelTrackCountIn(message = '녹음 준비를 취소했습니다.') {
     trackCountInRunIdRef.current += 1
     clearTrackCountInTimers()
+    trackCountInEpochMsRef.current = null
     setTrackCountIn(null)
     setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
     disposePlaybackSession(recordingMetronomeSessionRef.current)
@@ -473,15 +479,9 @@ export function StudioPage() {
 
     const totalPulses = Math.max(1, Math.round(studioMeter.beatsPerMeasure / studioMeter.pulseQuarterBeats))
     const pulseMilliseconds = getBeatSeconds(studio.bpm) * studioMeter.pulseQuarterBeats * 1000
-    const downbeatDelayMilliseconds = 80
+    const downbeatDelayMilliseconds = COUNT_IN_FIRST_PULSE_DELAY_MS
     const countInMilliseconds = totalPulses * pulseMilliseconds
-
-    setTrackCountIn({
-      slotId: track.slot_id,
-      pulsesRemaining: totalPulses,
-      totalPulses,
-    })
-    setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
+    let countInEpochMilliseconds = performance.now() + downbeatDelayMilliseconds
 
     if (metronomeEnabled) {
       disposePlaybackSession(recordingMetronomeSessionRef.current)
@@ -490,10 +490,26 @@ export function StudioPage() {
         studioMeter,
         downbeatDelayMilliseconds / 1000,
       )
+      countInEpochMilliseconds = recordingMetronomeSessionRef.current?.firstPulseAtMs ?? countInEpochMilliseconds
     }
 
+    const recordingDownbeatMilliseconds = countInEpochMilliseconds + countInMilliseconds
+    trackCountInEpochMsRef.current = countInEpochMilliseconds
+
+    const scheduleCountInAt = (targetMilliseconds: number, callback: () => void) => {
+      const timeoutId = window.setTimeout(callback, Math.max(0, Math.round(targetMilliseconds - performance.now())))
+      trackCountInTimeoutIdsRef.current.push(timeoutId)
+    }
+
+    setTrackCountIn({
+      slotId: track.slot_id,
+      pulsesRemaining: totalPulses,
+      totalPulses,
+    })
+    setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
+
     for (let pulseIndex = 1; pulseIndex < totalPulses; pulseIndex += 1) {
-      const timeoutId = window.setTimeout(() => {
+      scheduleCountInAt(countInEpochMilliseconds + pulseIndex * pulseMilliseconds, () => {
         if (trackCountInRunIdRef.current !== runId) {
           return
         }
@@ -502,17 +518,22 @@ export function StudioPage() {
           pulsesRemaining: totalPulses - pulseIndex,
           totalPulses,
         })
-      }, Math.round(downbeatDelayMilliseconds + pulseIndex * pulseMilliseconds))
-      trackCountInTimeoutIdsRef.current.push(timeoutId)
+      })
     }
 
-    const startTimeoutId = window.setTimeout(() => {
+    scheduleCountInAt(recordingDownbeatMilliseconds, () => {
       if (trackCountInRunIdRef.current !== runId) {
         return
       }
       clearTrackCountInTimers()
-      setTrackCountIn(null)
+      setTrackCountIn({
+        slotId: track.slot_id,
+        pulsesRemaining: 0,
+        totalPulses,
+      })
       if (!beginMicrophoneCapture(recorder)) {
+        trackCountInEpochMsRef.current = null
+        setTrackCountIn(null)
         setActionState({ phase: 'error', message: '녹음을 시작하지 못했습니다. 다시 시도해 주세요.' })
         return
       }
@@ -522,8 +543,15 @@ export function StudioPage() {
         phase: 'success',
         message: `${track.name} 녹음을 시작했습니다. 내부 메트로놈 기준으로 악보에 기록됩니다.`,
       })
-    }, Math.round(downbeatDelayMilliseconds + countInMilliseconds))
-    trackCountInTimeoutIdsRef.current.push(startTimeoutId)
+      const hideZeroTimeoutId = window.setTimeout(() => {
+        if (trackCountInRunIdRef.current !== runId) {
+          return
+        }
+        trackCountInEpochMsRef.current = null
+        setTrackCountIn(null)
+      }, COUNT_IN_ZERO_HOLD_MS)
+      trackCountInTimeoutIdsRef.current.push(hideZeroTimeoutId)
+    })
   }
 
   function disposeCurrentPlaybackSession() {
@@ -881,16 +909,13 @@ export function StudioPage() {
       return
     }
 
-    if (trackCountIn?.slotId === track.slot_id) {
-      cancelTrackCountIn()
-      return
-    }
-
     if (recordingSlotId === track.slot_id) {
       const recorder = trackRecorderRef.current
       const allowOverwrite = trackRecordingAllowOverwriteRef.current
       trackCountInRunIdRef.current += 1
       clearTrackCountInTimers()
+      trackCountInEpochMsRef.current = null
+      setTrackCountIn(null)
       trackRecorderRef.current = null
       trackRecordingAllowOverwriteRef.current = false
       disposePlaybackSession(recordingMetronomeSessionRef.current)
@@ -914,6 +939,11 @@ export function StudioPage() {
         `${track.name} 녹음을 악보화하는 중입니다.`,
         `${track.name} 녹음의 음성 추출 작업을 시작했습니다. 완료되면 트랙에 등록됩니다.`,
       )
+      return
+    }
+
+    if (trackCountIn?.slotId === track.slot_id) {
+      cancelTrackCountIn()
       return
     }
 

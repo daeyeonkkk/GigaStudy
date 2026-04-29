@@ -629,18 +629,18 @@ test('score playback schedules stacked track notes on the same audio clock', asy
   expect(firstChord.every((entry) => Math.abs(entry.startTime - firstChord[0].startTime) < 0.001)).toBe(true)
 })
 
-test('track recording shows a one-measure count-in before capture', async ({ page, browserName }) => {
+test('track recording shows zero on the count-in downbeat before capture continues', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Chromium project supplies fake microphone permissions.')
 
-  await createBlankStudio(page, 'Count-in recording grid', '60')
+  await createBlankStudio(page, 'Count-in recording grid', '240')
 
   await page.getByTestId('track-record-1').click()
   await expect(page.getByTestId('track-count-in-1')).toContainText('1마디 준비')
   await expect(page.getByTestId('track-count-in-1')).toContainText('4')
   await expect(page.getByTestId('track-recording-meter-1')).toHaveCount(0)
 
-  await page.getByTestId('track-record-1').click()
-  await expect(page.getByTestId('track-count-in-1')).toHaveCount(0)
+  await page.waitForFunction(() => document.querySelector('[data-testid="track-count-in-1"]')?.textContent?.includes('0'))
+  await expect(page.getByTestId('track-recording-meter-1')).toBeVisible()
 })
 
 test('admin login can inspect storage and run the engine queue trigger', async ({ page }) => {

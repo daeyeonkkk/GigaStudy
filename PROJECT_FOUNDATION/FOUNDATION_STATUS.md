@@ -796,13 +796,15 @@ not legacy product surfaces.
   `HTMLMediaElement.play()` and lets the browser buffer normally. Multi-track
   retained-audio playback keeps the stricter readiness barrier so simultaneous
   ensemble starts remain protected.
-- Recording count-in and audible metronome now share the same initial downbeat
-  delay parameter. This keeps the first audible click aligned with the displayed
-  one-measure count-in and the recording start downbeat from the studio BPM/meter
-  grid.
+- Recording count-in and audible metronome now share the metronome session's
+  first scheduled pulse timestamp. The one-measure count-in reaches visible `0`
+  on the recording-start downbeat, then the `0` flash remains briefly while the
+  microphone capture is already running. This makes the user's visual entry cue,
+  audible metronome click, and internal BPM/meter grid land on the same beat.
 - Verification for this patch: web lint passed, production web build passed,
-  focused Chromium playback/count-in E2E passed 3/3, and full Chromium release
-  gate passed 13/13 locally on 2026-04-29.
+  focused Chromium playback/count-in E2E passed 3/3, focused downbeat-zero
+  count-in E2E passed, and full Chromium release gate passed 13/13 locally on
+  2026-04-29.
 
 ## Status Summary
 

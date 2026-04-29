@@ -783,6 +783,27 @@ not legacy product surfaces.
   web lint passed, production web build passed, and Chromium release gate
   passed 13/13 locally on 2026-04-28.
 
+## Live Recording Playback And Count-In Patch - 2026-04-29
+
+- Live studio smoke data showed old Tenor voice registrations can be missing
+  `display_octave_shift` metadata. Browser engraving now treats a Tenor track
+  with missing display metadata as treble-8vb by default, so stored sounding
+  pitch remains unchanged while the rendered notes sit on the intended Tenor
+  staff instead of falling below it.
+- Single retained-audio track playback no longer fails just because the browser
+  delays `canplay`/`canplaythrough` readiness events. The player still prepares
+  media optimistically, but for a single original recording it proceeds to
+  `HTMLMediaElement.play()` and lets the browser buffer normally. Multi-track
+  retained-audio playback keeps the stricter readiness barrier so simultaneous
+  ensemble starts remain protected.
+- Recording count-in and audible metronome now share the same initial downbeat
+  delay parameter. This keeps the first audible click aligned with the displayed
+  one-measure count-in and the recording start downbeat from the studio BPM/meter
+  grid.
+- Verification for this patch: web lint passed, production web build passed,
+  focused Chromium playback/count-in E2E passed 3/3, and full Chromium release
+  gate passed 13/13 locally on 2026-04-29.
+
 ## Status Summary
 
 Foundation reset: complete.

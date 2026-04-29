@@ -473,7 +473,7 @@ export function StudioPage() {
 
     const totalPulses = Math.max(1, Math.round(studioMeter.beatsPerMeasure / studioMeter.pulseQuarterBeats))
     const pulseMilliseconds = getBeatSeconds(studio.bpm) * studioMeter.pulseQuarterBeats * 1000
-    const downbeatDelayMilliseconds = 40
+    const downbeatDelayMilliseconds = 80
     const countInMilliseconds = totalPulses * pulseMilliseconds
 
     setTrackCountIn({
@@ -485,7 +485,11 @@ export function StudioPage() {
 
     if (metronomeEnabled) {
       disposePlaybackSession(recordingMetronomeSessionRef.current)
-      recordingMetronomeSessionRef.current = startLoopingMetronomeSession(studio.bpm, studioMeter)
+      recordingMetronomeSessionRef.current = startLoopingMetronomeSession(
+        studio.bpm,
+        studioMeter,
+        downbeatDelayMilliseconds / 1000,
+      )
     }
 
     for (let pulseIndex = 1; pulseIndex < totalPulses; pulseIndex += 1) {
@@ -630,6 +634,7 @@ export function StudioPage() {
       })
 
       if (preparedAudioTracks.length > 0) {
+        const canStartWithoutStrictMediaBarrier = preparedAudioTracks.length === 1
         setActionState({
           phase: 'busy',
           message:
@@ -637,15 +642,16 @@ export function StudioPage() {
               ? '등록된 원음들을 동시에 시작할 수 있도록 준비합니다.'
               : '등록된 원음을 재생할 수 있도록 준비합니다.',
         })
-        await Promise.all(
-          preparedAudioTracks.map(({ node, track }) =>
-            prepareMediaElementPlayback(node).catch((error: unknown) => {
-              throw new Error(`${track.name} 녹음 원본을 불러오지 못했습니다.`, {
-                cause: error,
-              })
-            }),
+        const preparationResults = await Promise.allSettled(
+          preparedAudioTracks.map(({ node }) =>
+            prepareMediaElementPlayback(node, canStartWithoutStrictMediaBarrier ? 1500 : 8000),
           ),
         )
+        const failedPreparations = preparationResults.filter((result) => result.status === 'rejected')
+        if (failedPreparations.length > 0 && !canStartWithoutStrictMediaBarrier) {
+          const failedTrack = preparedAudioTracks[preparationResults.findIndex((result) => result.status === 'rejected')]
+          throw new Error(`${failedTrack?.track.name ?? 'Track'} 녹음 원본을 불러오지 못했습니다.`)
+        }
       }
 
       if (playbackRunIdRef.current !== runId) {

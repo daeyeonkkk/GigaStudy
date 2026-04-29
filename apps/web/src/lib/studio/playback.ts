@@ -270,6 +270,7 @@ export function scheduleMediaElementPlayback(
 export function startLoopingMetronomeSession(
   bpm: number,
   meter: MeterContext = DEFAULT_METER,
+  startDelaySeconds = 0.04,
 ): PlaybackSession | null {
   const AudioContextConstructor = getBrowserAudioContextConstructor()
   if (!AudioContextConstructor) {
@@ -289,7 +290,7 @@ export function startLoopingMetronomeSession(
   const scheduleAheadSeconds = 0.12
   const session: PlaybackSession = { context, nodes: [], timeoutIds: [] }
   let pulseIndex = 0
-  let nextClickTime = context.currentTime + 0.04
+  let nextClickTime = context.currentTime + Math.max(0.02, startDelaySeconds)
 
   const scheduleClicks = () => {
     if (context.state === 'closed') {

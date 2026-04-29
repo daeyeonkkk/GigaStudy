@@ -70,6 +70,13 @@ function getTrackClefProfile(track: TrackSlot): ClefProfile {
   return track.slot_id >= 4 ? { vexClef: 'bass' } : { vexClef: 'treble' }
 }
 
+function getDefaultDisplayOctaveShift(track: TrackSlot, clefProfile: ClefProfile): number {
+  if (track.slot_id === 3 || clefProfile.annotation === '8vb') {
+    return 12
+  }
+  return 0
+}
+
 function getTrackKeySignature(track: TrackSlot): string | null {
   const keySignature = track.notes.find((note) => note.key_signature)?.key_signature
   return keySignature && keySignature !== 'C' ? keySignature : null
@@ -113,12 +120,16 @@ function shiftPitchLabelOctaves(label: string, semitoneShift: number): string | 
   return `${pitchClass}${accidental}${Number(octaveText) + semitoneShift / 12}`
 }
 
-function getVexPitch(note: ScoreNote, clef: Clef): { accidental: string | null; key: string } {
+function getVexPitch(
+  note: ScoreNote,
+  clef: Clef,
+  defaultDisplayOctaveShift: number,
+): { accidental: string | null; key: string } {
   if (note.is_rest) {
     return { accidental: null, key: clef === 'bass' ? 'd/3' : 'b/4' }
   }
 
-  const displayShift = note.display_octave_shift ?? 0
+  const displayShift = note.display_octave_shift ?? defaultDisplayOctaveShift
   const preferredLabel = note.spelled_label ?? note.label
   const shiftedPreferredLabel = shiftPitchLabelOctaves(preferredLabel, displayShift)
   const fallbackLabel =
@@ -146,8 +157,13 @@ function attachDots(staveNote: StaveNote, duration: EngravingDuration) {
   }
 }
 
-function createStaveNote(note: ScoreNote, duration: EngravingDuration, clef: Clef): StaveNote {
-  const pitch = getVexPitch(note, clef)
+function createStaveNote(
+  note: ScoreNote,
+  duration: EngravingDuration,
+  clef: Clef,
+  defaultDisplayOctaveShift: number,
+): StaveNote {
+  const pitch = getVexPitch(note, clef, defaultDisplayOctaveShift)
   const staveNote = new StaveNote({
     clef,
     duration: getVexDurationCode(duration),
@@ -322,6 +338,7 @@ export function EngravedScoreStrip({
   )
   const clefProfile = getTrackClefProfile(track)
   const clef = clefProfile.vexClef
+  const defaultDisplayOctaveShift = getDefaultDisplayOctaveShift(track, clefProfile)
   const keySignature = getTrackKeySignature(track)
   const measureCount = Math.max(scoreModel.measureCount, engravingModel.measureCount, sharedMeasureWidths.length)
   const engravingLayout = useMemo(
@@ -406,7 +423,7 @@ export function EngravedScoreStrip({
         const staveNote =
           event.kind === 'rest' || event.renderNote === null
             ? createRest(event.duration, clef, event.hidden)
-            : createStaveNote(event.renderNote.note, event.duration, clef)
+            : createStaveNote(event.renderNote.note, event.duration, clef, defaultDisplayOctaveShift)
         staveNotes.push(staveNote)
         if (event.kind === 'note') {
           drawnMeasureNotes.push({ event, staveNote })
@@ -466,7 +483,18 @@ export function EngravedScoreStrip({
     return () => {
       container.innerHTML = ''
     }
-  }, [beatsPerMeasure, clef, clefProfile.annotation, clefProfile.vexClef, engravingLayout, keySignature, scoreWidth, syncShiftPx, track.name])
+  }, [
+    beatsPerMeasure,
+    clef,
+    clefProfile.annotation,
+    clefProfile.vexClef,
+    defaultDisplayOctaveShift,
+    engravingLayout,
+    keySignature,
+    scoreWidth,
+    syncShiftPx,
+    track.name,
+  ])
 
   return (
     <div

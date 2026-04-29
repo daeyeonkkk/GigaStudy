@@ -447,18 +447,17 @@ not legacy product surfaces.
   visual dots, so spacing and beam/tie geometry use the correct rhythmic ticks.
 - Visible ties are limited to adjacent split segments or explicit same-pitch
   continuations. The renderer no longer draws free-floating CSS tie arcs.
-- Track playback in audio mode now uses the retained recording/upload URL as a
-  browser media element. It no longer blocks on `fetch -> decodeAudioData` just
-  to play a recorded file, and it no longer silently falls back to synthesized
-  score tones when recorded audio playback is requested.
+- Historical note: this gate first moved audio-mode playback back to retained
+  source audio instead of silently falling back to synthesized score tones. That
+  intermediate browser-media-element path was later superseded by the 2026-04-29
+  Web Audio buffer clock path below.
 - Global playback and scoring reference playback share the same source policy:
   recorded media is used when audio mode and an audio asset exist; score tone
   synthesis is used only for score mode or tracks without retained audio.
 - Verification for this gate: web lint passed, production web build passed,
   browser E2E release gate passed 21/21, and a Playwright browser check against
   the live studio payload confirmed VexFlow renders without console errors and
-  Tenor playback calls the live track audio URL through
-  `HTMLMediaElement.play()`.
+  Tenor playback reached the retained source-audio path.
 
 ## Full Process Audit Gate - 2026-04-23
 
@@ -725,14 +724,13 @@ not legacy product surfaces.
 
 ## Direct Audio Playback And Playhead Gate - 2026-04-28
 
-- Studio audio-mode playback now uses retained recording/upload URLs directly
-  through browser media elements. Recorded takes no longer block on
-  `fetch -> decodeAudioData -> AudioBufferSource` before the user hears the
-  source; score synthesis remains the fallback for AI/generated tracks and
-  audio-less tracks.
-- Pure original-audio playback no longer opens a Web Audio context just to play
-  retained media. Web Audio is only required when score synthesis or the
-  metronome is part of the scheduled playback.
+- Studio audio-mode playback uses retained recording/upload URLs as the audible
+  source, then decodes them into `AudioBuffer` objects before scheduled
+  playback. This keeps original takes, synthesized score notes, metronome
+  clicks, and the smooth playhead on one Web Audio clock.
+- There is no separate `HTMLMediaElement.play()` playback lane anymore. Even a
+  single retained-audio track enters the same fetch/decode/schedule path, so
+  later layering with other tracks does not switch timing models.
 - Full-track audio playback now has a media readiness barrier: empty tracks are
   excluded, retained-audio tracks are all prepared to browser-playable state,
   and only then are they scheduled from one shared start point. This prevents
@@ -746,10 +744,11 @@ not legacy product surfaces.
   verified against a fake Web Audio clock: same-beat notes across tracks are
   scheduled at the exact same clock time, so stacked TrackNotes sound as a
   chord.
-- Retained-audio playback now distinguishes low-latency single-source playback
-  from synchronized playback. If retained audio is combined with another retained
-  audio track, score-synthesized notes, or the metronome, the original audio
-  waits at the readiness barrier and the whole set starts from one shared point.
+- Retained-audio playback now distinguishes source availability from shared
+  start timing. If retained audio is combined with another retained-audio track,
+  score-synthesized notes, or the metronome, every needed source waits at the
+  readiness barrier and the whole set starts from one shared Web Audio clock
+  point.
 - Verification for this gate: web lint passed, production web build passed,
   targeted Chromium audio playback E2E passed, and Chromium browser E2E
   release gate passed 13/13 on 2026-04-28.
@@ -926,6 +925,27 @@ not legacy product surfaces.
   regression suite passed 128/128, web lint passed, production web build passed,
   and Playwright release gate passed 40/40 with 2 browser-permission skips
   locally on 2026-04-29.
+
+## Workspace Legacy Cleanup - 2026-04-29
+
+- The current playback contract is now documented and implemented as one Web
+  Audio scheduling path. Obsolete `HTMLAudioElement` helper functions and the
+  corresponding browser-media E2E stub were removed so future playback work does
+  not accidentally reintroduce the drift-prone media-element lane.
+- Retained source audio remains first-class, but it is fetched, decoded, and
+  scheduled on the shared audio clock with score synthesis and the metronome.
+  User-facing copy now describes that shared-clock behavior instead of the old
+  "same start point" wording.
+- Compatibility readers for historical stored studio payloads remain
+  intentionally. They are not product behavior, but deleting them would make old
+  saved studios less recoverable while alpha data may still exist.
+- Generated local caches and disposable runtime artifacts are safe to clean from
+  the workspace. Secrets, local virtualenvs, and package dependency directories
+  are not treated as legacy cleanup targets.
+- Verification for this cleanup: API regression suite passed 129/129, web lint
+  passed, production web build passed, `git diff --check` passed, and
+  Playwright release gate passed 40/40 with 2 browser-permission skips locally
+  on 2026-04-29.
 
 ## Status Summary
 

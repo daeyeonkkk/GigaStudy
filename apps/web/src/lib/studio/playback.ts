@@ -8,7 +8,6 @@ import {
 
 export type PlaybackNode = {
   filters?: BiquadFilterNode[]
-  media?: HTMLAudioElement
   oscillator?: OscillatorNode
   oscillators?: OscillatorNode[]
   source?: AudioBufferSourceNode
@@ -153,124 +152,6 @@ export function createAudioBufferPlayback(
   return { source, gain }
 }
 
-export function createMediaElementPlayback(audioUrl: string, volume: number): PlaybackNode {
-  const media = new Audio(audioUrl)
-  media.preload = 'auto'
-  media.volume = Math.max(0, Math.min(1, volume))
-  return { media }
-}
-
-export function prepareMediaElementPlayback(
-  node: PlaybackNode,
-  timeoutMilliseconds = 3500,
-): Promise<void> {
-  if (!node.media) {
-    return Promise.resolve()
-  }
-
-  const media = node.media
-  const hasPlayableBuffer = () => media.readyState >= 3
-  if (hasPlayableBuffer()) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let timeoutId: number | null = null
-
-    const cleanup = () => {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId)
-      }
-      media.removeEventListener('canplay', handleReady)
-      media.removeEventListener('canplaythrough', handleReady)
-      media.removeEventListener('loadeddata', handleLoadedData)
-      media.removeEventListener('progress', handleLoadedData)
-      media.removeEventListener('error', handleError)
-    }
-
-    const finish = () => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      resolve()
-    }
-
-    const fail = (error: unknown) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      reject(error)
-    }
-
-    const handleReady = () => finish()
-    const handleLoadedData = () => {
-      if (hasPlayableBuffer()) {
-        finish()
-      }
-    }
-    const handleError = () => fail(new Error('Track audio media could not be loaded.'))
-
-    media.addEventListener('canplay', handleReady)
-    media.addEventListener('canplaythrough', handleReady)
-    media.addEventListener('loadeddata', handleLoadedData)
-    media.addEventListener('progress', handleLoadedData)
-    media.addEventListener('error', handleError)
-
-    timeoutId = window.setTimeout(() => {
-      if (hasPlayableBuffer()) {
-        finish()
-        return
-      }
-      fail(new Error('Track audio media was not ready before playback timeout.'))
-    }, timeoutMilliseconds)
-
-    try {
-      media.load()
-    } catch (error) {
-      fail(error)
-    }
-
-    if (hasPlayableBuffer()) {
-      finish()
-    }
-  })
-}
-
-export function scheduleMediaElementPlayback(
-  node: PlaybackNode,
-  delaySeconds: number,
-  offsetSeconds: number,
-  onError?: (error: unknown) => void,
-): number | null {
-  if (!node.media) {
-    return null
-  }
-
-  const media = node.media
-  const start = () => {
-    try {
-      media.currentTime = Math.max(0, offsetSeconds)
-      void media.play().catch((error) => {
-        onError?.(error)
-      })
-    } catch (error) {
-      onError?.(error)
-    }
-  }
-
-  if (delaySeconds <= 0.02) {
-    start()
-    return null
-  }
-
-  return window.setTimeout(start, Math.round(delaySeconds * 1000))
-}
-
 export function startLoopingMetronomeSession(
   bpm: number,
   meter: MeterContext = DEFAULT_METER,
@@ -338,13 +219,8 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ filters, media, oscillator, oscillators, source, gain, gains }) => {
+  session.nodes.forEach(({ filters, oscillator, oscillators, source, gain, gains }) => {
     try {
-      if (media) {
-        media.pause()
-        media.removeAttribute('src')
-        media.load()
-      }
       ;[gain, ...(gains ?? [])].forEach((currentGain) => {
         currentGain?.gain.cancelScheduledValues(0)
         currentGain?.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)

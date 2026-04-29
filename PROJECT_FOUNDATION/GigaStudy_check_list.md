@@ -195,6 +195,8 @@ This checklist tracks the new six-track studio foundation only.
   real decode path before extraction.
 - [x] Registered voice/audio tracks retain the normalized source audio for
   playback while TrackNote data remains the scoring/generation truth source.
+- [x] Obsolete browser-media-element playback helpers and tests are removed; all
+  retained audio playback now goes through the shared Web Audio scheduling path.
 - [x] Upload accepts supported MIDI formats.
 - [x] Upload accepts supported score formats.
 - [x] PDF/image score upload is fully covered by OMR job tests.

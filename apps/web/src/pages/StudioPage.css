@@ -423,6 +423,9 @@
   font-size: 0.83rem;
 }
 
+@keyframes composerPulse {
+  from {
+    opacity: 0.56;
     transform: scaleY(0.86);
   }
 

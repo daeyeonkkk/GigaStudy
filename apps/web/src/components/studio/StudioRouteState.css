@@ -69,3 +69,11 @@
 @keyframes composerPulse {
   from {
     opacity: 0.56;
+    transform: scaleY(0.86);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}

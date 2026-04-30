@@ -4,12 +4,19 @@ import struct
 import sys
 import types
 import wave
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 
 from gigastudy_api.services.engine.music_theory import midi_to_frequency
-from gigastudy_api.services.engine.voice import VoiceTranscriptionError, transcribe_voice_file
+from gigastudy_api.services.engine.voice import (
+    VoiceTranscriptionError,
+    _estimate_metronome_phase_alignment,
+    build_metronome_aligned_wav_bytes,
+    transcribe_voice_file,
+    transcribe_voice_file_with_alignment,
+)
 
 
 def _write_mono_wav(
@@ -137,6 +144,21 @@ def test_voice_transcription_tracks_singing_under_noise(tmp_path: Path) -> None:
     assert min(note.confidence for note in notes) > 0.5
 
 
+def test_voice_transcription_estimates_pre_notation_metronome_alignment() -> None:
+    alignment = _estimate_metronome_phase_alignment(
+        [
+            (0.13, 0.4, 0.9),
+            (0.63, 0.4, 0.9),
+            (1.13, 0.4, 0.9),
+        ],
+        bpm=120,
+    )
+
+    assert alignment.applied is True
+    assert alignment.offset_seconds == pytest.approx(-0.13, abs=0.01)
+    assert alignment.aligned_distance_beats < alignment.baseline_distance_beats
+
+
 def test_voice_transcription_rejects_non_wav_input(tmp_path: Path) -> None:
     mp3_path = tmp_path / "voice.mp3"
     mp3_path.write_bytes(b"not really mp3")
@@ -164,6 +186,45 @@ def test_voice_transcription_can_use_optional_basic_pitch_backend(tmp_path: Path
     assert [note.label for note in notes] == ["C5", "E5"]
     assert all(note.extraction_method == "basic_pitch_amt_v1" for note in notes)
     assert all(note.clef == "treble" for note in notes)
+
+
+def test_basic_pitch_notes_are_aligned_before_quantization(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wav_path = tmp_path / "basic-pitch-late.wav"
+    _write_mono_wav(wav_path, [(1.0, None, 0)])
+
+    package = types.ModuleType("basic_pitch")
+    inference = types.ModuleType("basic_pitch.inference")
+
+    def fake_predict(_path: str):
+        return None, None, [(0.13, 0.48, 72, 0.91), (0.63, 0.98, 76, 0.87)]
+
+    inference.predict = fake_predict  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "basic_pitch", package)
+    monkeypatch.setitem(sys.modules, "basic_pitch.inference", inference)
+
+    result = transcribe_voice_file_with_alignment(wav_path, bpm=120, slot_id=1, backend="basic_pitch")
+    notes = result.notes
+
+    assert [note.label for note in notes] == ["C5", "E5"]
+    assert [note.beat for note in notes] == [1, 2]
+    assert result.alignment.offset_seconds == pytest.approx(-0.13, abs=0.01)
+
+
+def test_metronome_aligned_wav_bytes_trim_and_pad_source_audio(tmp_path: Path) -> None:
+    wav_path = tmp_path / "align-source.wav"
+    _write_mono_wav(wav_path, [(0.5, None, 0), (0.5, 72, 0.2)], sample_rate=8000)
+
+    trimmed = build_metronome_aligned_wav_bytes(wav_path, -0.25)
+    padded = build_metronome_aligned_wav_bytes(wav_path, 0.25)
+
+    assert trimmed is not None
+    assert padded is not None
+    with wave.open(str(wav_path), "rb") as original_wav:
+        original_frames = original_wav.getnframes()
+    with wave.open(BytesIO(trimmed), "rb") as trimmed_wav:
+        assert trimmed_wav.getnframes() == original_frames - 2000
+    with wave.open(BytesIO(padded), "rb") as padded_wav:
+        assert padded_wav.getnframes() == original_frames + 2000
 
 
 def test_voice_transcription_can_use_librosa_pyin_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

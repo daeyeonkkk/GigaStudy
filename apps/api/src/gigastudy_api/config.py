@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     direct_upload_expiration_seconds: int = 15 * 60
     staged_upload_retention_seconds: int = 24 * 60 * 60
     lifecycle_cleanup_interval_seconds: int = 15 * 60
+    asset_cache_max_bytes: int = 256 * 1024 * 1024
+    asset_cache_max_age_seconds: int = 6 * 60 * 60
     max_active_engine_jobs: int = 1
     engine_job_max_attempts: int = 3
     engine_job_lease_seconds: int = 10 * 60

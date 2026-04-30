@@ -257,9 +257,13 @@ class S3AssetStorage(LocalAssetStorage):
         access_key_id: str,
         secret_access_key: str,
         addressing_style: str,
+        cache_max_bytes: int,
+        cache_max_age_seconds: int,
     ) -> None:
         super().__init__(root)
         self._bucket = bucket
+        self._cache_max_bytes = cache_max_bytes
+        self._cache_max_age_seconds = cache_max_age_seconds
         self._client = _build_s3_client(
             region=region,
             endpoint_url=endpoint_url,
@@ -349,12 +353,14 @@ class S3AssetStorage(LocalAssetStorage):
         relative_path = self._relative_path_from_reference(asset_path)
         local_path = self._cache_path(relative_path)
         if not local_path.exists():
+            self._evict_stale_cache_files()
             local_path.parent.mkdir(parents=True, exist_ok=True)
             try:
                 self._client.download_file(self._bucket, relative_path, str(local_path))
             except ClientError as error:
                 _remove_empty_file(local_path)
                 raise AssetStorageError("Stored asset was not found.") from error
+            self._enforce_cache_size_limit()
         return local_path
 
     def iter_studio_assets(self, studio_id: str) -> list[StoredAssetInfo]:
@@ -462,6 +468,57 @@ class S3AssetStorage(LocalAssetStorage):
     def _delete_objects(self, objects: list[dict[str, str]]) -> None:
         self._client.delete_objects(Bucket=self._bucket, Delete={"Objects": objects})
 
+    def _evict_stale_cache_files(self) -> None:
+        if self._cache_max_age_seconds <= 0:
+            return
+        cutoff = datetime.now(UTC) - timedelta(seconds=self._cache_max_age_seconds)
+        for path in self._iter_cache_files():
+            try:
+                if datetime.fromtimestamp(path.stat().st_mtime, UTC) < cutoff:
+                    path.unlink()
+                    _prune_empty_dirs(self._root, path.parent)
+            except OSError:
+                continue
+
+    def _enforce_cache_size_limit(self) -> None:
+        if self._cache_max_bytes <= 0:
+            return
+        files = []
+        total_bytes = 0
+        now = datetime.now(UTC)
+        for path in self._iter_cache_files():
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            total_bytes += stat.st_size
+            files.append((datetime.fromtimestamp(stat.st_mtime, UTC), stat.st_size, path))
+
+        if total_bytes <= self._cache_max_bytes:
+            return
+
+        for modified_at, size_bytes, path in sorted(files, key=lambda item: item[0]):
+            if total_bytes <= self._cache_max_bytes:
+                break
+            # Do not evict files that may still be part of an in-flight parser job.
+            if now - modified_at < timedelta(minutes=5):
+                continue
+            try:
+                path.unlink()
+                _prune_empty_dirs(self._root, path.parent)
+            except OSError:
+                continue
+            total_bytes -= size_bytes
+
+    def _iter_cache_files(self):
+        for relative_prefix in ("uploads", "jobs", "staged"):
+            root = self._cache_path(relative_prefix)
+            if not root.exists():
+                continue
+            for path in root.rglob("*"):
+                if path.is_file():
+                    yield path
+
     def _create_s3_direct_upload(
         self,
         *,
@@ -520,6 +577,8 @@ def build_asset_storage(*, storage_root: Path, settings: Settings) -> AssetStora
             access_key_id=settings.s3_access_key_id or "",
             secret_access_key=settings.s3_secret_access_key or "",
             addressing_style=settings.s3_addressing_style,
+            cache_max_bytes=settings.asset_cache_max_bytes,
+            cache_max_age_seconds=settings.asset_cache_max_age_seconds,
         )
     raise AssetStorageError(f"Unsupported asset storage backend: {settings.storage_backend}.")
 

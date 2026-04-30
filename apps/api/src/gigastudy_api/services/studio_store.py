@@ -355,7 +355,7 @@ class PostgresStudioStore:
             """,
             (studio_id, Jsonb(base_studio)),
         )
-        self._replace_sidecar_rows(
+        self._sync_sidecar_rows(
             connection,
             table_name="studio_reports",
             id_column="report_id",
@@ -363,7 +363,7 @@ class PostgresStudioStore:
             studio_id=studio_id,
             items=reports,
         )
-        self._replace_sidecar_rows(
+        self._sync_sidecar_rows(
             connection,
             table_name="studio_candidates",
             id_column="candidate_id",
@@ -372,7 +372,7 @@ class PostgresStudioStore:
             items=candidates,
         )
 
-    def _replace_sidecar_rows(
+    def _sync_sidecar_rows(
         self,
         connection,
         *,
@@ -382,16 +382,34 @@ class PostgresStudioStore:
         studio_id: str,
         items: list[Any],
     ) -> None:
-        connection.execute(f"DELETE FROM {table_name} WHERE studio_id = %s", (studio_id,))
+        next_ids: list[str] = []
         for index, item in enumerate(items):
             item_id = str(item.get(id_key) or f"{index:08d}") if isinstance(item, dict) else f"{index:08d}"
+            next_ids.append(item_id)
             connection.execute(
                 f"""
                 INSERT INTO {table_name} (studio_id, {id_column}, ordinal, payload, updated_at)
                 VALUES (%s, %s, %s, %s, now())
+                ON CONFLICT (studio_id, {id_column})
+                DO UPDATE SET
+                    ordinal = EXCLUDED.ordinal,
+                    payload = EXCLUDED.payload,
+                    updated_at = CASE
+                        WHEN {table_name}.ordinal IS DISTINCT FROM EXCLUDED.ordinal
+                          OR {table_name}.payload IS DISTINCT FROM EXCLUDED.payload
+                        THEN now()
+                        ELSE {table_name}.updated_at
+                    END
                 """,
                 (studio_id, item_id, index, Jsonb(item)),
             )
+        if next_ids:
+            connection.execute(
+                f"DELETE FROM {table_name} WHERE studio_id = %s AND NOT ({id_column} = ANY(%s))",
+                (studio_id, next_ids),
+            )
+        else:
+            connection.execute(f"DELETE FROM {table_name} WHERE studio_id = %s", (studio_id,))
 
     def _fetch_sidecars(self, connection, studio_ids: list[str]) -> dict[str, dict[str, list[Any]]]:
         sidecars: dict[str, dict[str, list[Any]]] = {

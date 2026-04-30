@@ -23,6 +23,12 @@ type CandidateReviewPanelProps = {
   onUpdateCandidateTargetSlot: (candidate: ExtractionCandidate, targetSlotId: number) => void
 }
 
+type CandidateVerdict = {
+  label: string
+  reason: string
+  tone: 'recommended' | 'review' | 'retry'
+}
+
 export function CandidateReviewPanel({
   beatsPerMeasure,
   candidateOverwriteApprovals,
@@ -59,6 +65,7 @@ export function CandidateReviewPanel({
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
           const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
           const contourPoints = getCandidateContourPoints(candidate)
+          const verdict = getCandidateVerdict(candidate, wouldOverwrite)
           const sourcePreviewUrl =
             candidate.job_id && shouldShowSourcePreview(candidate) && getJobSourcePreviewUrl
               ? getJobSourcePreviewUrl(candidate.job_id)
@@ -72,6 +79,10 @@ export function CandidateReviewPanel({
                   {candidate.variant_label ? ` · ${candidate.variant_label}` : ''}
                 </span>
                 <h3>{suggestedTrack?.name ?? `Track ${candidate.suggested_slot_id}`} 후보</h3>
+                <div className={`candidate-review__verdict candidate-review__verdict--${verdict.tone}`}>
+                  <strong>{verdict.label}</strong>
+                  <span>{verdict.reason}</span>
+                </div>
                 <strong>{decisionSummary.title}</strong>
                 <p>{decisionSummary.headline}</p>
                 <ul aria-label="후보 특징">
@@ -207,6 +218,73 @@ export function CandidateReviewPanel({
       </div>
     </section>
   )
+}
+
+function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boolean): CandidateVerdict {
+  if (candidate.notes.length === 0) {
+    return {
+      label: '재시도 권장',
+      reason: '등록할 음표가 감지되지 않았습니다.',
+      tone: 'retry',
+    }
+  }
+
+  const diagnostics = candidate.diagnostics ?? {}
+  const confidence = Math.max(0, Math.min(1, candidate.confidence))
+  const reviewHint = getDiagnosticString(diagnostics, 'review_hint')
+  const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags')
+  const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
+  const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
+  const density = getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
+
+  if (confidence < 0.5 || reviewHint === 'few_notes') {
+    return {
+      label: '재시도 권장',
+      reason: '판독 신뢰도가 낮거나 파트 누락 가능성이 큽니다.',
+      tone: 'retry',
+    }
+  }
+
+  if (
+    wouldOverwrite ||
+    confidence < 0.74 ||
+    riskTags.length > 0 ||
+    reviewHint !== null ||
+    (rangeFitRatio !== null && rangeFitRatio < 0.72) ||
+    (timingGridRatio !== null && timingGridRatio < 0.72) ||
+    (density !== null && density > 11)
+  ) {
+    return {
+      label: '검토 필요',
+      reason: wouldOverwrite
+        ? '기존 트랙을 덮어씁니다. 대상 트랙과 후보 흐름을 확인하세요.'
+        : '음역, 박자, 밀도 중 확인할 지점이 있습니다.',
+      tone: 'review',
+    }
+  }
+
+  return {
+    label: '추천',
+    reason: '트랙 배정과 악보화 품질이 안정적인 후보입니다.',
+    tone: 'recommended',
+  }
+}
+
+function getDiagnosticNumber(diagnostics: Record<string, unknown>, key: string): number | null {
+  const value = diagnostics[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function getDiagnosticString(diagnostics: Record<string, unknown>, key: string): string | null {
+  const value = diagnostics[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function getDiagnosticStringList(diagnostics: Record<string, unknown>, key: string): string[] {
+  const value = diagnostics[key]
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : []
 }
 
 function shouldShowSourcePreview(candidate: ExtractionCandidate): boolean {

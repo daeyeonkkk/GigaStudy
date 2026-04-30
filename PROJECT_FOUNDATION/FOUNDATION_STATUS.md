@@ -926,6 +926,252 @@ not legacy product surfaces.
   and Playwright release gate passed 40/40 with 2 browser-permission skips
   locally on 2026-04-29.
 
+## Repository Structure Refactor - 2026-04-30
+
+- The studio repository remains the write-boundary/orchestration facade, but
+  repeated domain logic has been moved behind focused modules:
+  sync-resolved TrackNote timeline calculation lives in
+  `services/engine/timeline.py`, extraction candidate diagnostics and variant
+  labels live in `services/engine/candidate_diagnostics.py`, and upload
+  filename/type/base64 policy lives in `services/upload_policy.py`.
+- Direct-upload token cryptography now lives in
+  `services/direct_upload_tokens.py`; studio list/document shaping lives in
+  `services/studio_documents.py`; shared asset path normalization lives in
+  `services/asset_paths.py`; and OMR result annotation/summary writing lives in
+  `services/engine/omr_results.py`.
+- Studio ownership/access decisions now live in `services/studio_access.py`,
+  and alpha capacity/admin-limit decisions now live in
+  `services/alpha_limits.py`. This keeps storage orchestration from owning
+  security and environment-limit policy text.
+- Stored-asset I/O now has its own API service boundary:
+  `services/studio_assets.py` owns direct/staged upload target creation,
+  expiring upload-token validation, byte writes, asset-registry upserts,
+  admin asset summaries, registry backfill from storage, staged-upload
+  promotion, generated asset persistence, temporary scoring upload files,
+  aligned-audio replacement, and lifecycle cleanup. The repository calls it as
+  an orchestration dependency instead of performing low-level file and
+  object-store work inline.
+- Redundant repository-local copies of direct-upload token decoding, owner
+  token hashing, admin limit building, studio hard-limit enforcement, candidate
+  diagnostics, upload validation, OMR marking, and old list/payload helpers
+  have been removed. Runtime `__pycache__` folders are treated as generated
+  workspace noise and are not source artifacts.
+- Browser playback helper logic that does not need React state now lives in
+  `apps/web/src/lib/studio/playback.ts`, keeping `StudioPage.tsx` closer to
+  page orchestration instead of low-level scheduling math.
+- Repeated studio route loading/error shell markup now lives in
+  `components/studio/StudioRouteState.tsx`, so `StudioPage.tsx` owns action
+  orchestration while shared route-state UX has one edit point.
+- The intended pattern is now explicit: pages/routes coordinate user actions,
+  repositories enforce persistence/write boundaries, engine modules own music
+  domain rules, storage modules own bytes, and small policy modules own
+  validation. Future work should avoid adding new extraction, notation,
+  upload, or playback rules directly into `studio_repository.py` or
+  `StudioPage.tsx` unless they are pure orchestration.
+- The old unused non-timeline metronome scheduling export was removed from the
+  browser playback library. The remaining playback scheduler always works from
+  the shared score timeline so metronome clicks, retained audio, synthesized
+  score notes, and the playhead stay on one clock model.
+- Scoring capture now only exposes `Stop` once the browser is actually
+  listening, waits briefly for the first microphone buffer before closing the
+  recorder, and treats an uploaded scoring take with no detected notes as a
+  valid zero-performance report instead of dropping the report. This prevents
+  fast start/stop races from silently losing the scoring flow.
+- The release gate now verifies microphone-dependent scoring only in the
+  Chromium project, which is the Playwright project configured with fake
+  microphone permissions. Firefox/WebKit continue to cover the shared studio
+  flow without pretending they have the same automated capture permissions.
+
+## Studio UX, Readiness, And LLM Contract Polish - 2026-04-30
+
+- The extraction queue panel now uses clean Korean labels and explicit state
+  hints for queued, running, review-ready, completed, and failed jobs. Failed
+  OMR/voice jobs explain whether the likely recovery path is a cleaner singing
+  take, a better score source, or a retry of the retained input asset.
+- Studio playback and scoring copy now uses user-facing shared beat language
+  instead of internal "audio clock" wording. This keeps the UX aligned with the
+  product principle that all retained audio, synthesized score notes,
+  metronome clicks, and the playhead run against one BPM/meter timeline.
+- The API now exposes `GET /api/health/ready` as a non-secret readiness
+  contract. It reports environment, metadata/object-storage configuration
+  booleans, engine lane settings, upload size limits, OMR/voice backend names,
+  and which DeepSeek intervention points are effectively enabled, without
+  returning API keys or object-storage secrets.
+- The LLM intervention contract is now explicit in the engine foundation:
+  notation review, ensemble registration review, and harmony generation
+  planning are independent DeepSeek-enabled gates. The LLM may request bounded
+  cleanup or planning instructions, but deterministic code still owns final
+  TrackNote mutation, BPM/meter, validation, scoring numbers, and fallback
+  behavior when the provider is unavailable.
+
+## Web Loading And Playback Runtime Optimization - 2026-04-30
+
+- Browser engraving no longer imports VexFlow's full package entry. The score
+  strip imports only the VexFlow classes it uses and initializes the Bravura /
+  Academico fonts explicitly. Production build output now splits engraving into
+  `EngravedScoreStrip`, `vexflow-core`, and `vexflow-fonts` chunks instead of
+  one oversized VexFlow vendor chunk.
+- The previous production warning from a 1.1 MiB `vexflow-vendor` chunk is gone.
+  Current measured chunks are roughly `vexflow-core` 268 KiB minified / 74 KiB
+  gzip and `vexflow-fonts` 391 KiB minified / 295 KiB gzip. These chunks remain
+  lazy-loaded behind the studio score board, so the home/admin/report routes do
+  not pay the engraving cost up front.
+- Vite now aliases the internal VexFlow ESM source under `vexflow-src`, with a
+  matching TypeScript path and knip ignore rule so build, type-check, and dead
+  code analysis agree on the same intentional import boundary.
+- The looping metronome session no longer keeps every historical timer id and
+  every completed click node for the whole recording session. It retains only
+  the active timer and a bounded recent-node window, while the shared audio
+  context still closes the entire session on stop/cancel. This keeps long
+  count-in/recording/metronome use from accumulating avoidable browser-side
+  references.
+- Verification for this optimization: web lint passed, production web build
+  passed with no chunk-size warning, API regression suite passed 138/138,
+  Playwright release gate passed 40/40 with 2 browser-permission skips, knip
+  passed, and `git diff --check` reported no whitespace errors locally on
+  2026-04-30.
+
+## Studio Flow UX Bottleneck Reduction - 2026-04-30
+
+- The studio flow audit identified the main UX risk as unclear waiting and
+  decision moments rather than missing core actions. Upload, recording,
+  extraction, candidate approval, playback, and scoring now expose more precise
+  state copy.
+- The extraction queue panel now receives the full job history instead of only
+  the newest four jobs. It provides filters for attention-needed jobs, failed
+  jobs, and all jobs so older failures and completed jobs remain recoverable.
+- Candidate review now has a front-loaded verdict badge: recommended, review
+  needed, or retry recommended. The badge is derived from confidence,
+  diagnostics, overwrite risk, range fit, timing-grid fit, density, and LLM risk
+  tags when present, while preserving the existing detailed metrics below it.
+- Playback preparation messages now distinguish loading recorded audio,
+  synthesized score-note playback, metronome inclusion, and synchronized start.
+  Single original-audio playback is described as a near-immediate source load;
+  multi-part playback explicitly says every prepared part starts from one
+  shared timeline.
+- Scoring mode selection now includes a compact current-mode summary that names
+  whether the session is answer scoring or harmony scoring, how many reference
+  tracks are involved, and whether the metronome is included.
+
+## Structural Consistency Hardening - 2026-04-30
+
+- Sync-resolved TrackNote views now preserve negative layer shifts instead of
+  clamping early notes back to 0 seconds / beat 1. User sync remains a layer
+  movement over the fixed BPM paper, so scoring, generation, ensemble review,
+  and other cross-track judgments can see the true effective timeline.
+- A Web/API contract regression test now checks that the main response schemas
+  exposed by the API are covered by the TypeScript studio types. The first
+  caught drift was `TrackSlot.diagnostics`, which is now present in the Web
+  type.
+- Track registration quality preparation moved out of `StudioRepository` into
+  `TrackRegistrationPreparer`. Repository code still orchestrates persistence
+  and user actions, while notation normalization, LLM review directives, and
+  ensemble arrangement gates live behind a dedicated domain service.
+- Repeated "commit this prepared material into a track" mutation now goes
+  through `register_track_material` in `studio_documents.py`. Recording,
+  upload, OMR, AI candidate approval, and seeded symbolic material therefore
+  set status, source labels, audio references, notes, duration, diagnostics,
+  and timestamps through one write helper instead of drifting through copied
+  assignment blocks.
+- Studio route loading, polling, registered-track derivation, active-job
+  derivation, and candidate derivation moved into `useStudioResource`. The
+  studio page now consumes a resource hook rather than owning both route data
+  fetching and user-action orchestration in the same component body.
+- Candidate review target selection, overwrite confirmation, approve/reject,
+  bulk job approval, and retry behavior moved into `useCandidateReviewState`.
+  The candidate panel remains a presentational decision surface, while API
+  mutations and local review state have one focused owner.
+- Studio playback state, selected-track playback, retained-audio decoding,
+  synthesized score playback, metronome scheduling, playhead animation,
+  seek/restart behavior, source switching, and active track gain updates moved
+  into `useStudioPlayback`. `StudioPage.tsx` no longer owns the Web Audio
+  scheduling state machine directly.
+- Studio scoring state, answer/harmony mode transitions, scoring microphone
+  capture, reference-track playback coordination, metronome-only scoring
+  playback, and report submission moved into `useStudioScoring`. This keeps
+  scoring UX orchestration separate from track-board upload/record/generate
+  actions.
+- Track recording state, one-measure count-in timers, recording metronome
+  session ownership, microphone recorder lifecycle, recording review state, and
+  register/delete actions moved into `useStudioRecording`. `StudioPage.tsx`
+  now keeps only the cross-flow guard that prevents track recording while
+  scoring capture is active.
+- Track material actions moved into `useStudioTrackActions`. Track upload,
+  direct-upload fallback, AI candidate generation, per-track sync, all-track
+  sync shifting, track volume persistence, and PDF export now have one Web
+  mutation owner instead of living inline in the studio route component.
+- The pending recording review surface moved into `PendingRecordingDialog`.
+  The page now passes the reviewed recording, busy state, and register/delete
+  callbacks into a focused presentation component instead of keeping modal
+  markup inline.
+- Backend extraction job construction now lives in `studio_jobs.py`.
+  `StudioRepository` still owns persistence, locking, and processing
+  orchestration, but OMR/voice `TrackExtractionJob` creation and durable
+  `EngineQueueJob` payload shaping have one source of truth.
+- OMR backend execution selection now lives in `omr_pipeline.py`. The
+  repository still owns job lifecycle, locking, failure marking, time-signature
+  updates, and candidate registration, while the pipeline owns Audiveris vs.
+  vector-PDF fallback execution and returns a typed result with candidate
+  method, extraction method, confidence, and review copy.
+- The OMR pipeline still receives the repository's Audiveris runner so the
+  existing single-engine execution lock remains intact. Queue records now use
+  their own `slot_id` instead of reloading the same job only to recover the
+  target slot during OMR parsing.
+- Voice queue execution now lives behind `voice_pipeline.py`. The repository
+  still owns overwrite policy, candidate creation, direct registration, job
+  completion, and failure semantics, while the pipeline owns transcription,
+  metronome-aligned audio replacement, and the normalized result passed back to
+  the repository. The repository's locked transcription runner is still
+  injected so the existing single-engine lane and legacy test monkeypatch
+  contract remain intact.
+- Extraction job state transitions now live in `studio_jobs.py` as pure studio
+  mutation helpers. Running, failed, completed, and unmapped full-score OMR
+  placeholder cleanup rules have one implementation, while `StudioRepository`
+  still owns locking, loading, saving, queue store updates, and HTTP error
+  translation.
+- Candidate construction and candidate state mutation now live in
+  `studio_candidates.py`. Pending candidate creation, registration-quality
+  diagnostic merging, approve/reject marking, sibling rejection, job-candidate
+  deduplication, and review-track marking now have shared helpers, while
+  `StudioRepository` still owns access checks, overwrite checks, registration
+  preparation, track material commits, and persistence.
+- Score-track request preparation now lives in `studio_scoring.py`. Reference
+  track selection, scoring-mode validation, performance-submission detection,
+  and answer-vs-harmony report construction are pure helper responsibilities,
+  while `StudioRepository` still owns owner access, temporary scoring-audio
+  extraction, report persistence, and HTTP error translation.
+- AI generation request preparation now lives in `studio_generation.py`.
+  Registered-context collection, sync-resolved context note shaping, optional
+  DeepSeek harmony planning, rule-based candidate generation, and generation
+  method/copy selection are service helpers. `StudioRepository` keeps access
+  checks, overwrite policy, candidate persistence, direct track material
+  registration, and HTTP error translation.
+- AI generation candidate review metadata also lives in
+  `studio_generation.py`. LLM direction diagnostics, profile/risk hints, and
+  candidate variant labels are generated next to the generation planning logic,
+  leaving the repository to persist prepared candidates.
+- Admin studio summary and asset-reference cleanup rules now live in
+  `studio_admin.py`. The repository still owns the admin command boundary,
+  locking, asset-service calls, and persistence, while the helper owns which
+  track/candidate/job references are counted or cleared.
+- Candidate cleanup rules now stay with candidate state helpers. A rejected or
+  moved candidate releases its review placeholder through
+  `release_review_track_if_no_pending_candidates`, so the repository no longer
+  duplicates candidate-slot release policy.
+- Track sync, all-track sync shift, volume, and time-signature mutation rules
+  now live in `studio_track_settings.py`. Repository methods translate access
+  and HTTP errors; track setting semantics have one small owner.
+- Durable queue recovery payload shaping now lives in `studio_jobs.py`.
+  Re-enqueue payload reconstruction and retry-attempt reset rules are job
+  helpers instead of inline repository payload assembly.
+- Upload-start audio candidate extraction now lives in
+  `studio_home_audio_import.py`, and seed score-to-OMR routing lives in
+  `upload_policy.py`. The repository still owns upload asset persistence and
+  HTTP translation, but import-specific track inference and routing policy have
+  named owners.
+- Playback preparation copy moved from the studio page into the playback
+  library so the page no longer owns that reusable playback-state wording.
+
 ## Workspace Legacy Cleanup - 2026-04-29
 
 - The current playback contract is now documented and implemented as one Web

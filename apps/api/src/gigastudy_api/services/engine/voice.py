@@ -4,6 +4,7 @@ import math
 import struct
 import wave
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from statistics import median
 
@@ -39,6 +40,32 @@ class VoiceSegment:
     pitch_std: float
 
 
+@dataclass(frozen=True)
+class MetronomeAlignment:
+    applied: bool
+    offset_seconds: float
+    offset_beats: float
+    baseline_distance_beats: float
+    aligned_distance_beats: float
+    event_count: int
+
+
+@dataclass(frozen=True)
+class VoiceTranscriptionResult:
+    notes: list[TrackNote]
+    alignment: MetronomeAlignment
+
+
+METRONOME_ALIGNMENT_FINE_STEP_BEATS = 0.01
+METRONOME_ALIGNMENT_MAX_OFFSET_BEATS = 0.3
+METRONOME_ALIGNMENT_STRONG_GRID_BEATS = 0.5
+METRONOME_ALIGNMENT_DETAIL_GRID_BEATS = 0.25
+METRONOME_ALIGNMENT_MIN_EVENTS = 2
+METRONOME_ALIGNMENT_MIN_IMPROVEMENT_BEATS = 0.035
+METRONOME_ALIGNMENT_MIN_OFFSET_SECONDS = 0.018
+NO_METRONOME_ALIGNMENT = MetronomeAlignment(False, 0.0, 0.0, 0.0, 0.0, 0)
+
+
 def transcribe_voice_file(
     path: Path,
     *,
@@ -48,6 +75,25 @@ def transcribe_voice_file(
     time_signature_denominator: int = 4,
     backend: str | None = None,
 ) -> list[TrackNote]:
+    return transcribe_voice_file_with_alignment(
+        path,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+        backend=backend,
+    ).notes
+
+
+def transcribe_voice_file_with_alignment(
+    path: Path,
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+    backend: str | None = None,
+) -> VoiceTranscriptionResult:
     if path.suffix.lower() != ".wav":
         msg = "Only WAV voice transcription is available in the local MVP engine."
         raise VoiceTranscriptionError(msg)
@@ -101,7 +147,7 @@ def _transcribe_with_local_autocorrelation(
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> list[TrackNote]:
+) -> VoiceTranscriptionResult:
     samples, sample_rate = _read_wav_mono(path)
     if not samples:
         raise VoiceTranscriptionError("Audio file is empty.")
@@ -172,7 +218,7 @@ def _transcribe_with_basic_pitch(
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> list[TrackNote]:
+) -> VoiceTranscriptionResult:
     try:
         from basic_pitch.inference import predict  # type: ignore[import-not-found]
     except Exception as error:  # pragma: no cover - optional dependency.
@@ -191,7 +237,7 @@ def _transcribe_with_basic_pitch(
 
     low_midi, high_midi = SLOT_RANGES.get(slot_id, (40, 81))
     beat_seconds = 60 / max(1, bpm)
-    notes: list[TrackNote] = []
+    parsed_events: list[tuple[float, float, int, float]] = []
     for event in note_events:
         parsed = _parse_basic_pitch_event(event)
         if parsed is None:
@@ -200,9 +246,22 @@ def _transcribe_with_basic_pitch(
         if midi_note < low_midi - 1 or midi_note > high_midi + 1:
             continue
         duration_seconds = max(0.05, end_seconds - onset_seconds)
+        parsed_events.append((onset_seconds, duration_seconds, midi_note, amplitude))
+
+    if not parsed_events:
+        raise VoiceTranscriptionError("Basic Pitch did not produce notes in the target track range.")
+
+    alignment = _estimate_metronome_phase_alignment(
+        [(onset, duration, confidence) for onset, duration, _midi, confidence in parsed_events],
+        bpm=bpm,
+    )
+    notes: list[TrackNote] = []
+    for onset_seconds, duration_seconds, midi_note, amplitude in parsed_events:
+        aligned_onset_seconds = max(0, onset_seconds + alignment.offset_seconds) if alignment.applied else onset_seconds
+        warnings = ["metronome_phase_aligned"] if alignment.applied else []
         notes.append(
             note_from_pitch(
-                beat=quantize(onset_seconds / beat_seconds + 1, 0.25),
+                beat=quantize(aligned_onset_seconds / beat_seconds + 1, 0.25),
                 duration_beats=max(0.25, quantize(duration_seconds / beat_seconds, 0.25)),
                 bpm=bpm,
                 source="voice",
@@ -210,20 +269,22 @@ def _transcribe_with_basic_pitch(
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 pitch_midi=midi_note,
-                onset_seconds=onset_seconds,
+                onset_seconds=aligned_onset_seconds,
                 duration_seconds=duration_seconds,
                 confidence=max(0.25, min(0.98, amplitude)),
+                notation_warnings=warnings,
             )
         )
 
-    if not notes:
-        raise VoiceTranscriptionError("Basic Pitch did not produce notes in the target track range.")
-    return normalize_track_notes(
-        notes,
-        bpm=bpm,
-        slot_id=slot_id,
-        time_signature_numerator=time_signature_numerator,
-        time_signature_denominator=time_signature_denominator,
+    return VoiceTranscriptionResult(
+        notes=normalize_track_notes(
+            notes,
+            bpm=bpm,
+            slot_id=slot_id,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+        ),
+        alignment=alignment,
     )
 
 
@@ -272,7 +333,7 @@ def _transcribe_with_librosa_pyin(
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> list[TrackNote]:
+) -> VoiceTranscriptionResult:
     try:
         import librosa  # type: ignore[import-not-found]
         import numpy as np  # type: ignore[import-not-found]
@@ -426,6 +487,38 @@ def _read_wav_mono(path: Path) -> tuple[list[float], int]:
     return samples, sample_rate
 
 
+def build_metronome_aligned_wav_bytes(path: Path, offset_seconds: float) -> bytes | None:
+    if abs(offset_seconds) < 0.001:
+        return None
+    try:
+        with wave.open(str(path), "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            sample_rate = wav_file.getframerate()
+            frame_count = wav_file.getnframes()
+            raw_frames = wav_file.readframes(frame_count)
+            params = wav_file.getparams()
+    except wave.Error as error:
+        raise VoiceTranscriptionError(str(error)) from error
+
+    bytes_per_frame = max(1, channels * sample_width)
+    shift_frames = round(abs(offset_seconds) * sample_rate)
+    if shift_frames <= 0:
+        return None
+    if offset_seconds < 0:
+        if shift_frames >= frame_count:
+            return None
+        aligned_frames = raw_frames[shift_frames * bytes_per_frame :]
+    else:
+        aligned_frames = b"\x00" * shift_frames * bytes_per_frame + raw_frames
+
+    output = BytesIO()
+    with wave.open(output, "wb") as wav_file:
+        wav_file.setparams(params)
+        wav_file.writeframes(aligned_frames)
+    return output.getvalue()
+
+
 def _estimate_frequency(
     frame: list[float],
     sample_rate: int,
@@ -559,7 +652,7 @@ def _frames_to_notes(
     time_signature_numerator: int,
     time_signature_denominator: int,
     extraction_method: str,
-) -> list[TrackNote]:
+) -> VoiceTranscriptionResult:
     if not frame_pitches:
         raise VoiceTranscriptionError("No voiced pitch contour was detected.")
 
@@ -591,11 +684,20 @@ def _frames_to_notes(
         raise VoiceTranscriptionError("No stable voiced note was detected.")
 
     beat_seconds = 60 / bpm
+    alignment = _estimate_metronome_phase_alignment(
+        [
+            (segment.onset_seconds, segment.duration_seconds, segment.confidence)
+            for segment in segments
+        ],
+        bpm=bpm,
+    )
     notes: list[TrackNote] = []
     for segment in segments:
         midi_note = round(segment.midi_float)
-        beat = quantize(segment.onset_seconds / beat_seconds + 1, 0.25)
+        aligned_onset_seconds = max(0, segment.onset_seconds + alignment.offset_seconds) if alignment.applied else segment.onset_seconds
+        beat = quantize(aligned_onset_seconds / beat_seconds + 1, 0.25)
         duration_beats = max(0.5, quantize(segment.duration_seconds / beat_seconds, 0.25))
+        warnings = ["metronome_phase_aligned"] if alignment.applied else []
         notes.append(
             note_from_pitch(
                 beat=beat,
@@ -606,17 +708,21 @@ def _frames_to_notes(
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 pitch_midi=midi_note,
-                onset_seconds=segment.onset_seconds,
+                onset_seconds=aligned_onset_seconds,
                 duration_seconds=segment.duration_seconds,
                 confidence=segment.confidence,
+                notation_warnings=warnings,
             )
         )
-    return normalize_track_notes(
-        notes,
-        bpm=bpm,
-        slot_id=slot_id,
-        time_signature_numerator=time_signature_numerator,
-        time_signature_denominator=time_signature_denominator,
+    return VoiceTranscriptionResult(
+        notes=normalize_track_notes(
+            notes,
+            bpm=bpm,
+            slot_id=slot_id,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+        ),
+        alignment=alignment,
     )
 
 
@@ -669,6 +775,80 @@ def _clean_segments(segments: list[VoiceSegment], *, min_segment_seconds: float)
                 continue
         cleaned.append(segment)
     return cleaned
+
+
+def _estimate_metronome_phase_alignment(
+    events: list[tuple[float, float, float]],
+    *,
+    bpm: int,
+) -> MetronomeAlignment:
+    beat_seconds = 60 / max(1, bpm)
+    weighted_beats: list[tuple[float, float]] = []
+    for onset_seconds, duration_seconds, confidence in events:
+        if not math.isfinite(onset_seconds) or onset_seconds < 0:
+            continue
+        beat = onset_seconds / beat_seconds + 1
+        confidence_weight = max(0.2, min(1.0, confidence))
+        duration_weight = max(0.6, min(1.6, duration_seconds / max(beat_seconds * 0.5, 0.001)))
+        weighted_beats.append((beat, confidence_weight * duration_weight))
+
+    if len(weighted_beats) < METRONOME_ALIGNMENT_MIN_EVENTS:
+        return MetronomeAlignment(False, 0.0, 0.0, 0.0, 0.0, len(weighted_beats))
+
+    baseline_distance = _metronome_phase_distance(weighted_beats, 0.0)
+    max_steps = round(METRONOME_ALIGNMENT_MAX_OFFSET_BEATS / METRONOME_ALIGNMENT_FINE_STEP_BEATS)
+    candidates = [
+        step * METRONOME_ALIGNMENT_FINE_STEP_BEATS
+        for step in range(-max_steps, max_steps + 1)
+    ]
+    first_beat = min(beat for beat, _weight in weighted_beats)
+    prefer_downbeat_entry = first_beat <= 1 + METRONOME_ALIGNMENT_MAX_OFFSET_BEATS + 0.05
+
+    def candidate_rank(offset_beats: float) -> tuple[float, float, float]:
+        distance = _metronome_phase_distance(weighted_beats, offset_beats)
+        downbeat_distance = abs(first_beat + offset_beats - 1) if prefer_downbeat_entry else 0.0
+        return round(distance, 6), downbeat_distance, abs(offset_beats)
+
+    best_offset_beats, best_distance = min(
+        ((offset_beats, _metronome_phase_distance(weighted_beats, offset_beats)) for offset_beats in candidates),
+        key=lambda candidate: candidate_rank(candidate[0]),
+    )
+    offset_seconds = best_offset_beats * beat_seconds
+    improvement = baseline_distance - best_distance
+    applied = (
+        abs(offset_seconds) >= METRONOME_ALIGNMENT_MIN_OFFSET_SECONDS
+        and improvement >= METRONOME_ALIGNMENT_MIN_IMPROVEMENT_BEATS
+    )
+    return MetronomeAlignment(
+        applied=applied,
+        offset_seconds=round(offset_seconds if applied else 0.0, 4),
+        offset_beats=round(best_offset_beats if applied else 0.0, 4),
+        baseline_distance_beats=round(baseline_distance, 4),
+        aligned_distance_beats=round(best_distance if applied else baseline_distance, 4),
+        event_count=len(weighted_beats),
+    )
+
+
+def _metronome_phase_distance(weighted_beats: list[tuple[float, float]], offset_beats: float) -> float:
+    if not weighted_beats:
+        return 0.0
+    total_weight = sum(weight for _beat, weight in weighted_beats)
+    if total_weight <= 0:
+        return 0.0
+    weighted_distance = 0.0
+    for beat, weight in weighted_beats:
+        aligned_beat = beat + offset_beats
+        strong_distance = _distance_to_beat_grid(aligned_beat, METRONOME_ALIGNMENT_STRONG_GRID_BEATS)
+        detail_distance = _distance_to_beat_grid(aligned_beat, METRONOME_ALIGNMENT_DETAIL_GRID_BEATS)
+        weighted_distance += weight * (strong_distance * 0.72 + detail_distance * 0.28)
+    return weighted_distance / total_weight
+
+
+def _distance_to_beat_grid(beat: float, grid_beats: float) -> float:
+    if grid_beats <= 0:
+        return 0.0
+    nearest = 1 + round((beat - 1) / grid_beats) * grid_beats
+    return abs(beat - nearest)
 
 
 def _pitch_std(midi_values: list[float]) -> float:

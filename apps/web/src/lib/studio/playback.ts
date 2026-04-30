@@ -5,6 +5,7 @@ import {
   isMeasureDownbeat,
   type MeterContext,
 } from './timing'
+import type { TrackSlot } from '../../types/studio'
 
 export type PlaybackNode = {
   filters?: BiquadFilterNode[]
@@ -23,6 +24,8 @@ export type PlaybackSession = {
   nodes: PlaybackNode[]
   timeoutIds: number[]
 }
+
+const RETAINED_METRONOME_NODE_LIMIT = 64
 
 export function createTone(
   context: AudioContext,
@@ -152,6 +155,55 @@ export function createAudioBufferPlayback(
   return { source, gain }
 }
 
+export function trackHasPlayableScore(track: TrackSlot): boolean {
+  return track.notes.some((note) => note.is_rest !== true)
+}
+
+export function trackHasPlayableAudio(track: TrackSlot): boolean {
+  return Boolean(track.audio_source_path)
+}
+
+export function getPlaybackPreparationMessage(
+  tracksToPlay: TrackSlot[],
+  includeMetronome: boolean,
+  playbackSource: PlaybackSourceMode,
+): string {
+  const audioCount = playbackSource === 'audio' ? tracksToPlay.filter(trackHasPlayableAudio).length : 0
+  const scoreCount = tracksToPlay.filter(
+    (track) =>
+      !(playbackSource === 'audio' && trackHasPlayableAudio(track)) && trackHasPlayableScore(track),
+  ).length
+  const parts = [
+    audioCount > 0 ? `원음 ${audioCount}개` : null,
+    scoreCount > 0 ? `악보 음 ${scoreCount}개` : null,
+    includeMetronome ? '메트로놈' : null,
+  ].filter(Boolean)
+
+  if (parts.length === 0) {
+    return '재생 가능한 원음이나 악보 음을 확인합니다.'
+  }
+  if (parts.length === 1 && audioCount === 1) {
+    return '녹음 원본을 불러옵니다. 기준 트랙이 없으면 거의 즉시 재생됩니다.'
+  }
+  return `${parts.join(', ')}을 준비한 뒤 하나의 시작점에서 동시에 재생합니다.`
+}
+
+export function getTrackVolumeScale(track: TrackSlot): number {
+  const volumePercent = Number.isFinite(track.volume_percent) ? track.volume_percent : 100
+  return Math.max(0, Math.min(100, Math.round(volumePercent))) / 100
+}
+
+export function getTrackTimelineDurationSeconds(track: TrackSlot, beatSeconds: number): number {
+  const noteEndSeconds = Math.max(
+    0,
+    ...track.notes.map((note) => (note.beat - 1 + note.duration_beats) * beatSeconds),
+  )
+  if (Number.isFinite(track.duration_seconds) && track.duration_seconds > 0) {
+    return Math.max(track.duration_seconds, noteEndSeconds)
+  }
+  return Math.max(0.25, noteEndSeconds)
+}
+
 export function startLoopingMetronomeSession(
   bpm: number,
   meter: MeterContext = DEFAULT_METER,
@@ -185,6 +237,7 @@ export function startLoopingMetronomeSession(
     }
 
     try {
+      session.timeoutIds = []
       void context.resume().catch(() => undefined)
       while (nextClickTime < context.currentTime + scheduleAheadSeconds) {
         const quarterBeatOffset = pulseIndex * meter.pulseQuarterBeats
@@ -202,8 +255,11 @@ export function startLoopingMetronomeSession(
         pulseIndex += 1
         nextClickTime += pulseSeconds
       }
+      if (session.nodes.length > RETAINED_METRONOME_NODE_LIMIT) {
+        session.nodes.splice(0, session.nodes.length - RETAINED_METRONOME_NODE_LIMIT)
+      }
       const timeoutId = window.setTimeout(scheduleClicks, lookaheadMilliseconds)
-      session.timeoutIds.push(timeoutId)
+      session.timeoutIds = [timeoutId]
     } catch {
       disposePlaybackSession(session)
     }
@@ -221,7 +277,7 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
   session.nodes.forEach(({ filters, oscillator, oscillators, source, gain, gains }) => {
     try {
-      ;[gain, ...(gains ?? [])].forEach((currentGain) => {
+      new Set([gain, ...(gains ?? [])]).forEach((currentGain) => {
         currentGain?.gain.cancelScheduledValues(0)
         currentGain?.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
       })
@@ -246,10 +302,11 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 }
 
-export function scheduleMetronomeClicks(
+export function scheduleMetronomeClicksFromTimeline(
   context: AudioContext,
   nodes: PlaybackNode[],
   scheduledStart: number,
+  startSeconds: number,
   maxBeat: number,
   bpm: number,
   meter: MeterContext,
@@ -262,10 +319,23 @@ export function scheduleMetronomeClicks(
     quarterBeatOffset <= Math.max(0, maxBeat - 1) + 0.001;
     quarterBeatOffset += meter.pulseQuarterBeats
   ) {
-    const clickStart = quarterBeatOffset * beatSeconds
+    const clickStartSeconds = quarterBeatOffset * beatSeconds
+    if (clickStartSeconds + 0.045 < startSeconds) {
+      continue
+    }
+    const relativeStartSeconds = Math.max(0, clickStartSeconds - startSeconds)
     const frequency = isMeasureDownbeat(quarterBeatOffset, meter.beatsPerMeasure) ? 960 : 720
-    nodes.push(createTone(context, scheduledStart + clickStart, 0.045, frequency, volume, 'square'))
-    latestStop = Math.max(latestStop, clickStart + 0.045)
+    nodes.push(
+      createTone(
+        context,
+        scheduledStart + relativeStartSeconds,
+        0.045,
+        frequency,
+        volume,
+        'square',
+      ),
+    )
+    latestStop = Math.max(latestStop, relativeStartSeconds + 0.045)
   }
   return latestStop
 }

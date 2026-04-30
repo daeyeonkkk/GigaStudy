@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
-import type { RenderContext } from 'vexflow'
-import {
-  Accidental,
-  Beam,
-  Dot,
-  Formatter,
-  Fraction,
-  Renderer,
-  Stave,
-  StaveNote,
-  StaveTie,
-  Voice,
-} from 'vexflow'
+import { Accidental } from 'vexflow-src/accidental'
+import { Beam } from 'vexflow-src/beam'
+import { Dot } from 'vexflow-src/dot'
+import { Font } from 'vexflow-src/font'
+import { Formatter } from 'vexflow-src/formatter'
+import { Fraction } from 'vexflow-src/fraction'
+import { Academico } from 'vexflow-src/fonts/academico'
+import { AcademicoBold } from 'vexflow-src/fonts/academicobold'
+import { Bravura } from 'vexflow-src/fonts/bravura'
+import { Metrics, MetricsDefaults } from 'vexflow-src/metrics'
+import type { RenderContext } from 'vexflow-src/rendercontext'
+import { Renderer } from 'vexflow-src/renderer'
+import { Stave } from 'vexflow-src/stave'
+import { StaveNote } from 'vexflow-src/stavenote'
+import { StaveTie } from 'vexflow-src/stavetie'
+import { Voice } from 'vexflow-src/voice'
 
 import {
   buildEngravingLayout,
@@ -55,6 +58,23 @@ const SYNC_TRANSLATED_VEXFLOW_GROUPS = '.vf-stavenote, .vf-beam, .vf-stavetie'
 const FIRST_MEASURE_NOTE_GUTTER_PX = 18
 
 const pitchNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
+initializeVexFlowFonts()
+
+function initializeVexFlowFonts() {
+  MetricsDefaults.fontFamily = 'Bravura,Academico'
+  Metrics.clear()
+
+  if (typeof FontFace === 'undefined') {
+    return
+  }
+
+  void Promise.allSettled([
+    Font.load('Bravura', Bravura, { display: 'block' }),
+    Font.load('Academico', Academico, { display: 'swap' }),
+    Font.load('Academico', AcademicoBold, { display: 'swap', weight: 'bold' }),
+  ])
+}
 
 function getTrackClefProfile(track: TrackSlot): ClefProfile {
   const notationClef = track.notes.find((note) => note.clef)?.clef

@@ -29,6 +29,11 @@ The current implementation has a working vertical slice for:
   one-measure BPM/meter count-in before actual capture
 - Retained recording/audio track assets for playback while TrackNote remains
   canonical for scoring, notation, export, and AI generation
+- Voice registration now estimates a small pre-notation metronome phase offset
+  before beat quantization. The canonical TrackNotes are written on the studio
+  BPM/meter grid, while retained source audio is rewritten once with leading
+  trim/pad so original takes share the same canonical 0s as the registered
+  score without abusing user Sync.
 - Browser recording metronome playback and input level feedback, with the
   metronome toggle controlling audible clicks only and not the internal score
   clock
@@ -99,6 +104,9 @@ The current implementation has a working vertical slice for:
 - Ensemble playback from either retained recording audio or TrackNote synthesis
 - Scoring playback honors the scoring checklist's metronome selection
 - Answer-sheet scoring with offline sync alignment
+- Registered tracks can be shifted together by the current sync step so a
+  user-aligned ensemble can be moved onto the metronome downbeat without
+  changing relative track offsets.
 - Horizontally scrollable VexFlow SVG track score engraving with fixed measure
   lines, hidden spacer rests for short rhythmic gaps, conservative flat
   measure-local beams, sync-shifted note markers, and `TrackNote` as the source
@@ -134,10 +142,23 @@ The current implementation has a working vertical slice for:
   job at a time.
 - Staged upload cleanup has an app-level lifecycle path for expired staged
   objects plus admin controls for expired-only or all abandoned staged objects.
-- Studio access is owner-token scoped by default. The browser sends a local
-  `X-GigaStudy-Owner-Token`, the API stores only its hash, and list/detail
-  routes are no longer public across all stored studios unless explicitly
-  configured for public/local-test mode.
+- API-proxy direct uploads are signed, expiring targets and owner-bound when
+  owner-token access mode is enabled. S3/R2 deployments continue to use
+  presigned object-store URLs.
+- Studio access is policy-controlled. The current live alpha intentionally uses
+  public studio list/detail/action access so testers can reopen existing
+  studios from the home screen and admin page. Owner-token scoped access remains
+  implemented behind `GIGASTUDY_API_STUDIO_ACCESS_POLICY=owner` for the later
+  private/account phase.
+- Studio detail reads no longer repair queue rows. Missing durable queue records
+  are repaired from studio job metadata only from upload, retry, admin drain, or
+  scheduler drain paths before claiming work.
+- Repository responsibilities are being narrowed around orchestration. Shared
+  sync-resolved timeline calculation, candidate diagnostic metadata, upload
+  type/base64 policy, direct-upload token cryptography, studio document
+  shaping, asset path normalization, OMR result summaries, and browser playback
+  helper math now live in dedicated modules so future engine/UI changes do not
+  keep expanding the central studio repository and studio page.
 
 ## Phase 0: Foundation Reset
 
@@ -187,7 +208,8 @@ Required:
 - Top global Stop
 - Top metronome toggle
 - Metronome clicks follow the studio meter and accent each measure downbeat
-- Per-track sync controls in 0.01 second steps
+- Per-track sync controls with user-selectable step size
+- Whole-registered-track sync shift by the same step size
 
 Cut line:
 
@@ -243,6 +265,8 @@ Required:
   audio.
 - Vocal generation preserves known context slot ids so it can avoid crossing
   and obvious SATB-style voice-leading errors.
+- Existing-track context for deterministic generation and LLM planning is the
+  sync-resolved effective TrackNote view, not raw unsynced `track.notes`.
 - Percussion rhythm generation for track 6
 - Meter-aware percussion downbeats for non-4/4 studios
 - Optional DeepSeek V4 Flash harmony planner for low-cost alpha candidate
@@ -337,7 +361,11 @@ Required:
 - Microphone recording starts with the session
 - Stop starts analysis
 - Target track's registered TrackNotes are the answer sheet
+- Answer-sheet timing is evaluated after applying the target track's sync offset;
+  reports must not compare against raw unsynced answer notes.
 - Selected references and metronome are playback context only
+- Selected reference tracks for harmony scoring are also sync-resolved before
+  comparison.
 - Performance input is converted to TrackNote data
 
 Cut line:

@@ -19,11 +19,12 @@ task.
 Before changing code or specs, check the relevant foundation documents:
 
 1. `README.md` for product scope and canonical document order
-2. `GigaStudy_master_plan.md` for user flows and non-goals
-3. `ENGINE_ARCHITECTURE.md` for TrackNote, extraction, AI generation, OMR, and
+2. `ARCHITECTURE_PRINCIPLES.md` for code structure and responsibility boundaries
+3. `GigaStudy_master_plan.md` for user flows and non-goals
+4. `ENGINE_ARCHITECTURE.md` for TrackNote, extraction, AI generation, OMR, and
    scoring contracts
-4. `DESIGN/UI_SCREEN_SPEC_PACKAGE/` for UI behavior and screen contracts
-5. `ROADMAP.md` and `GigaStudy_check_list.md` for phase and completion state
+5. `DESIGN/UI_SCREEN_SPEC_PACKAGE/` for UI behavior and screen contracts
+6. `ROADMAP.md` and `GigaStudy_check_list.md` for phase and completion state
 
 ## During Work
 

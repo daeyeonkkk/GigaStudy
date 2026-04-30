@@ -157,7 +157,7 @@ export function LaunchPage() {
     }
 
     const sourceKind = sourceKindOverride === 'auto' ? detectSourceKind(sourceFile) : sourceKindOverride
-    setSubmitState({ phase: 'submitting', label: '업로드 분석 중' })
+    setSubmitState({ phase: 'submitting', label: '파일을 업로드하고 분석 대기열을 준비하는 중' })
     try {
       const preparedSource: PreparedLaunchSource =
         sourceKind === 'music' && isAudioUploadFile(sourceFile)
@@ -179,6 +179,7 @@ export function LaunchPage() {
         await putDirectUpload(uploadTarget, preparedSource.blob)
         uploadedAssetPath = uploadTarget.asset_path
       } catch {
+        setSubmitState({ phase: 'submitting', label: '직접 업로드가 어려워 안전 업로드 경로로 다시 보내는 중' })
         const contentBase64 = preparedSource.contentBase64 ?? (await readFileAsDataUrl(sourceFile))
         studio = await createStudio({
           title: title.trim(),

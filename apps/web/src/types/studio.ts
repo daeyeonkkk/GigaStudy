@@ -94,6 +94,7 @@ export type TrackSlot = {
   audio_mime_type: string | null
   duration_seconds: number
   notes: ScoreNote[]
+  diagnostics: Record<string, unknown>
   updated_at: string
 }
 

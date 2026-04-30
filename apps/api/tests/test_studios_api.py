@@ -524,6 +524,83 @@ def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path:
     assert reports[0]["voice_leading_score"] is not None
 
 
+def test_answer_score_uses_target_track_sync_offset(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Answer sync scoring",
+            "bpm": 60,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_response = upload_musicxml_track(client, studio_id)
+    assert upload_response.status_code == 200
+
+    sync_response = client.patch(
+        f"/api/studios/{studio_id}/tracks/1/sync",
+        json={"sync_offset_seconds": 1.0},
+    )
+    assert sync_response.status_code == 200
+
+    performance_notes = []
+    for note in upload_response.json()["tracks"][0]["notes"]:
+        performance_note = dict(note)
+        performance_note["beat"] = round(performance_note["beat"] + 1, 4)
+        performance_note["onset_seconds"] = round(performance_note["onset_seconds"] + 1, 4)
+        performance_notes.append(performance_note)
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/score",
+        json={
+            "include_metronome": True,
+            "performance_notes": performance_notes,
+        },
+    )
+
+    assert score_response.status_code == 200
+    report = score_response.json()["reports"][0]
+    assert report["score_mode"] == "answer"
+    assert report["alignment_offset_seconds"] == 0
+    assert report["overall_score"] == 100
+
+
+def test_shift_registered_track_syncs_preserves_relative_offsets(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Ensemble sync shift",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id, slot_id=1)
+    upload_musicxml_track(client, studio_id, slot_id=2, filename="alto.musicxml")
+
+    client.patch(
+        f"/api/studios/{studio_id}/tracks/1/sync",
+        json={"sync_offset_seconds": 0.12},
+    )
+    client.patch(
+        f"/api/studios/{studio_id}/tracks/2/sync",
+        json={"sync_offset_seconds": -0.03},
+    )
+
+    shift_response = client.patch(
+        f"/api/studios/{studio_id}/tracks/sync",
+        json={"delta_seconds": 0.05},
+    )
+
+    assert shift_response.status_code == 200
+    tracks = shift_response.json()["tracks"]
+    assert tracks[0]["sync_offset_seconds"] == 0.17
+    assert tracks[1]["sync_offset_seconds"] == 0.02
+    assert tracks[2]["sync_offset_seconds"] == 0
+
+
 def test_harmony_score_requires_registered_reference_track(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
@@ -557,6 +634,33 @@ def test_harmony_score_requires_registered_reference_track(tmp_path: Path, monke
 
     assert score_response.status_code == 422
     assert "reference track" in score_response.json()["detail"]
+
+
+def test_score_track_rejects_empty_performance_input(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Empty score input",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/score",
+        json={
+            "reference_slot_ids": [1],
+            "include_metronome": True,
+        },
+    )
+
+    assert score_response.status_code == 422
+    assert "detectable notes" in score_response.json()["detail"]
+    studio_response = client.get(f"/api/studios/{studio_id}")
+    assert studio_response.json()["reports"] == []
 
 
 def test_pdf_export_requires_registered_track(tmp_path: Path, monkeypatch) -> None:
@@ -745,6 +849,40 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
     soprano = upload_response.json()["tracks"][0]
     assert soprano["status"] == "registered"
     assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
+
+
+def test_owner_scoped_direct_upload_put_requires_matching_owner_token(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch, studio_access_policy="owner")
+    owner_headers = {"X-GigaStudy-Owner-Token": OWNER_TOKEN_A}
+    other_headers = {"X-GigaStudy-Owner-Token": OWNER_TOKEN_B}
+    create_response = client.post(
+        "/api/studios",
+        headers=owner_headers,
+        json={
+            "title": "Owned direct upload target",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    content = MUSICXML_UPLOAD.encode("utf-8")
+
+    target_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload-target",
+        headers=owner_headers,
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "size_bytes": len(content),
+            "content_type": "application/vnd.recordare.musicxml+xml",
+        },
+    )
+
+    assert target_response.status_code == 200
+    put_path = target_response.json()["upload_url"].removeprefix("http://testserver")
+    assert client.put(put_path, content=content).status_code == 401
+    assert client.put(put_path, headers=other_headers, content=content).status_code == 404
+    assert client.put(put_path, headers=owner_headers, content=content).status_code == 200
 
 
 def test_upload_start_can_use_staged_direct_uploaded_symbolic_asset(tmp_path: Path, monkeypatch) -> None:

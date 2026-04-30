@@ -317,6 +317,20 @@ export function updateTrackSync(
   )
 }
 
+export function shiftRegisteredTrackSyncs(
+  studioId: string,
+  deltaSeconds: number,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/tracks/sync`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ delta_seconds: deltaSeconds }),
+    },
+    '전체 트랙 싱크를 저장하지 못했습니다.',
+  )
+}
+
 export function updateTrackVolume(
   studioId: string,
   slotId: number,

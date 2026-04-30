@@ -30,6 +30,7 @@ type StudioToolbarProps = {
   onSelectAllPlaybackTracks: () => void
   onStartSelectedPlayback: () => void
   onStopGlobalPlayback: () => void
+  onShiftAllSync: (deltaSeconds: number) => void
   onSyncStepChange: (seconds: number) => void
   onTogglePlaybackPicker: () => void
   onTogglePlaybackSelection: (slotId: number) => void
@@ -67,6 +68,7 @@ export function StudioToolbar({
   onSelectAllPlaybackTracks,
   onStartSelectedPlayback,
   onStopGlobalPlayback,
+  onShiftAllSync,
   onSyncStepChange,
   onTogglePlaybackPicker,
   onTogglePlaybackSelection,
@@ -193,6 +195,28 @@ export function StudioToolbar({
           />
           <span>s</span>
         </label>
+        <div className="composer-sync-all" role="group" aria-label="등록된 전체 트랙 싱크 이동">
+          <button
+            aria-label={`등록된 전체 트랙을 ${formatStepInput(syncStepSeconds)}초 앞으로 이동`}
+            className="composer-tool composer-tool--text composer-tool--sync-all"
+            data-testid="sync-all-earlier-button"
+            disabled={registeredTrackCount === 0 || actionState.phase === 'busy'}
+            type="button"
+            onClick={() => onShiftAllSync(-syncStepSeconds)}
+          >
+            전체 -
+          </button>
+          <button
+            aria-label={`등록된 전체 트랙을 ${formatStepInput(syncStepSeconds)}초 뒤로 이동`}
+            className="composer-tool composer-tool--text composer-tool--sync-all"
+            data-testid="sync-all-later-button"
+            disabled={registeredTrackCount === 0 || actionState.phase === 'busy'}
+            type="button"
+            onClick={() => onShiftAllSync(syncStepSeconds)}
+          >
+            전체 +
+          </button>
+        </div>
         <label className="composer-metronome">
           <input
             checked={metronomeEnabled}

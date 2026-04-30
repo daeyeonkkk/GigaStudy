@@ -281,6 +281,10 @@ class SyncTrackRequest(BaseModel):
     sync_offset_seconds: float = Field(ge=-30, le=30)
 
 
+class ShiftTrackSyncRequest(BaseModel):
+    delta_seconds: float = Field(ge=-10, le=10)
+
+
 class VolumeTrackRequest(BaseModel):
     volume_percent: int = Field(ge=0, le=100)
 

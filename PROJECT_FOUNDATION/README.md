@@ -69,6 +69,13 @@ Each track can be filled by:
 Each registered track has score display, playback controls, stop, scoring
 (`채점`), and 0.01 second sync adjustment. The top transport plays, pauses, and
 stops the whole six-track ensemble while preserving each track's sync offset.
+The user can also shift all registered tracks by the current sync step so an
+already-aligned ensemble can be moved together onto the metronome downbeat
+without changing inter-track sync relationships.
+The visible sync step is user-selectable; 0.01 seconds is only the default.
+Sync is not only a visual playback tweak: every cross-track judgment, including
+AI generation, LLM notation review, scoring, harmony scoring, playback, and
+export, must use the sync-resolved effective note timeline.
 
 Voice recordings are interpreted against the studio BPM/meter clock. The
 metronome toggle controls audible clicks only; the internal score clock remains
@@ -121,18 +128,19 @@ they should not drive new product or UI decisions.
 Read in this order:
 
 1. `WORKING_PROTOCOL.md`
-2. `GigaStudy_master_plan.md`
-3. `ENGINE_ARCHITECTURE.md`
-4. `ROADMAP.md`
-5. `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
-6. `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
-7. `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_HOME_SCREEN_SPEC.md`
-8. `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_MAIN_STUDIO_SCREEN_SPEC.md`
-9. `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_TRACK_REGISTRATION_SPEC.md`
-10. `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SCORING_REPORT_SPEC.md`
-11. `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_INTERACTION_MATRIX.md`
-12. `GigaStudy_check_list.md`
-13. `FOUNDATION_STATUS.md`
+2. `ARCHITECTURE_PRINCIPLES.md`
+3. `GigaStudy_master_plan.md`
+4. `ENGINE_ARCHITECTURE.md`
+5. `ROADMAP.md`
+6. `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
+7. `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
+8. `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_HOME_SCREEN_SPEC.md`
+9. `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_MAIN_STUDIO_SCREEN_SPEC.md`
+10. `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_TRACK_REGISTRATION_SPEC.md`
+11. `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SCORING_REPORT_SPEC.md`
+12. `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_INTERACTION_MATRIX.md`
+13. `GigaStudy_check_list.md`
+14. `FOUNDATION_STATUS.md`
 
 ## Foundation Rule
 

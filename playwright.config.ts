@@ -1,5 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const apiPort = Number(process.env.GIGASTUDY_E2E_API_PORT ?? 8000)
+const webPort = Number(process.env.GIGASTUDY_E2E_WEB_PORT ?? 5173)
+const apiBaseURL = `http://127.0.0.1:${apiPort}`
+const webBaseURL = `http://127.0.0.1:${webPort}`
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 90_000,
@@ -11,7 +16,7 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: webBaseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -45,15 +50,16 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'uv run uvicorn gigastudy_api.main:app --host 127.0.0.1 --port 8000 --app-dir src',
+      command: `uv run uvicorn gigastudy_api.main:app --host 127.0.0.1 --port ${apiPort} --app-dir src`,
       cwd: 'apps/api',
-      port: 8000,
+      port: apiPort,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
         ...process.env,
         GIGASTUDY_API_STORAGE_ROOT: '../../test-results/e2e-api-storage',
+        GIGASTUDY_API_CORS_ORIGINS: webBaseURL,
         GIGASTUDY_API_DATABASE_URL: '',
         GIGASTUDY_API_STORAGE_BACKEND: 'local',
         GIGASTUDY_API_DEEPSEEK_HARMONY_ENABLED: 'false',
@@ -63,15 +69,15 @@ export default defineConfig({
       },
     },
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+      command: `npm run dev -- --host 127.0.0.1 --port ${webPort}`,
       cwd: 'apps/web',
-      port: 5173,
+      port: webPort,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
         ...process.env,
-        VITE_API_BASE_URL: 'http://127.0.0.1:8000',
+        VITE_API_BASE_URL: apiBaseURL,
       },
     },
   ],

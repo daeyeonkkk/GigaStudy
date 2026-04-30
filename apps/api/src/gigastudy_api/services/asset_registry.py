@@ -1,37 +1,23 @@
 from __future__ import annotations
 
-import base64
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Protocol
 
 import psycopg
 from psycopg.rows import dict_row
 
+from gigastudy_api.services.asset_paths import (
+    clean_relative_path,
+    encode_asset_id,
+    studio_id_from_asset_path,
+)
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _clean_relative_path(relative_path: str) -> str:
-    clean = PurePosixPath(str(relative_path).replace("\\", "/")).as_posix().lstrip("/")
-    if clean in ("", ".") or clean.startswith("../"):
-        raise ValueError("invalid asset path")
-    return clean
-
-
-def _studio_id_from_asset_path(relative_path: str) -> str | None:
-    parts = _clean_relative_path(relative_path).split("/")
-    if len(parts) >= 2 and parts[0] in {"uploads", "jobs"}:
-        return parts[1]
-    return None
-
-
-def encode_asset_id(relative_path: str) -> str:
-    clean = _clean_relative_path(relative_path)
-    return base64.urlsafe_b64encode(clean.encode("utf-8")).decode("ascii").rstrip("=")
 
 
 @dataclass(frozen=True)
@@ -51,10 +37,10 @@ class AssetRecord:
 
     @classmethod
     def from_storage_info(cls, info: Any) -> AssetRecord:
-        relative_path = _clean_relative_path(str(info.relative_path))
+        relative_path = clean_relative_path(str(info.relative_path))
         return cls(
             relative_path=relative_path,
-            studio_id=_studio_id_from_asset_path(relative_path),
+            studio_id=studio_id_from_asset_path(relative_path),
             kind=str(getattr(info, "kind", "unknown") or "unknown"),
             filename=str(getattr(info, "filename", Path(relative_path).name) or Path(relative_path).name),
             size_bytes=int(getattr(info, "size_bytes", 0) or 0),
@@ -77,10 +63,10 @@ class AssetRecord:
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> AssetRecord:
-        relative_path = _clean_relative_path(str(data["relative_path"]))
+        relative_path = clean_relative_path(str(data["relative_path"]))
         return cls(
             relative_path=relative_path,
-            studio_id=data.get("studio_id") or _studio_id_from_asset_path(relative_path),
+            studio_id=data.get("studio_id") or studio_id_from_asset_path(relative_path),
             kind=str(data.get("kind") or "unknown"),
             filename=str(data.get("filename") or Path(relative_path).name),
             size_bytes=int(data.get("size_bytes") or 0),
@@ -117,7 +103,7 @@ class FileAssetRegistry:
         self._write(data)
 
     def mark_deleted(self, relative_path: str, deleted_at: str | None = None) -> AssetRecord | None:
-        clean = _clean_relative_path(relative_path)
+        clean = clean_relative_path(relative_path)
         data = self._read()
         existing = data.get(clean)
         if existing is None:
@@ -130,7 +116,7 @@ class FileAssetRegistry:
         return AssetRecord.from_json(existing)
 
     def mark_prefix_deleted(self, relative_prefix: str, deleted_at: str | None = None) -> tuple[int, int]:
-        prefix = _clean_relative_path(relative_prefix).rstrip("/") + "/"
+        prefix = clean_relative_path(relative_prefix).rstrip("/") + "/"
         deleted_at = deleted_at or _now_iso()
         data = self._read()
         count = 0
@@ -202,7 +188,7 @@ class PostgresAssetRegistry:
         self._ensure_schema()
 
     def upsert(self, record: AssetRecord) -> None:
-        clean = _clean_relative_path(record.relative_path)
+        clean = clean_relative_path(record.relative_path)
         with self._connect() as conn:
             conn.execute(
                 """
@@ -222,7 +208,7 @@ class PostgresAssetRegistry:
                 """,
                 (
                     clean,
-                    record.studio_id or _studio_id_from_asset_path(clean),
+                    record.studio_id or studio_id_from_asset_path(clean),
                     record.kind,
                     record.filename,
                     record.size_bytes,
@@ -233,7 +219,7 @@ class PostgresAssetRegistry:
             conn.commit()
 
     def mark_deleted(self, relative_path: str, deleted_at: str | None = None) -> AssetRecord | None:
-        clean = _clean_relative_path(relative_path)
+        clean = clean_relative_path(relative_path)
         deleted_at = deleted_at or _now_iso()
         with self._connect() as conn:
             row = conn.execute(
@@ -249,7 +235,7 @@ class PostgresAssetRegistry:
         return self._record_from_row(row) if row else None
 
     def mark_prefix_deleted(self, relative_prefix: str, deleted_at: str | None = None) -> tuple[int, int]:
-        prefix = _clean_relative_path(relative_prefix).rstrip("/") + "/"
+        prefix = clean_relative_path(relative_prefix).rstrip("/") + "/"
         deleted_at = deleted_at or _now_iso()
         with self._connect() as conn:
             rows = conn.execute(
@@ -337,10 +323,10 @@ class PostgresAssetRegistry:
         return psycopg.connect(self._database_url, row_factory=dict_row)
 
     def _record_from_row(self, row: dict[str, Any]) -> AssetRecord:
-        relative_path = _clean_relative_path(str(row["relative_path"]))
+        relative_path = clean_relative_path(str(row["relative_path"]))
         return AssetRecord(
             relative_path=relative_path,
-            studio_id=row.get("studio_id") or _studio_id_from_asset_path(relative_path),
+            studio_id=row.get("studio_id") or studio_id_from_asset_path(relative_path),
             kind=str(row.get("kind") or "unknown"),
             filename=str(row.get("filename") or Path(relative_path).name),
             size_bytes=int(row.get("size_bytes") or 0),

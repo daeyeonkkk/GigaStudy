@@ -9,6 +9,7 @@ from gigastudy_api.api.schemas.studios import (
     DirectUploadTarget,
     GenerateTrackRequest,
     ScoreTrackRequest,
+    ShiftTrackSyncRequest,
     Studio,
     StudioListItem,
     StudioSeedUploadRequest,
@@ -133,10 +134,11 @@ def get_omr_job_source_preview(
 async def put_direct_upload(
     asset_id: str,
     request: Request,
+    owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> dict[str, int | str]:
     content = await request.body()
-    return repository.write_direct_upload_content(asset_id, content)
+    return repository.write_direct_upload_content(asset_id, content, owner_token=owner_token)
 
 
 @router.post("/upload-target", response_model=DirectUploadTarget)
@@ -202,6 +204,16 @@ def generate_track(
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> Studio:
     return repository.generate_track(studio_id, slot_id, request, owner_token=owner_token)
+
+
+@router.patch("/{studio_id}/tracks/sync", response_model=Studio)
+def shift_registered_track_syncs(
+    studio_id: str,
+    request: ShiftTrackSyncRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> Studio:
+    return repository.shift_registered_syncs(studio_id, request, owner_token=owner_token)
 
 
 @router.patch("/{studio_id}/tracks/{slot_id}/sync", response_model=Studio)

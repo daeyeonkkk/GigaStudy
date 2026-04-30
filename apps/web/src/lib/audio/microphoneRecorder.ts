@@ -85,9 +85,22 @@ export function beginMicrophoneCapture(recorder: MicrophoneRecorder | null): boo
   return true
 }
 
+async function waitForInitialCapturedChunk(recorder: MicrophoneRecorder, timeoutMs = 300): Promise<void> {
+  const deadline = performance.now() + timeoutMs
+  while (recorder.capturing && recorder.chunks.length === 0 && performance.now() < deadline) {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 16)
+    })
+  }
+}
+
 export async function stopMicrophoneRecorder(recorder: MicrophoneRecorder | null): Promise<string | null> {
   if (!recorder) {
     return null
+  }
+
+  if (recorder.chunks.length === 0) {
+    await waitForInitialCapturedChunk(recorder)
   }
 
   recorder.processor.disconnect()

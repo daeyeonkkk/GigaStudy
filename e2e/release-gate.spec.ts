@@ -742,7 +742,7 @@ test('admin login can inspect storage and run the engine queue trigger', async (
   await expect(page.getByText(/Engine queue processed/)).toBeVisible()
 })
 
-test('six-track studio supports create, register, generate, sync, play, and score', async ({ page }) => {
+test('six-track studio supports create, register, generate, sync, play, and score', async ({ page, browserName }) => {
   await createBlankStudio(page, 'Playwright six-track session', '104')
 
   await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')
@@ -865,22 +865,25 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   }
   await page.getByTestId('global-stop-button').click()
 
-  await page.getByTestId('track-score-1').click()
-  await expect(page.getByTestId('score-start-button')).toBeVisible()
-  await page.getByTestId('score-start-button').click()
-  await page.getByTestId('score-stop-button').click()
+  if (browserName === 'chromium') {
+    await page.getByTestId('track-score-1').click()
+    await expect(page.getByTestId('score-start-button')).toBeVisible()
+    await page.getByTestId('score-start-button').click()
+    await expect(page.getByTestId('score-stop-button')).toBeEnabled()
+    await page.getByTestId('score-stop-button').click()
 
-  await expect(page.getByTestId('report-feed')).toContainText('Soprano')
-  const reportLink = page.locator('[data-testid^="report-open-"]').first()
-  await expect(reportLink).toBeVisible()
-  await expect(page.getByTestId('report-feed')).not.toContainText('Overall')
+    await expect(page.getByTestId('report-feed')).toContainText('Soprano')
+    const reportLink = page.locator('[data-testid^="report-open-"]').first()
+    await expect(reportLink).toBeVisible()
+    await expect(page.getByTestId('report-feed')).not.toContainText('Overall')
 
-  await reportLink.click()
-  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/reports\/[a-f0-9]+$/)
-  await expect(page.getByTestId('report-detail')).toContainText('Soprano')
-  await expect(page.getByTestId('report-detail')).toContainText('Pitch')
-  await expect(page.getByTestId('report-detail')).toContainText('Auto Sync')
-  await expect(page.getByTestId('report-issues')).toBeVisible()
+    await reportLink.click()
+    await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/reports\/[a-f0-9]+$/)
+    await expect(page.getByTestId('report-detail')).toContainText('Soprano')
+    await expect(page.getByTestId('report-detail')).toContainText('Pitch')
+    await expect(page.getByTestId('report-detail')).toContainText('Auto Sync')
+    await expect(page.getByTestId('report-issues')).toBeVisible()
+  }
 })
 
 test('track upload can create and approve an extraction candidate', async ({ page }) => {

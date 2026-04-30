@@ -49,6 +49,9 @@ Studio metadata and stored binary assets are separate responsibilities.
   transcription, OMR, or object-cache paths. They must not be treated as the
   durable source of truth because Cloud Run instance files are ephemeral and
   memory-backed.
+- In object-storage mode, the local object cache must be bounded by age and
+  total size. The deployed free-plan path should treat `GIGASTUDY_API_STORAGE_ROOT`
+  as disposable cache/work space, not as an unbounded mirror of R2/S3.
 - Asset references stored in tracks, candidates, and OMR jobs should be
   relative storage keys such as `uploads/{studio_id}/{slot_id}/{file}` or
   `jobs/{studio_id}/{job_id}/{file}`.
@@ -60,6 +63,10 @@ Studio metadata and stored binary assets are separate responsibilities.
   The final upload endpoint remains the only step that registers TrackNotes or
   review candidates. In local development the returned URL may be an API proxy
   endpoint; in S3/R2 deployments it should be a presigned object-store URL.
+- API-proxy direct upload targets are signed, expiring tokens. The token binds
+  the relative asset path, owner hash when owner-token mode is enabled, and the
+  max accepted byte size. Proxy `PUT` must reject expired, tampered, oversized,
+  or wrong-owner targets before writing bytes.
 - Home-start uploads use a staged variant because the studio id does not exist
   yet: `POST /api/studios/upload-target`, binary `PUT`, then
   `POST /api/studios` with `source_asset_path`. The API must promote the staged
@@ -83,13 +90,14 @@ Studio metadata and stored binary assets are separate responsibilities.
   uploads are capped at 15 MiB, and OMR/voice extraction is claimed through a
   durable engine queue while still limited to one active local engine lane by
   default.
-- Studio access is scoped by a per-browser owner token by default. Studio
-  create/list/detail/action APIs require `X-GigaStudy-Owner-Token` when
-  `GIGASTUDY_API_STUDIO_ACCESS_POLICY=owner`; the server stores only a SHA-256
-  hash of that token on the studio document and filters summary lists by the
-  hash. This is alpha-grade privacy, not full user accounts, but it removes the
-  previous public all-studio list/detail behavior. Explicit `public` policy is
-  reserved for tests and local demos.
+- Studio access is policy-controlled. The live alpha currently defaults to
+  `GIGASTUDY_API_STUDIO_ACCESS_POLICY=public` so the home screen and admin page
+  can reopen tester-created studios without account setup. The owner-token mode
+  remains implemented for a later private phase: when
+  `GIGASTUDY_API_STUDIO_ACCESS_POLICY=owner`, create/list/detail/action APIs
+  use `X-GigaStudy-Owner-Token`, the server stores only a SHA-256 hash of that
+  token on the studio document, and summary lists are filtered by that hash.
+  This is alpha-grade privacy, not full user accounts.
 - Engine jobs are durable records, not only in-process Cloud Run background
   tasks. The queue uses Postgres when `GIGASTUDY_API_DATABASE_URL` is set and a
   local JSON queue as the development fallback. Queue records store job type,
@@ -106,16 +114,19 @@ Studio metadata and stored binary assets are separate responsibilities.
   scheduler-compatible wake-up surface for Cloud Run. The live alpha deployment
   wires this to Cloud Scheduler job `gigastudy-engine-drain`, running every 5
   minutes in `Asia/Seoul` with a 300 second attempt deadline.
-- Studio detail polling must not wake heavy OMR/voice extraction. Polling may
-  rebuild missing queue records from studio metadata for recovery, but actual
-  processing is triggered by upload, retry, admin drain, or scheduler drain.
-  This keeps UI refresh traffic from occupying Cloud Run's limited request
-  lanes.
+- Studio detail polling must not wake heavy OMR/voice extraction and must not
+  mutate queue state. Missing queue records are repaired by upload, retry,
+  admin drain, or scheduler drain before claiming work. This keeps UI refresh
+  traffic from occupying Cloud Run's limited request lanes.
 - Track audio playback resolves retained audio through the asset storage layer.
   In object-storage mode, a missing local file is downloaded into the local
   cache before `FileResponse` serves it.
 - Scoring performance audio is not retained by default. It is temporary input
   for extraction and is deleted after TrackNote conversion.
+- Scoring must not create reports from empty performance input. The microphone
+  must be opened before reference playback is scheduled, capture must start on
+  the same score-clock flow, and the API must reject submissions with no
+  detected performance notes.
 
 ## Canonical TrackNote Data
 
@@ -168,10 +179,44 @@ For the current MVP, imported MIDI tempo does not replace the studio BPM;
 imported MIDI notes preserve beat positions and are normalized to studio BPM for
 `onset_seconds` and `duration_seconds` so playback and scoring share one clock.
 
-Voice extraction must not re-estimate or rewrite the studio BPM. Human timing
-drift, device latency, and loose entrances are handled as sync offset and
-beat-grid quantization problems. The BPM/meter grid is the paper; extracted
-notes are fitted onto it.
+Voice extraction must not re-estimate or rewrite the studio BPM. The intended
+registration pipeline is:
+
+`recorded source -> internal metronome phase alignment -> pitch/onset extraction
+-> beat quantization -> measure/rest/tie generation -> Track registration ->
+user micro Sync`.
+
+The BPM/meter grid is the paper; extracted notes are fitted onto it before they
+become notation. Registration-time alignment may apply a small deterministic
+whole-source offset to compensate capture latency or a loose entrance before
+quantization. When retained source audio exists, the audio asset itself is
+rewritten to the same canonical 0s by trimming leading silence for negative
+offsets or padding leading silence for positive offsets. The alignment value is
+diagnostic execution metadata, not part of persisted `TrackNote` truth.
+
+`TrackNote` storage and sync offset have a strict two-view contract:
+
+- Persisted `track.notes` keep the extracted or generated score content on the
+  track's own beat grid.
+- Retained source audio is already canonicalized at registration time. It shares
+  the same 0s as `track.notes`, so playback does not need a hidden audio-only
+  offset.
+- `track.sync_offset_seconds` is post-registration user micro alignment: a
+  track-layer translation on the shared studio timeline.
+- A whole-ensemble sync shift is a batch update of registered tracks'
+  `track.sync_offset_seconds` values by the same delta. It preserves relative
+  inter-track offsets and intentionally excludes empty tracks because no note or
+  source-audio layer exists there yet.
+- Any cross-track engine, LLM, playback, scoring, export, or arrangement
+  decision must consume a sync-resolved effective note view, not raw sibling
+  `track.notes`. In code this means deriving
+  `effective_beat = note.beat + sync_offset_seconds / seconds_per_beat` and
+  `effective_onset_seconds = note.onset_seconds + sync_offset_seconds` before
+  comparing one track to another.
+- Barlines, BPM, and meter never move when sync changes. User Sync moves the
+  note layer and retained source-audio layer together against the fixed paper
+  grid. It is not a tool for repairing failed notation; frequent large global
+  sync shifts indicate registration-time alignment needs improvement.
 
 Final track registration must pass through the shared notation registration
 quality gate in `services/engine/notation_quality.py`. This applies to direct
@@ -225,7 +270,10 @@ source-specific extraction -> TrackNote candidates -> deterministic notation
 quality first pass -> LLM registration-plan instruction -> deterministic repair
 application -> ensemble validation -> track registration. The LLM receives the
 target track summaries, deterministic candidate options, diagnostics, and any
-already registered sibling-track summaries before the target is committed. It may
+already registered sibling-track summaries before the target is committed. Every
+sibling-track summary given to the LLM must be sync-resolved first so model
+judgment sees the same musical time that playback, scoring, and arrangement
+validation use. It may
 flag score readability issues such as excessive density, unnatural
 micro-fragments, suspicious ties, unstable voice noise, or accidental clutter,
 and it may use sibling-track context to choose cleanup direction, key spelling,
@@ -814,6 +862,26 @@ DeepSeek remains supported through `https://api.deepseek.com`. Provider-specific
 payload fields must stay compatible: native DeepSeek may receive `thinking`,
 while OpenRouter omits that native field by default.
 
+LLM configuration is intentionally split by intervention point:
+
+- `GIGASTUDY_API_DEEPSEEK_NOTATION_REVIEW_ENABLED` lets the model inspect a
+  newly extracted TrackNote candidate before registration and return bounded
+  cleanup instructions for quantization, sustain merging, artifact pruning,
+  tie/rhythm cleanup, key spelling, and readability.
+- `GIGASTUDY_API_DEEPSEEK_ENSEMBLE_REVIEW_ENABLED` lets the model inspect that
+  target against the sync-resolved six-track context before commit and request
+  bounded registration hints for octave/range, spacing, crossing, chord
+  coverage, and singability.
+- `GIGASTUDY_API_DEEPSEEK_HARMONY_ENABLED` lets the model plan candidate goals
+  before AI generation so the deterministic generator can search with a clearer
+  a cappella arrangement intent.
+
+All three flags require `GIGASTUDY_API_DEEPSEEK_API_KEY`. Runtime readiness can
+be checked through `GET /api/health/ready`, which exposes only boolean
+configuration state and never returns the key or object-storage secrets. If a
+flag is off, the key is missing, or the provider call fails, the deterministic
+engine result remains the source of truth.
+
 AI generation is candidate-first by default:
 
 1. The API generates up to three symbolic candidates for the target track.
@@ -980,8 +1048,26 @@ These code paths currently implement the contract:
   `apps/api/src/gigastudy_api/services/engine/notation_quality.py`
 - Symbolic import: `apps/api/src/gigastudy_api/services/engine/symbolic.py`
 - Voice extraction: `apps/api/src/gigastudy_api/services/engine/voice.py`
+- Sync-resolved TrackNote timeline views:
+  `apps/api/src/gigastudy_api/services/engine/timeline.py`
+- Extraction candidate diagnostics and review metadata:
+  `apps/api/src/gigastudy_api/services/engine/candidate_diagnostics.py`
 - Durable extraction queue:
   `apps/api/src/gigastudy_api/services/engine_queue.py`
+- Upload filename/type/base64 policy:
+  `apps/api/src/gigastudy_api/services/upload_policy.py`
+- Direct-upload token signing and decoding:
+  `apps/api/src/gigastudy_api/services/direct_upload_tokens.py`
+- Studio ownership/access policy:
+  `apps/api/src/gigastudy_api/services/studio_access.py`
+- Alpha storage/studio capacity policy:
+  `apps/api/src/gigastudy_api/services/alpha_limits.py`
+- Studio document/list-item shaping:
+  `apps/api/src/gigastudy_api/services/studio_documents.py`
+- Asset path/id normalization:
+  `apps/api/src/gigastudy_api/services/asset_paths.py`
+- OMR result marking and vector fallback summaries:
+  `apps/api/src/gigastudy_api/services/engine/omr_results.py`
 - Browser audio primitives:
   `apps/web/src/lib/audio/audioContext.ts`
 - Browser WAV encoding:

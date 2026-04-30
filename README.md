@@ -58,19 +58,28 @@ The API exposes the current product surface only:
 - `GET /api/health`
 - `GET /api/studios`
 - `POST /api/studios`
+- `POST /api/studios/upload-target`
+- `PUT /api/studios/direct-uploads/{asset_id}`
 - `GET /api/studios/{studio_id}`
 - `GET /api/studios/{studio_id}/export/pdf`
+- `GET /api/studios/{studio_id}/tracks/{slot_id}/audio`
+- `GET /api/studios/{studio_id}/jobs/{job_id}/source-preview`
+- `POST /api/studios/{studio_id}/tracks/{slot_id}/upload-target`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/upload`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/generate`
 - `PATCH /api/studios/{studio_id}/tracks/{slot_id}/sync`
 - `POST /api/studios/{studio_id}/candidates/{candidate_id}/approve`
 - `POST /api/studios/{studio_id}/candidates/{candidate_id}/reject`
 - `POST /api/studios/{studio_id}/jobs/{job_id}/approve-candidates`
+- `POST /api/studios/{studio_id}/jobs/{job_id}/retry`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/score`
 - `GET /api/admin/storage`
 - `DELETE /api/admin/studios/{studio_id}`
 - `DELETE /api/admin/studios/{studio_id}/assets`
+- `DELETE /api/admin/staged-assets`
+- `DELETE /api/admin/expired-staged-assets`
 - `DELETE /api/admin/assets/{asset_id}`
+- `POST /api/admin/engine/drain`
 
 By default, studio state is persisted under `apps/api/storage`.
 Set `GIGASTUDY_API_STORAGE_ROOT` to use a different local directory.
@@ -84,6 +93,12 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
 - Keep `GIGASTUDY_API_STORAGE_ROOT` as temporary engine/cache space only.
 - Use `GIGASTUDY_API_MAX_UPLOAD_BYTES` to keep base64 JSON uploads inside the
   Cloud Run request and memory envelope.
+- In S3/R2 mode, `GIGASTUDY_API_ASSET_CACHE_MAX_BYTES` and
+  `GIGASTUDY_API_ASSET_CACHE_MAX_AGE_SECONDS` bound the temporary local object
+  cache under `GIGASTUDY_API_STORAGE_ROOT`.
+- Local API-proxy direct uploads use signed, expiring upload tokens. Owner-token
+  mode also binds those proxy upload tokens to the studio owner hash before any
+  bytes are written.
 - OMR quality/runtime can be tuned with `GIGASTUDY_API_OMR_BACKEND`
   (`auto`, `audiveris`, `pdf_vector`, `vector_first`) plus
   `GIGASTUDY_API_OMR_PREPROCESS_MODE` and
@@ -137,8 +152,8 @@ gcloud run deploy gigastudy-api-alpha \
 Smoke-check the deployed API before testing the Pages UI:
 
 ```bash
-curl https://gigastudy-api-alpha-ajpmdzbrga-du.a.run.app/api/health
-curl https://gigastudy-api-alpha-ajpmdzbrga-du.a.run.app/api/studios
+curl https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app/api/health
+curl https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app/api/studios
 ```
 
 ## Foundation Docs

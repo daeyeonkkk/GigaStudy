@@ -66,7 +66,7 @@ VOICE_COMFORT_CENTER = {
 }
 
 BEAM_SIZE = 10
-MAX_PITCH_CANDIDATES_PER_CHORD = 8
+MAX_PITCH_CANDIDATES_PER_CHORD = 6
 DIVERSE_PATH_DIFFERENCE_THRESHOLD = 0.22
 
 
@@ -851,7 +851,7 @@ def _search_voice_leading_paths(
 ) -> list[HarmonyPath]:
     paths = [HarmonyPath(cost=0.0, pitches=(), chords=())]
     previous_event: HarmonyEvent | None = None
-    beam_size = max(BEAM_SIZE, max_paths * 4)
+    beam_size = max(BEAM_SIZE, max_paths * 2)
 
     for event_index, event in enumerate(events):
         next_paths: list[HarmonyPath] = []

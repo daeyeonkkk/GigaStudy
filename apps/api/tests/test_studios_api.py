@@ -1768,6 +1768,81 @@ def test_studio_poll_does_not_wake_queued_engine_job(
     assert polled_payload["tracks"][0]["status"] == "extracting"
 
 
+def test_engine_queue_rehydrates_studio_job_lost_to_concurrent_save(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def pass_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackNote(
+                pitch_midi=43,
+                label="G2",
+                onset_seconds=0,
+                duration_seconds=1,
+                duration_beats=1,
+                beat=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        pass_transcribe_voice_file,
+    )
+    monkeypatch.setattr(
+        studio_repository.StudioRepository,
+        "_schedule_engine_queue_processing",
+        lambda self, background_tasks: None,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Recovered voice queue",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(b"RIFF\x24\x00\x00\x00WAVEfmt ").decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/5/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "bass.wav",
+            "content_base64": encoded,
+            "review_before_register": False,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    job_id = upload_response.json()["jobs"][0]["job_id"]
+    repository = studio_repository.get_studio_repository()
+    with repository._lock:
+        studio = repository._load_studio(studio_id)
+        assert studio is not None
+        bass = repository._find_track(studio, 5)
+        bass.status = "empty"
+        bass.source_kind = None
+        bass.source_label = None
+        bass.updated_at = studio.created_at
+        studio.jobs = []
+        repository._save_studio(studio)
+
+    processed = repository.process_engine_queue_once()
+
+    assert processed is not None
+    assert processed.job_id == job_id
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["job_id"] == job_id
+    assert payload["jobs"][0]["status"] == "completed"
+    assert payload["tracks"][4]["status"] == "registered"
+    assert payload["tracks"][4]["notes"][0]["label"] == "G2"
+
+
 def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

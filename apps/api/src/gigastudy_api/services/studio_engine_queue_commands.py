@@ -77,12 +77,17 @@ class StudioEngineQueueCommands:
             if record is None:
                 return None
 
-        self._repository._mark_job_running(
-            record.studio_id,
-            record.job_id,
-            attempt_count=record.attempt_count,
-            max_attempts=record.max_attempts,
-        )
+        try:
+            self._repository._ensure_extraction_job_for_queue_record(record)
+            self._repository._mark_job_running(
+                record.studio_id,
+                record.job_id,
+                attempt_count=record.attempt_count,
+                max_attempts=record.max_attempts,
+            )
+        except HTTPException as error:
+            self._engine_queue.fail(record.job_id, message=str(error.detail))
+            return record
         try:
             self._job_handlers.process(record)
         except Exception as error:

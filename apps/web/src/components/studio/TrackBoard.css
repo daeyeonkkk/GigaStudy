@@ -107,6 +107,28 @@
   font-size: 0.9rem;
 }
 
+.track-card__job-state {
+  width: fit-content;
+  padding: 2px 5px;
+  border: 1px solid #d6ad55;
+  border-radius: 3px;
+  background: #fff8e8;
+  color: #704400;
+}
+
+.track-card__job-state--needs_review,
+.track-card__job-state--completed {
+  border-color: #74a66a;
+  background: #f0fbef;
+  color: #1e5d25;
+}
+
+.track-card__job-state--failed {
+  border-color: #c8706a;
+  background: #fff1ef;
+  color: #8d241b;
+}
+
 .track-card--review .track-card__state strong {
   color: #9b5c00;
 }

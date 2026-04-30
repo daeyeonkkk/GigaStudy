@@ -9,9 +9,10 @@ import {
   formatSeconds,
   getTrackSourceLabel,
   getTrackRenderModel,
+  getJobStatusLabel,
   statusLabels,
 } from '../../lib/studio'
-import type { TrackSlot } from '../../types/studio'
+import type { TrackExtractionJob, TrackSlot } from '../../types/studio'
 import './TrackBoard.css'
 
 const EngravedScoreStrip = lazy(() =>
@@ -34,6 +35,7 @@ type TrackBoardProps = {
   bpm: number
   metronomeEnabled: boolean
   pendingCandidateCount: number
+  extractionJobs: TrackExtractionJob[]
   playingSlots: Set<number>
   playheadSeconds: number | null
   registeredTracks: TrackSlot[]
@@ -71,6 +73,19 @@ function clampVolumePercent(value: number): number {
 
 function getTrackVolumePercent(track: TrackSlot): number {
   return clampVolumePercent(track.volume_percent)
+}
+
+function getTrackActiveJob(track: TrackSlot, jobs: TrackExtractionJob[]): TrackExtractionJob | null {
+  return (
+    jobs.find(
+      (job) =>
+        job.slot_id === track.slot_id &&
+        (job.status === 'queued' ||
+          job.status === 'running' ||
+          job.status === 'needs_review' ||
+          job.status === 'failed'),
+    ) ?? null
+  )
 }
 
 function TrackVolumeControl({
@@ -168,6 +183,7 @@ export function TrackBoard({
   bpm,
   metronomeEnabled,
   pendingCandidateCount,
+  extractionJobs,
   playingSlots,
   playheadSeconds,
   registeredTracks,
@@ -233,6 +249,7 @@ export function TrackBoard({
           const isRecording = recordingSlotId === track.slot_id
           const isCountingIn = trackCountIn?.slotId === track.slot_id
           const isPlaying = playingSlots.has(track.slot_id)
+          const activeJob = getTrackActiveJob(track, extractionJobs)
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
@@ -261,6 +278,11 @@ export function TrackBoard({
                 </div>
                 <div className="track-card__state">
                   <strong>{statusLabels[track.status]}</strong>
+                  {activeJob ? (
+                    <span className={`track-card__job-state track-card__job-state--${activeJob.status}`}>
+                      {getJobStatusLabel(activeJob.status)}
+                    </span>
+                  ) : null}
                   <span>sync {formatSeconds(track.sync_offset_seconds)}</span>
                   <span>vol {getTrackVolumePercent(track)}%</span>
                 </div>

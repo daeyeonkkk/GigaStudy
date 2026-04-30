@@ -276,6 +276,7 @@ export function StudioPage() {
               bpm={studio.bpm}
               metronomeEnabled={metronomeEnabled}
               pendingCandidateCount={pendingCandidates.length}
+              extractionJobs={visibleExtractionJobs}
               playingSlots={playingSlots}
               playheadSeconds={playheadSeconds}
               registeredTracks={registeredTracks}

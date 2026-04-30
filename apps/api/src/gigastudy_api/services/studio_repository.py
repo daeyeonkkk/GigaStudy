@@ -866,6 +866,56 @@ class StudioRepository:
     def process_engine_queue_once(self) -> EngineQueueJob | None:
         return self._engine_commands.process_once()
 
+    def _ensure_extraction_job_for_queue_record(self, record: EngineQueueJob) -> None:
+        with self._lock:
+            studio = self._load_studio(record.studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            if any(job.job_id == record.job_id for job in studio.jobs):
+                return
+
+            timestamp = _now()
+            source_kind: SourceKind = "audio" if record.job_type == "voice" else "score"
+            payload_source_kind = record.payload.get("source_kind")
+            if payload_source_kind in {"recording", "audio", "midi", "score", "music", "ai"}:
+                source_kind = payload_source_kind
+            source_label = str(record.payload.get("source_label") or "recovered-upload")
+            audio_mime_type_value = record.payload.get("audio_mime_type")
+            job = TrackExtractionJob(
+                job_id=record.job_id,
+                job_type=record.job_type,
+                slot_id=record.slot_id,
+                source_kind=source_kind,
+                source_label=source_label,
+                status="queued",
+                method="voice_transcription" if record.job_type == "voice" else "audiveris_cli",
+                message="Recovered from durable engine queue.",
+                input_path=str(record.payload.get("input_path") or "") or None,
+                attempt_count=max(0, record.attempt_count),
+                max_attempts=record.max_attempts,
+                parse_all_parts=bool(record.payload.get("parse_all_parts")),
+                review_before_register=bool(record.payload.get("review_before_register")),
+                allow_overwrite=bool(record.payload.get("allow_overwrite")),
+                audio_mime_type=str(audio_mime_type_value) if audio_mime_type_value else None,
+                created_at=record.created_at,
+                updated_at=timestamp,
+            )
+            studio.jobs.append(job)
+            placeholder_tracks = (
+                [track for track in studio.tracks if track.slot_id <= 5]
+                if job.parse_all_parts
+                else [self._find_track(studio, job.slot_id)]
+            )
+            for track in placeholder_tracks:
+                if _track_has_content(track):
+                    continue
+                track.status = "extracting"
+                track.source_kind = job.source_kind
+                track.source_label = job.source_label
+                track.updated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+
     def _add_extraction_candidates(
         self,
         studio_id: str,

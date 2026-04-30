@@ -345,6 +345,18 @@ class PostgresStudioStore:
         return int(row["bytes"] if row is not None else 0)
 
     def _save_one_raw(self, connection, studio_id: str, payload: Any) -> None:
+        existing_row = connection.execute(
+            "SELECT payload FROM studio_documents WHERE studio_id = %s FOR UPDATE",
+            (studio_id,),
+        ).fetchone()
+        if existing_row is not None:
+            sidecars = self._fetch_sidecars(connection, [studio_id])
+            existing_payload = _merge_sidecars(
+                existing_row["payload"],
+                reports=sidecars["reports"].get(studio_id),
+                candidates=sidecars["candidates"].get(studio_id),
+            )
+            payload = _merge_concurrent_studio_payload(existing_payload, payload)
         base_studio, reports, candidates = _split_sidecars(payload)
         connection.execute(
             """
@@ -508,6 +520,59 @@ def _split_sidecars(payload: Any) -> tuple[Any, list[Any], list[Any]]:
     return base_payload, reports, candidates
 
 
+def _merge_concurrent_studio_payload(existing: Any, incoming: Any) -> Any:
+    if not isinstance(existing, dict) or not isinstance(incoming, dict):
+        return incoming
+
+    merged = dict(existing)
+    merged.update(incoming)
+    for key, id_key in (
+        ("tracks", "slot_id"),
+        ("jobs", "job_id"),
+        ("reports", "report_id"),
+        ("candidates", "candidate_id"),
+    ):
+        merged[key] = _merge_timestamped_items(
+            existing.get(key),
+            incoming.get(key),
+            id_key=id_key,
+        )
+    if _timestamp_value(existing.get("updated_at")) > _timestamp_value(incoming.get("updated_at")):
+        merged["updated_at"] = existing.get("updated_at")
+    return merged
+
+
+def _merge_timestamped_items(existing: Any, incoming: Any, *, id_key: str) -> list[Any]:
+    if not isinstance(existing, list):
+        return list(incoming) if isinstance(incoming, list) else []
+    if not isinstance(incoming, list):
+        return list(existing)
+
+    merged_by_id: dict[str, Any] = {}
+    ordered_ids: list[str] = []
+
+    def merge_item(item: Any) -> None:
+        if not isinstance(item, dict):
+            item_id = f"__index_{len(ordered_ids):08d}"
+        else:
+            item_id = str(item.get(id_key) or f"__index_{len(ordered_ids):08d}")
+        if item_id not in merged_by_id:
+            ordered_ids.append(item_id)
+            merged_by_id[item_id] = item
+            return
+        current = merged_by_id[item_id]
+        if _timestamp_value(item.get("updated_at") if isinstance(item, dict) else None) >= _timestamp_value(
+            current.get("updated_at") if isinstance(current, dict) else None
+        ):
+            merged_by_id[item_id] = item
+
+    for item in existing:
+        merge_item(item)
+    for item in incoming:
+        merge_item(item)
+    return [merged_by_id[item_id] for item_id in ordered_ids]
+
+
 def _merge_sidecars(
     payload: Any,
     *,
@@ -529,6 +594,10 @@ def _merge_sidecars(
         merged_payload.setdefault("candidates", [])
 
     return merged_payload
+
+
+def _timestamp_value(value: Any) -> str:
+    return str(value or "")
 
 
 def _owner_matches(studio_payload: Any, owner_token_hash: str | None) -> bool:

@@ -1174,6 +1174,11 @@ not legacy product surfaces.
   behind `studio_engine_job_handlers.py`. The repository keeps the persistence,
   track material mutation hooks, compatibility injection points used by tests,
   and HTTP-facing facade methods.
+- New OMR/voice extraction job creation now lives behind
+  `studio_extraction_job_commands.py`. It owns job construction, placeholder
+  track state, queue-record enqueue, and scheduler wake-up calls. The repository
+  still exposes the historical private enqueue methods as thin wrappers so
+  upload and recovery paths keep one visible orchestration boundary.
 - Score PDF export, retained track-audio resolution, and OMR source preview
   lookup now live behind `studio_resource_commands.py`. The repository exposes
   the same route-facing methods, but file/preview/export HTTP translation no

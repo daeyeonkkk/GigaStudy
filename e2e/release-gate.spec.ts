@@ -901,7 +901,16 @@ test('six-track studio supports create, register, generate, sync, play, and scor
     await expect(page.getByTestId('score-start-button')).toBeVisible()
     await page.getByTestId('score-start-button').click()
     await expect(page.getByTestId('score-stop-button')).toBeEnabled()
+    await expect(page.getByTestId('score-stop-button')).toContainText('중지', { timeout: 15_000 })
+    const scoreResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/tracks/1/score') &&
+        response.request().method() === 'POST',
+      { timeout: 60_000 },
+    )
     await page.getByTestId('score-stop-button').click()
+    const scoreResponse = await scoreResponsePromise
+    expect(scoreResponse.ok()).toBeTruthy()
 
     await expect(page.getByTestId('report-feed')).toContainText('Soprano')
     const reportLink = page.locator('[data-testid^="report-open-"]').first()

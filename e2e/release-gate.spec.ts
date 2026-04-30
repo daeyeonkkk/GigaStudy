@@ -478,6 +478,24 @@ async function approveFirstCandidate(page: Page) {
   await expect(page.getByTestId('candidate-review')).toBeHidden()
 }
 
+async function generateTrackAndWait(page: Page, slotId: number) {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/tracks/${slotId}/generate`) &&
+      response.request().method() === 'POST',
+  )
+  await page.getByTestId(`track-generate-${slotId}`).click()
+  const response = await responsePromise
+  expect(response.ok()).toBeTruthy()
+}
+
+async function expectPendingCandidateCount(page: Page, count: number) {
+  const review = page.getByTestId('candidate-review')
+  await expect(review.locator('.candidate-review__item')).toHaveCount(count)
+  await expect(review.locator('.candidate-review__header strong')).toHaveText(`${count} pending`)
+  await expect(page.locator('.studio-tracks__summary')).toContainText(`${count} review`)
+}
+
 test('home keeps upload and blank start flows separate', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByTestId('upload-and-start-button')).toBeHidden()
@@ -742,6 +760,19 @@ test('admin login can inspect storage and run the engine queue trigger', async (
   await expect(page.getByText(/Engine queue processed/)).toBeVisible()
 })
 
+test('AI regeneration replaces pending candidates for the same track', async ({ page }) => {
+  await createBlankStudio(page, 'AI candidate replacement session')
+  await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')
+  await approveFirstCandidate(page)
+
+  await expect(page.getByTestId('track-generate-2')).toBeEnabled()
+  await generateTrackAndWait(page, 2)
+  await expectPendingCandidateCount(page, 3)
+
+  await generateTrackAndWait(page, 2)
+  await expectPendingCandidateCount(page, 3)
+})
+
 test('six-track studio supports create, register, generate, sync, play, and score', async ({ page, browserName }) => {
   await createBlankStudio(page, 'Playwright six-track session', '104')
 
@@ -768,7 +799,7 @@ test('six-track studio supports create, register, generate, sync, play, and scor
   expect(sopranoOverflow.scrollWidth).toBeGreaterThan(sopranoOverflow.clientWidth)
 
   await expect(page.getByTestId('track-generate-2')).toBeEnabled()
-  await page.getByTestId('track-generate-2').click()
+  await generateTrackAndWait(page, 2)
   await expect(page.getByTestId('candidate-review')).toContainText('Balanced')
   await expect(page.getByTestId('candidate-review')).toContainText('Lower support')
   await expect(page.getByTestId('candidate-review')).toContainText('Upper blend')

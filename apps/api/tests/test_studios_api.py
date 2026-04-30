@@ -2129,5 +2129,4 @@ def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, mon
         if candidate["suggested_slot_id"] == 4 and candidate["status"] == "rejected"
     ]
     assert len(pending_baritone_candidates) == 3
-    assert len(superseded_baritone_candidates) == 3
-    assert all(candidate["notes"] == [] for candidate in superseded_baritone_candidates)
+    assert superseded_baritone_candidates == []

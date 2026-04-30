@@ -413,10 +413,9 @@ class StudioCandidateCommands:
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = self._now()
-            self._retire_pending_ai_generation_candidates(
+            self._discard_superseded_ai_generation_candidates(
                 studio,
                 slot_id,
-                timestamp=timestamp,
             )
             candidate_group_id = uuid4().hex
             for index, notes in enumerate(candidate_notes, start=1):
@@ -466,20 +465,24 @@ class StudioCandidateCommands:
             self._repository._save_studio(studio)
         return studio
 
-    def _retire_pending_ai_generation_candidates(
+    def _discard_superseded_ai_generation_candidates(
         self,
         studio: Studio,
         slot_id: int,
-        *,
-        timestamp: str,
     ) -> None:
-        for candidate in studio.candidates:
-            if (
-                candidate.status == "pending"
-                and candidate.source_kind == "ai"
+        studio.candidates = [
+            candidate
+            for candidate in studio.candidates
+            if not (
+                candidate.source_kind == "ai"
                 and candidate.suggested_slot_id == slot_id
                 and candidate.job_id is None
-            ):
-                mark_candidate_rejected(candidate, timestamp=timestamp)
-                candidate.message = SUPERSEDED_AI_CANDIDATE_MESSAGE
-                candidate.notes = []
+                and (
+                    candidate.status == "pending"
+                    or (
+                        candidate.status == "rejected"
+                        and candidate.message == SUPERSEDED_AI_CANDIDATE_MESSAGE
+                    )
+                )
+            )
+        ]

@@ -66,7 +66,7 @@ VOICE_COMFORT_CENTER = {
 }
 
 BEAM_SIZE = 10
-MAX_PITCH_CANDIDATES_PER_CHORD = 6
+MAX_PITCH_CANDIDATES_PER_CHORD = 4
 DIVERSE_PATH_DIFFERENCE_THRESHOLD = 0.22
 
 
@@ -729,7 +729,7 @@ def _select_voice_leading_paths(
 ) -> list[HarmonyPath]:
     selected: list[HarmonyPath] = []
     profiles = _voice_leading_profiles_for_count(candidate_count, profile_names=profile_names)
-    pool_size = max(8, candidate_count * 4)
+    pool_size = max(3, candidate_count)
 
     for candidate_index, profile in enumerate(profiles, start=1):
         profile_paths = _search_voice_leading_paths(
@@ -751,7 +751,7 @@ def _select_voice_leading_paths(
         target_slot_id=target_slot_id,
         events=events,
         key=key,
-        max_paths=max(pool_size, candidate_count * 8),
+        max_paths=max(pool_size, candidate_count * 3),
         profile=DEFAULT_VOICE_LEADING_PROFILE,
         harmony_plan=harmony_plan,
         candidate_goal=None,

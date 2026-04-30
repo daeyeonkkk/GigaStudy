@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from gigastudy_api.api.schemas.studios import Studio
+from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.music_theory import TRACKS, infer_slot_id
 from gigastudy_api.services.engine.notation import annotate_track_notes_for_slot
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError, VoiceTranscriptionResult
@@ -29,6 +30,11 @@ def extract_home_audio_candidate(
                 slot_id=slot_id,
                 time_signature_numerator=studio.time_signature_numerator,
                 time_signature_denominator=studio.time_signature_denominator,
+                extraction_plan=default_voice_extraction_plan(
+                    slot_id=slot_id,
+                    bpm=studio.bpm,
+                    source_kind="music",
+                ),
             )
         except VoiceTranscriptionError as error:
             errors.append(str(error))
@@ -54,6 +60,7 @@ def extract_home_audio_candidate(
                 slot_id=suggested_slot_id,
             ),
             alignment=transcription.alignment,
+            diagnostics=transcription.diagnostics,
         ),
         confidence,
     )

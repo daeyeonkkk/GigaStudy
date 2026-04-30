@@ -162,6 +162,7 @@ class StudioEngineJobHandlers:
                 source_label=result.source_label,
                 method="voice_transcription_review",
                 confidence=min((note.confidence for note in result.notes), default=0.45),
+                diagnostics_by_slot={record.slot_id: result.diagnostics},
                 message="Voice transcription is waiting for user approval.",
                 job_id=record.job_id,
                 audio_source_path=result.relative_audio_path,
@@ -187,6 +188,7 @@ class StudioEngineJobHandlers:
             audio_source_path=result.relative_audio_path,
             audio_source_label=result.source_label,
             audio_mime_type=result.audio_mime_type,
+            source_diagnostics=result.diagnostics,
         )
         self._repository._mark_job_completed(
             record.studio_id,

@@ -274,6 +274,7 @@ class StudioUploadCommands:
                 audio_source_path=audio_source_path,
                 audio_source_label=source_filename,
                 audio_mime_type=guess_audio_mime_type(source_filename),
+                source_diagnostics=transcription.diagnostics,
             )
             return studio
 

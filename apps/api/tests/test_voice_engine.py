@@ -10,6 +10,10 @@ from pathlib import Path
 import pytest
 
 from gigastudy_api.services.engine.music_theory import midi_to_frequency
+from gigastudy_api.services.engine.extraction_plan import (
+    apply_voice_extraction_instruction,
+    default_voice_extraction_plan,
+)
 from gigastudy_api.services.engine.voice import (
     VoiceTranscriptionError,
     _estimate_metronome_phase_alignment,
@@ -208,6 +212,48 @@ def test_basic_pitch_notes_are_aligned_before_quantization(tmp_path: Path, monke
     assert [note.label for note in notes] == ["C5", "E5"]
     assert [note.beat for note in notes] == [1, 2]
     assert result.alignment.offset_seconds == pytest.approx(-0.13, abs=0.01)
+
+
+def test_pre_extraction_plan_controls_voice_quantization(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wav_path = tmp_path / "basic-pitch-planned.wav"
+    _write_mono_wav(wav_path, [(1.0, None, 0)])
+
+    package = types.ModuleType("basic_pitch")
+    inference = types.ModuleType("basic_pitch.inference")
+
+    def fake_predict(_path: str):
+        return None, None, [(0.14, 0.59, 72, 0.91), (0.88, 1.31, 76, 0.87)]
+
+    inference.predict = fake_predict  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "basic_pitch", package)
+    monkeypatch.setitem(sys.modules, "basic_pitch.inference", inference)
+
+    plan = apply_voice_extraction_instruction(
+        default_voice_extraction_plan(slot_id=1, bpm=120),
+        confidence=0.86,
+        provider="test_llm",
+        model="unit",
+        quantization_grid=0.5,
+        min_segment_policy="strict",
+        confidence_policy="strict",
+        reasons=["Prefer score-readable half-beat placement."],
+    )
+    result = transcribe_voice_file_with_alignment(
+        wav_path,
+        bpm=120,
+        slot_id=1,
+        backend="basic_pitch",
+        extraction_plan=plan,
+    )
+
+    assert [note.label for note in result.notes] == ["C5", "E5"]
+    assert all(note.quantization_grid == 0.5 for note in result.notes)
+    assert result.diagnostics is not None
+    diagnostic_plan = result.diagnostics["voice_extraction_plan"]
+    assert isinstance(diagnostic_plan, dict)
+    assert diagnostic_plan["provider"] == "test_llm"
+    assert diagnostic_plan["used_llm"] is True
+    assert diagnostic_plan["quantization_grid"] == 0.5
 
 
 def test_metronome_aligned_wav_bytes_trim_and_pad_source_audio(tmp_path: Path) -> None:

@@ -655,6 +655,7 @@ class StudioRepository:
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
+        source_diagnostics: dict[str, Any] | None = None,
     ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
@@ -668,6 +669,9 @@ class StudioRepository:
                 source_kind=source_kind,
                 notes=notes,
             )
+            registration_diagnostics = dict(registration.diagnostics)
+            if source_diagnostics:
+                registration_diagnostics["source_extraction"] = source_diagnostics
             _register_track_material(
                 track,
                 timestamp=timestamp,
@@ -675,7 +679,7 @@ class StudioRepository:
                 source_label=source_label,
                 notes=registration.notes,
                 duration_seconds=_track_duration_seconds(registration.notes),
-                registration_diagnostics=registration.diagnostics,
+                registration_diagnostics=registration_diagnostics,
                 audio_source_path=audio_source_path,
                 audio_source_label=audio_source_label,
                 audio_mime_type=audio_mime_type,
@@ -794,6 +798,7 @@ class StudioRepository:
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
+        source_diagnostics: dict[str, Any] | None = None,
     ) -> None:
         self._candidates.append_initial_candidate(
             studio,
@@ -807,6 +812,7 @@ class StudioRepository:
             audio_source_path=audio_source_path,
             audio_source_label=audio_source_label,
             audio_mime_type=audio_mime_type,
+            source_diagnostics=source_diagnostics,
         )
 
     def _enqueue_omr_job(
@@ -875,6 +881,7 @@ class StudioRepository:
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
+        source_diagnostics: dict[str, Any] | None = None,
     ) -> Studio:
         return self._candidates.add_extraction_candidates(
             studio_id,
@@ -1004,6 +1011,7 @@ class StudioRepository:
         slot_id: int,
         time_signature_numerator: int,
         time_signature_denominator: int,
+        extraction_plan: Any | None = None,
     ) -> list[TrackNote]:
         with _engine_execution_lock:
             return transcribe_voice_file(
@@ -1012,6 +1020,7 @@ class StudioRepository:
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
+                extraction_plan=extraction_plan,
             )
 
     def _transcribe_voice_file_with_alignment(
@@ -1022,6 +1031,7 @@ class StudioRepository:
         slot_id: int,
         time_signature_numerator: int,
         time_signature_denominator: int,
+        extraction_plan: Any | None = None,
     ) -> VoiceTranscriptionResult:
         with _engine_execution_lock:
             if transcribe_voice_file is not _ORIGINAL_TRANSCRIBE_VOICE_FILE:
@@ -1032,8 +1042,15 @@ class StudioRepository:
                         slot_id=slot_id,
                         time_signature_numerator=time_signature_numerator,
                         time_signature_denominator=time_signature_denominator,
+                        extraction_plan=extraction_plan,
                     ),
                     alignment=NO_METRONOME_ALIGNMENT,
+                    diagnostics={
+                        "engine": "monkeypatched_voice_transcriber",
+                        "voice_extraction_plan": extraction_plan.diagnostics()
+                        if hasattr(extraction_plan, "diagnostics")
+                        else None,
+                    },
                 )
             return transcribe_voice_file_with_alignment(
                 source_path,
@@ -1041,6 +1058,7 @@ class StudioRepository:
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
+                extraction_plan=extraction_plan,
             )
 
     def _run_audiveris_omr(

@@ -186,6 +186,17 @@ registration pipeline is:
 -> beat quantization -> measure/rest/tie generation -> Track registration ->
 user micro Sync`.
 
+Before pitch/onset extraction, voice-like input must pass through a bounded
+pre-transcription extraction plan. The deterministic default plan is derived
+from the target slot, studio BPM, source kind, and already registered sibling
+tracks. When the DeepSeek extraction-plan flag is enabled and an API key is
+configured, the LLM may choose only bounded parameters: vocal range widening
+within the target slot policy, quantization grid, segment strictness,
+confidence strictness, adjacent-same-pitch merging, and unstable-note
+suppression. The LLM must not output TrackNotes, final pitches, beats, or a new
+tempo. DSP/ML extractors apply the selected plan directly before producing
+raw note candidates.
+
 The BPM/meter grid is the paper; extracted notes are fitted onto it before they
 become notation. Registration-time alignment may apply a small deterministic
 whole-source offset to compensate capture latency or a loose entrance before

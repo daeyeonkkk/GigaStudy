@@ -243,6 +243,7 @@ class StudioCandidateCommands:
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
+        source_diagnostics: dict[str, Any] | None = None,
     ) -> None:
         timestamp = self._now()
         registration = self._repository._prepare_registration_notes(
@@ -257,6 +258,7 @@ class StudioCandidateCommands:
             notes,
             method=method,
             confidence=confidence,
+            source_diagnostics=source_diagnostics,
         )
         candidate = build_pending_candidate(
             audio_mime_type=audio_mime_type,

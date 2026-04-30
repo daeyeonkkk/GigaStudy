@@ -153,6 +153,12 @@ Track fill actions:
   registration: stable pitch segments, consistent quantization, measure-owned
   notes, valid ties across barlines, and track-appropriate clef/key/accidental
   display policy.
+- Voice-derived extraction must start from a pre-transcription plan, not only a
+  post-hoc notation repair. The plan is based on the target track, studio BPM,
+  source kind, and sibling track context. Optional LLM involvement is allowed
+  only as bounded planning: choose extraction strictness, grid, and range policy
+  while deterministic engines still perform pitch tracking and TrackNote
+  generation.
 - Upload accepts supported audio, MIDI, or score formats and converts them into
   registered track material or reviewable extraction candidates. Browser-
   decodable MP3/M4A/OGG/FLAC audio is normalized to WAV before the local

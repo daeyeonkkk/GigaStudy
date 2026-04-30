@@ -1,6 +1,7 @@
 import json
 
 from gigastudy_api.config import Settings
+from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.music_theory import note_from_pitch
 from gigastudy_api.services.llm.deepseek import (
     _build_chat_completion_payload,
@@ -8,6 +9,10 @@ from gigastudy_api.services.llm.deepseek import (
     _chat_completion_headers,
     _parse_deepseek_response,
     plan_harmony_with_deepseek,
+)
+from gigastudy_api.services.llm.extraction_plan import (
+    _parse_deepseek_extraction_response,
+    plan_voice_extraction_with_deepseek,
 )
 
 
@@ -38,6 +43,64 @@ def test_deepseek_planner_is_disabled_until_explicitly_enabled() -> None:
     )
 
     assert plan is None
+
+
+def test_deepseek_extraction_plan_is_disabled_until_explicitly_enabled() -> None:
+    settings = Settings(deepseek_extraction_plan_enabled=False, deepseek_api_key="secret")
+    base_plan = default_voice_extraction_plan(slot_id=3, bpm=92)
+
+    plan = plan_voice_extraction_with_deepseek(
+        settings=settings,
+        base_plan=base_plan,
+        title="Disabled",
+        bpm=92,
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+        source_kind="recording",
+        source_label="tenor.wav",
+        context_tracks_by_slot={1: [_note(label="C5")]},
+    )
+
+    assert plan is None
+
+
+def test_deepseek_extraction_response_applies_bounded_plan() -> None:
+    payload = {
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "confidence": 0.82,
+                            "quantization_grid": 0.5,
+                            "min_segment_policy": "strict",
+                            "confidence_policy": "loose",
+                            "widen_range_semitones": 2,
+                            "merge_adjacent_same_pitch": True,
+                            "suppress_unstable_notes": True,
+                            "reasons": ["Dense tenor input should be simplified before extraction."],
+                            "warnings": ["Do not alter the studio BPM."],
+                        }
+                    )
+                }
+            }
+        ]
+    }
+
+    instruction = _parse_deepseek_extraction_response(
+        payload,
+        model="deepseek/deepseek-v4-flash:free",
+        provider="openrouter",
+    )
+    plan = instruction.apply_to(default_voice_extraction_plan(slot_id=3, bpm=92))
+
+    assert plan.provider == "openrouter"
+    assert plan.model == "deepseek/deepseek-v4-flash:free"
+    assert plan.used_llm is True
+    assert plan.quantization_grid == 0.5
+    assert plan.low_midi == 46
+    assert plan.high_midi == 69
+    assert "Do not alter the studio BPM." in plan.warnings
 
 
 def test_deepseek_payload_uses_json_mode_and_non_thinking_by_default() -> None:

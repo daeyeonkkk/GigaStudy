@@ -11,11 +11,11 @@ from statistics import median
 from gigastudy_api.api.schemas.studios import TrackNote
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.music_theory import (
-    SLOT_RANGES,
     frequency_to_midi,
     note_from_pitch,
     quantize,
 )
+from gigastudy_api.services.engine.extraction_plan import VoiceExtractionPlan, default_voice_extraction_plan
 from gigastudy_api.services.engine.notation import normalize_track_notes
 
 
@@ -54,6 +54,7 @@ class MetronomeAlignment:
 class VoiceTranscriptionResult:
     notes: list[TrackNote]
     alignment: MetronomeAlignment
+    diagnostics: dict[str, object] | None = None
 
 
 METRONOME_ALIGNMENT_FINE_STEP_BEATS = 0.01
@@ -74,6 +75,7 @@ def transcribe_voice_file(
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
     backend: str | None = None,
+    extraction_plan: VoiceExtractionPlan | None = None,
 ) -> list[TrackNote]:
     return transcribe_voice_file_with_alignment(
         path,
@@ -82,6 +84,7 @@ def transcribe_voice_file(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
         backend=backend,
+        extraction_plan=extraction_plan,
     ).notes
 
 
@@ -93,6 +96,7 @@ def transcribe_voice_file_with_alignment(
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
     backend: str | None = None,
+    extraction_plan: VoiceExtractionPlan | None = None,
 ) -> VoiceTranscriptionResult:
     if path.suffix.lower() != ".wav":
         msg = "Only WAV voice transcription is available in the local MVP engine."
@@ -107,6 +111,7 @@ def transcribe_voice_file_with_alignment(
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
+                extraction_plan=extraction_plan,
             )
         except VoiceTranscriptionError:
             if resolved_backend == "basic_pitch":
@@ -123,6 +128,7 @@ def transcribe_voice_file_with_alignment(
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
+                extraction_plan=extraction_plan,
             )
         except VoiceTranscriptionError:
             if resolved_backend in {"librosa", "pyin", "librosa_pyin"}:
@@ -137,6 +143,7 @@ def transcribe_voice_file_with_alignment(
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
+        extraction_plan=extraction_plan,
     )
 
 
@@ -147,7 +154,9 @@ def _transcribe_with_local_autocorrelation(
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
+    extraction_plan: VoiceExtractionPlan | None = None,
 ) -> VoiceTranscriptionResult:
+    plan = extraction_plan or default_voice_extraction_plan(slot_id=slot_id, bpm=bpm)
     samples, sample_rate = _read_wav_mono(path)
     if not samples:
         raise VoiceTranscriptionError("Audio file is empty.")
@@ -156,7 +165,7 @@ def _transcribe_with_local_autocorrelation(
     frame_size = min(4096, max(1024, sample_rate // 20))
     hop_size = frame_size // 2
     hop_seconds = hop_size / sample_rate
-    low_midi, high_midi = SLOT_RANGES.get(slot_id, (40, 81))
+    low_midi, high_midi = plan.low_midi, plan.high_midi
     fmin = 440 * 2 ** ((low_midi - 69) / 12)
     fmax = 440 * 2 ** ((high_midi - 69) / 12)
     frame_candidates: list[tuple[int, list[float], float]] = []
@@ -183,7 +192,7 @@ def _transcribe_with_local_autocorrelation(
         frequency, confidence = _estimate_frequency(frame, sample_rate, fmin=fmin, fmax=fmax)
         if frequency is None:
             continue
-        if confidence < 0.42:
+        if confidence < plan.min_frame_confidence:
             continue
         midi_float = 69 + 12 * math.log2(frequency / 440)
         midi_note = frequency_to_midi(frequency)
@@ -208,6 +217,8 @@ def _transcribe_with_local_autocorrelation(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
         extraction_method="wav_autocorrelation_v2",
+        extraction_plan=plan,
+        frame_count=len(stable_frame_pitches),
     )
 
 
@@ -218,7 +229,9 @@ def _transcribe_with_basic_pitch(
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
+    extraction_plan: VoiceExtractionPlan | None = None,
 ) -> VoiceTranscriptionResult:
+    plan = extraction_plan or default_voice_extraction_plan(slot_id=slot_id, bpm=bpm)
     try:
         from basic_pitch.inference import predict  # type: ignore[import-not-found]
     except Exception as error:  # pragma: no cover - optional dependency.
@@ -235,7 +248,7 @@ def _transcribe_with_basic_pitch(
     if not note_events:
         raise VoiceTranscriptionError("Basic Pitch did not produce any note events.")
 
-    low_midi, high_midi = SLOT_RANGES.get(slot_id, (40, 81))
+    low_midi, high_midi = plan.low_midi, plan.high_midi
     beat_seconds = 60 / max(1, bpm)
     parsed_events: list[tuple[float, float, int, float]] = []
     for event in note_events:
@@ -261,8 +274,11 @@ def _transcribe_with_basic_pitch(
         warnings = ["metronome_phase_aligned"] if alignment.applied else []
         notes.append(
             note_from_pitch(
-                beat=quantize(aligned_onset_seconds / beat_seconds + 1, 0.25),
-                duration_beats=max(0.25, quantize(duration_seconds / beat_seconds, 0.25)),
+                beat=quantize(aligned_onset_seconds / beat_seconds + 1, plan.quantization_grid),
+                duration_beats=max(
+                    plan.quantization_grid,
+                    quantize(duration_seconds / beat_seconds, plan.quantization_grid),
+                ),
                 bpm=bpm,
                 source="voice",
                 extraction_method="basic_pitch_amt_v1",
@@ -283,8 +299,17 @@ def _transcribe_with_basic_pitch(
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
+            quantization_grid=plan.quantization_grid,
+            merge_adjacent_same_pitch=plan.merge_adjacent_same_pitch,
         ),
         alignment=alignment,
+        diagnostics=_voice_transcription_diagnostics(
+            plan,
+            extraction_method="basic_pitch_amt_v1",
+            frame_count=0,
+            segment_count=len(parsed_events),
+            note_count=len(notes),
+        ),
     )
 
 
@@ -333,14 +358,16 @@ def _transcribe_with_librosa_pyin(
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
+    extraction_plan: VoiceExtractionPlan | None = None,
 ) -> VoiceTranscriptionResult:
+    plan = extraction_plan or default_voice_extraction_plan(slot_id=slot_id, bpm=bpm)
     try:
         import librosa  # type: ignore[import-not-found]
         import numpy as np  # type: ignore[import-not-found]
     except Exception as error:  # pragma: no cover - optional dependency.
         raise VoiceTranscriptionError("librosa is not installed.") from error
 
-    low_midi, high_midi = SLOT_RANGES.get(slot_id, (40, 81))
+    low_midi, high_midi = plan.low_midi, plan.high_midi
     fmin = 440 * 2 ** ((max(0, low_midi - 2) - 69) / 12)
     fmax = 440 * 2 ** ((min(127, high_midi + 2) - 69) / 12)
     sample_rate = 22_050
@@ -392,7 +419,7 @@ def _transcribe_with_librosa_pyin(
         if rms < voice_threshold:
             continue
         probability = float(voiced_probabilities[index])
-        if probability < 0.48:
+        if probability < plan.min_voiced_probability:
             continue
 
         midi_float = 69 + 12 * math.log2(frequency / 440)
@@ -417,6 +444,8 @@ def _transcribe_with_librosa_pyin(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
         extraction_method="librosa_pyin_v1",
+        extraction_plan=plan,
+        frame_count=len(stable_frame_pitches),
     )
 
 
@@ -652,21 +681,24 @@ def _frames_to_notes(
     time_signature_numerator: int,
     time_signature_denominator: int,
     extraction_method: str,
+    extraction_plan: VoiceExtractionPlan | None = None,
+    frame_count: int | None = None,
 ) -> VoiceTranscriptionResult:
     if not frame_pitches:
         raise VoiceTranscriptionError("No voiced pitch contour was detected.")
+    plan = extraction_plan or default_voice_extraction_plan(slot_id=slot_id, bpm=bpm)
 
     segments: list[VoiceSegment] = []
     current_start = frame_pitches[0].time_seconds
     previous_time = current_start
     midi_values = [frame_pitches[0].midi_float]
     confidence_values = [frame_pitches[0].confidence]
-    max_gap_seconds = max(0.11, hop_seconds * 2.75)
+    max_gap_seconds = max(plan.max_gap_seconds, hop_seconds * 2.75)
 
     for frame in frame_pitches[1:]:
         current_midi = median(midi_values)
         gap = frame.time_seconds - previous_time
-        if abs(frame.midi_float - current_midi) <= 0.75 and gap <= max_gap_seconds:
+        if abs(frame.midi_float - current_midi) <= plan.segment_pitch_tolerance and gap <= max_gap_seconds:
             previous_time = frame.time_seconds
             midi_values.append(frame.midi_float)
             confidence_values.append(frame.confidence)
@@ -679,7 +711,13 @@ def _frames_to_notes(
         confidence_values = [frame.confidence]
 
     segments.append(_build_segment(current_start, previous_time, midi_values, confidence_values, hop_seconds))
-    segments = _clean_segments(segments, min_segment_seconds=max(0.15, hop_seconds * 3.5))
+    segments = _clean_segments(
+        segments,
+        min_segment_seconds=max(plan.min_segment_seconds, hop_seconds * 3.5),
+        min_segment_confidence=plan.min_segment_confidence,
+        max_pitch_std=plan.max_pitch_std,
+        suppress_unstable_notes=plan.suppress_unstable_notes,
+    )
     if not segments:
         raise VoiceTranscriptionError("No stable voiced note was detected.")
 
@@ -695,8 +733,11 @@ def _frames_to_notes(
     for segment in segments:
         midi_note = round(segment.midi_float)
         aligned_onset_seconds = max(0, segment.onset_seconds + alignment.offset_seconds) if alignment.applied else segment.onset_seconds
-        beat = quantize(aligned_onset_seconds / beat_seconds + 1, 0.25)
-        duration_beats = max(0.5, quantize(segment.duration_seconds / beat_seconds, 0.25))
+        beat = quantize(aligned_onset_seconds / beat_seconds + 1, plan.quantization_grid)
+        duration_beats = max(
+            0.5,
+            quantize(segment.duration_seconds / beat_seconds, plan.quantization_grid),
+        )
         warnings = ["metronome_phase_aligned"] if alignment.applied else []
         notes.append(
             note_from_pitch(
@@ -721,8 +762,17 @@ def _frames_to_notes(
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
+            quantization_grid=plan.quantization_grid,
+            merge_adjacent_same_pitch=plan.merge_adjacent_same_pitch,
         ),
         alignment=alignment,
+        diagnostics=_voice_transcription_diagnostics(
+            plan,
+            extraction_method=extraction_method,
+            frame_count=frame_count if frame_count is not None else len(frame_pitches),
+            segment_count=len(segments),
+            note_count=len(notes),
+        ),
     )
 
 
@@ -743,16 +793,23 @@ def _build_segment(
     )
 
 
-def _clean_segments(segments: list[VoiceSegment], *, min_segment_seconds: float) -> list[VoiceSegment]:
+def _clean_segments(
+    segments: list[VoiceSegment],
+    *,
+    min_segment_seconds: float,
+    min_segment_confidence: float,
+    max_pitch_std: float,
+    suppress_unstable_notes: bool,
+) -> list[VoiceSegment]:
     cleaned: list[VoiceSegment] = []
     for segment in segments:
         if segment.frame_count < 3:
             continue
         if segment.duration_seconds < min_segment_seconds:
             continue
-        if segment.confidence < 0.46:
+        if segment.confidence < min_segment_confidence:
             continue
-        if segment.pitch_std > 0.65:
+        if suppress_unstable_notes and segment.pitch_std > max_pitch_std:
             continue
         if cleaned:
             previous = cleaned[-1]
@@ -775,6 +832,24 @@ def _clean_segments(segments: list[VoiceSegment], *, min_segment_seconds: float)
                 continue
         cleaned.append(segment)
     return cleaned
+
+
+def _voice_transcription_diagnostics(
+    plan: VoiceExtractionPlan,
+    *,
+    extraction_method: str,
+    frame_count: int,
+    segment_count: int,
+    note_count: int,
+) -> dict[str, object]:
+    return {
+        "engine": extraction_method,
+        "voice_extraction_plan": plan.diagnostics(),
+        "pre_notation_frame_count": frame_count,
+        "pre_notation_segment_count": segment_count,
+        "pre_normalization_note_count": note_count,
+        "bpm_is_absolute": True,
+    }
 
 
 def _estimate_metronome_phase_alignment(

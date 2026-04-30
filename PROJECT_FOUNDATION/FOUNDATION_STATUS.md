@@ -148,6 +148,15 @@ The current implementation has a working six-track vertical slice:
   the local WAV engine; `basic_pitch`, `librosa`/`pyin`, and `local` can be
   forced for focused tests. Basic Pitch and librosa output still flow through
   the same TrackNote, BPM-grid, range, and notation normalization policy.
+- Voice/audio track registration now has a pre-transcription extraction-plan
+  layer. The deterministic plan uses the studio BPM, target voice slot, source
+  kind, and sibling track context before pitch frames are converted into
+  TrackNotes. If `GIGASTUDY_API_DEEPSEEK_EXTRACTION_PLAN_ENABLED=true` and a
+  DeepSeek API key is configured, the LLM can choose only bounded extraction
+  parameters such as quantization grid, segment strictness, confidence
+  strictness, tiny slot-range widening, and unstable-note suppression. The LLM
+  cannot write notes or change tempo; the selected plan is applied by Basic
+  Pitch, librosa pYIN, and the local WAV engine and is stored in diagnostics.
 - Final voice-like track registration now compares the prepared notes against
   already registered sibling tracks and can apply a small deterministic
   reference-grid offset before committing TrackNotes. This is a latency/drift

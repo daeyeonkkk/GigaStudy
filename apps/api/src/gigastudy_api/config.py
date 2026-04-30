@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     voice_transcription_backend: str = "auto"
     engine_processing_timeout_seconds: int = 120
     deepseek_harmony_enabled: bool = False
+    deepseek_extraction_plan_enabled: bool = False
     deepseek_notation_review_enabled: bool = False
     deepseek_ensemble_review_enabled: bool = False
     deepseek_api_key: str | None = None

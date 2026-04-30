@@ -1170,8 +1170,14 @@ not legacy product surfaces.
   helpers instead of inline repository payload assembly.
 - Engine queue lifecycle commands now live behind
   `studio_engine_queue_commands.py`. Claim/drain/schedule/repair/re-enqueue
-  orchestration has a named command owner, while the repository keeps the
-  actual OMR/voice job handlers and track material mutation hooks.
+  orchestration has a named command owner, while OMR/voice queue execution lives
+  behind `studio_engine_job_handlers.py`. The repository keeps the persistence,
+  track material mutation hooks, compatibility injection points used by tests,
+  and HTTP-facing facade methods.
+- Score PDF export, retained track-audio resolution, and OMR source preview
+  lookup now live behind `studio_resource_commands.py`. The repository exposes
+  the same route-facing methods, but file/preview/export HTTP translation no
+  longer sits inline in the central repository body.
 - Upload-start audio candidate extraction now lives in
   `studio_home_audio_import.py`, and seed score-to-OMR routing lives in
   `upload_policy.py`. The repository still owns upload asset persistence and

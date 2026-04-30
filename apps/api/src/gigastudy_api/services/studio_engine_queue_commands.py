@@ -21,10 +21,12 @@ class StudioEngineQueueCommands:
         self,
         *,
         engine_queue: EngineQueueStore,
+        job_handlers: Any,
         now: Any,
         repository: Any,
     ) -> None:
         self._engine_queue = engine_queue
+        self._job_handlers = job_handlers
         self._now = now
         self._repository = repository
 
@@ -82,12 +84,7 @@ class StudioEngineQueueCommands:
             max_attempts=record.max_attempts,
         )
         try:
-            if record.job_type == "omr":
-                self._repository._process_omr_queue_record(record)
-            elif record.job_type == "voice":
-                self._repository._process_voice_queue_record(record)
-            else:
-                raise RuntimeError(f"Unsupported engine job type: {record.job_type}")
+            self._job_handlers.process(record)
         except Exception as error:
             message = str(error) or "Engine job failed."
             self._repository._mark_job_failed(record.studio_id, record.job_id, message=message)

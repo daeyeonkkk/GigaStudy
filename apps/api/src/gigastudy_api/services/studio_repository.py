@@ -73,7 +73,6 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics as _candidate_diagnostics,
     candidate_review_message as _candidate_review_message,
     estimate_candidate_confidence as _estimate_candidate_confidence,
-    parsed_track_diagnostics_by_slot as _parsed_track_diagnostics_by_slot,
     track_duration_seconds as _track_duration_seconds,
 )
 from gigastudy_api.services.engine.music_theory import (
@@ -82,9 +81,6 @@ from gigastudy_api.services.engine.music_theory import (
 from gigastudy_api.services.engine.omr import run_audiveris_omr
 from gigastudy_api.services.engine.notation_quality import RegistrationNotationResult
 from gigastudy_api.services.engine.pdf_vector_omr import parse_born_digital_pdf_score
-from gigastudy_api.services.engine.omr_results import mark_notes_as_omr as _mark_notes_as_omr
-from gigastudy_api.services.engine.pdf_export import ScorePdfExportError, build_studio_score_pdf
-from gigastudy_api.services.engine.score_preview import ScorePreviewError, render_score_source_preview
 from gigastudy_api.services.engine.symbolic import (
     SymbolicParseError,
     parse_symbolic_file_with_metadata,
@@ -99,9 +95,9 @@ from gigastudy_api.services.engine.voice import (
 
 _ORIGINAL_TRANSCRIBE_VOICE_FILE = transcribe_voice_file
 from gigastudy_api.services.engine_queue import EngineQueueJob, EngineQueueStore, build_engine_queue_store
+from gigastudy_api.services.studio_engine_job_handlers import StudioEngineJobHandlers
 from gigastudy_api.services.studio_engine_queue_commands import StudioEngineQueueCommands
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
-from gigastudy_api.services.omr_pipeline import OmrPipelineError, run_omr_pipeline
 from gigastudy_api.services.studio_generation import (
     GenerationRequestError,
     generation_candidate_review_metadata,
@@ -116,6 +112,7 @@ from gigastudy_api.services.studio_scoring import (
     selected_scoring_reference_slot_ids,
     validate_score_track_request,
 )
+from gigastudy_api.services.studio_resource_commands import StudioResourceCommands
 from gigastudy_api.services.studio_track_settings import (
     TrackSettingsError,
     set_studio_time_signature,
@@ -136,7 +133,6 @@ from gigastudy_api.services.studio_access import (
     owner_policy_enabled,
     require_studio_access,
 )
-from gigastudy_api.services.voice_pipeline import run_voice_pipeline
 from gigastudy_api.services.upload_policy import (
     AUDIO_SOURCE_SUFFIXES,
     DEFAULT_UPLOAD_BPM,
@@ -190,8 +186,15 @@ class StudioRepository:
             storage_root=self._root,
             database_url=settings.database_url,
         )
+        self._engine_job_handlers = StudioEngineJobHandlers(
+            assets=self._assets,
+            repository=self,
+            root=self._root,
+            vector_parser=parse_born_digital_pdf_score,
+        )
         self._engine_commands = StudioEngineQueueCommands(
             engine_queue=self._engine_queue,
+            job_handlers=self._engine_job_handlers,
             now=_now,
             repository=self,
         )
@@ -203,6 +206,10 @@ class StudioRepository:
             lock=self._lock,
             now=_now,
             store=self._store,
+        )
+        self._resources = StudioResourceCommands(
+            assets=self._assets,
+            repository=self,
         )
 
     def list_accessible_studios(
@@ -310,11 +317,7 @@ class StudioRepository:
         return studio
 
     def export_score_pdf(self, studio_id: str, *, owner_token: str | None = None) -> tuple[str, bytes]:
-        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        try:
-            return f"{studio.studio_id}-score.pdf", build_studio_score_pdf(studio)
-        except ScorePdfExportError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
+        return self._resources.export_score_pdf(studio_id, owner_token=owner_token)
 
     def get_track_audio(
         self,
@@ -323,18 +326,7 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> tuple[Path, str, str]:
-        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        track = self._find_track(studio, slot_id)
-        if track.status != "registered" or track.audio_source_path is None:
-            raise HTTPException(status_code=404, detail="Track audio source not found.")
-
-        source_path = self._assets.resolve_data_asset_path(track.audio_source_path)
-        if not source_path.exists() or not source_path.is_file():
-            raise HTTPException(status_code=404, detail="Track audio source file is missing.")
-
-        media_type = track.audio_mime_type or _guess_audio_mime_type(source_path.name)
-        filename = track.audio_source_label or track.source_label or source_path.name
-        return source_path, media_type, filename
+        return self._resources.get_track_audio(studio_id, slot_id, owner_token=owner_token)
 
     def get_omr_source_preview(
         self,
@@ -344,26 +336,12 @@ class StudioRepository:
         page_index: int = 0,
         owner_token: str | None = None,
     ) -> tuple[bytes, str]:
-        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        job = next((item for item in studio.jobs if item.job_id == job_id), None)
-        if job is None:
-            raise HTTPException(status_code=404, detail="Extraction job not found.")
-        if job.job_type != "omr":
-            raise HTTPException(status_code=409, detail="Only OMR jobs have score previews.")
-        if job.input_path is None:
-            raise HTTPException(status_code=404, detail="OMR source file is missing.")
-
-        source_path = self._assets.resolve_data_asset_path(job.input_path)
-        try:
-            content = render_score_source_preview(source_path, page_index=page_index)
-        except ScorePreviewError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
-
-        filename_root = Path(job.source_label or job.job_id).stem or job.job_id
-        safe_filename_root = "".join(
-            char for char in filename_root if char.isalnum() or char in {"-", "_", "."}
-        ) or job.job_id
-        return content, f"{safe_filename_root}-page-{page_index + 1}.png"
+        return self._resources.get_omr_source_preview(
+            studio_id,
+            job_id,
+            page_index=page_index,
+            owner_token=owner_token,
+        )
 
     def get_admin_storage_summary(
         self,
@@ -1388,148 +1366,6 @@ class StudioRepository:
     def process_engine_queue_once(self) -> EngineQueueJob | None:
         return self._engine_commands.process_once()
 
-    def _process_omr_queue_record(self, record: EngineQueueJob) -> None:
-        settings = get_settings()
-        studio = self.get_studio(record.studio_id)
-        input_path = self._assets.resolve_data_asset_path(str(record.payload.get("input_path") or ""))
-        source_label = str(record.payload.get("source_label") or "uploaded-score")
-        try:
-            result = run_omr_pipeline(
-                audiveris_bin=settings.audiveris_bin,
-                audiveris_runner=self._run_audiveris_omr,
-                backend=settings.omr_backend,
-                input_path=input_path,
-                job_output_dir=self._job_output_dir(record.studio_id, record.job_id),
-                job_slot_id=record.slot_id,
-                persist_generated_asset=self._assets.persist_generated_asset,
-                record=record,
-                source_label=source_label,
-                studio=studio,
-                timeout_seconds=settings.engine_processing_timeout_seconds,
-                vector_parser=parse_born_digital_pdf_score,
-            )
-        except OmrPipelineError as error:
-            self._mark_job_failed(record.studio_id, record.job_id, message=str(error))
-            return
-
-        parsed_symbolic = result.parsed_symbolic
-        mapped_notes = _mark_notes_as_omr(
-            parsed_symbolic.mapped_notes,
-            extraction_method=result.extraction_method,
-        )
-        if not mapped_notes:
-            self._mark_job_failed(record.studio_id, record.job_id, message="OMR did not produce any track notes.")
-            return
-
-        if parsed_symbolic.has_time_signature:
-            self._update_time_signature(
-                record.studio_id,
-                parsed_symbolic.time_signature_numerator,
-                parsed_symbolic.time_signature_denominator,
-            )
-        self._mark_job_completed(
-            record.studio_id,
-            record.job_id,
-            output_path=result.output_reference,
-            method=result.job_method,
-        )
-        diagnostics_by_slot = _parsed_track_diagnostics_by_slot(
-            parsed_symbolic,
-            method=result.extraction_method,
-            fallback_method=result.candidate_method,
-        )
-        confidence_by_slot = {
-            slot_id: _estimate_candidate_confidence(
-                slot_id,
-                notes,
-                method=result.candidate_method,
-                fallback_confidence=result.confidence,
-                diagnostics=diagnostics_by_slot.get(slot_id),
-            )
-            for slot_id, notes in mapped_notes.items()
-        }
-        message_by_slot = {
-            slot_id: _candidate_review_message(
-                slot_id,
-                notes,
-                method=result.candidate_method,
-                diagnostics=_candidate_diagnostics(
-                    slot_id,
-                    notes,
-                    method=result.candidate_method,
-                    confidence=confidence_by_slot[slot_id],
-                    source_diagnostics=diagnostics_by_slot.get(slot_id),
-                ),
-                default_message=result.message,
-            )
-            for slot_id, notes in mapped_notes.items()
-        }
-        self._add_extraction_candidates(
-            record.studio_id,
-            mapped_notes,
-            source_kind="score",
-            source_label=source_label,
-            method=result.candidate_method,
-            confidence=result.confidence,
-            confidence_by_slot=confidence_by_slot,
-            diagnostics_by_slot=diagnostics_by_slot,
-            job_id=record.job_id,
-            message=result.message,
-            message_by_slot=message_by_slot,
-        )
-
-    def _process_voice_queue_record(self, record: EngineQueueJob) -> None:
-        studio = self.get_studio(record.studio_id)
-        source_path = self._assets.resolve_data_asset_path(str(record.payload.get("input_path") or ""))
-        source_label = str(record.payload.get("source_label") or "voice.wav")
-        review_before_register = bool(record.payload.get("review_before_register"))
-        allow_overwrite = bool(record.payload.get("allow_overwrite"))
-        audio_mime_type = str(record.payload.get("audio_mime_type") or _guess_audio_mime_type(source_label))
-        result = run_voice_pipeline(
-            audio_mime_type=audio_mime_type,
-            record=record,
-            replace_audio_asset_with_aligned_wav=self._assets.replace_audio_asset_with_aligned_wav,
-            source_label=source_label,
-            source_path=source_path,
-            studio=studio,
-            transcribe_with_alignment=self._transcribe_voice_file_with_alignment,
-        )
-        if review_before_register:
-            self._add_extraction_candidates(
-                record.studio_id,
-                {record.slot_id: result.notes},
-                source_kind="audio",
-                source_label=result.source_label,
-                method="voice_transcription_review",
-                confidence=min((note.confidence for note in result.notes), default=0.45),
-                message="Voice transcription is waiting for user approval.",
-                job_id=record.job_id,
-                audio_source_path=result.relative_audio_path,
-                audio_source_label=result.source_label,
-                audio_mime_type=result.audio_mime_type,
-            )
-            return
-
-        track = self._find_track(studio, record.slot_id)
-        if _track_has_content(track) and not allow_overwrite:
-            self._mark_job_failed(
-                record.studio_id,
-                record.job_id,
-                message="Upload would overwrite an existing registered track.",
-            )
-            return
-        self._update_track(
-            record.studio_id,
-            record.slot_id,
-            source_kind="audio",
-            source_label=result.source_label,
-            notes=result.notes,
-            audio_source_path=result.relative_audio_path,
-            audio_source_label=result.source_label,
-            audio_mime_type=result.audio_mime_type,
-        )
-        self._mark_job_completed(record.studio_id, record.job_id, output_path=result.relative_audio_path)
-
     def _add_extraction_candidates(
         self,
         studio_id: str,
@@ -1843,9 +1679,6 @@ class StudioRepository:
                 audiveris_bin=audiveris_bin,
                 timeout_seconds=timeout_seconds,
             )
-
-    def _job_output_dir(self, studio_id: str, job_id: str) -> Path:
-        return self._root / "jobs" / studio_id / job_id
 
     def _list_studios(self, *, limit: int, offset: int) -> list[Studio]:
         raw_rows = self._store.list_raw(limit=limit, offset=offset)

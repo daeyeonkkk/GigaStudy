@@ -191,3 +191,43 @@ def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> 
     assert [note.beat for note in result.notes] == [1.5, 2.5, 3.5, 4.5]
     assert "reference_alignment" not in result.diagnostics
     assert "reference_track_grid_alignment" not in result.diagnostics["actions"]
+
+
+def test_registration_quality_enforces_final_score_contract() -> None:
+    note = note_from_pitch(
+        beat=2.24,
+        duration_beats=0.62,
+        bpm=60,
+        source="voice",
+        extraction_method="rough_input",
+        pitch_midi=55,
+        onset_seconds=99,
+        duration_seconds=99,
+        clef="treble",
+        key_signature="F#",
+        voice_index=1,
+    )
+
+    result = prepare_notes_for_track_registration(
+        [note],
+        bpm=90,
+        slot_id=3,
+        source_kind="recording",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    registered_note = result.notes[0]
+    assert registered_note.beat == 2.25
+    assert registered_note.duration_beats == 0.5
+    assert registered_note.onset_seconds == 0.8333
+    assert registered_note.duration_seconds == 0.3333
+    assert registered_note.measure_index == 1
+    assert registered_note.beat_in_measure == 2.25
+    assert registered_note.voice_index == 3
+    assert registered_note.clef == "treble_8vb"
+    assert registered_note.display_octave_shift == 12
+    assert registered_note.key_signature
+    assert result.diagnostics["score_contract"]["single_voice_index"] is True
+    assert result.diagnostics["score_contract"]["seconds_follow_beat_grid"] is True
+    assert any(action.startswith("score_contract_enforced_") for action in result.diagnostics["actions"])

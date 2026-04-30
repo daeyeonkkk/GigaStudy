@@ -301,6 +301,14 @@ validates, and re-runs the ensemble gate before registration.
 Track rendering, playback, AI generation, and scoring must consume this schema
 rather than inventing separate note shapes.
 
+Final registration includes a source-agnostic score-contract gate. Recording,
+audio upload, MusicXML/MIDI, OMR, and AI candidates may arrive from different
+extractors, but before they become track truth they must be rewritten or
+validated against the same studio BPM/meter coordinates. The gate derives
+seconds from beat positions, refreshes measure metadata, sets the registered
+track `voice_index`, enforces clef/display policy, and normalizes key spelling
+so every track remains one staff part inside the same a cappella score.
+
 ## Voice-To-Score Normalization Contract
 
 Voice-derived notation must pass through a musical normalization layer before a

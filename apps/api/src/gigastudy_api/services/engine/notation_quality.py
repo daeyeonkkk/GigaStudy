@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from math import ceil, floor
 from typing import Any, Mapping
@@ -11,6 +11,7 @@ from gigastudy_api.services.engine.music_theory import (
     beat_in_measure_from_beat,
     label_to_midi,
     measure_index_from_beat,
+    midi_to_frequency,
     midi_to_label,
     quarter_beats_per_measure,
     quantize,
@@ -198,6 +199,14 @@ def prepare_notes_for_track_registration(
     if alignment["applied"]:
         prepared_notes = alignment["notes"]
         actions.append("reference_track_grid_alignment")
+    prepared_notes, contract_actions, score_contract = _enforce_registration_score_contract(
+        prepared_notes,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+    actions.extend(contract_actions)
     diagnostics = _registration_diagnostics(
         prepared_notes,
         slot_id=slot_id,
@@ -213,6 +222,7 @@ def prepare_notes_for_track_registration(
             for key, value in alignment.items()
             if key != "notes"
         }
+    diagnostics["score_contract"] = score_contract
     prepared_notes = _attach_quality_warnings(prepared_notes, diagnostics)
     return RegistrationNotationResult(notes=prepared_notes, diagnostics=diagnostics)
 
@@ -420,6 +430,14 @@ def apply_notation_review_instruction(
     if alignment["applied"]:
         prepared_notes = alignment["notes"]
         actions.append("llm_reference_track_grid_alignment")
+    prepared_notes, contract_actions, score_contract = _enforce_registration_score_contract(
+        prepared_notes,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+    actions.extend(f"llm_{action}" for action in contract_actions)
     diagnostics = _registration_diagnostics(
         prepared_notes,
         slot_id=slot_id,
@@ -440,6 +458,7 @@ def apply_notation_review_instruction(
             for key, value in alignment.items()
             if key != "notes"
         }
+    diagnostics["score_contract"] = score_contract
     diagnostics["pre_llm_registration_quality"] = baseline.diagnostics
     prepared_notes = _attach_quality_warnings(prepared_notes, diagnostics)
     return RegistrationNotationResult(notes=prepared_notes, diagnostics=diagnostics)
@@ -1238,6 +1257,195 @@ def _repair_symbolic_timing_metadata(
             )
         )
     return repaired
+
+
+def _enforce_registration_score_contract(
+    notes: list[TrackNote],
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> tuple[list[TrackNote], list[str], dict[str, Any]]:
+    """Force final TrackNotes onto the studio score coordinate system.
+
+    Earlier stages may transcribe, import, simplify, align, or review notes.
+    Registration must end with one canonical score contract: the studio BPM and
+    meter define seconds, measures, track voice identity, clef, and key spelling.
+    """
+
+    if not notes:
+        return [], [], _score_contract_diagnostics(
+            [],
+            bpm=bpm,
+            slot_id=slot_id,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+        )
+
+    contract_notes = notes
+    actions: list[str] = []
+    if _has_measure_crossing_notes(
+        contract_notes,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    ):
+        quantization_grid = min(
+            (
+                note.quantization_grid
+                for note in contract_notes
+                if note.quantization_grid is not None and note.quantization_grid > 0
+            ),
+            default=VOICE_QUANTIZATION_GRID_BEATS,
+        )
+        contract_notes = normalize_track_notes(
+            contract_notes,
+            bpm=bpm,
+            slot_id=slot_id,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            quantization_grid=quantization_grid,
+            merge_adjacent_same_pitch=False,
+        )
+        actions.append("score_contract_measure_split")
+
+    shared_key_signature = _shared_key_signature(contract_notes)
+    annotated_notes = annotate_track_notes_for_slot(
+        contract_notes,
+        slot_id=slot_id,
+        key_signature=shared_key_signature,
+    )
+    clef = clef_for_slot(slot_id)
+    display_octave_shift = display_octave_shift_for_slot(slot_id)
+    key_signature = shared_key_signature or _shared_key_signature(annotated_notes) or "C"
+    spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
+    beat_seconds = seconds_per_beat(max(1, bpm))
+
+    enforced: list[TrackNote] = []
+    changed_count = 0
+    for note in annotated_notes:
+        beat = max(1.0, round(note.beat, 4))
+        duration_beats = max(0.0625, round(note.duration_beats, 4))
+        pitch_midi = _resolve_pitch_midi(note)
+        spelled_label = note.spelled_label
+        accidental = note.accidental
+        label = note.label
+        if not note.is_rest and pitch_midi is not None:
+            spelled_label = spell_midi_label(pitch_midi, spelling_mode=spelling_mode)
+            accidental = accidental_for_key(spelled_label, key_signature)
+            label = spelled_label
+
+        update = {
+            "pitch_midi": pitch_midi,
+            "pitch_hz": midi_to_frequency(pitch_midi) if pitch_midi is not None else None,
+            "label": label,
+            "spelled_label": spelled_label,
+            "accidental": accidental,
+            "clef": clef,
+            "key_signature": key_signature,
+            "display_octave_shift": display_octave_shift,
+            "onset_seconds": round(max(0, (beat - 1) * beat_seconds), 4),
+            "duration_seconds": round(duration_beats * beat_seconds, 4),
+            "beat": beat,
+            "duration_beats": duration_beats,
+            "measure_index": measure_index_from_beat(
+                beat,
+                time_signature_numerator,
+                time_signature_denominator,
+            ),
+            "beat_in_measure": round(
+                beat_in_measure_from_beat(
+                    beat,
+                    time_signature_numerator,
+                    time_signature_denominator,
+                ),
+                4,
+            ),
+            "voice_index": slot_id,
+        }
+        if any(getattr(note, key) != value for key, value in update.items()):
+            changed_count += 1
+        enforced.append(note.model_copy(update=update))
+
+    if changed_count:
+        actions.append(f"score_contract_enforced_{changed_count}")
+    return enforced, actions, _score_contract_diagnostics(
+        enforced,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+
+
+def _shared_key_signature(notes: list[TrackNote]) -> str | None:
+    key_counts = Counter(note.key_signature for note in notes if note.key_signature in KEY_FIFTHS)
+    if not key_counts:
+        return None
+    return key_counts.most_common(1)[0][0]
+
+
+def _score_contract_diagnostics(
+    notes: list[TrackNote],
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> dict[str, Any]:
+    if not notes:
+        return {
+            "version": "score_contract_v1",
+            "note_count": 0,
+            "single_voice_index": True,
+            "single_key_signature": True,
+            "seconds_follow_beat_grid": True,
+            "measure_metadata_consistent": True,
+            "clef_policy_consistent": True,
+        }
+
+    voice_indices = {note.voice_index for note in notes}
+    key_signatures = {note.key_signature for note in notes}
+    clefs = {note.clef for note in notes}
+    beat_seconds = seconds_per_beat(max(1, bpm))
+    expected_clef = clef_for_slot(slot_id)
+    seconds_follow_beat_grid = all(
+        abs(note.onset_seconds - round(max(0, (note.beat - 1) * beat_seconds), 4)) <= 0.0001
+        and abs(note.duration_seconds - round(note.duration_beats * beat_seconds, 4)) <= 0.0001
+        for note in notes
+    )
+    measure_metadata_consistent = all(
+        note.measure_index == measure_index_from_beat(
+            note.beat,
+            time_signature_numerator,
+            time_signature_denominator,
+        )
+        and abs(
+            (note.beat_in_measure or 0)
+            - round(
+                beat_in_measure_from_beat(
+                    note.beat,
+                    time_signature_numerator,
+                    time_signature_denominator,
+                ),
+                4,
+            )
+        )
+        <= 0.0001
+        for note in notes
+    )
+    return {
+        "version": "score_contract_v1",
+        "note_count": len(notes),
+        "single_voice_index": len(voice_indices) == 1 and slot_id in voice_indices,
+        "single_key_signature": len(key_signatures) == 1 and None not in key_signatures,
+        "seconds_follow_beat_grid": seconds_follow_beat_grid,
+        "measure_metadata_consistent": measure_metadata_consistent,
+        "clef_policy_consistent": clefs == {expected_clef},
+        "voice_index": next(iter(voice_indices)) if len(voice_indices) == 1 else None,
+        "key_signature": next(iter(key_signatures)) if len(key_signatures) == 1 else None,
+        "clef": next(iter(clefs)) if len(clefs) == 1 else None,
+    }
 
 
 def _align_to_reference_tracks(

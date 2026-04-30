@@ -384,6 +384,11 @@ The current implementation has a working six-track vertical slice:
   answer when at least one selected registered reference track exists, then
   grades the new take for ensemble fit, rhythm-grid alignment, target range,
   and basic voice-leading.
+- Track registration now has a final score-contract gate after extraction,
+  import, LLM review, and ensemble validation. Every registered TrackNote is
+  forced back onto the studio BPM/meter coordinate system with canonical
+  seconds, measure metadata, voice_index, clef, and key spelling so all tracks
+  remain parts of one a cappella score.
 - Studio report feed shows compact report title/date links; full quantitative
   report details live on a separate report page.
 - AI generation now creates multiple pending candidates first; approving one

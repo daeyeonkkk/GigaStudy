@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import math
 from collections import Counter
 from dataclasses import dataclass
@@ -65,6 +66,7 @@ VOICE_COMFORT_CENTER = {
 }
 
 BEAM_SIZE = 10
+MAX_PITCH_CANDIDATES_PER_CHORD = 8
 DIVERSE_PATH_DIFFERENCE_THRESHOLD = 0.22
 
 
@@ -914,7 +916,7 @@ def _search_voice_leading_paths(
 
         if not next_paths:
             return []
-        paths = sorted(next_paths, key=lambda candidate: candidate.cost)[:beam_size]
+        paths = heapq.nsmallest(beam_size, next_paths, key=lambda candidate: candidate.cost)
         previous_event = event
     return _unique_paths_by_pitch(paths, max_paths)
 
@@ -972,7 +974,16 @@ def _candidate_pitches_for_slot(
         return [max(low, min(high, VOICE_COMFORT_CENTER.get(target_slot_id, (low + high) // 2)))]
 
     center = _goal_center(target_slot_id, profile, candidate_goal)
-    return sorted(set(candidates), key=lambda pitch: (abs(pitch - center), pitch))
+    ordered = sorted(
+        set(candidates),
+        key=lambda pitch: (
+            _voice_ordering_cost(target_slot_id, pitch, event),
+            0 if pitch % 12 in chord.tones else 1,
+            abs(pitch - center),
+            pitch,
+        ),
+    )
+    return ordered[:MAX_PITCH_CANDIDATES_PER_CHORD]
 
 
 def _allows_melodic_connectors(

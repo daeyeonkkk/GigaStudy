@@ -46,28 +46,12 @@ from gigastudy_api.services.alpha_limits import (
 from gigastudy_api.services.direct_upload_tokens import DirectUploadTokenCodec
 from gigastudy_api.services.studio_admin_commands import StudioAdminCommands
 from gigastudy_api.services.studio_assets import StudioAssetService
-from gigastudy_api.services.studio_candidates import (
-    build_pending_candidate,
-    diagnostics_with_registration_quality,
-    mark_candidate_approved,
-    mark_candidate_rejected,
-    mark_track_needs_review,
-    mark_track_needs_review_if_empty,
-    pending_candidates_for_job,
-    release_review_track_if_no_pending_candidates,
-    reject_candidate_group_siblings,
-    unique_candidates_by_suggested_slot,
-)
 from gigastudy_api.services.studio_jobs import (
-    clear_unmapped_omr_placeholders,
     mark_extraction_job_completed,
     mark_extraction_job_failed,
     mark_extraction_job_running,
 )
 from gigastudy_api.services.engine.candidate_diagnostics import (
-    candidate_diagnostics as _candidate_diagnostics,
-    candidate_review_message as _candidate_review_message,
-    estimate_candidate_confidence as _estimate_candidate_confidence,
     track_duration_seconds as _track_duration_seconds,
 )
 from gigastudy_api.services.engine.music_theory import (
@@ -93,10 +77,10 @@ from gigastudy_api.services.engine_queue import EngineQueueJob, EngineQueueStore
 from gigastudy_api.services.studio_engine_job_handlers import StudioEngineJobHandlers
 from gigastudy_api.services.studio_engine_queue_commands import StudioEngineQueueCommands
 from gigastudy_api.services.studio_extraction_job_commands import StudioExtractionJobCommands
+from gigastudy_api.services.studio_candidate_commands import StudioCandidateCommands
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
 from gigastudy_api.services.studio_generation import (
     GenerationRequestError,
-    generation_candidate_review_metadata,
     generate_track_material,
 )
 from gigastudy_api.services.studio_home_audio_import import extract_home_audio_candidate
@@ -200,6 +184,10 @@ class StudioRepository:
             now=_now,
             repository=self,
             schedule_processing=self._schedule_engine_queue_processing,
+        )
+        self._candidates = StudioCandidateCommands(
+            now=_now,
+            repository=self,
         )
         self._registration_preparer = TrackRegistrationPreparer()
         self._lock = RLock()
@@ -674,61 +662,12 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> Studio:
-        with self._lock:
-            studio = self._load_studio(studio_id)
-            if studio is None:
-                raise HTTPException(status_code=404, detail="Studio not found.")
-            require_studio_access(studio, owner_token)
-            timestamp = _now()
-            candidate = self._find_candidate(studio, candidate_id)
-            if candidate.status != "pending":
-                raise HTTPException(status_code=409, detail="Only pending candidates can be approved.")
-            target_slot_id = request.target_slot_id or candidate.suggested_slot_id
-            track = self._find_track(studio, target_slot_id)
-            if _track_has_content(track) and not request.allow_overwrite:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Approving this candidate would overwrite an existing registered track.",
-                )
-            registration = self._prepare_registration_notes(
-                studio,
-                target_slot_id,
-                source_kind=candidate.source_kind,
-                notes=candidate.notes,
-            )
-            mark_candidate_approved(
-                candidate,
-                notes=registration.notes,
-                registration_diagnostics=registration.diagnostics,
-                timestamp=timestamp,
-            )
-            _register_track_material(
-                track,
-                timestamp=timestamp,
-                source_kind=candidate.source_kind,
-                source_label=candidate.source_label,
-                notes=registration.notes,
-                duration_seconds=_track_duration_seconds(registration.notes),
-                registration_diagnostics=registration.diagnostics,
-                audio_source_path=candidate.audio_source_path,
-                audio_source_label=candidate.audio_source_label,
-                audio_mime_type=candidate.audio_mime_type,
-            )
-            if target_slot_id != candidate.suggested_slot_id:
-                release_review_track_if_no_pending_candidates(
-                    studio,
-                    slot_id=candidate.suggested_slot_id,
-                    resolved_candidate_id=candidate.candidate_id,
-                    timestamp=timestamp,
-                )
-            reject_candidate_group_siblings(
-                studio.candidates,
-                approved_candidate=candidate,
-                timestamp=timestamp,
-            )
-            studio.updated_at = timestamp
-            self._save_studio(studio)
-        return studio
+        return self._candidates.approve_candidate(
+            studio_id,
+            candidate_id,
+            request,
+            owner_token=owner_token,
+        )
 
     def reject_candidate(
         self,
@@ -737,25 +676,11 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> Studio:
-        with self._lock:
-            studio = self._load_studio(studio_id)
-            if studio is None:
-                raise HTTPException(status_code=404, detail="Studio not found.")
-            require_studio_access(studio, owner_token)
-            timestamp = _now()
-            candidate = self._find_candidate(studio, candidate_id)
-            if candidate.status != "pending":
-                raise HTTPException(status_code=409, detail="Only pending candidates can be rejected.")
-            mark_candidate_rejected(candidate, timestamp=timestamp)
-            release_review_track_if_no_pending_candidates(
-                studio,
-                slot_id=candidate.suggested_slot_id,
-                resolved_candidate_id=candidate.candidate_id,
-                timestamp=timestamp,
-            )
-            studio.updated_at = timestamp
-            self._save_studio(studio)
-        return studio
+        return self._candidates.reject_candidate(
+            studio_id,
+            candidate_id,
+            owner_token=owner_token,
+        )
 
     def approve_job_candidates(
         self,
@@ -765,88 +690,12 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> Studio:
-        with self._lock:
-            studio = self._load_studio(studio_id)
-            if studio is None:
-                raise HTTPException(status_code=404, detail="Studio not found.")
-            require_studio_access(studio, owner_token)
-
-            job = next((candidate_job for candidate_job in studio.jobs if candidate_job.job_id == job_id), None)
-            if job is None:
-                raise HTTPException(status_code=404, detail="Extraction job not found.")
-
-            pending_candidates = pending_candidates_for_job(studio.candidates, job_id)
-            if not pending_candidates:
-                raise HTTPException(status_code=409, detail="No pending candidates are waiting for this job.")
-
-            unique_candidates_by_slot, duplicate_candidates = unique_candidates_by_suggested_slot(
-                pending_candidates
-            )
-
-            occupied_slots = [
-                slot_id
-                for slot_id in unique_candidates_by_slot
-                if _track_has_content(self._find_track(studio, slot_id))
-            ]
-            if occupied_slots and not request.allow_overwrite:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Approving this OMR job would overwrite existing registered tracks.",
-                )
-
-            timestamp = _now()
-            source_kinds = {candidate.source_kind for candidate in unique_candidates_by_slot.values()}
-            if len(source_kinds) == 1:
-                shared_source_kind = next(iter(source_kinds))
-                registrations = self._prepare_registration_batch(
-                    studio,
-                    {
-                        slot_id: candidate.notes
-                        for slot_id, candidate in unique_candidates_by_slot.items()
-                    },
-                    source_kind=shared_source_kind,
-                )
-            else:
-                registrations = {
-                    slot_id: self._prepare_registration_notes(
-                        studio,
-                        slot_id,
-                        source_kind=candidate.source_kind,
-                        notes=candidate.notes,
-                    )
-                    for slot_id, candidate in unique_candidates_by_slot.items()
-                }
-            for slot_id, candidate in unique_candidates_by_slot.items():
-                track = self._find_track(studio, slot_id)
-                registration = registrations[slot_id]
-                mark_candidate_approved(
-                    candidate,
-                    notes=registration.notes,
-                    registration_diagnostics=registration.diagnostics,
-                    timestamp=timestamp,
-                )
-                _register_track_material(
-                    track,
-                    timestamp=timestamp,
-                    source_kind=candidate.source_kind,
-                    source_label=candidate.source_label,
-                    notes=registration.notes,
-                    duration_seconds=_track_duration_seconds(registration.notes),
-                    registration_diagnostics=registration.diagnostics,
-                    audio_source_path=candidate.audio_source_path,
-                    audio_source_label=candidate.audio_source_label,
-                    audio_mime_type=candidate.audio_mime_type,
-                )
-
-            for candidate in duplicate_candidates:
-                mark_candidate_rejected(candidate, timestamp=timestamp)
-
-            job.status = "completed"
-            job.message = "OMR candidates registered into their suggested tracks."
-            job.updated_at = timestamp
-            studio.updated_at = timestamp
-            self._save_studio(studio)
-        return studio
+        return self._candidates.approve_job_candidates(
+            studio_id,
+            job_id,
+            request,
+            owner_token=owner_token,
+        )
 
     def retry_extraction_job(
         self,
@@ -1217,47 +1066,19 @@ class StudioRepository:
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
     ) -> None:
-        timestamp = _now()
-        registration = self._prepare_registration_notes(
+        self._candidates.append_initial_candidate(
             studio,
-            suggested_slot_id,
-            source_kind=source_kind,
-            notes=notes,
-        )
-        notes = registration.notes
-        diagnostics = _candidate_diagnostics(
-            suggested_slot_id,
-            notes,
-            method=method,
-            confidence=confidence,
-        )
-        candidate = build_pending_candidate(
-            audio_mime_type=audio_mime_type,
-            audio_source_label=audio_source_label,
-            audio_source_path=audio_source_path,
-            confidence=confidence,
-            created_at=timestamp,
-            diagnostics=diagnostics_with_registration_quality(
-                diagnostics,
-                registration.diagnostics,
-            ),
-            message=message,
-            method=method,
-            notes=notes,
-            source_kind=source_kind,
-            source_label=source_label,
             suggested_slot_id=suggested_slot_id,
-            updated_at=timestamp,
-        )
-        studio.candidates.append(candidate)
-        track = self._find_track(studio, suggested_slot_id)
-        mark_track_needs_review(
-            track,
             source_kind=source_kind,
             source_label=source_label,
-            timestamp=timestamp,
+            method=method,
+            confidence=confidence,
+            notes=notes,
+            message=message,
+            audio_source_path=audio_source_path,
+            audio_source_label=audio_source_label,
+            audio_mime_type=audio_mime_type,
         )
-        studio.updated_at = timestamp
 
     def _enqueue_omr_job(
         self,
@@ -1326,92 +1147,24 @@ class StudioRepository:
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
     ) -> Studio:
-        with self._lock:
-            studio = self._load_studio(studio_id)
-            if studio is None:
-                raise HTTPException(status_code=404, detail="Studio not found.")
-            timestamp = _now()
-            for slot_id, notes in mapped_notes.items():
-                registration = self._prepare_registration_notes(
-                    studio,
-                    slot_id,
-                    source_kind=source_kind,
-                    notes=notes,
-                )
-                notes = registration.notes
-                source_diagnostics = (diagnostics_by_slot or {}).get(slot_id)
-                slot_confidence = (
-                    confidence_by_slot.get(slot_id)
-                    if confidence_by_slot and slot_id in confidence_by_slot
-                    else _estimate_candidate_confidence(
-                        slot_id,
-                        notes,
-                        method=method,
-                        fallback_confidence=confidence,
-                        diagnostics=source_diagnostics,
-                    )
-                )
-                slot_diagnostics = _candidate_diagnostics(
-                    slot_id,
-                    notes,
-                    method=method,
-                    confidence=slot_confidence,
-                    source_diagnostics=source_diagnostics,
-                )
-                candidate = build_pending_candidate(
-                    candidate_group_id=candidate_group_id,
-                    confidence=slot_confidence,
-                    created_at=timestamp,
-                    diagnostics=diagnostics_with_registration_quality(
-                        slot_diagnostics,
-                        registration.diagnostics,
-                    ),
-                    job_id=job_id,
-                    message=(message_by_slot or {}).get(
-                        slot_id,
-                        _candidate_review_message(
-                            slot_id,
-                            notes,
-                            method=method,
-                            diagnostics=slot_diagnostics,
-                            default_message=message,
-                        ),
-                    ),
-                    method=method,
-                    notes=notes,
-                    source_kind=source_kind,
-                    source_label=source_label,
-                    suggested_slot_id=slot_id,
-                    updated_at=timestamp,
-                    variant_label=variant_label,
-                    audio_source_path=audio_source_path,
-                    audio_source_label=audio_source_label,
-                    audio_mime_type=audio_mime_type,
-                )
-                studio.candidates.append(candidate)
-                track = self._find_track(studio, slot_id)
-                mark_track_needs_review_if_empty(
-                    track,
-                    source_kind=source_kind,
-                    source_label=source_label,
-                    timestamp=timestamp,
-                )
-            for job in studio.jobs:
-                if job.job_id == job_id:
-                    job.status = "needs_review"
-                    job.message = message
-                    job.updated_at = timestamp
-                    if job.parse_all_parts:
-                        clear_unmapped_omr_placeholders(
-                            studio,
-                            job,
-                            mapped_slot_ids=set(mapped_notes),
-                            timestamp=timestamp,
-                        )
-                    break
-            studio.updated_at = timestamp
-            self._save_studio(studio)
-        return studio
+        return self._candidates.add_extraction_candidates(
+            studio_id,
+            mapped_notes,
+            source_kind=source_kind,
+            source_label=source_label,
+            method=method,
+            confidence=confidence,
+            confidence_by_slot=confidence_by_slot,
+            diagnostics_by_slot=diagnostics_by_slot,
+            message_by_slot=message_by_slot,
+            job_id=job_id,
+            message=message,
+            candidate_group_id=candidate_group_id,
+            variant_label=variant_label,
+            audio_source_path=audio_source_path,
+            audio_source_label=audio_source_label,
+            audio_mime_type=audio_mime_type,
+        )
 
     def _add_generation_candidates(
         self,
@@ -1424,58 +1177,15 @@ class StudioRepository:
         message: str,
         llm_plan: DeepSeekHarmonyPlan | None = None,
     ) -> Studio:
-        with self._lock:
-            studio = self._load_studio(studio_id)
-            if studio is None:
-                raise HTTPException(status_code=404, detail="Studio not found.")
-            timestamp = _now()
-            candidate_group_id = uuid4().hex
-            for index, notes in enumerate(candidate_notes, start=1):
-                registration = self._prepare_registration_notes(
-                    studio,
-                    slot_id,
-                    source_kind="ai",
-                    notes=notes,
-                )
-                notes = registration.notes
-                confidence = min((note.confidence for note in notes), default=0.65)
-                diagnostics, variant_label = generation_candidate_review_metadata(
-                    slot_id=slot_id,
-                    notes=notes,
-                    method=method,
-                    confidence=confidence,
-                    candidate_index=index,
-                    llm_plan=llm_plan,
-                )
-                candidate = build_pending_candidate(
-                    candidate_group_id=candidate_group_id,
-                    confidence=confidence,
-                    created_at=timestamp,
-                    diagnostics=diagnostics_with_registration_quality(
-                        diagnostics,
-                        registration.diagnostics,
-                    ),
-                    message=message,
-                    method=method,
-                    notes=notes,
-                    source_kind="ai",
-                    source_label=source_label,
-                    suggested_slot_id=slot_id,
-                    updated_at=timestamp,
-                    variant_label=variant_label,
-                )
-                studio.candidates.append(candidate)
-
-            track = self._find_track(studio, slot_id)
-            mark_track_needs_review_if_empty(
-                track,
-                source_kind="ai",
-                source_label=source_label,
-                timestamp=timestamp,
-            )
-            studio.updated_at = timestamp
-            self._save_studio(studio)
-        return studio
+        return self._candidates.add_generation_candidates(
+            studio_id,
+            slot_id,
+            candidate_notes,
+            source_label=source_label,
+            method=method,
+            message=message,
+            llm_plan=llm_plan,
+        )
 
     def _schedule_engine_queue_processing(self, background_tasks: BackgroundTasks | None) -> None:
         self._engine_commands.schedule_processing(background_tasks)

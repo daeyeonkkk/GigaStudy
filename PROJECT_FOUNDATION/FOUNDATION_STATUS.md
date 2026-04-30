@@ -1135,6 +1135,11 @@ not legacy product surfaces.
   deduplication, and review-track marking now have shared helpers, while
   `StudioRepository` still owns access checks, overwrite checks, registration
   preparation, track material commits, and persistence.
+- Candidate approval/rejection, bulk job approval, initial audio candidates,
+  extraction review candidates, and AI generation review candidates now live
+  behind `studio_candidate_commands.py`. The repository keeps historical
+  method names as thin orchestration hooks, while candidate workflow branching
+  and review-queue mutation have one command owner.
 - Score-track request preparation now lives in `studio_scoring.py`. Reference
   track selection, scoring-mode validation, performance-submission detection,
   and answer-vs-harmony report construction are pure helper responsibilities,

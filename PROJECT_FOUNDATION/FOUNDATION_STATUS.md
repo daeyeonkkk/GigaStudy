@@ -1184,6 +1184,11 @@ not legacy product surfaces.
   track state, queue-record enqueue, and scheduler wake-up calls. The repository
   still exposes the historical private enqueue methods as thin wrappers so
   upload and recovery paths keep one visible orchestration boundary.
+- Home seed upload, staged/direct upload target creation, proxy upload writes,
+  per-track symbolic/audio/score upload routing, and seed-file promotion now
+  live behind `studio_upload_commands.py`. Upload policy and parser routing are
+  no longer inline repository logic; repository upload methods are facade
+  shims that keep route-facing names stable.
 - Score PDF export, retained track-audio resolution, and OMR source preview
   lookup now live behind `studio_resource_commands.py`. The repository exposes
   the same route-facing methods, but file/preview/export HTTP translation no

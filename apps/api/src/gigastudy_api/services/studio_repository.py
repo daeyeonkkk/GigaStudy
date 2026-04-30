@@ -60,10 +60,6 @@ from gigastudy_api.services.engine.music_theory import (
 from gigastudy_api.services.engine.omr import run_audiveris_omr
 from gigastudy_api.services.engine.notation_quality import RegistrationNotationResult
 from gigastudy_api.services.engine.pdf_vector_omr import parse_born_digital_pdf_score
-from gigastudy_api.services.engine.symbolic import (
-    SymbolicParseError,
-    parse_symbolic_file_with_metadata,
-)
 from gigastudy_api.services.engine.voice import (
     NO_METRONOME_ALIGNMENT,
     VoiceTranscriptionError,
@@ -78,12 +74,12 @@ from gigastudy_api.services.studio_engine_job_handlers import StudioEngineJobHan
 from gigastudy_api.services.studio_engine_queue_commands import StudioEngineQueueCommands
 from gigastudy_api.services.studio_extraction_job_commands import StudioExtractionJobCommands
 from gigastudy_api.services.studio_candidate_commands import StudioCandidateCommands
+from gigastudy_api.services.studio_upload_commands import StudioUploadCommands
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
 from gigastudy_api.services.studio_generation import (
     GenerationRequestError,
     generate_track_material,
 )
-from gigastudy_api.services.studio_home_audio_import import extract_home_audio_candidate
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
 from gigastudy_api.services.studio_scoring import (
     ScoringRequestError,
@@ -114,14 +110,8 @@ from gigastudy_api.services.studio_access import (
     require_studio_access,
 )
 from gigastudy_api.services.upload_policy import (
-    AUDIO_SOURCE_SUFFIXES,
     DEFAULT_UPLOAD_BPM,
-    OMR_SOURCE_SUFFIXES,
-    SYMBOLIC_SOURCE_SUFFIXES,
-    guess_audio_mime_type as _guess_audio_mime_type,
     should_route_seed_upload_to_omr,
-    validate_studio_seed_upload_filename as _validated_studio_seed_upload_filename,
-    validate_track_upload_filename as _validated_track_upload_filename,
 )
 
 
@@ -186,6 +176,11 @@ class StudioRepository:
             schedule_processing=self._schedule_engine_queue_processing,
         )
         self._candidates = StudioCandidateCommands(
+            now=_now,
+            repository=self,
+        )
+        self._uploads = StudioUploadCommands(
+            assets=self._assets,
             now=_now,
             repository=self,
         )
@@ -370,7 +365,7 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> DirectUploadTarget:
-        return self._assets.create_studio_upload_target(request, owner_token=owner_token)
+        return self._uploads.create_studio_upload_target(request, owner_token=owner_token)
 
     def create_track_upload_target(
         self,
@@ -380,14 +375,11 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> DirectUploadTarget:
-        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        self._find_track(studio, slot_id)
-        return self._assets.create_track_upload_target(
+        return self._uploads.create_track_upload_target(
             studio_id,
             slot_id,
             request,
             owner_token=owner_token,
-            owner_token_hash=studio.owner_token_hash,
         )
 
     def write_direct_upload_content(
@@ -397,19 +389,14 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> dict[str, int | str]:
-        return self._assets.write_direct_upload_content(
+        return self._uploads.write_direct_upload_content(
             asset_id,
             content,
             owner_token=owner_token,
-            validate_track_upload_owner=self._validate_track_upload_owner,
         )
 
     def _validate_track_upload_owner(self, studio_id: str, slot_id: int) -> None:
-        with self._lock:
-            studio = self._load_studio(studio_id)
-        if studio is None:
-            raise HTTPException(status_code=404, detail="Studio not found.")
-        self._find_track(studio, slot_id)
+        self._uploads.validate_track_upload_owner(studio_id, slot_id)
 
     def upload_track(
         self,
@@ -420,95 +407,13 @@ class StudioRepository:
         owner_token: str | None = None,
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
-        filename, suffix = _validated_track_upload_filename(request.source_kind, request.filename)
-
-        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        self._find_track(studio, slot_id)
-
-        if request.asset_path is not None:
-            source_path = self._assets.resolve_existing_upload_asset(
-                studio_id=studio_id,
-                slot_id=slot_id,
-                filename=filename,
-                asset_path=request.asset_path,
-            )
-        else:
-            source_path = self._assets.save_upload(
-                studio_id=studio_id,
-                slot_id=slot_id,
-                filename=filename,
-                content_base64=request.content_base64 or "",
-            )
-
-        try:
-            if request.source_kind == "midi" or suffix in SYMBOLIC_SOURCE_SUFFIXES:
-                registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "score"
-                parsed_symbolic = parse_symbolic_file_with_metadata(
-                    source_path,
-                    bpm=studio.bpm,
-                    target_slot_id=slot_id,
-                )
-                if parsed_symbolic.has_time_signature:
-                    self._update_time_signature(
-                        studio_id,
-                        parsed_symbolic.time_signature_numerator,
-                        parsed_symbolic.time_signature_denominator,
-                    )
-                mapped_notes = parsed_symbolic.mapped_notes
-                if request.review_before_register:
-                    return self._add_extraction_candidates(
-                        studio_id,
-                        mapped_notes,
-                        source_kind=registered_source_kind,
-                        source_label=filename,
-                        method="symbolic_import_review",
-                        confidence=0.92,
-                        message="Symbolic import is waiting for user approval.",
-                    )
-                if self._mapped_notes_would_overwrite(studio, mapped_notes) and not request.allow_overwrite:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="Upload would overwrite an existing registered track.",
-                    )
-                return self._apply_extracted_tracks(
-                    studio_id,
-                    mapped_notes,
-                    source_kind=registered_source_kind,
-                    source_label=filename,
-                )
-
-            if request.source_kind == "audio":
-                track = self._find_track(studio, slot_id)
-                if _track_has_content(track) and not request.allow_overwrite and not request.review_before_register:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="Upload would overwrite an existing registered track.",
-                    )
-                return self._enqueue_voice_job(
-                    studio_id,
-                    slot_id,
-                    source_kind="audio",
-                    source_label=filename,
-                    source_path=source_path,
-                    background_tasks=background_tasks,
-                    review_before_register=request.review_before_register,
-                    allow_overwrite=request.allow_overwrite,
-                )
-
-            if request.source_kind == "score" and suffix in OMR_SOURCE_SUFFIXES:
-                return self._enqueue_omr_job(
-                    studio_id,
-                    slot_id,
-                    source_kind="score",
-                    source_label=filename,
-                    source_path=source_path,
-                    background_tasks=background_tasks,
-                    parse_all_parts=True,
-                )
-        except (SymbolicParseError, VoiceTranscriptionError) as error:
-            raise HTTPException(status_code=422, detail=str(error)) from error
-
-        raise HTTPException(status_code=422, detail="Unsupported upload processing path.")
+        return self._uploads.upload_track(
+            studio_id,
+            slot_id,
+            request,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
 
     def generate_track(
         self,
@@ -943,83 +848,13 @@ class StudioRepository:
         source_content_base64: str | None,
         source_asset_path: str | None,
     ) -> Studio:
-        source_path = self._prepare_studio_seed_upload(
+        return self._uploads.seed_from_upload(
             studio,
             source_kind=source_kind,
             source_filename=source_filename,
             source_content_base64=source_content_base64,
             source_asset_path=source_asset_path,
         )
-        suffix = source_path.suffix.lower()
-
-        if source_kind == "score" and suffix in SYMBOLIC_SOURCE_SUFFIXES:
-            try:
-                parsed_symbolic = parse_symbolic_file_with_metadata(source_path, bpm=studio.bpm)
-            except SymbolicParseError as error:
-                raise HTTPException(status_code=422, detail=str(error)) from error
-            registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "score"
-            if parsed_symbolic.has_time_signature:
-                studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
-                studio.time_signature_denominator = parsed_symbolic.time_signature_denominator
-            timestamp = _now()
-            registrations = self._prepare_registration_batch(
-                studio,
-                parsed_symbolic.mapped_notes,
-                source_kind=registered_source_kind,
-            )
-            for slot_id in parsed_symbolic.mapped_notes:
-                track = self._find_track(studio, slot_id)
-                registration = registrations[slot_id]
-                _register_track_material(
-                    track,
-                    timestamp=timestamp,
-                    source_kind=registered_source_kind,
-                    source_label=source_filename,
-                    notes=registration.notes,
-                    duration_seconds=_track_duration_seconds(registration.notes),
-                    registration_diagnostics=registration.diagnostics,
-                )
-            studio.updated_at = timestamp
-            return studio
-
-        if source_kind == "music" and suffix in AUDIO_SOURCE_SUFFIXES:
-            if suffix != ".wav":
-                raise HTTPException(
-                    status_code=422,
-                    detail="Audio analysis currently supports WAV. MP3/M4A/OGG/FLAC upload is accepted by the UI but still needs a decoder path before analysis can run.",
-                )
-            try:
-                suggested_slot_id, transcription, confidence = extract_home_audio_candidate(
-                    studio,
-                    source_path,
-                    transcribe_with_alignment=self._transcribe_voice_file_with_alignment,
-                )
-            except VoiceTranscriptionError as error:
-                raise HTTPException(status_code=422, detail=str(error)) from error
-            audio_source_path = self._assets.relative_data_asset_path(source_path)
-            self._assets.replace_audio_asset_with_aligned_wav(
-                relative_audio_path=audio_source_path,
-                source_path=source_path,
-                source_label=source_filename,
-                audio_mime_type=_guess_audio_mime_type(source_filename),
-                transcription=transcription,
-            )
-            self._append_initial_candidate(
-                studio,
-                suggested_slot_id=suggested_slot_id,
-                source_kind="audio",
-                source_label=source_filename,
-                method="home_voice_transcription_review",
-                confidence=confidence,
-                notes=transcription.notes,
-                message="Audio upload produced a reviewable track candidate.",
-                audio_source_path=audio_source_path,
-                audio_source_label=source_filename,
-                audio_mime_type=_guess_audio_mime_type(source_filename),
-            )
-            return studio
-
-        raise HTTPException(status_code=422, detail="Unsupported upload processing path.")
 
     def _prepare_studio_seed_upload(
         self,
@@ -1030,25 +865,12 @@ class StudioRepository:
         source_content_base64: str | None,
         source_asset_path: str | None,
     ) -> Path:
-        filename, _suffix = _validated_studio_seed_upload_filename(source_kind, source_filename)
-        has_inline_content = bool(source_content_base64)
-        has_asset_path = bool(source_asset_path)
-        if has_inline_content == has_asset_path:
-            raise HTTPException(status_code=422, detail="Upload start requires exactly one source file.")
-
-        if source_asset_path is not None:
-            return self._assets.promote_staged_seed_asset(
-                studio_id=studio.studio_id,
-                filename=filename,
-                source_kind=source_kind,
-                asset_path=source_asset_path,
-            )
-
-        return self._assets.save_upload(
-            studio_id=studio.studio_id,
-            slot_id=0,
-            filename=filename,
-            content_base64=source_content_base64 or "",
+        return self._uploads.prepare_studio_seed_upload(
+            studio,
+            source_kind=source_kind,
+            source_filename=source_filename,
+            source_content_base64=source_content_base64,
+            source_asset_path=source_asset_path,
         )
 
     def _append_initial_candidate(

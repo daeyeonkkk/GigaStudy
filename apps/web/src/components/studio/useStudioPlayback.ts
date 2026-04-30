@@ -31,8 +31,10 @@ type PlaybackTimeline = {
 }
 
 type PlaybackStartOptions = {
+  onStartScheduled?: (scheduledStartAtMs: number) => void
   onScheduledStart?: () => void
   scheduledStartAtMs?: number
+  scheduledStartLeadMs?: number
   startSeconds?: number
 }
 
@@ -264,10 +266,15 @@ export function useStudioPlayback({
 
       scheduledStartDelaySeconds = Math.max(
         minimumStartDelaySeconds,
-        options.scheduledStartAtMs ? (options.scheduledStartAtMs - performance.now()) / 1000 : minimumStartDelaySeconds,
+        options.scheduledStartLeadMs !== undefined
+          ? options.scheduledStartLeadMs / 1000
+          : options.scheduledStartAtMs
+            ? (options.scheduledStartAtMs - performance.now()) / 1000
+            : minimumStartDelaySeconds,
       )
       playbackStartAtMs = performance.now() + scheduledStartDelaySeconds * 1000
       scheduledStart = activeContext ? activeContext.currentTime + scheduledStartDelaySeconds : 0
+      options.onStartScheduled?.(playbackStartAtMs)
 
       preparedAudioTracks.forEach(({ buffer, track, trackStartSeconds }) => {
         if (!activeContext) {

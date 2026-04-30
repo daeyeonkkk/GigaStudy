@@ -272,11 +272,15 @@ The current implementation has a working six-track vertical slice:
   API from Postgres-backed studio metadata and R2-backed stored assets, with
   `/api/admin/storage` reporting `s3://gigastudy-alpha` and the configured
   alpha limits.
-- Per-track browser recording now opens the microphone, shows a one-measure
-  count-in from the studio BPM/meter grid, and starts actual WAV capture on the
-  following downbeat. The metronome toggle only mutes/unmutes audible clicks;
-  the internal score clock still drives TrackNote timing. The UI shows count-in,
-  elapsed-time, and input-level feedback.
+- Per-track browser recording now opens the microphone, shows a BPM/meter
+  pulse count-in from the studio grid, and starts the take on the displayed
+  `0` pulse. For a 4/4 studio the visible count-in is `3, 2, 1, 0`; faster BPM
+  makes those pulses fall faster. The first audible count-in pulse is delayed
+  by a small 100 ms preparation window, and microphone capture opens with a
+  short preroll before `0` so slightly early entrances are not dropped. The
+  metronome toggle only mutes/unmutes audible clicks; the internal score clock
+  still drives TrackNote timing. The UI shows count-in, elapsed-time, and
+  input-level feedback.
 - Voice-to-score is now a first-class engine contract, not merely raw pitch
   detection. Voice-derived notes must be fitted onto the immutable studio
   BPM/meter grid, cleaned for noise, assigned to measures, quantized
@@ -1074,11 +1078,12 @@ not legacy product surfaces.
   whether the session is answer scoring or harmony scoring, how many reference
   tracks are involved, and whether the metronome is included.
 - Scoring microphone capture now follows the same delayed-input principle as
-  track recording. Starting a scoring session pre-arms the microphone, shows a
-  one-measure BPM/meter count-in, and begins actual performance capture on the
-  count-in downbeat. Audible reference tracks and the scoring metronome are
-  scheduled to the same downbeat, while silent count-in still preserves the
-  internal studio clock.
+  track recording. Starting a scoring session pre-arms the microphone, prepares
+  any audible reference tracks first, then shows the same BPM/meter pulse
+  count-in. Actual performance capture starts with the same short preroll, and
+  audible reference tracks plus the scoring metronome are scheduled to the
+  displayed `0` pulse. Silent count-in still preserves the internal studio
+  clock.
 
 ## Structural Consistency Hardening - 2026-04-30
 

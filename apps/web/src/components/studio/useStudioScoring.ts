@@ -9,7 +9,13 @@ import {
   type MicrophoneRecorder,
 } from '../../lib/audio'
 import {
+  COUNT_IN_CAPTURE_PREROLL_MS,
+  COUNT_IN_FIRST_PULSE_DELAY_MS,
+  COUNT_IN_ZERO_HOLD_MS,
   disposePlaybackSession,
+  getCountInDisplayValue,
+  getCountInStartOffsetPulses,
+  getCountInTotalPulses,
   getBeatSeconds,
   startLoopingMetronomeSession,
   type MeterContext,
@@ -30,8 +36,10 @@ type UseStudioScoringArgs = {
     tracksToPlay: TrackSlot[],
     includeMetronome?: boolean,
     options?: {
+      onStartScheduled?: (scheduledStartAtMs: number) => void
       onScheduledStart?: () => void
       scheduledStartAtMs?: number
+      scheduledStartLeadMs?: number
       startSeconds?: number
     },
   ) => Promise<boolean>
@@ -39,9 +47,6 @@ type UseStudioScoringArgs = {
   studio: Studio | null
   studioMeter: MeterContext
 }
-
-const COUNT_IN_FIRST_PULSE_DELAY_MS = 80
-const COUNT_IN_ZERO_HOLD_MS = 220
 
 export function useStudioScoring({
   markReferencePlayback,
@@ -240,34 +245,22 @@ export function useStudioScoring({
       session.playbackReferenceIds.includes(track.slot_id),
     )
 
-    const totalPulses = Math.max(1, Math.round(studioMeter.beatsPerMeasure / studioMeter.pulseQuarterBeats))
+    const totalPulses = getCountInTotalPulses(studioMeter)
     const pulseMilliseconds = getBeatSeconds(studio.bpm) * studioMeter.pulseQuarterBeats * 1000
-    const countInMilliseconds = totalPulses * pulseMilliseconds
-    let countInEpochMilliseconds = performance.now() + COUNT_IN_FIRST_PULSE_DELAY_MS
-
-    if (session.includeMetronome) {
-      scoreCountInMetronomeSessionRef.current = startLoopingMetronomeSession(
-        studio.bpm,
-        studioMeter,
-        COUNT_IN_FIRST_PULSE_DELAY_MS / 1000,
-      )
-      countInEpochMilliseconds = scoreCountInMetronomeSessionRef.current?.firstPulseAtMs ?? countInEpochMilliseconds
-    }
-
-    const captureStartAtMs = countInEpochMilliseconds + countInMilliseconds
+    const countInLeadMilliseconds =
+      COUNT_IN_FIRST_PULSE_DELAY_MS + getCountInStartOffsetPulses(totalPulses) * pulseMilliseconds
     const scheduleCountInAt = (targetMilliseconds: number, callback: () => void) => {
       const timeoutId = window.setTimeout(callback, Math.max(0, Math.round(targetMilliseconds - performance.now())))
       scoreCountInTimeoutIdsRef.current.push(timeoutId)
     }
-    const finishScoreCountIn = (audibleSlotIds: number[], keepMetronomeRunning: boolean) => {
-      if (scoreRunIdRef.current !== runId) {
-        return
-      }
-      clearScoreCountInTimers()
-      if (!keepMetronomeRunning) {
-        disposeScoreCountInMetronome()
+    let captureStarted = false
+    const startScoreCapture = () => {
+      if (captureStarted) {
+        return true
       }
       if (!beginMicrophoneCapture(recorder)) {
+        scoreRunIdRef.current += 1
+        clearScoreCountInTimers()
         disposeScoreCountInMetronome()
         void stopMicrophoneRecorder(recorder)
         scoreRecorderRef.current = null
@@ -277,6 +270,20 @@ export function useStudioScoring({
           phase: 'error',
           message: '마이크 입력 캡처를 시작하지 못했습니다. 다시 시도해 주세요.',
         })
+        return false
+      }
+      captureStarted = true
+      return true
+    }
+    const finishScoreCountIn = (audibleSlotIds: number[], keepMetronomeRunning: boolean) => {
+      if (scoreRunIdRef.current !== runId) {
+        return
+      }
+      clearScoreCountInTimers()
+      if (!keepMetronomeRunning) {
+        disposeScoreCountInMetronome()
+      }
+      if (!startScoreCapture()) {
         return
       }
       if (audibleSlotIds.length > 0) {
@@ -301,40 +308,66 @@ export function useStudioScoring({
       scoreCountInTimeoutIdsRef.current.push(hideZeroTimeoutId)
     }
 
-    setScoreSession({
-      ...session,
-      phase: 'counting_in',
-      countIn: {
-        pulsesRemaining: totalPulses,
-        totalPulses,
-      },
-    })
-    setActionState({
-      phase: 'success',
-      message: '1마디 count-in 뒤 기준 트랙과 마이크 입력을 같은 다운비트에서 시작합니다.',
-    })
+    const scheduleVisibleCountIn = (performanceStartAtMs: number) => {
+      if (scoreRunIdRef.current !== runId) {
+        return
+      }
+      const countInEpochMilliseconds =
+        performanceStartAtMs - getCountInStartOffsetPulses(totalPulses) * pulseMilliseconds
+      const capturePrerollAtMs = Math.max(performance.now(), performanceStartAtMs - COUNT_IN_CAPTURE_PREROLL_MS)
 
-    for (let pulseIndex = 1; pulseIndex < totalPulses; pulseIndex += 1) {
-      scheduleCountInAt(countInEpochMilliseconds + pulseIndex * pulseMilliseconds, () => {
+      if (session.includeMetronome) {
+        disposeScoreCountInMetronome()
+        scoreCountInMetronomeSessionRef.current = startLoopingMetronomeSession(
+          studio.bpm,
+          studioMeter,
+          Math.max(0.02, (countInEpochMilliseconds - performance.now()) / 1000),
+        )
+      }
+
+      setScoreSession({
+        ...session,
+        phase: 'counting_in',
+        countIn: {
+          pulsesRemaining: getCountInDisplayValue(totalPulses, 0),
+          totalPulses,
+        },
+      })
+      setActionState({
+        phase: 'success',
+        message: '박자 count-in 뒤 기준 트랙과 마이크 입력을 0박에서 시작합니다.',
+      })
+
+      for (let pulseIndex = 1; pulseIndex < totalPulses - 1; pulseIndex += 1) {
+        scheduleCountInAt(countInEpochMilliseconds + pulseIndex * pulseMilliseconds, () => {
+          if (scoreRunIdRef.current !== runId) {
+            return
+          }
+          setScoreSession({
+            ...session,
+            phase: 'counting_in',
+            countIn: {
+              pulsesRemaining: getCountInDisplayValue(totalPulses, pulseIndex),
+              totalPulses,
+            },
+          })
+        })
+      }
+
+      scheduleCountInAt(capturePrerollAtMs, () => {
         if (scoreRunIdRef.current !== runId) {
           return
         }
-        setScoreSession({
-          ...session,
-          phase: 'counting_in',
-          countIn: {
-            pulsesRemaining: totalPulses - pulseIndex,
-            totalPulses,
-          },
-        })
+        startScoreCapture()
       })
     }
 
     if (referenceTracks.length > 0) {
       setActionState({ phase: 'busy', message: '기준 트랙을 count-in 다운비트에 맞춰 준비합니다.' })
       if (!(await startPlaybackSession(referenceTracks, session.includeMetronome, {
+        onStartScheduled: scheduleVisibleCountIn,
         onScheduledStart: () => finishScoreCountIn(referenceTracks.map((track) => track.slot_id), false),
-        scheduledStartAtMs: captureStartAtMs,
+        scheduledStartLeadMs: countInLeadMilliseconds,
       }))) {
         scoreRunIdRef.current += 1
         clearScoreCountInTimers()
@@ -347,7 +380,9 @@ export function useStudioScoring({
       return
     }
 
-    scheduleCountInAt(captureStartAtMs, () => {
+    const performanceStartAtMs = performance.now() + countInLeadMilliseconds
+    scheduleVisibleCountIn(performanceStartAtMs)
+    scheduleCountInAt(performanceStartAtMs, () => {
       finishScoreCountIn([], session.includeMetronome)
     })
   }

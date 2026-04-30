@@ -8,7 +8,13 @@ import {
   type MicrophoneRecorder,
 } from '../../lib/audio'
 import {
+  COUNT_IN_CAPTURE_PREROLL_MS,
+  COUNT_IN_FIRST_PULSE_DELAY_MS,
+  COUNT_IN_ZERO_HOLD_MS,
   disposePlaybackSession,
+  getCountInDisplayValue,
+  getCountInStartOffsetPulses,
+  getCountInTotalPulses,
   getBeatSeconds,
   startLoopingMetronomeSession,
   type MeterContext,
@@ -44,9 +50,6 @@ type UseStudioRecordingArgs = {
   studio: Studio | null
   studioMeter: MeterContext
 }
-
-const COUNT_IN_FIRST_PULSE_DELAY_MS = 80
-const COUNT_IN_ZERO_HOLD_MS = 220
 
 export function useStudioRecording({
   metronomeEnabled,
@@ -148,10 +151,9 @@ export function useStudioRecording({
     trackCountInRunIdRef.current = runId
     clearTrackCountInTimers()
 
-    const totalPulses = Math.max(1, Math.round(studioMeter.beatsPerMeasure / studioMeter.pulseQuarterBeats))
+    const totalPulses = getCountInTotalPulses(studioMeter)
     const pulseMilliseconds = getBeatSeconds(studio.bpm) * studioMeter.pulseQuarterBeats * 1000
     const downbeatDelayMilliseconds = COUNT_IN_FIRST_PULSE_DELAY_MS
-    const countInMilliseconds = totalPulses * pulseMilliseconds
     let countInEpochMilliseconds = performance.now() + downbeatDelayMilliseconds
 
     if (metronomeEnabled) {
@@ -164,7 +166,12 @@ export function useStudioRecording({
       countInEpochMilliseconds = recordingMetronomeSessionRef.current?.firstPulseAtMs ?? countInEpochMilliseconds
     }
 
-    const recordingDownbeatMilliseconds = countInEpochMilliseconds + countInMilliseconds
+    const recordingDownbeatMilliseconds =
+      countInEpochMilliseconds + getCountInStartOffsetPulses(totalPulses) * pulseMilliseconds
+    const capturePrerollMilliseconds = Math.max(
+      performance.now(),
+      recordingDownbeatMilliseconds - COUNT_IN_CAPTURE_PREROLL_MS,
+    )
     trackCountInEpochMsRef.current = countInEpochMilliseconds
 
     const scheduleCountInAt = (targetMilliseconds: number, callback: () => void) => {
@@ -172,25 +179,55 @@ export function useStudioRecording({
       trackCountInTimeoutIdsRef.current.push(timeoutId)
     }
 
+    let captureStarted = false
+    const startCapture = () => {
+      if (captureStarted) {
+        return true
+      }
+      if (!beginMicrophoneCapture(recorder)) {
+        trackCountInRunIdRef.current += 1
+        clearTrackCountInTimers()
+        trackCountInEpochMsRef.current = null
+        setTrackCountIn(null)
+        setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
+        disposePlaybackSession(recordingMetronomeSessionRef.current)
+        recordingMetronomeSessionRef.current = null
+        trackRecorderRef.current = null
+        trackRecordingAllowOverwriteRef.current = false
+        void stopMicrophoneRecorder(recorder)
+        setActionState({ phase: 'error', message: '녹음을 시작하지 못했습니다. 다시 시도해 주세요.' })
+        return false
+      }
+      captureStarted = true
+      return true
+    }
+
     setTrackCountIn({
       slotId: track.slot_id,
-      pulsesRemaining: totalPulses,
+      pulsesRemaining: getCountInDisplayValue(totalPulses, 0),
       totalPulses,
     })
     setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
 
-    for (let pulseIndex = 1; pulseIndex < totalPulses; pulseIndex += 1) {
+    for (let pulseIndex = 1; pulseIndex < totalPulses - 1; pulseIndex += 1) {
       scheduleCountInAt(countInEpochMilliseconds + pulseIndex * pulseMilliseconds, () => {
         if (trackCountInRunIdRef.current !== runId) {
           return
         }
         setTrackCountIn({
           slotId: track.slot_id,
-          pulsesRemaining: totalPulses - pulseIndex,
+          pulsesRemaining: getCountInDisplayValue(totalPulses, pulseIndex),
           totalPulses,
         })
       })
     }
+
+    scheduleCountInAt(capturePrerollMilliseconds, () => {
+      if (trackCountInRunIdRef.current !== runId) {
+        return
+      }
+      startCapture()
+    })
 
     scheduleCountInAt(recordingDownbeatMilliseconds, () => {
       if (trackCountInRunIdRef.current !== runId) {
@@ -202,10 +239,7 @@ export function useStudioRecording({
         pulsesRemaining: 0,
         totalPulses,
       })
-      if (!beginMicrophoneCapture(recorder)) {
-        trackCountInEpochMsRef.current = null
-        setTrackCountIn(null)
-        setActionState({ phase: 'error', message: '녹음을 시작하지 못했습니다. 다시 시도해 주세요.' })
+      if (!startCapture()) {
         return
       }
       setRecordingSlotId(track.slot_id)

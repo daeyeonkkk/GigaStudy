@@ -70,6 +70,7 @@ export function useStudioScoring({
       targetSlotId: track.slot_id,
       scoreMode,
       selectedReferenceIds: references,
+      playbackReferenceIds: references,
       includeMetronome: scoreMode === 'answer' ? metronomeEnabled || references.length === 0 : metronomeEnabled,
       phase: 'ready',
     })
@@ -81,16 +82,28 @@ export function useStudioScoring({
         return current
       }
       const references = registeredSlotIds.filter((slotId) => slotId !== current.targetSlotId)
+      const retainedSelectedReferenceIds = current.selectedReferenceIds.filter((slotId) =>
+        references.includes(slotId),
+      )
+      const selectedReferenceIds =
+        scoreMode === 'harmony' && retainedSelectedReferenceIds.length === 0
+          ? references
+          : retainedSelectedReferenceIds
+      const retainedPlaybackReferenceIds = current.playbackReferenceIds.filter((slotId) =>
+        selectedReferenceIds.includes(slotId),
+      )
+      const playbackReferenceIds =
+        scoreMode === 'harmony' && retainedPlaybackReferenceIds.length === 0
+          ? selectedReferenceIds
+          : retainedPlaybackReferenceIds
       return {
         ...current,
         scoreMode,
-        selectedReferenceIds:
-          scoreMode === 'harmony' && current.selectedReferenceIds.length === 0
-            ? references
-            : current.selectedReferenceIds,
+        selectedReferenceIds,
+        playbackReferenceIds,
         includeMetronome:
           scoreMode === 'answer'
-            ? current.includeMetronome || current.selectedReferenceIds.length === 0
+            ? current.includeMetronome || selectedReferenceIds.length === 0
             : current.includeMetronome,
       }
     })
@@ -102,11 +115,31 @@ export function useStudioScoring({
         return current
       }
       const exists = current.selectedReferenceIds.includes(slotId)
+      const selectedReferenceIds = exists
+        ? current.selectedReferenceIds.filter((candidate) => candidate !== slotId)
+        : [...current.selectedReferenceIds, slotId]
+      const playbackReferenceIds = exists
+        ? current.playbackReferenceIds.filter((candidate) => candidate !== slotId)
+        : Array.from(new Set([...current.playbackReferenceIds, slotId]))
       return {
         ...current,
-        selectedReferenceIds: exists
-          ? current.selectedReferenceIds.filter((candidate) => candidate !== slotId)
-          : [...current.selectedReferenceIds, slotId],
+        selectedReferenceIds,
+        playbackReferenceIds,
+      }
+    })
+  }
+
+  function toggleScoreReferencePlayback(slotId: number) {
+    setScoreSession((current) => {
+      if (!current || !current.selectedReferenceIds.includes(slotId)) {
+        return current
+      }
+      const exists = current.playbackReferenceIds.includes(slotId)
+      return {
+        ...current,
+        playbackReferenceIds: exists
+          ? current.playbackReferenceIds.filter((candidate) => candidate !== slotId)
+          : [...current.playbackReferenceIds, slotId],
       }
     })
   }
@@ -155,7 +188,8 @@ export function useStudioScoring({
     }
 
     const referenceTracks = studio.tracks.filter((track) =>
-      scoreSession.selectedReferenceIds.includes(track.slot_id),
+      scoreSession.selectedReferenceIds.includes(track.slot_id) &&
+      scoreSession.playbackReferenceIds.includes(track.slot_id),
     )
     if (referenceTracks.length > 0) {
       setActionState({ phase: 'busy', message: '마이크와 기준 트랙을 같은 박자 기준으로 준비합니다.' })
@@ -269,6 +303,7 @@ export function useStudioScoring({
     startScoreListening,
     stopScoreListening,
     toggleScoreReference,
+    toggleScoreReferencePlayback,
     updateScoreMode,
   }
 }

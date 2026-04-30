@@ -108,6 +108,7 @@ export function StudioPage() {
     startScoreListening,
     stopScoreListening,
     toggleScoreReference,
+    toggleScoreReferencePlayback,
     updateScoreMode,
   } = useStudioScoring({
     markReferencePlayback,
@@ -340,6 +341,7 @@ export function StudioPage() {
         onStart={() => void startScoreListening()}
         onStop={() => void stopScoreListening()}
         onToggleReference={toggleScoreReference}
+        onToggleReferencePlayback={toggleScoreReferencePlayback}
       />
 
       {pendingTrackRecording ? (

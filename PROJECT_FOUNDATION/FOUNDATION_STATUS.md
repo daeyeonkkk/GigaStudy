@@ -371,11 +371,13 @@ The current implementation has a working six-track vertical slice:
 - Registered track strips now share measure widths and draw a smooth scheduler
   playhead, keeping global playback progress vertically aligned across tracks
   while per-track sync moves only notes/audio.
+- Scoring separates "reference track" from "audible reference playback".
+  Checked reference tracks remain the scoring criteria/context sent to the
+  engine, while each reference track has an independent playback checkbox for
+  whether it should be heard during the take.
 - Scoring reference playback honors the scoring checklist's metronome setting,
-  including metronome-only scoring sessions.
-- Scoring reference playback uses the same audio-or-score playback source
-  selection as normal studio playback, so checked tracks are audible practice
-  context while the target take is recorded.
+  including metronome-only scoring sessions, and uses the same audio-or-score
+  playback source selection as normal studio playback.
 - Scoring uses the target track as the answer sheet, extracts/accepts
   performance notes, auto-aligns global sync, and reports quantitative errors.
 - Scoring also has a harmony mode. It can run without a registered target

@@ -917,14 +917,15 @@ come from user upload, user recording, OMR, MIDI, MusicXML, or AI generation.
 The engine aligns the user's extracted performance to that target answer and
 evaluates pitch/rhythm accuracy.
 
-Selected reference tracks and the metronome are playback context only. They are
-not the truth source for judging answer accuracy.
+The target track remains the answer truth source for answer accuracy. Selected
+reference tracks are stored as scoring context, but they do not override the
+target answer sheet.
 
 ### Harmony Scoring
 
 Harmony scoring does not require a registered target-track answer. It requires
-at least one registered reference track. The user records a new part while the
-selected reference tracks play, and the engine judges whether the extracted
+at least one registered reference track. The user records a new part against the
+selected reference tracks, and the engine judges whether the extracted
 performance fits the existing ensemble.
 
 Harmony scoring evaluates:
@@ -970,10 +971,13 @@ these diagnostics start deciding between plausible stylistic choices rather than
 clear structural risks, the next improvement requires live a cappella test
 recordings and human arranger ratings.
 
-When scoring starts, checked reference tracks must be audible through the same
-playback-source choice used by normal studio playback. In `audio` mode this
-means retained recordings are played where available; in `score` mode the
-symbolic notes are synthesized.
+Reference selection and reference playback are deliberately separate. The
+`reference_slot_ids` sent to the engine are the scoring criteria/context.
+Audible playback is a frontend practice option tracked per reference track, so
+a reference can be used for scoring while muted in the speaker mix. Audible
+reference tracks must use the same playback-source choice as normal studio
+playback. In `audio` mode this means retained recordings are played where
+available; in `score` mode the symbolic notes are synthesized.
 
 ## Offline Alignment
 

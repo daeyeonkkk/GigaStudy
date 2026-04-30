@@ -5,6 +5,7 @@ export type ScoreSessionState = {
   targetSlotId: number
   scoreMode: ScoreMode
   selectedReferenceIds: number[]
+  playbackReferenceIds: number[]
   includeMetronome: boolean
   phase: 'ready' | 'listening' | 'analyzing'
 }
@@ -19,6 +20,7 @@ type ScoringDrawerProps = {
   onStart: () => void
   onStop: () => void
   onToggleReference: (slotId: number) => void
+  onToggleReferencePlayback: (slotId: number) => void
 }
 
 export function ScoringDrawer({
@@ -31,6 +33,7 @@ export function ScoringDrawer({
   onStart,
   onStop,
   onToggleReference,
+  onToggleReferencePlayback,
 }: ScoringDrawerProps) {
   if (!scoreSession || !targetTrack) {
     return null
@@ -43,9 +46,13 @@ export function ScoringDrawer({
   const canUseHarmonyMode = registeredReferenceCount > 0
   const isHarmonyMode = scoreSession.scoreMode === 'harmony'
   const selectedReferenceCount = scoreSession.selectedReferenceIds.length
+  const playbackReferenceCount = scoreSession.playbackReferenceIds.filter((slotId) =>
+    scoreSession.selectedReferenceIds.includes(slotId),
+  ).length
   const modeSummary = isHarmonyMode
-    ? `현재 모드: 화음 채점. ${selectedReferenceCount}개 기준 트랙 위에 새 파트를 얹어 안정도, 긴장감, 충돌을 평가합니다.`
-    : `현재 모드: 정답 채점. ${targetTrack.name} 악보를 답안지로 삼고 선택한 기준 트랙과 함께 박자/음정을 평가합니다.`
+    ? `현재 모드: 화음 채점. ${selectedReferenceCount}개 기준 트랙을 기준으로 새 파트의 안정감과 충돌을 평가하고, ${playbackReferenceCount}개 트랙을 들려줍니다.`
+    : `현재 모드: 정답 채점. ${targetTrack.name} 악보를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 기준으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
+  const phaseLocked = scoreSession.phase !== 'ready'
 
   return (
     <section className="score-drawer" aria-label="채점 체크리스트">
@@ -68,7 +75,7 @@ export function ScoringDrawer({
         <div className="score-mode-switch" role="group" aria-label="채점 모드">
           <button
             className={scoreSession.scoreMode === 'answer' ? 'is-active' : ''}
-            disabled={!canUseAnswerMode || scoreSession.phase !== 'ready'}
+            disabled={!canUseAnswerMode || phaseLocked}
             type="button"
             onClick={() => onScoreModeChange('answer')}
           >
@@ -77,7 +84,7 @@ export function ScoringDrawer({
           </button>
           <button
             className={isHarmonyMode ? 'is-active' : ''}
-            disabled={!canUseHarmonyMode || scoreSession.phase !== 'ready'}
+            disabled={!canUseHarmonyMode || phaseLocked}
             type="button"
             onClick={() => onScoreModeChange('harmony')}
           >
@@ -92,26 +99,55 @@ export function ScoringDrawer({
           <em>{scoreSession.includeMetronome ? '메트로놈 포함' : '메트로놈 제외'}</em>
         </div>
 
-        <div className="score-checklist">
-          {tracks.map((track) => (
-            <label className={track.status === 'registered' ? '' : 'is-disabled'} key={track.slot_id}>
-              <input
-                checked={scoreSession.selectedReferenceIds.includes(track.slot_id)}
-                disabled={track.status !== 'registered' || track.slot_id === scoreSession.targetSlotId}
-                type="checkbox"
-                onChange={() => onToggleReference(track.slot_id)}
-              />
-              <span>트랙 {track.slot_id}</span>
-              <strong>{track.name}</strong>
-            </label>
-          ))}
-          <label className={isHarmonyMode ? 'is-optional' : ''}>
+        <div className="score-checklist" aria-label="기준 트랙과 연주 여부">
+          <div className="score-checklist__heading" aria-hidden="true">
+            <span>트랙</span>
+            <span>기준</span>
+            <span>연주</span>
+          </div>
+          {tracks.map((track) => {
+            const isTarget = track.slot_id === scoreSession.targetSlotId
+            const disabled = track.status !== 'registered' || isTarget
+            const isReference = scoreSession.selectedReferenceIds.includes(track.slot_id)
+            const isAudible = isReference && scoreSession.playbackReferenceIds.includes(track.slot_id)
+            return (
+              <div
+                className={`score-checklist__row ${disabled ? 'is-disabled' : ''}`}
+                key={track.slot_id}
+              >
+                <div className="score-checklist__track">
+                  <span>트랙 {track.slot_id}</span>
+                  <strong>{track.name}</strong>
+                </div>
+                <label>
+                  <input
+                    checked={isReference}
+                    disabled={disabled || phaseLocked}
+                    type="checkbox"
+                    onChange={() => onToggleReference(track.slot_id)}
+                  />
+                  <span>기준</span>
+                </label>
+                <label>
+                  <input
+                    checked={isAudible}
+                    disabled={disabled || !isReference || phaseLocked}
+                    type="checkbox"
+                    onChange={() => onToggleReferencePlayback(track.slot_id)}
+                  />
+                  <span>연주</span>
+                </label>
+              </div>
+            )
+          })}
+          <label className={`score-checklist__metronome ${isHarmonyMode ? 'is-optional' : ''}`}>
             <input
               checked={scoreSession.includeMetronome}
+              disabled={phaseLocked}
               type="checkbox"
               onChange={(event) => onIncludeMetronomeChange(event.target.checked)}
             />
-            <span>{isHarmonyMode ? '보조' : '기준'}</span>
+            <span>{isHarmonyMode ? '보조 연주' : '박자 기준'}</span>
             <strong>메트로놈</strong>
           </label>
         </div>
@@ -142,10 +178,10 @@ export function ScoringDrawer({
 
         <p className="score-drawer__hint">
           {scoreSession.phase === 'listening'
-            ? '선택한 트랙이 동시에 재생되고 마이크 입력을 받고 있습니다.'
+            ? '연주로 선택한 트랙만 스피커로 재생됩니다. 기준 체크는 채점 계산에 그대로 사용됩니다.'
             : isHarmonyMode
-              ? '화음 채점은 정답 악보 없이, 새로 부른 파트가 선택한 트랙 위에서 얼마나 안정적으로 어울리는지 평가합니다.'
-              : '정답 채점은 이 트랙 악보를 답안지로 삼아 박자와 음정 정확도를 평가합니다.'}
+              ? '화음 채점은 정답 악보 없이, 기준 트랙 위에 새 파트가 안정적으로 얹히는지 평가합니다.'
+              : '정답 채점은 이 트랙 악보를 답안지로 삼고, 기준 트랙과 메트로놈은 평가 맥락과 연습 재생을 보조합니다.'}
         </p>
       </div>
     </section>

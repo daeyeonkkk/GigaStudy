@@ -9,10 +9,10 @@ import {
   type MicrophoneRecorder,
 } from '../../lib/audio'
 import {
-  COUNT_IN_CAPTURE_PREROLL_MS,
   COUNT_IN_FIRST_PULSE_DELAY_MS,
   COUNT_IN_ZERO_HOLD_MS,
   disposePlaybackSession,
+  getCountInCapturePrerollMs,
   getCountInDisplayValue,
   getCountInStartOffsetPulses,
   getCountInTotalPulses,
@@ -314,7 +314,10 @@ export function useStudioScoring({
       }
       const countInEpochMilliseconds =
         performanceStartAtMs - getCountInStartOffsetPulses(totalPulses) * pulseMilliseconds
-      const capturePrerollAtMs = Math.max(performance.now(), performanceStartAtMs - COUNT_IN_CAPTURE_PREROLL_MS)
+      const capturePrerollAtMs = Math.max(
+        performance.now(),
+        performanceStartAtMs - getCountInCapturePrerollMs(pulseMilliseconds),
+      )
 
       if (session.includeMetronome) {
         disposeScoreCountInMetronome()

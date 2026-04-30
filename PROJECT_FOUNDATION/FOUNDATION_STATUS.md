@@ -277,7 +277,8 @@ The current implementation has a working six-track vertical slice:
   `0` pulse. For a 4/4 studio the visible count-in is `3, 2, 1, 0`; faster BPM
   makes those pulses fall faster. The first audible count-in pulse is delayed
   by a small 100 ms preparation window, and microphone capture opens with a
-  short preroll before `0` so slightly early entrances are not dropped. The
+  short BPM-bounded preroll before `0` so slightly early entrances are not
+  dropped without pushing the captured file outside the auto-alignment lane. The
   metronome toggle only mutes/unmutes audible clicks; the internal score clock
   still drives TrackNote timing. The UI shows count-in, elapsed-time, and
   input-level feedback.

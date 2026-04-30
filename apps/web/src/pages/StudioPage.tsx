@@ -65,7 +65,6 @@ export function StudioPage() {
     selectAllPlaybackTracks,
     selectedPlaybackSlotIds,
     setActiveTrackVolume,
-    startMetronomeOnlyPlayback,
     startPlaybackSession,
     startSelectedPlayback,
     stopGlobalPlayback,
@@ -117,10 +116,10 @@ export function StudioPage() {
     registeredSlotIds,
     setActionState,
     setStudio,
-    startMetronomeOnlyPlayback,
     startPlaybackSession,
     stopPlaybackSession,
     studio,
+    studioMeter,
   })
   const {
     handleExportPdf,
@@ -182,7 +181,11 @@ export function StudioPage() {
   })
 
   async function handleRecord(track: TrackSlot) {
-    if (scoreSession?.phase === 'listening' || scoreSession?.phase === 'analyzing') {
+    if (
+      scoreSession?.phase === 'counting_in' ||
+      scoreSession?.phase === 'listening' ||
+      scoreSession?.phase === 'analyzing'
+    ) {
       setActionState({
         phase: 'error',
         message: '채점 녹음이 진행 중입니다. 먼저 채점을 중지한 뒤 트랙 녹음을 시작해 주세요.',

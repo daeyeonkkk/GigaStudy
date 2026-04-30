@@ -1,13 +1,19 @@
 import type { ScoreMode, TrackSlot } from '../../types/studio'
 import './ScoringDrawer.css'
 
+export type ScoreCountInState = {
+  pulsesRemaining: number
+  totalPulses: number
+}
+
 export type ScoreSessionState = {
   targetSlotId: number
   scoreMode: ScoreMode
   selectedReferenceIds: number[]
   playbackReferenceIds: number[]
   includeMetronome: boolean
-  phase: 'ready' | 'listening' | 'analyzing'
+  phase: 'ready' | 'counting_in' | 'listening' | 'analyzing'
+  countIn?: ScoreCountInState | null
 }
 
 type ScoringDrawerProps = {
@@ -165,19 +171,29 @@ export function ScoringDrawer({
           <button
             className="app-button app-button--record"
             data-testid="score-stop-button"
-            disabled={scoreSession.phase !== 'listening'}
+            disabled={scoreSession.phase !== 'counting_in' && scoreSession.phase !== 'listening'}
             type="button"
             onClick={onStop}
           >
-            중지
+            {scoreSession.phase === 'counting_in' ? '취소' : '중지'}
           </button>
           <button className="app-button app-button--secondary" type="button" onClick={onCancel}>
             취소
           </button>
         </div>
 
+        {scoreSession.countIn ? (
+          <div className="score-drawer__count-in" data-testid="score-count-in">
+            <span>1마디 준비</span>
+            <strong>{scoreSession.countIn.pulsesRemaining}</strong>
+            <em>{scoreSession.includeMetronome ? 'metronome count-in' : 'silent count-in'}</em>
+          </div>
+        ) : null}
+
         <p className="score-drawer__hint">
-          {scoreSession.phase === 'listening'
+          {scoreSession.phase === 'counting_in'
+            ? '카운트인이 끝나는 다운비트부터 기준 트랙 재생과 마이크 입력이 동시에 시작됩니다.'
+            : scoreSession.phase === 'listening'
             ? '연주로 선택한 트랙만 스피커로 재생됩니다. 기준 체크는 채점 계산에 그대로 사용됩니다.'
             : isHarmonyMode
               ? '화음 채점은 정답 악보 없이, 기준 트랙 위에 새 파트가 안정적으로 얹히는지 평가합니다.'

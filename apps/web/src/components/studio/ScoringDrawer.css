@@ -193,6 +193,38 @@
   gap: 8px;
 }
 
+.score-drawer__count-in {
+  display: grid;
+  grid-template-columns: auto 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #9bb0da;
+  border-radius: 5px;
+  background: #f0f4ff;
+}
+
+.score-drawer__count-in span,
+.score-drawer__count-in em {
+  color: #33414d;
+  font-size: 0.84rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.score-drawer__count-in strong {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #082fbd;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #082fbd;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
 .score-drawer__hint {
   color: #54616c;
   font-weight: 700;

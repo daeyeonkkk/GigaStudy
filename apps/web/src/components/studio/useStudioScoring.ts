@@ -8,6 +8,13 @@ import {
   stopMicrophoneRecorder,
   type MicrophoneRecorder,
 } from '../../lib/audio'
+import {
+  disposePlaybackSession,
+  getBeatSeconds,
+  startLoopingMetronomeSession,
+  type MeterContext,
+  type PlaybackSession,
+} from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
 import type { ScoreSessionState } from './ScoringDrawer'
 import type { SetStudioActionState } from './studioActionState'
@@ -19,11 +26,22 @@ type UseStudioScoringArgs = {
   registeredSlotIds: number[]
   setActionState: SetStudioActionState
   setStudio: Dispatch<SetStateAction<Studio | null>>
-  startMetronomeOnlyPlayback: () => boolean
-  startPlaybackSession: (tracksToPlay: TrackSlot[], includeMetronome?: boolean) => Promise<boolean>
+  startPlaybackSession: (
+    tracksToPlay: TrackSlot[],
+    includeMetronome?: boolean,
+    options?: {
+      onScheduledStart?: () => void
+      scheduledStartAtMs?: number
+      startSeconds?: number
+    },
+  ) => Promise<boolean>
   stopPlaybackSession: () => void
   studio: Studio | null
+  studioMeter: MeterContext
 }
+
+const COUNT_IN_FIRST_PULSE_DELAY_MS = 80
+const COUNT_IN_ZERO_HOLD_MS = 220
 
 export function useStudioScoring({
   markReferencePlayback,
@@ -32,12 +50,14 @@ export function useStudioScoring({
   registeredSlotIds,
   setActionState,
   setStudio,
-  startMetronomeOnlyPlayback,
   startPlaybackSession,
   stopPlaybackSession,
   studio,
+  studioMeter,
 }: UseStudioScoringArgs) {
   const [scoreSession, setScoreSession] = useState<ScoreSessionState | null>(null)
+  const scoreCountInMetronomeSessionRef = useRef<PlaybackSession | null>(null)
+  const scoreCountInTimeoutIdsRef = useRef<number[]>([])
   const scoreRecorderRef = useRef<MicrophoneRecorder | null>(null)
   const scoreRunIdRef = useRef(0)
 
@@ -49,8 +69,31 @@ export function useStudioScoring({
     [scoreSession, studio],
   )
 
+  function clearScoreCountInTimers() {
+    scoreCountInTimeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
+    scoreCountInTimeoutIdsRef.current = []
+  }
+
+  function disposeScoreCountInMetronome() {
+    disposePlaybackSession(scoreCountInMetronomeSessionRef.current)
+    scoreCountInMetronomeSessionRef.current = null
+  }
+
+  function cancelScoreSession() {
+    scoreRunIdRef.current += 1
+    clearScoreCountInTimers()
+    disposeScoreCountInMetronome()
+    void stopMicrophoneRecorder(scoreRecorderRef.current)
+    scoreRecorderRef.current = null
+    stopPlaybackSession()
+    setScoreSession(null)
+  }
+
   useEffect(() => {
     return () => {
+      clearScoreCountInTimers()
+      disposePlaybackSession(scoreCountInMetronomeSessionRef.current)
+      scoreCountInMetronomeSessionRef.current = null
       void stopMicrophoneRecorder(scoreRecorderRef.current)
       scoreRecorderRef.current = null
     }
@@ -152,6 +195,7 @@ export function useStudioScoring({
     if (!scoreSession || !studio) {
       return
     }
+    const session = scoreSession
     if (recordingSlotId !== null) {
       setActionState({
         phase: 'error',
@@ -159,20 +203,23 @@ export function useStudioScoring({
       })
       return
     }
-    if (scoreSession.scoreMode === 'answer' && scoreTargetTrack?.status !== 'registered') {
+    if (session.scoreMode === 'answer' && scoreTargetTrack?.status !== 'registered') {
       setActionState({ phase: 'error', message: '정답 채점은 먼저 대상 트랙이 등록되어 있어야 합니다.' })
       return
     }
-    if (scoreSession.scoreMode === 'answer' && scoreSession.selectedReferenceIds.length === 0 && !scoreSession.includeMetronome) {
+    if (session.scoreMode === 'answer' && session.selectedReferenceIds.length === 0 && !session.includeMetronome) {
       setActionState({ phase: 'error', message: '정답 채점 기준으로 트랙이나 메트로놈을 하나 이상 선택하세요.' })
       return
     }
-    if (scoreSession.scoreMode === 'harmony' && scoreSession.selectedReferenceIds.length === 0) {
+    if (session.scoreMode === 'harmony' && session.selectedReferenceIds.length === 0) {
       setActionState({ phase: 'error', message: '화음 채점은 기준 트랙을 하나 이상 선택해야 합니다.' })
       return
     }
     const runId = scoreRunIdRef.current + 1
     scoreRunIdRef.current = runId
+    clearScoreCountInTimers()
+    disposeScoreCountInMetronome()
+    stopPlaybackSession()
     setActionState({ phase: 'busy', message: '채점용 마이크 입력을 준비합니다.' })
     const recorder = await startMicrophoneRecorder({ captureImmediately: false })
     if (scoreRunIdRef.current !== runId) {
@@ -186,46 +233,122 @@ export function useStudioScoring({
       })
       return
     }
+    scoreRecorderRef.current = recorder
 
     const referenceTracks = studio.tracks.filter((track) =>
-      scoreSession.selectedReferenceIds.includes(track.slot_id) &&
-      scoreSession.playbackReferenceIds.includes(track.slot_id),
+      session.selectedReferenceIds.includes(track.slot_id) &&
+      session.playbackReferenceIds.includes(track.slot_id),
     )
-    if (referenceTracks.length > 0) {
-      setActionState({ phase: 'busy', message: '마이크와 기준 트랙을 같은 박자 기준으로 준비합니다.' })
-      if (!(await startPlaybackSession(referenceTracks, scoreSession.includeMetronome))) {
-        void stopMicrophoneRecorder(recorder)
+
+    const totalPulses = Math.max(1, Math.round(studioMeter.beatsPerMeasure / studioMeter.pulseQuarterBeats))
+    const pulseMilliseconds = getBeatSeconds(studio.bpm) * studioMeter.pulseQuarterBeats * 1000
+    const countInMilliseconds = totalPulses * pulseMilliseconds
+    let countInEpochMilliseconds = performance.now() + COUNT_IN_FIRST_PULSE_DELAY_MS
+
+    if (session.includeMetronome) {
+      scoreCountInMetronomeSessionRef.current = startLoopingMetronomeSession(
+        studio.bpm,
+        studioMeter,
+        COUNT_IN_FIRST_PULSE_DELAY_MS / 1000,
+      )
+      countInEpochMilliseconds = scoreCountInMetronomeSessionRef.current?.firstPulseAtMs ?? countInEpochMilliseconds
+    }
+
+    const captureStartAtMs = countInEpochMilliseconds + countInMilliseconds
+    const scheduleCountInAt = (targetMilliseconds: number, callback: () => void) => {
+      const timeoutId = window.setTimeout(callback, Math.max(0, Math.round(targetMilliseconds - performance.now())))
+      scoreCountInTimeoutIdsRef.current.push(timeoutId)
+    }
+    const finishScoreCountIn = (audibleSlotIds: number[], keepMetronomeRunning: boolean) => {
+      if (scoreRunIdRef.current !== runId) {
         return
       }
-      markReferencePlayback(referenceTracks.map((track) => track.slot_id))
-    } else if (scoreSession.includeMetronome) {
-      if (!startMetronomeOnlyPlayback()) {
+      clearScoreCountInTimers()
+      if (!keepMetronomeRunning) {
+        disposeScoreCountInMetronome()
+      }
+      if (!beginMicrophoneCapture(recorder)) {
+        disposeScoreCountInMetronome()
         void stopMicrophoneRecorder(recorder)
+        scoreRecorderRef.current = null
+        stopPlaybackSession()
+        setScoreSession({ ...session, phase: 'ready', countIn: null })
         setActionState({
           phase: 'error',
-          message: '메트로놈 재생용 오디오 장치를 열지 못했습니다.',
+          message: '마이크 입력 캡처를 시작하지 못했습니다. 다시 시도해 주세요.',
         })
         return
       }
+      if (audibleSlotIds.length > 0) {
+        markReferencePlayback(audibleSlotIds)
+      }
+      setScoreSession({ ...session, phase: 'listening', countIn: { pulsesRemaining: 0, totalPulses } })
+      setActionState({
+        phase: 'success',
+        message:
+          session.scoreMode === 'harmony'
+            ? '선택한 트랙 위에 새 파트를 얹어 부르면 화음 완성도를 채점합니다.'
+          : '선택한 기준 트랙과 동시에 채점 입력을 받습니다.',
+      })
+      const hideZeroTimeoutId = window.setTimeout(() => {
+        if (scoreRunIdRef.current !== runId) {
+          return
+        }
+        setScoreSession((current) =>
+          current?.phase === 'listening' ? { ...current, countIn: null } : current,
+        )
+      }, COUNT_IN_ZERO_HOLD_MS)
+      scoreCountInTimeoutIdsRef.current.push(hideZeroTimeoutId)
     }
 
-    if (!beginMicrophoneCapture(recorder)) {
-      void stopMicrophoneRecorder(recorder)
-      stopPlaybackSession()
-      setActionState({
-        phase: 'error',
-        message: '마이크 입력 캡처를 시작하지 못했습니다. 다시 시도해 주세요.',
-      })
-      return
-    }
-    scoreRecorderRef.current = recorder
-    setScoreSession({ ...scoreSession, phase: 'listening' })
+    setScoreSession({
+      ...session,
+      phase: 'counting_in',
+      countIn: {
+        pulsesRemaining: totalPulses,
+        totalPulses,
+      },
+    })
     setActionState({
       phase: 'success',
-      message:
-        scoreSession.scoreMode === 'harmony'
-          ? '선택한 트랙 위에 새 파트를 얹어 부르면 화음 완성도를 채점합니다.'
-          : '선택한 기준 트랙과 동시에 채점 입력을 받습니다.',
+      message: '1마디 count-in 뒤 기준 트랙과 마이크 입력을 같은 다운비트에서 시작합니다.',
+    })
+
+    for (let pulseIndex = 1; pulseIndex < totalPulses; pulseIndex += 1) {
+      scheduleCountInAt(countInEpochMilliseconds + pulseIndex * pulseMilliseconds, () => {
+        if (scoreRunIdRef.current !== runId) {
+          return
+        }
+        setScoreSession({
+          ...session,
+          phase: 'counting_in',
+          countIn: {
+            pulsesRemaining: totalPulses - pulseIndex,
+            totalPulses,
+          },
+        })
+      })
+    }
+
+    if (referenceTracks.length > 0) {
+      setActionState({ phase: 'busy', message: '기준 트랙을 count-in 다운비트에 맞춰 준비합니다.' })
+      if (!(await startPlaybackSession(referenceTracks, session.includeMetronome, {
+        onScheduledStart: () => finishScoreCountIn(referenceTracks.map((track) => track.slot_id), false),
+        scheduledStartAtMs: captureStartAtMs,
+      }))) {
+        scoreRunIdRef.current += 1
+        clearScoreCountInTimers()
+        disposeScoreCountInMetronome()
+        void stopMicrophoneRecorder(recorder)
+        scoreRecorderRef.current = null
+        setScoreSession({ ...session, phase: 'ready', countIn: null })
+        return
+      }
+      return
+    }
+
+    scheduleCountInAt(captureStartAtMs, () => {
+      finishScoreCountIn([], session.includeMetronome)
     })
   }
 
@@ -235,6 +358,24 @@ export function useStudioScoring({
     }
 
     const session = scoreSession
+    if (session.phase === 'counting_in') {
+      scoreRunIdRef.current += 1
+      clearScoreCountInTimers()
+      disposeScoreCountInMetronome()
+      void stopMicrophoneRecorder(scoreRecorderRef.current)
+      scoreRecorderRef.current = null
+      stopPlaybackSession()
+      setScoreSession({ ...session, phase: 'ready', countIn: null })
+      setActionState({
+        phase: 'success',
+        message: '채점 count-in을 취소했습니다.',
+      })
+      return
+    }
+    if (session.phase !== 'listening') {
+      return
+    }
+
     if (session.scoreMode === 'answer' && scoreTargetTrack?.status !== 'registered') {
       setActionState({ phase: 'error', message: '정답 채점은 먼저 대상 트랙이 등록되어 있어야 합니다.' })
       return
@@ -258,6 +399,8 @@ export function useStudioScoring({
     })
     try {
       scoreRunIdRef.current += 1
+      clearScoreCountInTimers()
+      disposeScoreCountInMetronome()
       const performanceAudioBase64 = await stopMicrophoneRecorder(scoreRecorderRef.current)
       scoreRecorderRef.current = null
       stopPlaybackSession()
@@ -286,6 +429,8 @@ export function useStudioScoring({
             : '채점 리포트를 하단 피드에 등록했습니다.',
       })
     } catch (error) {
+      clearScoreCountInTimers()
+      disposeScoreCountInMetronome()
       setScoreSession({ ...session, phase: 'ready' })
       setActionState({
         phase: 'error',
@@ -295,7 +440,7 @@ export function useStudioScoring({
   }
 
   return {
-    cancelScoreSession: () => setScoreSession(null),
+    cancelScoreSession,
     openScoreSession,
     scoreSession,
     scoreTargetTrack,

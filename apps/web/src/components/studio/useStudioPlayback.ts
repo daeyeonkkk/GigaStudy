@@ -31,6 +31,8 @@ type PlaybackTimeline = {
 }
 
 type PlaybackStartOptions = {
+  onScheduledStart?: () => void
+  scheduledStartAtMs?: number
   startSeconds?: number
 }
 
@@ -162,7 +164,7 @@ export function useStudioPlayback({
       ...playableTracks.map((track) => track.sync_offset_seconds),
     )
     const startSeconds = Math.max(minTimelineSeconds, options.startSeconds ?? minTimelineSeconds)
-    const mediaStartDelaySeconds = 0.08
+    const minimumStartDelaySeconds = 0.08
     const audioTracks = playbackSource === 'audio' ? playableTracks.filter(trackHasPlayableAudio) : []
     const scoreTracks = playableTracks.filter(
       (track) => !(playbackSource === 'audio' && trackHasPlayableAudio(track)) && trackHasPlayableScore(track),
@@ -174,7 +176,9 @@ export function useStudioPlayback({
     let timelineEndSeconds = Math.max(startSeconds, minTimelineSeconds + 0.25)
     let maxBeat = 1
     let context: AudioContext | undefined
+    let playbackStartAtMs = performance.now() + minimumStartDelaySeconds * 1000
     let scheduledStart = 0
+    let scheduledStartDelaySeconds = minimumStartDelaySeconds
     const trackVolumeGains = new Map<number, GainNode>()
 
     const AudioContextConstructor = getBrowserAudioContextConstructor()
@@ -185,7 +189,7 @@ export function useStudioPlayback({
       }
       try {
         context = new AudioContextConstructor()
-        scheduledStart = context.currentTime + mediaStartDelaySeconds
+        scheduledStart = context.currentTime + minimumStartDelaySeconds
         await context.resume().catch(() => undefined)
       } catch {
         setActionState({ phase: 'error', message: '오디오 장치를 열지 못했습니다. 브라우저 권한을 확인해 주세요.' })
@@ -258,7 +262,12 @@ export function useStudioPlayback({
         return false
       }
 
-      scheduledStart = activeContext ? activeContext.currentTime + mediaStartDelaySeconds : 0
+      scheduledStartDelaySeconds = Math.max(
+        minimumStartDelaySeconds,
+        options.scheduledStartAtMs ? (options.scheduledStartAtMs - performance.now()) / 1000 : minimumStartDelaySeconds,
+      )
+      playbackStartAtMs = performance.now() + scheduledStartDelaySeconds * 1000
+      scheduledStart = activeContext ? activeContext.currentTime + scheduledStartDelaySeconds : 0
 
       preparedAudioTracks.forEach(({ buffer, track, trackStartSeconds }) => {
         if (!activeContext) {
@@ -390,16 +399,25 @@ export function useStudioPlayback({
       setPlaybackTimeline(null)
       setPlayheadSeconds(null)
       clearPlaybackIndicators()
-    }, Math.ceil(sessionDurationSeconds * 1000))
+    }, Math.ceil((scheduledStartDelaySeconds + sessionDurationSeconds) * 1000))
 
     playbackSession.timeoutIds.push(timeoutId)
     playbackSessionRef.current = playbackSession
     playbackTrackGainsRef.current = trackVolumeGains
+    if (options.onScheduledStart) {
+      const scheduledStartCallbackId = window.setTimeout(() => {
+        if (playbackSessionRef.current !== playbackSession || playbackRunIdRef.current !== runId) {
+          return
+        }
+        options.onScheduledStart?.()
+      }, Math.max(0, Math.round(playbackStartAtMs - performance.now())))
+      playbackSession.timeoutIds.push(scheduledStartCallbackId)
+    }
     setPlaybackTimeline({
       maxSeconds: Math.max(timelineEndSeconds, startSeconds + latestStop),
       minSeconds: minTimelineSeconds,
       startSeconds,
-      startedAtMs: performance.now() + mediaStartDelaySeconds * 1000,
+      startedAtMs: playbackStartAtMs,
     })
     return true
   }

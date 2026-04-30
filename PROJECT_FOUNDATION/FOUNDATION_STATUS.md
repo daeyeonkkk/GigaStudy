@@ -1073,6 +1073,12 @@ not legacy product surfaces.
 - Scoring mode selection now includes a compact current-mode summary that names
   whether the session is answer scoring or harmony scoring, how many reference
   tracks are involved, and whether the metronome is included.
+- Scoring microphone capture now follows the same delayed-input principle as
+  track recording. Starting a scoring session pre-arms the microphone, shows a
+  one-measure BPM/meter count-in, and begins actual performance capture on the
+  count-in downbeat. Audible reference tracks and the scoring metronome are
+  scheduled to the same downbeat, while silent count-in still preserves the
+  internal studio clock.
 
 ## Structural Consistency Hardening - 2026-04-30
 

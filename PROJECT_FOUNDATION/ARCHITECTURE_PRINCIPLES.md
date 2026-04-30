@@ -60,6 +60,30 @@ Avoid:
 If a helper can be tested without repository storage, it probably belongs in a
 policy or engine module instead.
 
+### Studio Command Services
+
+`studio_*_commands.py` modules are route-facing use-case coordinators that sit
+behind `StudioRepository`.
+
+Allowed:
+
+- coordinate one user/admin action such as upload, generation, scoring,
+  candidate review, resource lookup, or queue maintenance
+- call repository persistence hooks when the action needs a transaction-like
+  load/mutate/save boundary
+- translate domain/use-case failures into HTTP-facing errors
+
+Avoid:
+
+- low-level asset/object-store implementation details
+- reusable music-domain algorithms
+- browser copy or layout assumptions
+- becoming broad "misc command" containers
+
+These command services are intentionally internal to the repository boundary.
+They may use named repository hooks, but each command file must still have one
+clear reason to change.
+
 ### Engine Modules
 
 Engine modules own music-domain logic.
@@ -143,11 +167,13 @@ Those rules belong in `apps/web/src/lib/*` or focused components.
 
 ## Current Hotspots
 
-These files are allowed to remain large only temporarily:
+These files are still worth watching:
 
 - `apps/api/src/gigastudy_api/services/studio_repository.py`
-- `apps/web/src/pages/StudioPage.tsx`
-- `apps/web/src/pages/StudioPage.css`
+- `apps/web/src/components/studio/useStudioPlayback.ts`
+- `apps/web/src/components/studio/EngravedScoreStrip.tsx`
+- `apps/web/src/components/studio/TrackBoard.tsx`
+- `apps/web/src/components/studio/TrackBoard.css`
 
 When adding features, first ask whether code can move into an existing engine,
 storage, upload policy, playback, engraving, or candidate-summary module.

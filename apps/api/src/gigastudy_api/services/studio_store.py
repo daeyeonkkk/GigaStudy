@@ -349,6 +349,10 @@ class PostgresStudioStore:
         return int(row["bytes"] if row is not None else 0)
 
     def _save_one_raw(self, connection, studio_id: str, payload: Any) -> None:
+        existing_sidecars: dict[str, list[Any]] = {
+            "reports": [],
+            "candidates": [],
+        }
         existing_row = connection.execute(
             "SELECT payload FROM studio_documents WHERE studio_id = %s FOR UPDATE",
             (studio_id,),
@@ -361,6 +365,10 @@ class PostgresStudioStore:
                 candidates=sidecars["candidates"].get(studio_id),
             )
             payload = _merge_concurrent_studio_payload(existing_payload, payload)
+            existing_sidecars = {
+                "reports": sidecars["reports"].get(studio_id) or [],
+                "candidates": sidecars["candidates"].get(studio_id) or [],
+            }
         base_studio, reports, candidates = _split_sidecars(payload)
         connection.execute(
             """
@@ -378,6 +386,7 @@ class PostgresStudioStore:
             id_key="report_id",
             studio_id=studio_id,
             items=reports,
+            existing_items=existing_sidecars["reports"],
         )
         self._sync_sidecar_rows(
             connection,
@@ -386,6 +395,7 @@ class PostgresStudioStore:
             id_key="candidate_id",
             studio_id=studio_id,
             items=candidates,
+            existing_items=existing_sidecars["candidates"],
         )
 
     def _sync_sidecar_rows(
@@ -397,11 +407,19 @@ class PostgresStudioStore:
         id_key: str,
         studio_id: str,
         items: list[Any],
+        existing_items: list[Any] | None = None,
     ) -> None:
         next_ids: list[str] = []
+        existing_by_id = {
+            _sidecar_item_id(existing_item, id_key=id_key, index=index): (index, existing_item)
+            for index, existing_item in enumerate(existing_items or [])
+        }
         for index, item in enumerate(items):
-            item_id = str(item.get(id_key) or f"{index:08d}") if isinstance(item, dict) else f"{index:08d}"
+            item_id = _sidecar_item_id(item, id_key=id_key, index=index)
             next_ids.append(item_id)
+            existing = existing_by_id.get(item_id)
+            if existing is not None and existing[0] == index and existing[1] == item:
+                continue
             connection.execute(
                 f"""
                 INSERT INTO {table_name} (studio_id, {id_column}, ordinal, payload, updated_at)
@@ -609,6 +627,10 @@ def _merge_sidecars(
         merged_payload.setdefault("candidates", [])
 
     return merged_payload
+
+
+def _sidecar_item_id(item: Any, *, id_key: str, index: int) -> str:
+    return str(item.get(id_key) or f"{index:08d}") if isinstance(item, dict) else f"{index:08d}"
 
 
 def _timestamp_value(value: Any) -> str:

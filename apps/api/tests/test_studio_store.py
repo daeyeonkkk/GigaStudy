@@ -36,6 +36,42 @@ def test_postgres_store_reuses_connection_between_operations(monkeypatch) -> Non
     assert first_connection.rollbacks == 0
 
 
+def test_postgres_store_skips_unchanged_sidecar_upserts() -> None:
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def execute(self, query, params=None):
+            self.calls.append((str(query), params))
+
+    store = PostgresStudioStore("postgresql://example/studios")
+    connection = FakeConnection()
+    existing_candidate = {
+        "candidate_id": "existing",
+        "updated_at": "2026-04-30T12:00:00+00:00",
+        "payload": {"notes": [1, 2, 3]},
+    }
+    new_candidate = {
+        "candidate_id": "new",
+        "updated_at": "2026-04-30T12:01:00+00:00",
+        "payload": {"notes": [4]},
+    }
+
+    store._sync_sidecar_rows(
+        connection,
+        table_name="studio_candidates",
+        id_column="candidate_id",
+        id_key="candidate_id",
+        studio_id="studio-1",
+        items=[existing_candidate, new_candidate],
+        existing_items=[dict(existing_candidate)],
+    )
+
+    upsert_calls = [call for call in connection.calls if "INSERT INTO studio_candidates" in call[0]]
+    assert len(upsert_calls) == 1
+    assert upsert_calls[0][1][1] == "new"
+
+
 def test_merge_concurrent_studio_payload_preserves_newer_jobs_and_tracks() -> None:
     existing = {
         "studio_id": "studio-1",

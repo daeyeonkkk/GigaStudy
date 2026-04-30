@@ -13,6 +13,9 @@ from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_ca
 from gigastudy_api.services.engine.timeline import notes_with_sync_offset
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan, plan_harmony_with_deepseek
 
+DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT = 40
+DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 2.5
+
 
 @dataclass(frozen=True)
 class GeneratedTrackMaterial:
@@ -76,8 +79,12 @@ def generate_track_material(
             409,
             "AI generation requires at least one registered context track.",
         )
+    planning_settings = _generation_planning_settings(
+        settings,
+        context_note_count=len(context_notes),
+    )
     llm_plan = plan_harmony_with_deepseek(
-        settings=settings,
+        settings=planning_settings,
         title=studio.title,
         bpm=studio.bpm,
         time_signature_numerator=studio.time_signature_numerator,
@@ -97,6 +104,17 @@ def generate_track_material(
         profile_names=llm_plan.profile_names() if llm_plan is not None else None,
         harmony_plan=llm_plan,
     )
+    if not candidate_notes and llm_plan is not None:
+        llm_plan = None
+        candidate_notes = generate_rule_based_harmony_candidates(
+            target_slot_id=target_slot_id,
+            context_tracks=context_notes,
+            bpm=studio.bpm,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            context_notes_by_slot=context_notes_by_slot,
+            candidate_count=request.candidate_count,
+        )
     label = "Generated percussion groove" if target_slot_id == 6 else "Voice-leading harmony score"
     method = (
         "rule_based_percussion_candidates_v0"
@@ -119,6 +137,21 @@ def generate_track_material(
         method=method,
         message=message,
         llm_plan=llm_plan,
+    )
+
+
+def _generation_planning_settings(settings: Settings, *, context_note_count: int) -> Settings:
+    if context_note_count > DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT:
+        return settings.model_copy(update={"deepseek_harmony_enabled": False})
+    return settings.model_copy(
+        update={
+            "deepseek_timeout_seconds": max(
+                0.5,
+                min(settings.deepseek_timeout_seconds, DEEPSEEK_GENERATION_TIMEOUT_SECONDS),
+            ),
+            "deepseek_max_retries": 0,
+            "deepseek_revision_cycles": 0,
+        }
     )
 
 

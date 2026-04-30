@@ -14,6 +14,10 @@ from gigastudy_api.services.llm.extraction_plan import (
     _parse_deepseek_extraction_response,
     plan_voice_extraction_with_deepseek,
 )
+from gigastudy_api.services.studio_generation import (
+    DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT,
+    _generation_planning_settings,
+)
 
 
 def _note(beat: float = 1, label: str = "C5"):
@@ -43,6 +47,40 @@ def test_deepseek_planner_is_disabled_until_explicitly_enabled() -> None:
     )
 
     assert plan is None
+
+
+def test_generation_planning_skips_llm_for_large_context() -> None:
+    settings = Settings(
+        deepseek_harmony_enabled=True,
+        deepseek_api_key="secret",
+        deepseek_timeout_seconds=8,
+        deepseek_max_retries=1,
+        deepseek_revision_cycles=1,
+    )
+
+    planning_settings = _generation_planning_settings(
+        settings,
+        context_note_count=DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT + 1,
+    )
+
+    assert planning_settings.deepseek_harmony_enabled is False
+
+
+def test_generation_planning_caps_llm_latency_for_small_context() -> None:
+    settings = Settings(
+        deepseek_harmony_enabled=True,
+        deepseek_api_key="secret",
+        deepseek_timeout_seconds=8,
+        deepseek_max_retries=2,
+        deepseek_revision_cycles=2,
+    )
+
+    planning_settings = _generation_planning_settings(settings, context_note_count=4)
+
+    assert planning_settings.deepseek_harmony_enabled is True
+    assert planning_settings.deepseek_timeout_seconds == 2.5
+    assert planning_settings.deepseek_max_retries == 0
+    assert planning_settings.deepseek_revision_cycles == 0
 
 
 def test_deepseek_extraction_plan_is_disabled_until_explicitly_enabled() -> None:

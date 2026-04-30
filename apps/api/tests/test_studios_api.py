@@ -2056,3 +2056,45 @@ def test_ai_generation_uses_sync_adjusted_context_timing(tmp_path: Path, monkeyp
     assert len(alto_candidates) == 3
     assert [note["beat"] for note in alto_candidates[0]["notes"][:2]] == [2, 3]
     assert [note["onset_seconds"] for note in alto_candidates[0]["notes"][:2]] == [1, 2]
+
+
+def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Close neighbor generation",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    tenor_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Tenor</part-name></score-part></part-list>
+  <part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><note><pitch><step>F</step><octave>3</octave></pitch><duration>1</duration></note></measure></part>
+</score-partwise>
+"""
+    bass_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Bass</part-name></score-part></part-list>
+  <part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><note><pitch><step>D</step><alter>1</alter><octave>3</octave></pitch><duration>1</duration></note></measure></part>
+</score-partwise>
+"""
+    upload_musicxml_track(client, studio_id, slot_id=3, filename="tenor.musicxml", xml=tenor_xml)
+    upload_musicxml_track(client, studio_id, slot_id=5, filename="bass.musicxml", xml=bass_xml)
+
+    generate_response = client.post(
+        f"/api/studios/{studio_id}/tracks/4/generate",
+        json={"context_slot_ids": [3, 5]},
+    )
+
+    assert generate_response.status_code == 200
+    baritone_candidates = [
+        candidate
+        for candidate in generate_response.json()["candidates"]
+        if candidate["suggested_slot_id"] == 4 and candidate["status"] == "pending"
+    ]
+    assert len(baritone_candidates) == 3
+    assert baritone_candidates[0]["notes"][0]["label"] == "E3"

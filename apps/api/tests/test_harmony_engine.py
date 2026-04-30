@@ -97,6 +97,22 @@ def test_vocal_generation_uses_known_slots_to_avoid_voice_crossing() -> None:
         assert lower.pitch_midi < generated.pitch_midi < upper.pitch_midi
 
 
+def test_vocal_generation_uses_middle_gap_when_neighbor_voices_are_close() -> None:
+    tenor = [_context_note(1, "F3")]
+    bass = [_context_note(1, "D#3")]
+
+    notes = generate_rule_based_harmony(
+        target_slot_id=4,
+        context_tracks=tenor + bass,
+        context_notes_by_slot={3: tenor, 5: bass},
+        bpm=120,
+    )
+
+    assert len(notes) == 1
+    assert notes[0].label == "E3"
+    assert bass[0].pitch_midi < notes[0].pitch_midi < tenor[0].pitch_midi
+
+
 def test_vocal_generation_avoids_parallel_perfects_against_soprano() -> None:
     soprano = [
         _context_note(1, "C5"),

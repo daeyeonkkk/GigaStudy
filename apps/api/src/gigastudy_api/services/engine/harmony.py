@@ -966,6 +966,8 @@ def _candidate_pitches_for_slot(
         if tonic_tones:
             chord_tones.extend(tonic_tones)
     candidates = chord_tones + melodic_connectors
+    if candidates and not any(not _crosses_known_voice(target_slot_id, pitch, event) for pitch in candidates):
+        candidates.extend(_ordered_gap_filler_pitches(target_slot_id, event))
     if not candidates:
         return [max(low, min(high, VOICE_COMFORT_CENTER.get(target_slot_id, (low + high) // 2)))]
 
@@ -1003,12 +1005,10 @@ def _pitch_cost(
     measure_intent: MeasureHarmonyIntent | None = None,
     candidate_goal: DeepSeekCandidateDirection | None = None,
 ) -> float:
-    if _crosses_known_voice(target_slot_id, pitch, event):
-        return math.inf
-
     cost = 0.0
     center = _goal_center(target_slot_id, profile, candidate_goal)
     cost += abs(pitch - center) * 0.055 * profile.register_focus
+    cost += _voice_ordering_cost(target_slot_id, pitch, event)
     cost += _spacing_cost(target_slot_id, pitch, event)
 
     target_pitch_class = pitch % 12
@@ -1063,6 +1063,55 @@ def _crosses_known_voice(target_slot_id: int, pitch: int, event: HarmonyEvent) -
     if lower_pitches and pitch <= max(lower_pitches):
         return True
     return False
+
+
+def _voice_ordering_cost(target_slot_id: int, pitch: int, event: HarmonyEvent) -> float:
+    if 0 in event.active_by_slot:
+        return 0.0
+    higher_pitches = [
+        note.pitch_midi
+        for slot_id, note in event.active_by_slot.items()
+        if slot_id < target_slot_id and note.pitch_midi is not None
+    ]
+    lower_pitches = [
+        note.pitch_midi
+        for slot_id, note in event.active_by_slot.items()
+        if target_slot_id < slot_id <= 5 and note.pitch_midi is not None
+    ]
+    cost = 0.0
+    if higher_pitches:
+        nearest_higher = min(higher_pitches)
+        if pitch >= nearest_higher:
+            cost += 14.0 + (pitch - nearest_higher) * 0.8
+    if lower_pitches:
+        nearest_lower = max(lower_pitches)
+        if pitch <= nearest_lower:
+            cost += 14.0 + (nearest_lower - pitch) * 0.8
+    return cost
+
+
+def _ordered_gap_filler_pitches(target_slot_id: int, event: HarmonyEvent) -> list[int]:
+    if 0 in event.active_by_slot:
+        return []
+    low, high = SLOT_RANGES[target_slot_id]
+    higher_pitches = [
+        note.pitch_midi
+        for slot_id, note in event.active_by_slot.items()
+        if slot_id < target_slot_id and note.pitch_midi is not None
+    ]
+    lower_pitches = [
+        note.pitch_midi
+        for slot_id, note in event.active_by_slot.items()
+        if target_slot_id < slot_id <= 5 and note.pitch_midi is not None
+    ]
+    if not higher_pitches or not lower_pitches:
+        return []
+    lower_bound = max(low, max(lower_pitches) + 1)
+    upper_bound = min(high, min(higher_pitches) - 1)
+    if lower_bound > upper_bound:
+        return []
+    center = VOICE_COMFORT_CENTER.get(target_slot_id, (low + high) // 2)
+    return sorted(range(lower_bound, upper_bound + 1), key=lambda pitch: (abs(pitch - center), pitch))
 
 
 def _spacing_cost(target_slot_id: int, pitch: int, event: HarmonyEvent) -> float:

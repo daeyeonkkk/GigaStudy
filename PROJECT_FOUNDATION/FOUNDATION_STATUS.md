@@ -1155,6 +1155,15 @@ not legacy product surfaces.
   `studio_generation.py`. LLM direction diagnostics, profile/risk hints, and
   candidate variant labels are generated next to the generation planning logic,
   leaving the repository to persist prepared candidates.
+- AI generation route orchestration now lives behind
+  `studio_generation_commands.py`. The command owns request-level generation
+  branching, review-candidate vs direct-registration choice, overwrite
+  translation, and use of the generation engine.
+- Score-track route orchestration now lives behind `studio_scoring_commands.py`.
+  The command owns scoring request validation, temporary performance-audio
+  transcription, report construction, and report persistence. The repository
+  keeps the historical `_extract_scoring_audio` hook as a thin compatibility
+  wrapper.
 - Admin studio summary and asset-reference cleanup rules now live in
   `studio_admin.py`. The repository still owns the admin command boundary,
   locking, asset-service calls, and persistence, while the helper owns which

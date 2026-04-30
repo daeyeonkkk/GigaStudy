@@ -62,7 +62,6 @@ from gigastudy_api.services.engine.notation_quality import RegistrationNotationR
 from gigastudy_api.services.engine.pdf_vector_omr import parse_born_digital_pdf_score
 from gigastudy_api.services.engine.voice import (
     NO_METRONOME_ALIGNMENT,
-    VoiceTranscriptionError,
     VoiceTranscriptionResult,
     transcribe_voice_file,
     transcribe_voice_file_with_alignment,
@@ -74,20 +73,11 @@ from gigastudy_api.services.studio_engine_job_handlers import StudioEngineJobHan
 from gigastudy_api.services.studio_engine_queue_commands import StudioEngineQueueCommands
 from gigastudy_api.services.studio_extraction_job_commands import StudioExtractionJobCommands
 from gigastudy_api.services.studio_candidate_commands import StudioCandidateCommands
+from gigastudy_api.services.studio_generation_commands import StudioGenerationCommands
+from gigastudy_api.services.studio_scoring_commands import StudioScoringCommands
 from gigastudy_api.services.studio_upload_commands import StudioUploadCommands
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
-from gigastudy_api.services.studio_generation import (
-    GenerationRequestError,
-    generate_track_material,
-)
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
-from gigastudy_api.services.studio_scoring import (
-    ScoringRequestError,
-    build_score_track_report,
-    score_track_request_has_performance,
-    selected_scoring_reference_slot_ids,
-    validate_score_track_request,
-)
 from gigastudy_api.services.studio_resource_commands import StudioResourceCommands
 from gigastudy_api.services.studio_track_settings import (
     TrackSettingsError,
@@ -180,6 +170,12 @@ class StudioRepository:
             repository=self,
         )
         self._uploads = StudioUploadCommands(
+            assets=self._assets,
+            now=_now,
+            repository=self,
+        )
+        self._generation = StudioGenerationCommands(repository=self)
+        self._scoring = StudioScoringCommands(
             assets=self._assets,
             now=_now,
             repository=self,
@@ -423,43 +419,11 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> Studio:
-        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        self._find_track(studio, slot_id)
-        try:
-            generated = generate_track_material(
-                settings=get_settings(),
-                studio=studio,
-                target_slot_id=slot_id,
-                request=request,
-            )
-        except GenerationRequestError as error:
-            raise HTTPException(status_code=error.status_code, detail=error.detail) from error
-
-        if not generated.candidate_notes:
-            raise HTTPException(status_code=409, detail="No harmony notes could be generated.")
-        if request.review_before_register:
-            return self._add_generation_candidates(
-                studio_id,
-                slot_id,
-                generated.candidate_notes,
-                source_label=generated.source_label,
-                method=generated.method,
-                message=generated.message,
-                llm_plan=generated.llm_plan,
-            )
-
-        target_track = self._find_track(studio, slot_id)
-        if _track_has_content(target_track) and not request.allow_overwrite:
-            raise HTTPException(
-                status_code=409,
-                detail="AI generation would overwrite an existing registered track.",
-            )
-        return self._update_track(
+        return self._generation.generate_track(
             studio_id,
             slot_id,
-            source_kind="ai",
-            source_label=generated.source_label,
-            notes=generated.candidate_notes[0],
+            request,
+            owner_token=owner_token,
         )
 
     def update_sync(
@@ -649,60 +613,12 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> Studio:
-        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        target_track = self._find_track(studio, slot_id)
-        reference_slot_ids = selected_scoring_reference_slot_ids(
-            studio,
-            target_slot_id=slot_id,
-            requested_reference_slot_ids=request.reference_slot_ids,
+        return self._scoring.score_track(
+            studio_id,
+            slot_id,
+            request,
+            owner_token=owner_token,
         )
-        try:
-            validate_score_track_request(
-                request,
-                target_track=target_track,
-                reference_slot_ids=reference_slot_ids,
-            )
-        except ScoringRequestError as error:
-            raise HTTPException(status_code=error.status_code, detail=error.detail) from error
-
-        performance_notes = list(request.performance_notes)
-        has_submitted_performance = score_track_request_has_performance(request)
-        if request.performance_audio_base64 is not None:
-            performance_notes = self._extract_scoring_audio(
-                studio_id=studio_id,
-                slot_id=slot_id,
-                filename=request.performance_filename or "scoring-take.wav",
-                content_base64=request.performance_audio_base64,
-                bpm=studio.bpm,
-                time_signature_numerator=studio.time_signature_numerator,
-                time_signature_denominator=studio.time_signature_denominator,
-            )
-
-        if not has_submitted_performance:
-            raise HTTPException(
-                status_code=422,
-                detail="Scoring requires a recorded performance with detectable notes.",
-            )
-
-        timestamp = _now()
-        report = build_score_track_report(
-            studio=studio,
-            target_slot_id=slot_id,
-            target_track=target_track,
-            request=request,
-            reference_slot_ids=reference_slot_ids,
-            performance_notes=performance_notes,
-            created_at=timestamp,
-        )
-
-        with self._lock:
-            studio = self._load_studio(studio_id)
-            if studio is None:
-                raise HTTPException(status_code=404, detail="Studio not found.")
-            studio.reports.append(report)
-            studio.updated_at = timestamp
-            self._save_studio(studio)
-        return studio
 
     def drain_engine_queue(self, *, max_jobs: int | None = None) -> AdminEngineDrainResult:
         return self._engine_commands.drain(max_jobs=max_jobs)
@@ -718,24 +634,15 @@ class StudioRepository:
         time_signature_numerator: int,
         time_signature_denominator: int,
     ) -> list[TrackNote]:
-        source_path = self._assets.save_temp_upload(
+        return self._scoring.extract_scoring_audio(
             studio_id=studio_id,
             slot_id=slot_id,
             filename=filename,
             content_base64=content_base64,
+            bpm=bpm,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
         )
-        try:
-            return self._transcribe_voice_file(
-                source_path,
-                bpm=bpm,
-                slot_id=slot_id,
-                time_signature_numerator=time_signature_numerator,
-                time_signature_denominator=time_signature_denominator,
-            )
-        except VoiceTranscriptionError:
-            return []
-        finally:
-            self._assets.delete_temp_file(source_path)
 
     def _update_track(
         self,

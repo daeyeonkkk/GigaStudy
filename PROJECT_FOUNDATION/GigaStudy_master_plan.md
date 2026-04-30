@@ -215,6 +215,11 @@ When Stop is clicked:
 
 - Playback and recording stop.
 - GigaStudy extracts the user's performance into TrackNote data.
+- Performance extraction uses the same bounded pre-transcription planning
+  principle as track registration. Answer scoring uses the target answer track
+  as context; harmony scoring uses selected reference tracks as ensemble
+  context. The LLM may only help choose extraction policy, never write the
+  performance notes.
 - GigaStudy automatically estimates and applies a global sync offset.
 - GigaStudy analyzes pitch and rhythm at 0.01 second resolution after alignment.
 - A report is created.

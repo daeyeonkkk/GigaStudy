@@ -634,6 +634,8 @@ class StudioRepository:
         time_signature_numerator: int,
         time_signature_denominator: int,
     ) -> list[TrackNote]:
+        studio = self.get_studio(studio_id)
+        target_track = self._find_track(studio, slot_id)
         return self._scoring.extract_scoring_audio(
             studio_id=studio_id,
             slot_id=slot_id,
@@ -642,6 +644,8 @@ class StudioRepository:
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
+            studio=studio,
+            target_track=target_track,
         )
 
     def _update_track(

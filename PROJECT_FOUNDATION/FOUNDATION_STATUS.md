@@ -157,6 +157,11 @@ The current implementation has a working six-track vertical slice:
   strictness, tiny slot-range widening, and unstable-note suppression. The LLM
   cannot write notes or change tempo; the selected plan is applied by Basic
   Pitch, librosa pYIN, and the local WAV engine and is stored in diagnostics.
+- Scoring recordings now use the same pre-transcription planning principle.
+  Answer scoring sends the registered target track as expected context, while
+  harmony scoring sends the selected reference tracks as ensemble context.
+  The resulting performance TrackNotes are still deterministic and aligned to
+  the studio BPM/meter before scoring.
 - Final voice-like track registration now compares the prepared notes against
   already registered sibling tracks and can apply a small deterministic
   reference-grid offset before committing TrackNotes. This is a latency/drift

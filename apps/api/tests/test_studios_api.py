@@ -663,6 +663,60 @@ def test_score_track_rejects_empty_performance_input(tmp_path: Path, monkeypatch
     assert studio_response.json()["reports"] == []
 
 
+def test_scoring_audio_extraction_uses_context_aware_plan(tmp_path: Path, monkeypatch) -> None:
+    captured = {}
+
+    def fake_transcribe_voice_file(*args, **kwargs):
+        captured["plan"] = kwargs.get("extraction_plan")
+        return [
+            TrackNote(
+                pitch_midi=72,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_scoring_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Scoring context plan",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+    encoded = base64.b64encode(b"RIFF....WAVEfmt scoring take").decode("ascii")
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/score",
+        json={
+            "reference_slot_ids": [],
+            "include_metronome": True,
+            "performance_audio_base64": encoded,
+            "performance_filename": "scoring-take.wav",
+        },
+    )
+
+    assert score_response.status_code == 200
+    plan = captured["plan"]
+    assert plan is not None
+    assert plan.slot_id == 1
+    assert plan.provider == "deterministic"
+    assert any("Existing tracks are present" in reason for reason in plan.reasons)
+
+
 def test_pdf_export_requires_registered_track(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

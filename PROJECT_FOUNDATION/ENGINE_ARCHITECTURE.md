@@ -197,6 +197,13 @@ suppression. The LLM must not output TrackNotes, final pitches, beats, or a new
 tempo. DSP/ML extractors apply the selected plan directly before producing
 raw note candidates.
 
+This same principle applies to scoring recordings. Answer scoring uses the
+registered target track as answer-sheet context for extraction planning, while
+harmony scoring uses the selected reference tracks as ensemble context. The
+performance recording is still transcribed by deterministic audio engines onto
+the fixed BPM/meter grid before the answer or harmony scoring engine compares
+it.
+
 The BPM/meter grid is the paper; extracted notes are fitted onto it before they
 become notation. Registration-time alignment may apply a small deterministic
 whole-source offset to compensate capture latency or a loose entrance before

@@ -5,8 +5,12 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from gigastudy_api.api.schemas.studios import ScoreTrackRequest, Studio, TrackNote
+from gigastudy_api.api.schemas.studios import ScoreTrackRequest, Studio, TrackNote, TrackSlot
+from gigastudy_api.config import get_settings
+from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
+from gigastudy_api.services.engine.timeline import notes_with_sync_offset
+from gigastudy_api.services.llm.extraction_plan import plan_voice_extraction_with_deepseek
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_scoring import (
     ScoringRequestError,
@@ -61,6 +65,10 @@ class StudioScoringCommands:
                 slot_id=slot_id,
                 filename=request.performance_filename or "scoring-take.wav",
                 content_base64=request.performance_audio_base64,
+                studio=studio,
+                target_track=target_track,
+                score_mode=request.score_mode,
+                reference_slot_ids=reference_slot_ids,
                 bpm=studio.bpm,
                 time_signature_numerator=studio.time_signature_numerator,
                 time_signature_denominator=studio.time_signature_denominator,
@@ -102,6 +110,10 @@ class StudioScoringCommands:
         bpm: int,
         time_signature_numerator: int,
         time_signature_denominator: int,
+        studio: Studio | None = None,
+        target_track: TrackSlot | None = None,
+        score_mode: str = "answer",
+        reference_slot_ids: list[int] | None = None,
     ) -> list[TrackNote]:
         source_path = self._assets.save_temp_upload(
             studio_id=studio_id,
@@ -110,14 +122,76 @@ class StudioScoringCommands:
             content_base64=content_base64,
         )
         try:
+            extraction_plan = None
+            if studio is not None and target_track is not None:
+                extraction_plan = self._build_scoring_extraction_plan(
+                    studio=studio,
+                    slot_id=slot_id,
+                    target_track=target_track,
+                    score_mode=score_mode,
+                    reference_slot_ids=reference_slot_ids or [],
+                    source_label=filename,
+                )
             return self._repository._transcribe_voice_file(
                 source_path,
                 bpm=bpm,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
+                extraction_plan=extraction_plan,
             )
         except VoiceTranscriptionError:
             return []
         finally:
             self._assets.delete_temp_file(source_path)
+
+    def _build_scoring_extraction_plan(
+        self,
+        *,
+        studio: Studio,
+        slot_id: int,
+        target_track: TrackSlot,
+        score_mode: str,
+        reference_slot_ids: list[int],
+        source_label: str,
+    ):
+        reference_slot_set = set(reference_slot_ids)
+        context_tracks_by_slot = {
+            track.slot_id: notes_with_sync_offset(
+                track.notes,
+                track.sync_offset_seconds,
+                studio.bpm,
+                voice_index=track.slot_id,
+            )
+            for track in studio.tracks
+            if track.slot_id in reference_slot_set and track.notes
+        }
+        expected_notes: list[TrackNote] = []
+        if score_mode == "answer" and target_track.notes:
+            expected_notes = notes_with_sync_offset(
+                target_track.notes,
+                target_track.sync_offset_seconds,
+                studio.bpm,
+                voice_index=target_track.slot_id,
+            )
+            context_tracks_by_slot[target_track.slot_id] = expected_notes
+
+        extraction_plan = default_voice_extraction_plan(
+            slot_id=slot_id,
+            bpm=studio.bpm,
+            source_kind="recording",
+            context_tracks_by_slot=context_tracks_by_slot,
+        )
+        llm_plan = plan_voice_extraction_with_deepseek(
+            settings=get_settings(),
+            base_plan=extraction_plan,
+            title=studio.title,
+            bpm=studio.bpm,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            source_kind=f"scoring_{score_mode}",
+            source_label=source_label,
+            context_tracks_by_slot=context_tracks_by_slot,
+            expected_track_notes=expected_notes,
+        )
+        return llm_plan or extraction_plan

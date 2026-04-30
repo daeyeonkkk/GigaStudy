@@ -110,6 +110,7 @@ def plan_voice_extraction_with_deepseek(
     source_kind: str,
     source_label: str,
     context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
+    expected_track_notes: list[TrackNote] | None = None,
 ) -> VoiceExtractionPlan | None:
     if not settings.deepseek_extraction_plan_enabled or not settings.deepseek_api_key:
         return None
@@ -127,6 +128,7 @@ def plan_voice_extraction_with_deepseek(
         source_kind=source_kind,
         source_label=source_label,
         context_tracks_by_slot=context_tracks_by_slot or {},
+        expected_track_notes=expected_track_notes or [],
     )
 
     last_error: Exception | None = None
@@ -201,6 +203,7 @@ def _build_extraction_plan_payload(
     source_kind: str,
     source_label: str,
     context_tracks_by_slot: dict[int, list[TrackNote]],
+    expected_track_notes: list[TrackNote],
 ) -> dict[str, Any]:
     low, high = SLOT_RANGES.get(base_plan.slot_id, (base_plan.low_midi, base_plan.high_midi))
     context = {
@@ -224,6 +227,11 @@ def _build_extraction_plan_payload(
             "allowed_range": f"{midi_to_label(low)}-{midi_to_label(high)}",
         },
         "current_default_plan": base_plan.diagnostics(),
+        "expected_target_track": (
+            _summarize_track(base_plan.slot_id, expected_track_notes)
+            if expected_track_notes
+            else None
+        ),
         "existing_tracks": [
             _summarize_track(slot_id, notes)
             for slot_id, notes in sorted(context_tracks_by_slot.items())
@@ -245,6 +253,7 @@ def _build_extraction_plan_payload(
             "Use stricter confidence when source is likely room noise or non-singing; use loose only for quiet but stable singing.",
             "Widen range only slightly for real tenor/bass/soprano edge notes; do not change the assigned track.",
             "Respect existing tracks as one a cappella score; extraction should stay on the shared beat grid.",
+            "When an expected target track is present, use it as answer-sheet context for extraction policy only; do not emit its notes.",
         ],
     }
     messages = [

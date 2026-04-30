@@ -1,0 +1,72 @@
+.recording-review-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(216, 221, 226, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.recording-review-panel {
+  width: min(560px, 100%);
+  border: 1px solid #8d99a4;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 18px;
+  box-shadow: 0 18px 54px rgba(20, 31, 42, 0.26);
+}
+
+.recording-review-panel h2 {
+  margin: 2px 0 8px;
+  color: #111111;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1.06;
+}
+
+.recording-review-panel p {
+  margin: 0 0 14px;
+  color: #43515e;
+  font-weight: 800;
+}
+
+.recording-review-panel dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.recording-review-panel dl div {
+  border: 1px solid #d3dbe2;
+  border-radius: 4px;
+  padding: 9px 10px;
+  background: #f8fafb;
+}
+
+.recording-review-panel dt {
+  color: #52606b;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.recording-review-panel dd {
+  margin: 3px 0 0;
+  color: #111111;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.recording-review-panel audio {
+  display: block;
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+.recording-review-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+

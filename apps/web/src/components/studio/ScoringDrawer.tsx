@@ -1,4 +1,5 @@
 import type { ScoreMode, TrackSlot } from '../../types/studio'
+import './ScoringDrawer.css'
 
 export type ScoreSessionState = {
   targetSlotId: number

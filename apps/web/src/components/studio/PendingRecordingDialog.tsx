@@ -1,4 +1,5 @@
 import { formatDurationSeconds } from '../../lib/studio'
+import './PendingRecordingDialog.css'
 import type { PendingTrackRecording } from './useStudioRecording'
 
 type PendingRecordingDialogProps = {

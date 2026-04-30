@@ -8,6 +8,7 @@ import {
   statusLabels,
 } from '../../lib/studio'
 import type { ExtractionCandidate, TrackSlot } from '../../types/studio'
+import './CandidateReviewPanel.css'
 
 type CandidateReviewPanelProps = {
   beatsPerMeasure: number

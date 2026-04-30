@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 
 import { describeReferences, formatDate } from '../../lib/studio'
 import type { ScoringReport, TrackSlot } from '../../types/studio'
+import './ReportFeed.css'
 
 type ReportFeedProps = {
   reports: ScoringReport[]

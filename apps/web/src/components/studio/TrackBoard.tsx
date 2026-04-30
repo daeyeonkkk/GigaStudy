@@ -12,6 +12,7 @@ import {
   statusLabels,
 } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
+import './TrackBoard.css'
 
 const EngravedScoreStrip = lazy(() =>
   import('./EngravedScoreStrip').then((module) => ({ default: module.EngravedScoreStrip })),

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 
 import { getJobStatusLabel } from '../../lib/studio'
 import type { ExtractionCandidate, TrackExtractionJob, TrackSlot } from '../../types/studio'
+import './ExtractionJobsPanel.css'
 
 type JobFilter = 'attention' | 'failed' | 'all'
 

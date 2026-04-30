@@ -1,0 +1,175 @@
+.extraction-jobs {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid #c8cfd5;
+}
+
+.extraction-jobs__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: end;
+}
+
+.extraction-jobs__header h2 {
+  color: #111111;
+  font-size: 1.2rem;
+}
+
+.extraction-jobs__header p:not(.eyebrow) {
+  margin-top: 3px;
+  color: #54616c;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.extraction-jobs__header strong,
+.extraction-jobs__status {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #a9b4bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111111;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.extraction-jobs__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.extraction-jobs__filters button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #a9b4bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1c2c3a;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.extraction-jobs__filters button.is-active {
+  border-color: #082fbd;
+  background: #f0f4ff;
+  color: #082fbd;
+}
+
+.extraction-jobs__list {
+  display: grid;
+  gap: 8px;
+}
+
+.extraction-jobs__empty {
+  padding: 12px;
+  border: 1px dashed #c8cfd5;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #54616c;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.extraction-jobs__item {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 8px 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid #c8cfd5;
+  border-left: 4px solid #386cb8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.extraction-jobs__item strong {
+  display: block;
+  color: #111111;
+}
+
+.extraction-jobs__item span,
+.extraction-jobs__item p {
+  color: #54616c;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.extraction-jobs__item p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.extraction-jobs__item .extraction-jobs__candidate-strip {
+  padding: 7px 9px;
+  border: 1px solid #dbe1e6;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #263541;
+}
+
+.extraction-jobs__item .extraction-jobs__state-hint {
+  padding: 7px 9px;
+  border: 1px solid #dbe1e6;
+  border-radius: 4px;
+  background: #f7f9fb;
+  color: #384652;
+}
+
+.extraction-jobs__item .extraction-jobs__failure {
+  flex: 1 1 260px;
+  padding: 7px 9px;
+  border: 1px solid #e2b4af;
+  border-radius: 4px;
+  background: #fff7f5;
+  color: #8d241b;
+}
+
+.extraction-jobs__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.extraction-jobs__actions label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #384652;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.extraction-jobs__actions input {
+  width: 16px;
+  height: 16px;
+  accent-color: #082fbd;
+}
+
+.extraction-jobs__status--running,
+.extraction-jobs__status--queued {
+  border-color: #d6ad55;
+  background: #fff8e8;
+  color: #704400;
+}
+
+.extraction-jobs__status--needs_review,
+.extraction-jobs__status--completed {
+  border-color: #74a66a;
+  background: #f0fbef;
+  color: #1e5d25;
+}
+
+.extraction-jobs__status--failed {
+  border-color: #c8706a;
+  background: #fff1ef;
+  color: #8d241b;
+}
+

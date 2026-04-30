@@ -1104,6 +1104,11 @@ not legacy product surfaces.
   The page now passes the reviewed recording, busy state, and register/delete
   callbacks into a focused presentation component instead of keeping modal
   markup inline.
+- Studio UI CSS is now split by component ownership. `StudioPage.css` keeps the
+  composer shell, page-level layout, shared buttons, status bar, route-state
+  keyframes, and responsive overrides, while track board, extraction jobs,
+  candidate review, pending-recording dialog, report feed, scoring drawer, and
+  route-state styles live next to their components.
 - Backend extraction job construction now lives in `studio_jobs.py`.
   `StudioRepository` still owns persistence, locking, and processing
   orchestration, but OMR/voice `TrackExtractionJob` creation and durable

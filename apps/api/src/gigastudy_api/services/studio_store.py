@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 from pathlib import Path
+from threading import RLock
 from typing import Any, Protocol
 
 from psycopg.rows import dict_row
@@ -198,6 +200,8 @@ class PostgresStudioStore:
     def __init__(self, database_url: str) -> None:
         self._database_url = _normalize_database_url(database_url)
         self._initialized = False
+        self._connection = None
+        self._connection_lock = RLock()
 
     @property
     def metadata_label(self) -> str:
@@ -447,10 +451,21 @@ class PostgresStudioStore:
                 sidecars[key].setdefault(str(row["studio_id"]), []).append(row["payload"])
         return sidecars
 
+    @contextmanager
     def _connect(self):
         import psycopg
 
-        return psycopg.connect(self._database_url, row_factory=dict_row)
+        with self._connection_lock:
+            if self._connection is None or self._connection.closed:
+                self._connection = psycopg.connect(self._database_url, row_factory=dict_row)
+            try:
+                yield self._connection
+                if not self._connection.closed:
+                    self._connection.commit()
+            except Exception:
+                if not self._connection.closed:
+                    self._connection.rollback()
+                raise
 
     def _ensure_schema(self, connection) -> None:
         if self._initialized:

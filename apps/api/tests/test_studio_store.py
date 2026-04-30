@@ -1,4 +1,39 @@
-from gigastudy_api.services.studio_store import _merge_concurrent_studio_payload
+from gigastudy_api.services.studio_store import PostgresStudioStore, _merge_concurrent_studio_payload
+
+
+def test_postgres_store_reuses_connection_between_operations(monkeypatch) -> None:
+    connections = []
+
+    class FakeConnection:
+        closed = False
+
+        def __init__(self) -> None:
+            self.commits = 0
+            self.rollbacks = 0
+
+        def commit(self) -> None:
+            self.commits += 1
+
+        def rollback(self) -> None:
+            self.rollbacks += 1
+
+    def fake_connect(*args, **kwargs):
+        connection = FakeConnection()
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr("psycopg.connect", fake_connect)
+    store = PostgresStudioStore("postgresql://example/studios")
+
+    with store._connect() as first_connection:
+        pass
+    with store._connect() as second_connection:
+        pass
+
+    assert first_connection is second_connection
+    assert connections == [first_connection]
+    assert first_connection.commits == 2
+    assert first_connection.rollbacks == 0
 
 
 def test_merge_concurrent_studio_payload_preserves_newer_jobs_and_tracks() -> None:

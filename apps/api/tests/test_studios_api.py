@@ -2110,3 +2110,24 @@ def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, mon
     ]
     assert len(baritone_candidates) == 3
     assert baritone_candidates[0]["notes"][0]["label"] == "E3"
+
+    regenerate_response = client.post(
+        f"/api/studios/{studio_id}/tracks/4/generate",
+        json={"context_slot_ids": [3, 5]},
+    )
+
+    assert regenerate_response.status_code == 200
+    regenerate_payload = regenerate_response.json()
+    pending_baritone_candidates = [
+        candidate
+        for candidate in regenerate_payload["candidates"]
+        if candidate["suggested_slot_id"] == 4 and candidate["status"] == "pending"
+    ]
+    superseded_baritone_candidates = [
+        candidate
+        for candidate in regenerate_payload["candidates"]
+        if candidate["suggested_slot_id"] == 4 and candidate["status"] == "rejected"
+    ]
+    assert len(pending_baritone_candidates) == 3
+    assert len(superseded_baritone_candidates) == 3
+    assert all(candidate["notes"] == [] for candidate in superseded_baritone_candidates)

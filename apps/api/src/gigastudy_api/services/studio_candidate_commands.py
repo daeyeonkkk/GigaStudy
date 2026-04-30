@@ -36,6 +36,8 @@ from gigastudy_api.services.studio_documents import register_track_material, tra
 from gigastudy_api.services.studio_generation import generation_candidate_review_metadata
 from gigastudy_api.services.studio_jobs import clear_unmapped_omr_placeholders
 
+SUPERSEDED_AI_CANDIDATE_MESSAGE = "Superseded by newer AI generation candidates."
+
 
 class StudioCandidateCommands:
     def __init__(
@@ -411,6 +413,11 @@ class StudioCandidateCommands:
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = self._now()
+            self._retire_pending_ai_generation_candidates(
+                studio,
+                slot_id,
+                timestamp=timestamp,
+            )
             candidate_group_id = uuid4().hex
             for index, notes in enumerate(candidate_notes, start=1):
                 registration = self._repository._prepare_registration_notes(
@@ -458,3 +465,21 @@ class StudioCandidateCommands:
             studio.updated_at = timestamp
             self._repository._save_studio(studio)
         return studio
+
+    def _retire_pending_ai_generation_candidates(
+        self,
+        studio: Studio,
+        slot_id: int,
+        *,
+        timestamp: str,
+    ) -> None:
+        for candidate in studio.candidates:
+            if (
+                candidate.status == "pending"
+                and candidate.source_kind == "ai"
+                and candidate.suggested_slot_id == slot_id
+                and candidate.job_id is None
+            ):
+                mark_candidate_rejected(candidate, timestamp=timestamp)
+                candidate.message = SUPERSEDED_AI_CANDIDATE_MESSAGE
+                candidate.notes = []

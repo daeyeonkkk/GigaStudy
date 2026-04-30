@@ -17,6 +17,8 @@ from gigastudy_api.services.llm.notation_review import (
     review_notation_with_deepseek,
 )
 
+LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS: set[str] = {"ai"}
+
 
 class TrackRegistrationPreparer:
     """Single quality gate for material before it becomes registered TrackNote truth."""
@@ -92,6 +94,11 @@ class TrackRegistrationPreparer:
             time_signature_denominator=studio.time_signature_denominator,
             reference_tracks=reference_tracks,
         )
+        if source_kind in LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS:
+            return _with_llm_registration_review_skip(
+                registration,
+                reason="ai_candidate_generation",
+            )
         settings = get_settings()
         instruction = review_notation_with_deepseek(
             settings=settings,
@@ -154,6 +161,11 @@ class TrackRegistrationPreparer:
                 "ensemble_arrangement": ensemble_result.diagnostics,
             },
         )
+        if source_kind in LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS:
+            return _with_ensemble_llm_review_skip(
+                ensemble_registration,
+                reason="ai_candidate_generation",
+            )
         settings = get_settings()
         instruction = review_ensemble_registration_with_deepseek(
             settings=settings,
@@ -224,3 +236,34 @@ class TrackRegistrationPreparer:
             bpm=studio.bpm,
             exclude_slot_id=exclude_slot_id,
         )
+
+
+def _with_llm_registration_review_skip(
+    registration: RegistrationNotationResult,
+    *,
+    reason: str,
+) -> RegistrationNotationResult:
+    diagnostics = dict(registration.diagnostics)
+    actions = list(diagnostics.get("actions", []))
+    skip_action = f"llm_notation_review_skipped_{reason}"
+    if skip_action not in actions:
+        actions.append(skip_action)
+    diagnostics["actions"] = actions
+    diagnostics["llm_notation_review"] = {
+        "applied": False,
+        "skipped_reason": reason,
+    }
+    return RegistrationNotationResult(notes=registration.notes, diagnostics=diagnostics)
+
+
+def _with_ensemble_llm_review_skip(
+    registration: RegistrationNotationResult,
+    *,
+    reason: str,
+) -> RegistrationNotationResult:
+    diagnostics = dict(registration.diagnostics)
+    diagnostics["llm_ensemble_review"] = {
+        "applied": False,
+        "skipped_reason": reason,
+    }
+    return RegistrationNotationResult(notes=registration.notes, diagnostics=diagnostics)

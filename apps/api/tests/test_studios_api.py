@@ -2085,6 +2085,18 @@ def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, mon
     upload_musicxml_track(client, studio_id, slot_id=3, filename="tenor.musicxml", xml=tenor_xml)
     upload_musicxml_track(client, studio_id, slot_id=5, filename="bass.musicxml", xml=bass_xml)
 
+    def fail_ai_notation_review(*args, **kwargs):
+        raise AssertionError("AI candidate generation should not block on notation-review LLM calls.")
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.track_registration.review_notation_with_deepseek",
+        fail_ai_notation_review,
+    )
+    monkeypatch.setattr(
+        "gigastudy_api.services.track_registration.review_ensemble_registration_with_deepseek",
+        fail_ai_notation_review,
+    )
+
     generate_response = client.post(
         f"/api/studios/{studio_id}/tracks/4/generate",
         json={"context_slot_ids": [3, 5]},

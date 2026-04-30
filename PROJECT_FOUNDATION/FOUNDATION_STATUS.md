@@ -1154,6 +1154,10 @@ not legacy product surfaces.
   `studio_admin.py`. The repository still owns the admin command boundary,
   locking, asset-service calls, and persistence, while the helper owns which
   track/candidate/job references are counted or cleared.
+- Admin API commands now live behind `studio_admin_commands.py`. The repository
+  exposes the historical route-facing methods as a thin facade, while storage
+  summary pagination, studio deletion, staged cleanup, and single-asset cleanup
+  are owned by the admin command service.
 - Candidate cleanup rules now stay with candidate state helpers. A rejected or
   moved candidate releases its review placeholder through
   `release_review_track_if_no_pending_candidates`, so the repository no longer
@@ -1164,6 +1168,10 @@ not legacy product surfaces.
 - Durable queue recovery payload shaping now lives in `studio_jobs.py`.
   Re-enqueue payload reconstruction and retry-attempt reset rules are job
   helpers instead of inline repository payload assembly.
+- Engine queue lifecycle commands now live behind
+  `studio_engine_queue_commands.py`. Claim/drain/schedule/repair/re-enqueue
+  orchestration has a named command owner, while the repository keeps the
+  actual OMR/voice job handlers and track material mutation hooks.
 - Upload-start audio candidate extraction now lives in
   `studio_home_audio_import.py`, and seed score-to-OMR routing lives in
   `upload_policy.py`. The repository still owns upload asset persistence and

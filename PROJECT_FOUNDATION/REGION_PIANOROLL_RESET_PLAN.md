@@ -97,7 +97,9 @@ These should not be carried into the new core:
 - Ensemble arrangement gate as a pre-registration staff-score quality gate.
   Some range/crossing checks may later return as piano-roll diagnostics.
 - OMR as a first-class core path:
-  Audiveris integration, vector PDF OMR, OMR preview, OMR-specific job UI.
+  user-facing OMR labels, OMR-specific job UI, and staff-shaped preview
+  assumptions. PDF/MusicXML/MIDI ingestion may remain as a document extraction
+  adapter that emits region candidates.
   Score import can return later as a lossy event importer, not as an engraved
   score promise.
 - Current `TrackBoard` score-paper UI and related CSS.
@@ -219,7 +221,9 @@ select references + target
 4. Replace API schema with `Region`, `PitchEvent`, `RegionCandidate`,
    `PracticeReport`.
 5. Keep storage/assets/queue, but adapt repository commands to the new schema.
-6. Remove VexFlow, notation, PDF export, OMR, and staff-specific tests.
+6. Remove VexFlow, staff notation, PDF score export, OMR-specific UI, and
+   staff-specific tests. Preserve PDF/MusicXML/MIDI ingestion only as document
+   extraction into region candidates.
 7. Build minimal web shell:
    home -> studio arrange view -> piano roll panel -> practice waterfall route.
 8. Reconnect microphone recording and direct upload as region creation.
@@ -249,7 +253,8 @@ select references + target
   them in the region model.
 - Import expectation risk: MusicXML/PDF users may expect staff rendering. The
   product must state that imports become editable piano-roll regions.
-- OMR scope risk: keeping OMR during the reset will drag the old staff model
+- Document extraction scope risk: retaining PDF/MusicXML/MIDI ingestion is useful,
+  but any OMR-specific UI or staff-shaped preview can drag the old staff model
   back into the core.
 - Candidate approval risk: approving a candidate must insert/replace regions
   atomically, not mutate invisible track-level note lists.
@@ -268,7 +273,8 @@ The first implementation cut should be intentionally small:
 - Waterfall read-only playback visual from the same events.
 - No VexFlow.
 - No PDF export.
-- No OMR.
+- No OMR-specific UI. Document ingestion may exist only as a region candidate
+  adapter.
 - No notation quality gate.
 
 Once that vertical slice exists, reconnect upload, recording, extraction, AI,

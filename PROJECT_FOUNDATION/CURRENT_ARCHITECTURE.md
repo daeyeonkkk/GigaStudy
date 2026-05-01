@@ -134,3 +134,5 @@ The remaining compatibility layer is mostly naming and storage shape:
 - Persistent studio state should eventually store explicit regions/events.
 - Candidate payloads should expose candidate regions, not only note arrays.
 - Scoring reports should include event/region coordinates for piano-roll review.
+- PDF/MusicXML/MIDI ingestion should stay behind document-extraction naming and
+  never reintroduce staff rendering as a product surface.

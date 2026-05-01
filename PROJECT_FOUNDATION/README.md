@@ -1,23 +1,23 @@
 # GigaStudy Project Foundation
 
-Date: 2026-04-20
+Date: 2026-05-02
 
-This folder is the source of truth for the new GigaStudy product direction.
+This folder is the source of truth for the current GigaStudy product direction.
 
-GigaStudy is no longer defined as a generic guide-recording, melody-extraction,
-arrangement, sharing, or ops workspace. The product is now defined as a
-six-track a cappella practice studio.
+GigaStudy is now a six-track a cappella arrangement and practice studio built
+around region arrangement, piano-roll editing, and waterfall practice playback.
+It is no longer an engraved staff-score UI.
 
 ## Product Definition
 
 GigaStudy lets a user create a studio, fill six vocal/percussion tracks by
 upload, recording, or AI generation, synchronize those tracks, play them as an
-ensemble, and score a vocal attempt against the target track's registered
-answer notes while selected references play as context.
+ensemble, practice with a timing-focused waterfall view, and score a vocal
+attempt against selected reference tracks.
 
-The core artifact is one six-track score. BPM and time signature define the
-paper grid for that score. Recordings, uploads, OMR, MIDI, MusicXML, and AI
-generation are all ways to add symbolic `TrackNote` material onto that grid.
+The core artifact is one six-track timeline. BPM and time signature define the
+shared musical clock. Recordings, document uploads, MIDI, MusicXML, and AI
+generation are ways to add editable regions and pitch events onto that clock.
 
 Canonical track slots:
 
@@ -39,10 +39,10 @@ They enter a project name, then choose one of two starts:
 - Upload and start (`업로드 후 시작`)
 - Start blank (`새로 시작`)
 
-Upload and start appears only after a score or music source is selected. BPM and
+Upload and start appears only after a document or music source is selected. BPM and
 time signature are requested only for Start blank.
 
-If the user uploads a score, GigaStudy extracts track material:
+If the user uploads a document, GigaStudy extracts track material:
 
 - A cappella score: register every identifiable part into the matching six
   tracks.
@@ -66,7 +66,7 @@ Each track can be filled by:
 - Uploading
 - AI generation, once at least one track already exists
 
-Each registered track has score display, playback controls, stop, scoring
+Each registered track has a region lane, playback controls, stop, scoring
 (`채점`), and 0.01 second sync adjustment. The top transport plays, pauses, and
 stops the whole six-track ensemble while preserving each track's sync offset.
 The user can also shift all registered tracks by the current sync step so an
@@ -74,14 +74,12 @@ already-aligned ensemble can be moved together onto the metronome downbeat
 without changing inter-track sync relationships.
 The visible sync step is user-selectable; 0.01 seconds is only the default.
 Sync is not only a visual playback tweak: every cross-track judgment, including
-AI generation, LLM notation review, scoring, harmony scoring, playback, and
-export, must use the sync-resolved effective note timeline.
+AI generation, scoring, harmony scoring, and playback, must use the
+sync-resolved effective event timeline.
 
 Voice recordings are interpreted against the studio BPM/meter clock. The
-metronome toggle controls audible clicks only; the internal score clock remains
-active so extracted notes land on consistent measure boundaries. Voice-derived
-notes must be normalized into readable measure-based notation before they become
-trusted track material.
+metronome toggle controls audible clicks only; the internal clock remains
+active so extracted pitch events land on consistent timeline positions.
 
 ### 3. Scoring Session And Report
 
@@ -89,7 +87,7 @@ The user scores a recorded attempt from a registered track.
 
 When scoring starts, the user chooses which reference tracks and metronome to
 hear. Selected references play together while the microphone records. When the
-user stops, GigaStudy extracts the performance into TrackNote data, aligns the
+user stops, GigaStudy extracts the performance into pitch events, aligns the
 take offline to compensate latency, then checks pitch and rhythm at 0.01 second
 resolution.
 
@@ -104,43 +102,24 @@ three core flows:
 
 - File import and extraction
 - Pitch and rhythm analysis
-- Score rendering
+- Region, piano-roll, and waterfall rendering
 - Audio playback and sync
-- AI part generation as symbolic TrackNote generation
+- AI part generation as timeline event generation
 - Report history
 - Basic project persistence
 
 Anything that does not directly support the three core flows is out of the
 foundation for now.
 
-## Removed From The Foundation
-
-The previous foundation contained documents for guide-based recording,
-standalone arrangement workspaces, shared review, ops screens, deployment
-tracks, calibration evidence rounds, and legacy mockups. Those are no longer
-canonical for the product definition and have been removed.
-
-They may still exist in application code until implementation catches up, but
-they should not drive new product or UI decisions.
-
 ## Canonical Documents
 
 Read in this order:
 
 1. `WORKING_PROTOCOL.md`
-2. `ARCHITECTURE_PRINCIPLES.md`
-3. `GigaStudy_master_plan.md`
-4. `ENGINE_ARCHITECTURE.md`
-5. `ROADMAP.md`
-6. `DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md`
-7. `DESIGN/UI_SCREEN_SPEC_PACKAGE/00_GLOBAL_UI_FIXED_SPEC.md`
-8. `DESIGN/UI_SCREEN_SPEC_PACKAGE/01_HOME_SCREEN_SPEC.md`
-9. `DESIGN/UI_SCREEN_SPEC_PACKAGE/02_MAIN_STUDIO_SCREEN_SPEC.md`
-10. `DESIGN/UI_SCREEN_SPEC_PACKAGE/03_TRACK_REGISTRATION_SPEC.md`
-11. `DESIGN/UI_SCREEN_SPEC_PACKAGE/04_SCORING_REPORT_SPEC.md`
-12. `DESIGN/UI_SCREEN_SPEC_PACKAGE/05_INTERACTION_MATRIX.md`
-13. `GigaStudy_check_list.md`
-14. `FOUNDATION_STATUS.md`
+2. `REGION_PIANOROLL_RESET_PLAN.md`
+3. `CURRENT_ARCHITECTURE.md`
+4. `ACAPPELLA_ARRANGEMENT_AUDIT.md`
+5. `AI_HARMONY_GENERATION_DESIGN.md`
 
 ## Foundation Rule
 
@@ -148,9 +127,9 @@ If a requirement does not help a user create a six-track studio, fill/sync/play
 the six tracks, or score a recorded attempt with a useful report, it does not belong
 in the current foundation.
 
-If engine work changes the TrackNote contract, extraction strategy, AI
+If engine work changes the region/event contract, extraction strategy, AI
 generation strategy, or scoring alignment rules, update
-`ENGINE_ARCHITECTURE.md` in the same work.
+`CURRENT_ARCHITECTURE.md` in the same work.
 
 Every task must follow `WORKING_PROTOCOL.md`: check the relevant foundation
 documents before implementation and update foundation in the same task whenever

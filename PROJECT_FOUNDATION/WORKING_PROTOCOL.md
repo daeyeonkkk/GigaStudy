@@ -1,6 +1,6 @@
 # GigaStudy Working Protocol
 
-Date: 2026-04-20
+Date: 2026-05-02
 
 This protocol applies to every product, engine, UI, and test task in this
 repository.
@@ -19,12 +19,10 @@ task.
 Before changing code or specs, check the relevant foundation documents:
 
 1. `README.md` for product scope and canonical document order
-2. `ARCHITECTURE_PRINCIPLES.md` for code structure and responsibility boundaries
-3. `GigaStudy_master_plan.md` for user flows and non-goals
-4. `ENGINE_ARCHITECTURE.md` for TrackNote, extraction, AI generation, OMR, and
-   scoring contracts
-5. `DESIGN/UI_SCREEN_SPEC_PACKAGE/` for UI behavior and screen contracts
-6. `ROADMAP.md` and `GigaStudy_check_list.md` for phase and completion state
+2. `REGION_PIANOROLL_RESET_PLAN.md` for reset intent and preserved assets
+3. `CURRENT_ARCHITECTURE.md` for code structure, data flow, and contracts
+4. `ACAPPELLA_ARRANGEMENT_AUDIT.md` for musical product constraints
+5. `AI_HARMONY_GENERATION_DESIGN.md` for AI generation constraints
 
 ## During Work
 
@@ -42,14 +40,12 @@ When code and foundation disagree:
 
 Before finishing a task:
 
-- Update `ENGINE_ARCHITECTURE.md` if TrackNote, extraction, OMR, AI generation,
-  or scoring changed.
-- Update the UI screen spec if visible flows, controls, report layout, or user
-  states changed.
-- Update `ROADMAP.md` if phase scope or next work changed.
-- Update `GigaStudy_check_list.md` when items become done, deferred, or newly
-  required.
-- Update `FOUNDATION_STATUS.md` when implementation reality materially changes.
+- Update `CURRENT_ARCHITECTURE.md` if region/event contracts, extraction, AI
+  generation, scoring, or visible data flow changed.
+- Update `REGION_PIANOROLL_RESET_PLAN.md` if the reset sequence or retained
+  asset list changes.
+- Update `ACAPPELLA_ARRANGEMENT_AUDIT.md` or
+  `AI_HARMONY_GENERATION_DESIGN.md` when musical/AI assumptions change.
 
 The final response should state whether foundation files were updated and name
 the important files.

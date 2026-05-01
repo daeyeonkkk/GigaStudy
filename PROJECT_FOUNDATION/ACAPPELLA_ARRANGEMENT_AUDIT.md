@@ -2,13 +2,13 @@
 
 Date: 2026-04-28
 
-This note evaluates whether GigaStudy's six-track score model matches practical
-a cappella arranging principles.
+This note evaluates whether GigaStudy's six-track region/timeline model matches
+practical a cappella arranging principles.
 
 ## Arrangement Principles
 
-A cappella arranging is not six unrelated solo tracks. It is one score where
-parts have complementary roles:
+A cappella arranging is not six unrelated solo tracks. It is one shared
+timeline where parts have complementary roles:
 
 - Lead or top-line material is the road map for form, lyric rhythm, and phrase
   placement.
@@ -24,11 +24,12 @@ parts have complementary roles:
 
 ## Fit Check
 
-GigaStudy is currently aligned with the foundational score model:
+GigaStudy is currently aligned with the foundational region model:
 
-- The product artifact is one six-track score with a shared BPM and meter.
-- TrackNote beat coordinates are canonical, so rendering, playback, scoring,
-  and export can share one timeline.
+- The product artifact is one six-track timeline with a shared BPM and meter.
+- Region/PitchEvent coordinates are canonical for rendering, playback, and
+  scoring; `TrackNote` remains only a compatibility/import shape during the
+  migration.
 - Per-track recording uses the studio clock and count-in instead of estimating
   a new tempo from every take.
 - Final registration can nudge extracted voice/audio material onto the existing
@@ -58,8 +59,8 @@ The current model is musically plausible but not yet a full a cappella arranger:
 - Bass generation is only one of the vocal slots. A cappella bass should be
   judged with special rules for roots, groove, articulation speed, breathing,
   and tuning support.
-- Score engraving and TrackNote data do not currently model lyric/syllable
-  alignment, which is central to vocal arrangements.
+- Region and pitch-event data do not yet model lyric/syllable alignment, which
+  is central to vocal arrangements.
 
 ## Product Direction
 

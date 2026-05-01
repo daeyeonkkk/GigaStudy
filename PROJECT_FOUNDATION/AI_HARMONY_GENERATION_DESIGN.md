@@ -23,7 +23,7 @@ Last updated: 2026-04-28
   arrangement constraints: singability, useful contrary/oblique motion,
   candidate diversity, voice-crossing/parallel-perfect avoidance, and bass
   foundation.
-- Approved AI candidates pass through the shared notation quality gate,
+- Approved AI candidates pass through the shared event quality gate,
   deterministic ensemble arrangement gate, and optional LLM ensemble
   registration review before they become registered track content.
 - Regression coverage proves that a supplied plan can change both generated
@@ -34,7 +34,7 @@ Last updated: 2026-04-28
 
 GigaStudy should keep DeepSeek V4 Flash as the single low-cost LLM planner, but
 the planner must move from "candidate profile ordering" to "measure-level
-harmony intent." The LLM still must not write final `TrackNote` arrays. The
+harmony intent." The LLM still must not write final `PitchEvent` arrays. The
 deterministic engine remains the only layer allowed to create, normalize, and
 validate persisted notes.
 
@@ -43,17 +43,16 @@ to change the actual generated music.
 
 ## Product Contract
 
-AI generation is symbolic score completion:
+AI generation is symbolic timeline completion:
 
-- Input is registered `TrackNote` material from any subset of Soprano, Alto,
-  Tenor, Baritone, Bass, and Percussion.
-- Output is one or more candidate `TrackNote` lists for the requested target
-  track.
+- Input is registered region/pitch-event material from any subset of Soprano,
+  Alto, Tenor, Baritone, Bass, and Percussion.
+- Output is one or more candidate event lists for the requested target track.
 - BPM and time signature are immutable studio truth. The AI must not infer or
   rewrite tempo.
 - The target track is not overwritten until the user approves one candidate.
 - Natural vocal audio generation is out of scope. Playback may synthesize score
-  notes or use retained recordings, but AI generation produces score data.
+  events or use retained recordings, but AI generation produces timeline data.
 
 ## Current Gap
 
@@ -323,7 +322,7 @@ DeepSeek may decide:
 - user-facing labels and selection hints;
 - warnings.
 
-DeepSeek may later be added as a notation critic for extracted TrackNotes, but
+DeepSeek may later be added as an event critic for extracted pitch events, but
 that role is advisory repair policy, not unchecked authorship. The current
 registration quality gate is deterministic and owns final BPM-grid timing,
 measure ownership, clef/key/spelling, density cleanup, and range validation.
@@ -336,7 +335,7 @@ compose replacement notes or override the deterministic ensemble gate.
 DeepSeek may not decide:
 
 - final MIDI pitch sequence;
-- exact onset/duration TrackNotes;
+- exact onset/duration pitch events;
 - BPM or meter;
 - overwrite behavior;
 - hidden server state;
@@ -353,7 +352,7 @@ Add deterministic regression fixtures:
 - soprano + bass, generate inner voices;
 - SATB minus one voice, reconstruct missing voice;
 - pop-like repeated melody, ensure candidates are not identical;
-- dense voice-derived TrackNotes, ensure AI simplifies when asked;
+- dense voice-derived pitch events, ensure AI simplifies when asked;
 - final cadence fixtures in major and minor;
 - non-4/4 meter fixtures.
 
@@ -400,7 +399,7 @@ auditable constraints matter more than novelty.
 Adopt the hybrid approach now:
 
 - DeepSeek V4 Flash: planner and candidate explainer.
-- Deterministic constrained search: final TrackNote generator.
+- Deterministic constrained search: final pitch-event generator.
 - Quality report: candidate comparison and regression gate.
 
 Do not adopt a heavyweight symbolic neural model yet. The next real quality

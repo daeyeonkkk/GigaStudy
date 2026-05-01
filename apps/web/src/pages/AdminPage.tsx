@@ -349,7 +349,7 @@ export function AdminPage() {
             <section className="admin-queue" aria-label="Engine queue operations">
               <div>
                 <span>Engine queue</span>
-                <strong>OMR and voice extraction lane</strong>
+                <strong>Document and voice extraction lane</strong>
                 <p>Runs up to 3 queued or expired jobs now. Use this after a failed wake-up or a quiet period.</p>
               </div>
               <button
@@ -453,7 +453,7 @@ export function AdminPage() {
         ) : (
           <section className="admin-login-empty" aria-label="Login prompt">
             <h1>Admin</h1>
-            <p>Log in to delete studios, uploads, recordings, generated files, and OMR outputs.</p>
+            <p>Log in to delete studios, uploads, recordings, generated files, and document outputs.</p>
           </section>
         )}
 

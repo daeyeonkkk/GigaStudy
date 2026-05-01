@@ -139,7 +139,7 @@ export function getTrackAudioUrl(studioId: string, slotId: number): string {
   return url.toString()
 }
 
-export function getOmrJobSourcePreviewUrl(studioId: string, jobId: string, pageIndex = 0): string {
+export function getDocumentJobSourcePreviewUrl(studioId: string, jobId: string, pageIndex = 0): string {
   const url = new URL(`/api/studios/${studioId}/jobs/${jobId}/source-preview`, apiBaseUrl)
   url.searchParams.set('page_index', String(pageIndex))
   url.searchParams.set('owner_token', getOwnerToken())
@@ -239,7 +239,7 @@ export function approveJobCandidates(
         allow_overwrite: allowOverwrite,
       }),
     },
-    'OMR 결과를 트랙에 등록하지 못했습니다.',
+    '문서 분석 결과를 트랙에 등록하지 못했습니다.',
   )
 }
 

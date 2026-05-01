@@ -210,7 +210,7 @@ function getJobRecoveryHint(job: TrackExtractionJob): string {
     return 'PDF에서 읽을 수 있는 벡터 데이터를 찾지 못했습니다. 더 선명한 원본, MusicXML, MIDI가 있으면 우선 사용하세요.'
   }
   if (job.job_type === 'omr' && message.includes('timed out')) {
-    return 'Audiveris 처리 시간이 초과됐습니다. 다시 시도하거나, 가능하면 vector PDF/MusicXML/MIDI를 사용하세요.'
+    return '문서 분석 시간이 초과됐습니다. 다시 시도하거나, 가능하면 vector PDF/MusicXML/MIDI를 사용하세요.'
   }
   return '원본 파일은 남아 있습니다. 같은 입력으로 다시 처리할 수 있습니다.'
 }

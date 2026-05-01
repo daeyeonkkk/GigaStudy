@@ -42,12 +42,12 @@ They enter a project name, then choose one of two starts:
 Upload and start appears only after a document or music source is selected. BPM and
 time signature are requested only for Start blank.
 
-If the user uploads a document, GigaStudy extracts track material:
+If the user uploads a document, GigaStudy extracts track material into regions:
 
-- A cappella score: register every identifiable part into the matching six
-  tracks.
-- Non-a cappella score: register the main melody into the most appropriate
-  track.
+- A cappella source: register every identifiable part into the matching six
+  tracks as region events.
+- Non-a cappella source: register the main melody into the most appropriate
+  track as region events.
 
 If the user uploads music, GigaStudy extracts every usable part and registers
 those into the six tracks where possible. Browser-decodable MP3/M4A/OGG/FLAC

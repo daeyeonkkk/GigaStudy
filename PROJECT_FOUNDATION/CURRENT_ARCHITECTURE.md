@@ -29,7 +29,8 @@ for the product UI and API response.
   candidate review state, and action status.
 - `apps/web/src/components/studio/StudioToolbar.tsx`
   Global transport, sync step, playback source, metronome, and selected-track
-  playback controls.
+  playback controls. Playback source is now audio clips or region events, not
+  score rendering.
 - `apps/web/src/components/studio/TrackBoard.tsx`
   Main arrangement surface. It renders:
   - macro region lanes for all six tracks,
@@ -37,7 +38,8 @@ for the product UI and API response.
   - a waterfall practice preview.
 - `apps/web/src/lib/studio/regions.ts`
   Frontend fallback adapter from legacy `TrackSlot.notes` to
-  `ArrangementRegion` and `PitchEvent`.
+  `ArrangementRegion` and `PitchEvent`. Normal rendering and playback prefer
+  `studio.regions` from the API.
 
 ### API
 
@@ -47,8 +49,8 @@ for the product UI and API response.
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
 - `apps/api/src/gigastudy_api/api/schemas/studios.py`
-  Public contract. `Studio.regions` is computed from tracks and exposed as the
-  new arrangement data flow.
+  Public contract. `Studio.regions` and `ExtractionCandidate.region` expose the
+  arrangement data flow.
 - `apps/api/src/gigastudy_api/services/studio_store.py`
   Studio persistence abstraction.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`
@@ -109,8 +111,8 @@ flowchart TD
 2. API loads a `Studio` from `StudioStore`.
 3. `Studio.regions` is computed from registered tracks.
 4. Web passes `studio.regions` into `TrackBoard`.
-5. `TrackBoard` renders macro region lanes, selected-region piano roll events,
-   and waterfall practice events from the same region payload.
+5. `TrackBoard`, playback, candidate review, and practice waterfall consume
+   pitch events from the same region payload.
 
 ### Upload / Import
 
@@ -118,7 +120,8 @@ flowchart TD
 2. Browser sends the file via direct upload or inline fallback.
 3. API creates an extraction job.
 4. Engine queue runs document/audio/MIDI extraction.
-5. Extracted material becomes reviewable candidates.
+5. Extracted material becomes reviewable candidates with candidate-region
+   previews.
 6. User approval registers the candidate into a track.
 7. Reloaded studio response exposes the registered track as a region.
 
@@ -140,7 +143,7 @@ flowchart TD
 
 1. Toolbar or track controls choose source mode.
 2. Audio mode prefers retained audio clips when present.
-3. Note-event mode synthesizes playable events from registered pitch material.
+3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`.
 4. Sync offset and volume are applied per track.
 5. Playhead state drives region lane and waterfall visual timing.
 
@@ -177,7 +180,8 @@ The remaining compatibility layer is mostly naming and storage shape:
 
 - `TrackNote` should become an internal import/scoring adapter.
 - Persistent studio state should eventually store explicit regions/events.
-- Candidate payloads should expose candidate regions, not only note arrays.
+- Candidate note arrays should remain compatibility payload only; candidate
+  review must use `ExtractionCandidate.region`.
 - Scoring reports should include event/region coordinates for piano-roll review.
 - PDF/MusicXML/MIDI ingestion should stay behind document-extraction naming and
   never reintroduce staff rendering as a product surface.

@@ -85,9 +85,10 @@ class StudioAssetService:
         referenced_paths: set[str],
         limit: int,
         offset: int,
+        sync_missing: bool = False,
     ) -> tuple[int, int, list[AdminAssetSummary]]:
         asset_count, asset_bytes = self._asset_registry.summarize_studio(studio_id)
-        if asset_count == 0:
+        if sync_missing and asset_count == 0:
             self._sync_studio_asset_registry(studio_id)
             asset_count, asset_bytes = self._asset_registry.summarize_studio(studio_id)
         records = (

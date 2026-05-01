@@ -2,7 +2,7 @@ import base64
 
 import unicodedata
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
 
 from gigastudy_api.api.schemas.admin import AdminDeleteResult, AdminEngineDrainResult, AdminStorageSummary
 from gigastudy_api.config import get_settings
@@ -60,6 +60,7 @@ def get_admin_storage_summary(
     studio_offset: int = Query(default=0, ge=0),
     asset_limit: int = Query(default=25, ge=0, le=100),
     asset_offset: int = Query(default=0, ge=0),
+    sync_missing_assets: bool = Query(default=False),
     _: None = Depends(require_admin_credentials),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> AdminStorageSummary:
@@ -68,25 +69,36 @@ def get_admin_storage_summary(
         studio_offset=studio_offset,
         asset_limit=asset_limit,
         asset_offset=asset_offset,
+        sync_missing_assets=sync_missing_assets,
     )
 
 
 @router.delete("/studios/{studio_id}", response_model=AdminDeleteResult)
 def delete_admin_studio(
     studio_id: str,
+    background_tasks: BackgroundTasks,
+    background: bool = Query(default=False),
     _: None = Depends(require_admin_credentials),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> AdminDeleteResult:
-    return repository.delete_admin_studio(studio_id)
+    return repository.delete_admin_studio(
+        studio_id,
+        background_tasks=background_tasks if background else None,
+    )
 
 
 @router.delete("/studios/{studio_id}/assets", response_model=AdminDeleteResult)
 def delete_admin_studio_assets(
     studio_id: str,
+    background_tasks: BackgroundTasks,
+    background: bool = Query(default=False),
     _: None = Depends(require_admin_credentials),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> AdminDeleteResult:
-    return repository.delete_admin_studio_assets(studio_id)
+    return repository.delete_admin_studio_assets(
+        studio_id,
+        background_tasks=background_tasks if background else None,
+    )
 
 
 @router.delete("/staged-assets", response_model=AdminDeleteResult)

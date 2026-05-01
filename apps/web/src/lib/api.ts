@@ -27,6 +27,7 @@ type AdminStorageQuery = {
   studioOffset?: number
   assetLimit?: number
   assetOffset?: number
+  syncMissingAssets?: boolean
 }
 
 export function readFileAsDataUrl(file: File): Promise<string> {
@@ -436,6 +437,9 @@ function buildAdminStoragePath(query: AdminStorageQuery): string {
   if (query.assetOffset !== undefined) {
     params.set('asset_offset', String(query.assetOffset))
   }
+  if (query.syncMissingAssets !== undefined) {
+    params.set('sync_missing_assets', String(query.syncMissingAssets))
+  }
   const suffix = params.toString()
   return suffix ? `/api/admin/storage?${suffix}` : '/api/admin/storage'
 }
@@ -445,7 +449,7 @@ export function deleteAdminStudio(
   studioId: string,
 ): Promise<AdminDeleteResult> {
   return requestJson<AdminDeleteResult>(
-    `/api/admin/studios/${studioId}`,
+    `/api/admin/studios/${studioId}?background=true`,
     {
       method: 'DELETE',
       headers: adminHeaders(credentials),
@@ -459,7 +463,7 @@ export function deleteAdminStudioAssets(
   studioId: string,
 ): Promise<AdminDeleteResult> {
   return requestJson<AdminDeleteResult>(
-    `/api/admin/studios/${studioId}/assets`,
+    `/api/admin/studios/${studioId}/assets?background=true`,
     {
       method: 'DELETE',
       headers: adminHeaders(credentials),

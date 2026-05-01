@@ -143,17 +143,22 @@ export function AdminPage() {
     })
   }
 
-  async function runDeletion(key: string, action: () => Promise<unknown>) {
+  async function runDeletion(key: string, action: () => Promise<{ cleanup_queued?: boolean; message?: string }>) {
     setBusyKey(key)
     setStatus({ phase: 'loading', message: 'Processing deletion.' })
     try {
-      await action()
+      const result = await action()
       const nextOffset =
         summary?.studios.length === 1 && studioOffset > 0
           ? Math.max(0, studioOffset - ADMIN_STUDIO_PAGE_SIZE)
           : studioOffset
       await loadSummary(activeCredentials, nextOffset)
-      setStatus({ phase: 'success', message: 'Deletion completed.' })
+      setStatus({
+        phase: 'success',
+        message: result.cleanup_queued
+          ? 'Removed from the admin list. Stored file cleanup is continuing in the background.'
+          : (result.message ?? 'Deletion completed.'),
+      })
     } catch (error) {
       setStatus({
         phase: 'error',
@@ -176,7 +181,7 @@ export function AdminPage() {
   function handleDeleteStudioAssets(studio: AdminStudioSummary) {
     if (
       !window.confirm(
-        `Delete ${studio.asset_count} stored file(s) for ${studio.title}? Normalized TrackNote data will remain.`,
+        `Delete stored file(s) for ${studio.title}? Normalized TrackNote data will remain. Legacy file counts may be incomplete until a storage scan runs.`,
       )
     ) {
       return
@@ -417,7 +422,7 @@ export function AdminPage() {
                       </Link>
                       <button
                         type="button"
-                        disabled={isBusy || studio.asset_count === 0}
+                        disabled={isBusy}
                         onClick={() => handleDeleteStudioAssets(studio)}
                       >
                         Delete Files

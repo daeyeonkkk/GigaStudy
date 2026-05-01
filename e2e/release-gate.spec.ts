@@ -791,6 +791,37 @@ test('admin login can inspect storage and run the engine queue trigger', async (
   await expect(page.getByText(/Engine queue processed/)).toBeVisible()
 })
 
+test('admin can remove a studio without waiting for asset cleanup', async ({ page }) => {
+  await createBlankStudio(page, 'Admin deletion session')
+  const studioId = new URL(page.url()).pathname.split('/').pop()
+  expect(studioId).toBeTruthy()
+
+  await page.goto('/admin')
+  await page.getByLabel('ID').fill('admin')
+  await page.getByLabel('Password').fill('eodus123')
+  await page.getByRole('button', { name: 'Login' }).click()
+  await expect(page.getByText('Admin deletion session')).toBeVisible()
+
+  page.once('dialog', (dialog) => {
+    void dialog.accept()
+  })
+  const deleteResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/admin/studios/${studioId}?background=true`) &&
+      response.request().method() === 'DELETE',
+  )
+  await page
+    .locator('.admin-studio-row')
+    .filter({ hasText: 'Admin deletion session' })
+    .getByRole('button', { name: 'Delete Studio' })
+    .click()
+  const deleteResponse = await deleteResponsePromise
+  expect(deleteResponse.ok()).toBeTruthy()
+  expect((await deleteResponse.json()).cleanup_queued).toBe(true)
+  await expect(page.getByText(/Removed from the admin list/)).toBeVisible()
+  await expect(page.getByText('Admin deletion session')).not.toBeVisible()
+})
+
 test('AI regeneration replaces pending candidates for the same track', async ({ page }) => {
   await createBlankStudio(page, 'AI candidate replacement session')
   await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')

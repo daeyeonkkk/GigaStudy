@@ -147,6 +147,39 @@ def test_admin_storage_summary_is_paginated(tmp_path: Path, monkeypatch) -> None
     assert payload["limits"]["studio_hard_limit"] == 500
 
 
+def test_admin_storage_summary_skips_legacy_asset_scan_by_default(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Legacy assets",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+    assert create_response.status_code == 200
+    studio_id = create_response.json()["studio_id"]
+    legacy_path = tmp_path / "uploads" / studio_id / "1" / "legacy.wav"
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_bytes(b"legacy audio")
+
+    fast_response = client.get("/api/admin/storage", headers=ADMIN_HEADERS)
+
+    assert fast_response.status_code == 200
+    fast_payload = fast_response.json()
+    assert fast_payload["studios"][0]["asset_count"] == 0
+
+    synced_response = client.get(
+        "/api/admin/storage?sync_missing_assets=true",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert synced_response.status_code == 200
+    synced_payload = synced_response.json()
+    assert synced_payload["studios"][0]["asset_count"] == 1
+    assert synced_payload["studios"][0]["assets"][0]["relative_path"] == f"uploads/{studio_id}/1/legacy.wav"
+
+
 def test_admin_can_delete_abandoned_staged_uploads(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     content = b"%PDF-1.4 staged direct upload"
@@ -357,6 +390,41 @@ def test_admin_can_delete_studio_and_its_assets(tmp_path: Path, monkeypatch) -> 
     assert client.get(f"/api/studios/{studio_id}").status_code == 404
     assert not (tmp_path / "uploads" / studio_id).exists()
     assert client.get("/api/admin/storage", headers=ADMIN_HEADERS).json()["studio_count"] == 0
+
+
+def test_admin_can_delete_studio_with_background_asset_cleanup(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackNote(
+                pitch_midi=69,
+                pitch_hz=440,
+                label="A4",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    studio_id, studio_payload = create_audio_studio(client)
+    assert (tmp_path / studio_payload["tracks"][0]["audio_source_path"]).exists()
+
+    delete_response = client.delete(f"/api/admin/studios/{studio_id}?background=true", headers=ADMIN_HEADERS)
+
+    assert delete_response.status_code == 200
+    payload = delete_response.json()
+    assert payload["studio_id"] == studio_id
+    assert payload["cleanup_queued"] is True
+    assert payload["deleted_files"] == 0
+    assert client.get(f"/api/studios/{studio_id}").status_code == 404
 
 
 def test_scoring_audio_is_temporary_and_not_listed_as_admin_asset(tmp_path: Path, monkeypatch) -> None:

@@ -71,6 +71,7 @@ class AdminDeleteResult(BaseModel):
     asset_id: str | None = None
     deleted_files: int = 0
     deleted_bytes: int = 0
+    cleanup_queued: bool = False
 
 
 class AdminEngineDrainResult(BaseModel):

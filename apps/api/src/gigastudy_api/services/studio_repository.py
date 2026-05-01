@@ -332,19 +332,31 @@ class StudioRepository:
         studio_offset: int = 0,
         asset_limit: int = 25,
         asset_offset: int = 0,
+        sync_missing_assets: bool = False,
     ) -> AdminStorageSummary:
         return self._admin.storage_summary(
             studio_limit=studio_limit,
             studio_offset=studio_offset,
             asset_limit=asset_limit,
             asset_offset=asset_offset,
+            sync_missing_assets=sync_missing_assets,
         )
 
-    def delete_admin_studio(self, studio_id: str) -> AdminDeleteResult:
-        return self._admin.delete_studio(studio_id)
+    def delete_admin_studio(
+        self,
+        studio_id: str,
+        *,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> AdminDeleteResult:
+        return self._admin.delete_studio(studio_id, background_tasks=background_tasks)
 
-    def delete_admin_studio_assets(self, studio_id: str) -> AdminDeleteResult:
-        return self._admin.delete_studio_assets(studio_id)
+    def delete_admin_studio_assets(
+        self,
+        studio_id: str,
+        *,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> AdminDeleteResult:
+        return self._admin.delete_studio_assets(studio_id, background_tasks=background_tasks)
 
     def delete_admin_staged_assets(self) -> AdminDeleteResult:
         return self._admin.delete_staged_assets()

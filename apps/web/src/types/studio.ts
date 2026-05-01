@@ -272,6 +272,7 @@ export type AdminDeleteResult = {
   asset_id: string | null
   deleted_files: number
   deleted_bytes: number
+  cleanup_queued: boolean
 }
 
 export type AdminEngineDrainResult = {

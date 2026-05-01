@@ -43,6 +43,7 @@ class StudioAdminCommands:
         studio_offset: int = 0,
         asset_limit: int = 25,
         asset_offset: int = 0,
+        sync_missing_assets: bool = False,
     ) -> AdminStorageSummary:
         with self._lock:
             studio_count = self._store.count()
@@ -53,6 +54,7 @@ class StudioAdminCommands:
                 studio,
                 asset_limit=asset_limit,
                 asset_offset=asset_offset,
+                sync_missing_assets=sync_missing_assets,
             )
             for studio in studios
         ]
@@ -80,16 +82,27 @@ class StudioAdminCommands:
             studios=studio_summaries,
         )
 
-    def delete_studio(self, studio_id: str) -> AdminDeleteResult:
+    def delete_studio(
+        self,
+        studio_id: str,
+        *,
+        background_tasks: Any | None = None,
+    ) -> AdminDeleteResult:
         with self._lock:
             if not self._store.delete_one_raw(studio_id):
                 raise HTTPException(status_code=404, detail="Studio not found.")
 
         self._engine_queue.delete_studio_jobs(studio_id)
-        upload_files, upload_bytes = self._assets.delete_asset_prefix(f"uploads/{studio_id}/")
-        job_files, job_bytes = self._assets.delete_asset_prefix(f"jobs/{studio_id}/")
-        deleted_files = upload_files + job_files
-        deleted_bytes = upload_bytes + job_bytes
+        if background_tasks is not None:
+            background_tasks.add_task(self._delete_studio_asset_prefixes, studio_id)
+            return AdminDeleteResult(
+                deleted=True,
+                message="Studio metadata deleted. Stored asset cleanup is running in the background.",
+                studio_id=studio_id,
+                cleanup_queued=True,
+            )
+
+        deleted_files, deleted_bytes = self._delete_studio_asset_prefixes(studio_id)
         return AdminDeleteResult(
             deleted=True,
             message="Studio and stored assets deleted.",
@@ -98,7 +111,12 @@ class StudioAdminCommands:
             deleted_bytes=deleted_bytes,
         )
 
-    def delete_studio_assets(self, studio_id: str) -> AdminDeleteResult:
+    def delete_studio_assets(
+        self,
+        studio_id: str,
+        *,
+        background_tasks: Any | None = None,
+    ) -> AdminDeleteResult:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
@@ -108,10 +126,16 @@ class StudioAdminCommands:
             studio.updated_at = timestamp
             self._save_studio(studio)
 
-        upload_files, upload_bytes = self._assets.delete_asset_prefix(f"uploads/{studio_id}/")
-        job_files, job_bytes = self._assets.delete_asset_prefix(f"jobs/{studio_id}/")
-        deleted_files = upload_files + job_files
-        deleted_bytes = upload_bytes + job_bytes
+        if background_tasks is not None:
+            background_tasks.add_task(self._delete_studio_asset_prefixes, studio_id)
+            return AdminDeleteResult(
+                deleted=True,
+                message="Studio asset references cleared. Stored asset cleanup is running in the background.",
+                studio_id=studio_id,
+                cleanup_queued=True,
+            )
+
+        deleted_files, deleted_bytes = self._delete_studio_asset_prefixes(studio_id)
         return AdminDeleteResult(
             deleted=True,
             message="Studio assets deleted. Normalized track notes and reports were kept.",
@@ -173,6 +197,7 @@ class StudioAdminCommands:
         *,
         asset_limit: int,
         asset_offset: int,
+        sync_missing_assets: bool,
     ) -> AdminStudioSummary:
         referenced_paths = referenced_asset_paths(
             studio,
@@ -183,6 +208,7 @@ class StudioAdminCommands:
             referenced_paths=referenced_paths,
             limit=asset_limit,
             offset=asset_offset,
+            sync_missing=sync_missing_assets,
         )
         return build_admin_studio_summary(
             studio,
@@ -203,3 +229,8 @@ class StudioAdminCommands:
 
     def _save_studio(self, studio: Studio) -> None:
         self._store.save_one_raw(studio.studio_id, encode_studio_payload(studio))
+
+    def _delete_studio_asset_prefixes(self, studio_id: str) -> tuple[int, int]:
+        upload_files, upload_bytes = self._assets.delete_asset_prefix(f"uploads/{studio_id}/")
+        job_files, job_bytes = self._assets.delete_asset_prefix(f"jobs/{studio_id}/")
+        return upload_files + job_files, upload_bytes + job_bytes

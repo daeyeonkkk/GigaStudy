@@ -75,6 +75,7 @@ test('blank studio opens the region editor and independent practice route', asyn
 test('document upload becomes a region, piano-roll events, and practice waterfall notes', async ({ page }) => {
   await createBlankStudio(page, 'Region import session', '104')
   await uploadSopranoMusicXml(page)
+  await expect(page.locator('[data-testid^="candidate-region-"]').first()).toContainText('C5')
   await approveFirstCandidate(page)
 
   await expectRegisteredRegion(page, 1, ['C5', 'G5'])
@@ -95,6 +96,7 @@ test('AI generation registers a second editable region', async ({ page }) => {
   await expect(page.getByTestId('track-generate-2')).toBeEnabled()
   await page.getByTestId('track-generate-2').click()
   await expect(page.getByTestId('candidate-review')).toContainText('Balanced')
+  await expect(page.locator('[data-testid^="candidate-region-"]').first()).toContainText('E4')
   await approveFirstCandidate(page)
 
   await expectRegisteredRegion(page, 2, ['E4', 'G4'])

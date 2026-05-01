@@ -4,10 +4,12 @@ import {
   getCandidateContourPoints,
   getCandidateDecisionSummary,
   getCandidatePreviewText,
+  getPitchEventRange,
+  getPitchedEvents,
   sourceLabels,
   statusLabels,
 } from '../../lib/studio'
-import type { ExtractionCandidate, TrackSlot } from '../../types/studio'
+import type { ExtractionCandidate, PitchEvent, TrackSlot } from '../../types/studio'
 import './CandidateReviewPanel.css'
 
 type CandidateReviewPanelProps = {
@@ -28,6 +30,66 @@ type CandidateVerdict = {
   label: string
   reason: string
   tone: 'recommended' | 'review' | 'retry'
+}
+
+function getEventTimelinePercent(seconds: number, startSeconds: number, durationSeconds: number): number {
+  return Math.max(0, Math.min(100, ((seconds - startSeconds) / Math.max(0.25, durationSeconds)) * 100))
+}
+
+function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {
+  const pitchRange = getPitchEventRange(events)
+  const midi = typeof event.pitch_midi === 'number' ? event.pitch_midi : pitchRange.minMidi
+  const span = Math.max(1, pitchRange.maxMidi - pitchRange.minMidi)
+  return Math.max(4, Math.min(86, ((pitchRange.maxMidi - midi) / span) * 82 + 4))
+}
+
+function getCandidateEventStyle(
+  candidate: ExtractionCandidate,
+  event: PitchEvent,
+  events: PitchEvent[],
+): CSSProperties {
+  return {
+    '--candidate-event-left': `${getEventTimelinePercent(
+      event.start_seconds,
+      candidate.region.start_seconds,
+      candidate.region.duration_seconds,
+    )}%`,
+    '--candidate-event-top': `${getEventTopPercent(event, events)}%`,
+    '--candidate-event-width': `${Math.max(
+      2.4,
+      getEventTimelinePercent(
+        event.start_seconds + event.duration_seconds,
+        event.start_seconds,
+        candidate.region.duration_seconds,
+      ),
+    )}%`,
+  } as CSSProperties
+}
+
+function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate }) {
+  const events = getPitchedEvents(candidate.region.pitch_events)
+
+  return (
+    <div className="candidate-review__region" data-testid={`candidate-region-${candidate.candidate_id}`}>
+      <span>Region candidate</span>
+      <div className="candidate-review__region-grid">
+        {events.length === 0 ? (
+          <p>No pitch events</p>
+        ) : (
+          events.slice(0, 32).map((event) => (
+            <i
+              aria-label={`${event.label} at beat ${event.start_beat}`}
+              key={event.event_id}
+              style={getCandidateEventStyle(candidate, event, events)}
+              title={`${event.label}@${event.start_beat}`}
+            >
+              {event.label}
+            </i>
+          ))
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function CandidateReviewPanel({
@@ -113,6 +175,7 @@ export function CandidateReviewPanel({
                     />
                   ))}
                 </div>
+                <CandidateRegionPreview candidate={candidate} />
               </div>
 
               {decisionSummary.diagnostics.length > 0 ? (

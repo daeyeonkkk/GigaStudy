@@ -182,6 +182,59 @@
   transform: translate(-50%, -50%);
 }
 
+.candidate-review__region {
+  display: grid;
+  gap: 5px;
+}
+
+.candidate-review__region > span {
+  color: #985f00;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.candidate-review__region-grid {
+  position: relative;
+  min-height: 76px;
+  border: 1px solid #dbe1e6;
+  background:
+    linear-gradient(#edf2f5 0 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(90deg, #e2e8ed 0 1px, transparent 1px) 0 0 / 25% 100%,
+    #ffffff;
+  overflow: hidden;
+}
+
+.candidate-review__region-grid i {
+  position: absolute;
+  left: var(--candidate-event-left);
+  top: var(--candidate-event-top);
+  width: var(--candidate-event-width);
+  min-width: 30px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid #225f4d;
+  border-radius: 4px;
+  background: #69c497;
+  color: #092219;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-review__region-grid p {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #64717c;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .candidate-review__metrics,
 .candidate-review__diagnostics,
 .candidate-review__technical dl {

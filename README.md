@@ -3,7 +3,7 @@
 GigaStudy is a six-track a cappella practice studio.
 The product is now centered on three user flows:
 
-1. Create a studio from a score/music upload or from an empty six-track board.
+1. Create a studio from a document/music upload or from an empty six-track board.
 2. Complete six fixed tracks: Soprano, Alto, Tenor, Baritone, Bass, and Percussion.
 3. Score a singer against selected reference tracks and append a timing/pitch report to the studio feed.
 
@@ -14,7 +14,7 @@ Everything outside those flows is intentionally removed from the current foundat
 - `apps/web`
   React + Vite client for the home screen and main six-track studio.
 - `apps/api`
-  FastAPI service with TrackNote engines, optional Postgres metadata
+  FastAPI service with pitch-event engines, optional Postgres metadata
   persistence, and optional S3-compatible asset persistence.
 - `PROJECT_FOUNDATION`
   Current product foundation for the six-track GigaStudy direction.
@@ -61,7 +61,6 @@ The API exposes the current product surface only:
 - `POST /api/studios/upload-target`
 - `PUT /api/studios/direct-uploads/{asset_id}`
 - `GET /api/studios/{studio_id}`
-- `GET /api/studios/{studio_id}/export/pdf`
 - `GET /api/studios/{studio_id}/tracks/{slot_id}/audio`
 - `GET /api/studios/{studio_id}/jobs/{job_id}/source-preview`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/upload-target`

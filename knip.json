@@ -1,8 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
-    "apps/web": {
-      "ignoreDependencies": ["vexflow-src/*"]
-    }
+    "apps/web": {}
   }
 }

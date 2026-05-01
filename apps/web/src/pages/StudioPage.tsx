@@ -277,6 +277,7 @@ export function StudioPage() {
               extractionJobs={visibleExtractionJobs}
               playingSlots={playingSlots}
               playheadSeconds={playheadSeconds}
+              arrangementRegions={studio.regions}
               registeredTracks={registeredTracks}
               syncStepSeconds={syncStepSeconds}
               trackCountIn={trackCountIn}

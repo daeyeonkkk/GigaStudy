@@ -200,6 +200,7 @@ export type Studio = {
   time_signature_numerator: number
   time_signature_denominator: number
   tracks: TrackSlot[]
+  regions: ArrangementRegion[]
   reports: ScoringReport[]
   jobs: TrackExtractionJob[]
   candidates: ExtractionCandidate[]

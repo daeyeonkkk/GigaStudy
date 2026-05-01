@@ -36,6 +36,7 @@ type TrackBoardProps = {
   extractionJobs: TrackExtractionJob[]
   playingSlots: Set<number>
   playheadSeconds: number | null
+  arrangementRegions: ArrangementRegion[]
   registeredTracks: TrackSlot[]
   recordingSlotId: number | null
   syncStepSeconds: number
@@ -315,6 +316,7 @@ export function TrackBoard({
   extractionJobs,
   playingSlots,
   playheadSeconds,
+  arrangementRegions,
   registeredTracks,
   recordingSlotId,
   syncStepSeconds,
@@ -330,7 +332,10 @@ export function TrackBoard({
   onUpload,
   onVolumeChange,
 }: TrackBoardProps) {
-  const regions = useMemo(() => buildArrangementRegions(tracks, bpm), [bpm, tracks])
+  const regions = useMemo(
+    () => (arrangementRegions.length > 0 ? arrangementRegions : buildArrangementRegions(tracks, bpm)),
+    [arrangementRegions, bpm, tracks],
+  )
   const regionsByTrack = useMemo(
     () => new Map(regions.map((region) => [region.track_slot_id, region])),
     [regions],

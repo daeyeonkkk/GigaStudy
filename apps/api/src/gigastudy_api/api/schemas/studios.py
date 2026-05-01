@@ -1,7 +1,8 @@
+from math import isfinite
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 TrackStatus = Literal[
     "empty",
@@ -52,6 +53,38 @@ class TrackNote(BaseModel):
 
 
 ScoreNote = TrackNote
+
+
+class PitchEvent(BaseModel):
+    event_id: str
+    track_slot_id: int
+    region_id: str
+    label: str
+    pitch_midi: int | None = None
+    pitch_hz: float | None = None
+    start_seconds: float
+    duration_seconds: float
+    start_beat: float
+    duration_beats: float
+    confidence: float = Field(default=1, ge=0, le=1)
+    source: NoteSource
+    is_rest: bool = False
+
+
+class ArrangementRegion(BaseModel):
+    region_id: str
+    track_slot_id: int
+    track_name: str
+    source_kind: SourceKind | None = None
+    source_label: str | None = None
+    audio_source_path: str | None = None
+    audio_mime_type: str | None = None
+    start_seconds: float
+    duration_seconds: float
+    sync_offset_seconds: float = 0
+    volume_percent: int = Field(default=100, ge=0, le=100)
+    pitch_events: list[PitchEvent] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
 class TrackExtractionJob(BaseModel):
@@ -111,6 +144,90 @@ class TrackSlot(BaseModel):
     notes: list[TrackNote] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     updated_at: str
+
+
+def build_arrangement_regions(tracks: list[TrackSlot], bpm: int) -> list[ArrangementRegion]:
+    return [
+        region
+        for track in tracks
+        if (region := _build_track_region(track, bpm)) is not None
+    ]
+
+
+def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
+    if track.status != "registered" or (not track.notes and not track.audio_source_path):
+        return None
+
+    region_id = f"track-{track.slot_id}-region-1"
+    pitch_events = [
+        _pitch_event_from_note(note, track=track, region_id=region_id, bpm=bpm)
+        for note in sorted(track.notes, key=lambda item: (item.beat, item.id))
+    ]
+    region_start = track.sync_offset_seconds
+    event_end_seconds = max(
+        (event.start_seconds + event.duration_seconds for event in pitch_events),
+        default=region_start,
+    )
+    content_duration = max(
+        4.0,
+        track.duration_seconds,
+        event_end_seconds - region_start,
+    )
+    return ArrangementRegion(
+        region_id=region_id,
+        track_slot_id=track.slot_id,
+        track_name=track.name,
+        source_kind=track.source_kind,
+        source_label=track.source_label,
+        audio_source_path=track.audio_source_path,
+        audio_mime_type=track.audio_mime_type,
+        start_seconds=region_start,
+        duration_seconds=content_duration,
+        sync_offset_seconds=track.sync_offset_seconds,
+        volume_percent=track.volume_percent,
+        pitch_events=pitch_events,
+        diagnostics=track.diagnostics,
+    )
+
+
+def _pitch_event_from_note(
+    note: TrackNote,
+    *,
+    track: TrackSlot,
+    region_id: str,
+    bpm: int,
+) -> PitchEvent:
+    return PitchEvent(
+        event_id=f"{region_id}-{note.id}",
+        track_slot_id=track.slot_id,
+        region_id=region_id,
+        label=note.label,
+        pitch_midi=note.pitch_midi,
+        pitch_hz=note.pitch_hz,
+        start_seconds=track.sync_offset_seconds + _note_start_seconds(note, bpm),
+        duration_seconds=_note_duration_seconds(note, bpm),
+        start_beat=note.beat,
+        duration_beats=note.duration_beats,
+        confidence=note.confidence,
+        source=note.source,
+        is_rest=note.is_rest,
+    )
+
+
+def _note_start_seconds(note: TrackNote, bpm: int) -> float:
+    if isfinite(note.onset_seconds) and note.onset_seconds > 0:
+        return note.onset_seconds
+    return max(0.0, (note.beat - 1) * _beat_seconds(bpm))
+
+
+def _note_duration_seconds(note: TrackNote, bpm: int) -> float:
+    if isfinite(note.duration_seconds) and note.duration_seconds > 0:
+        return note.duration_seconds
+    return max(0.08, note.duration_beats * _beat_seconds(bpm))
+
+
+def _beat_seconds(bpm: int) -> float:
+    return 60 / max(1, bpm)
 
 
 class ReportIssue(BaseModel):
@@ -189,6 +306,11 @@ class Studio(BaseModel):
     candidates: list[ExtractionCandidate] = Field(default_factory=list)
     created_at: str
     updated_at: str
+
+    @computed_field(return_type=list[ArrangementRegion])
+    @property
+    def regions(self) -> list[ArrangementRegion]:
+        return build_arrangement_regions(self.tracks, self.bpm)
 
 
 class StudioListItem(BaseModel):

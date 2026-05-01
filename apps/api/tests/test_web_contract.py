@@ -15,8 +15,10 @@ from gigastudy_api.api.schemas.admin import (
     AdminStudioSummary,
 )
 from gigastudy_api.api.schemas.studios import (
+    ArrangementRegion,
     DirectUploadTarget,
     ExtractionCandidate,
+    PitchEvent,
     ReportIssue,
     ScoringReport,
     Studio,
@@ -33,6 +35,8 @@ WEB_TYPES_PATH = Path(__file__).resolve().parents[3] / "apps" / "web" / "src" / 
 def test_web_studio_response_types_cover_api_schema_fields() -> None:
     web_types = WEB_TYPES_PATH.read_text(encoding="utf-8")
     contracts: list[tuple[Type[BaseModel], str, set[str]]] = [
+        (PitchEvent, "PitchEvent", set()),
+        (ArrangementRegion, "ArrangementRegion", set()),
         (TrackNote, "ScoreNote", set()),
         (TrackExtractionJob, "TrackExtractionJob", set()),
         (ExtractionCandidate, "ExtractionCandidate", set()),
@@ -54,6 +58,42 @@ def test_web_studio_response_types_cover_api_schema_fields() -> None:
         api_fields = set(model.model_fields) - excluded_fields
         ts_fields = _extract_ts_type_fields(web_types, type_name)
         assert api_fields <= ts_fields, f"{type_name} missing fields: {sorted(api_fields - ts_fields)}"
+
+
+def test_studio_response_includes_arrangement_regions() -> None:
+    studio = Studio(
+        studio_id="studio-region-contract",
+        title="Region contract",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="registered",
+                source_kind="midi",
+                source_label="seed.mid",
+                duration_seconds=0,
+                notes=[
+                    TrackNote(
+                        label="C4",
+                        pitch_midi=60,
+                        beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+                updated_at="2026-01-01T00:00:00Z",
+            )
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = studio.model_dump(mode="json")
+
+    assert payload["regions"][0]["region_id"] == "track-1-region-1"
+    assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
 
 
 def _extract_ts_type_fields(source: str, type_name: str) -> set[str]:

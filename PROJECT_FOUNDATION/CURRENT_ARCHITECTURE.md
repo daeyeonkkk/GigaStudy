@@ -58,6 +58,51 @@ for the product UI and API response.
 
 ## Data Flow
 
+```mermaid
+flowchart TD
+  User["User"]
+  Launch["Launch Page"]
+  StudioPage["Studio Page"]
+  PracticePage["Practice Page"]
+  TrackBoard["TrackBoard: Region View + Piano Roll"]
+  Waterfall["Waterfall Practice Stage"]
+  API["FastAPI Studio API"]
+  Store["StudioStore"]
+  Assets["StudioAssets"]
+  Queue["Engine Queue"]
+  Engines["Document / Voice / MIDI Engines"]
+  Candidates["Review Candidates"]
+  Regions["ArrangementRegion + PitchEvent"]
+  Playback["Browser Playback Engine"]
+  Scoring["Scoring Pipeline"]
+  Reports["Practice Reports"]
+
+  User --> Launch
+  User --> StudioPage
+  User --> PracticePage
+  Launch --> API
+  StudioPage --> API
+  PracticePage --> API
+  API --> Store
+  API --> Assets
+  API --> Queue
+  Queue --> Engines
+  Engines --> Candidates
+  Candidates --> API
+  Store --> Regions
+  API --> Regions
+  Regions --> TrackBoard
+  Regions --> Waterfall
+  StudioPage --> Playback
+  PracticePage --> Playback
+  Playback --> TrackBoard
+  Playback --> Waterfall
+  StudioPage --> Scoring
+  Scoring --> API
+  API --> Reports
+  Reports --> StudioPage
+```
+
 ### Studio Load
 
 1. Web calls `GET /api/studios/{studio_id}`.

@@ -1267,7 +1267,7 @@ def _enforce_registration_score_contract(
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> tuple[list[TrackNote], list[str], dict[str, Any]]:
-    """Force final TrackNotes onto the studio score coordinate system.
+    """Force final TrackNotes onto the studio region-event clock.
 
     Earlier stages may transcribe, import, simplify, align, or review notes.
     Registration must end with one canonical score contract: the studio BPM and

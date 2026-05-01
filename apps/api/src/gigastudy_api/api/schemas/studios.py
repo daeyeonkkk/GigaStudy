@@ -51,10 +51,6 @@ class TrackNote(BaseModel):
     quantization_grid: float | None = None
     notation_warnings: list[str] = Field(default_factory=list)
 
-
-ScoreNote = TrackNote
-
-
 class PitchEvent(BaseModel):
     event_id: str
     track_slot_id: int

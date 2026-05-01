@@ -186,7 +186,7 @@ export function useStudioPlayback({
     const AudioContextConstructor = getBrowserAudioContextConstructor()
     if (needsAudioContext) {
       if (!AudioContextConstructor) {
-        setActionState({ phase: 'error', message: '악보 음이나 메트로놈을 재생할 오디오 장치를 열지 못했습니다.' })
+        setActionState({ phase: 'error', message: '노트 이벤트나 메트로놈을 재생할 오디오 장치를 열지 못했습니다.' })
         return false
       }
       try {
@@ -229,7 +229,7 @@ export function useStudioPlayback({
         const requiresSynchronizedStart = audioTracks.length > 1 || scoreTracks.length > 0 || includeMetronome
         const synchronizedParts = [
           `원음 ${audioTracks.length}개`,
-          scoreTracks.length > 0 ? `악보 음 ${scoreTracks.length}개` : null,
+          scoreTracks.length > 0 ? `노트 이벤트 ${scoreTracks.length}개` : null,
           includeMetronome ? '메트로놈' : null,
         ].filter(Boolean)
         setActionState({
@@ -358,7 +358,7 @@ export function useStudioPlayback({
 
       if (!scheduledAnyTrack) {
         disposePlaybackSession({ context, nodes, timeoutIds })
-        setActionState({ phase: 'error', message: '재생 가능한 녹음 파일이나 악보 음표가 없습니다.' })
+        setActionState({ phase: 'error', message: '재생 가능한 녹음 파일이나 노트 이벤트가 없습니다.' })
         return false
       }
 
@@ -494,7 +494,7 @@ export function useStudioPlayback({
         message:
           playbackSource === 'audio'
             ? `${selectedTracks.length}개 트랙을 같은 박자 기준에서 재생합니다.`
-            : `${selectedTracks.length}개 트랙을 악보 음 기준으로 동시에 재생합니다.`,
+            : `${selectedTracks.length}개 트랙을 노트 이벤트 기준으로 동시에 재생합니다.`,
       })
     }
   }
@@ -547,7 +547,7 @@ export function useStudioPlayback({
     setPlaybackSource(nextSource)
     setActionState({
       phase: 'success',
-      message: nextSource === 'audio' ? '재생 소스를 녹음 원본으로 전환했습니다.' : '재생 소스를 악보 음으로 전환했습니다.',
+      message: nextSource === 'audio' ? '재생 소스를 녹음 원본으로 전환했습니다.' : '재생 소스를 노트 이벤트로 전환했습니다.',
     })
   }
 
@@ -575,7 +575,7 @@ export function useStudioPlayback({
         message:
           playbackSource === 'audio' && track.audio_source_path
             ? `${track.name} 트랙의 녹음 원본을 재생합니다.`
-            : `${track.name} 트랙을 악보 음 기준으로 재생합니다.`,
+            : `${track.name} 트랙을 노트 이벤트 기준으로 재생합니다.`,
       })
     }
   }

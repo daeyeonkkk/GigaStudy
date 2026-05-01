@@ -98,8 +98,8 @@ export function ExtractionJobsPanel({
           const canRetryJob = job.status === 'failed'
           const wouldOverwrite = jobWouldOverwrite(job.job_id)
           const allowOverwrite = jobOverwriteApprovals[job.job_id] === true
-          const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : '악보 OMR'
-          const jobTargetLabel = job.parse_all_parts ? '전체 악보' : (jobTrack?.name ?? `Track ${job.slot_id}`)
+          const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : '문서 분석'
+          const jobTargetLabel = job.parse_all_parts ? '전체 문서' : (jobTrack?.name ?? `Track ${job.slot_id}`)
           const candidateSummary = getJobCandidateSummary(jobCandidates, tracks)
           const recoveryHint = getJobRecoveryHint(job)
           const attemptLabel =
@@ -176,24 +176,24 @@ function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: Track
       const measureCount = getCandidateDiagnosticNumber(candidate, 'measure_count')
       const noteCount = getCandidateDiagnosticNumber(candidate, 'note_count') ?? candidate.notes.length
       const measureLabel = measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'
-      return `${track?.name ?? `Track ${candidate.suggested_slot_id}`} ${confidence} / ${measureLabel} / ${noteCount}음`
+      return `${track?.name ?? `Track ${candidate.suggested_slot_id}`} ${confidence} / ${measureLabel} / ${noteCount}개`
     })
     .join(' | ')
 }
 
 function getJobStateHint(job: TrackExtractionJob): string {
   if (job.status === 'queued') {
-    return '대기열에 올라와 있습니다. 앞선 OMR/음성 작업이 끝나면 자동으로 시작합니다.'
+    return '대기열에 올라와 있습니다. 앞선 문서/음성 작업이 끝나면 자동으로 시작합니다.'
   }
   if (job.status === 'running') {
     return job.job_type === 'voice'
       ? '녹음 파일을 내부 메트로놈 기준으로 정렬하고 TrackNote 후보를 만드는 중입니다.'
-      : '악보 파트와 트랙 후보를 추출하는 중입니다. 완료되면 등록 가능한 후보가 표시됩니다.'
+      : '문서 파트와 트랙 후보를 추출하는 중입니다. 완료되면 등록 가능한 후보가 표시됩니다.'
   }
   if (job.status === 'needs_review') {
     return job.parse_all_parts
       ? '여러 파트 후보가 준비됐습니다. 트랙 배정과 덮어쓰기 여부를 확인한 뒤 등록하세요.'
-      : '후보가 준비됐습니다. 등록하면 해당 트랙의 악보와 재생 소스로 반영됩니다.'
+      : '후보가 준비됐습니다. 등록하면 해당 트랙의 노트 이벤트와 재생 소스로 반영됩니다.'
   }
   if (job.status === 'completed') {
     return '처리가 완료됐습니다.'
@@ -207,7 +207,7 @@ function getJobRecoveryHint(job: TrackExtractionJob): string {
     return '노래로 판단할 만큼 안정적인 음정 구간을 찾지 못했습니다. 배경 소음을 줄이고 실제 노래 구간만 다시 녹음해 보세요.'
   }
   if (job.job_type === 'omr' && message.includes('vector fallback failed')) {
-    return 'PDF에서 읽을 수 있는 악보 벡터를 찾지 못했습니다. 더 선명한 원본, MusicXML, MIDI가 있으면 우선 사용하세요.'
+    return 'PDF에서 읽을 수 있는 벡터 데이터를 찾지 못했습니다. 더 선명한 원본, MusicXML, MIDI가 있으면 우선 사용하세요.'
   }
   if (job.job_type === 'omr' && message.includes('timed out')) {
     return 'Audiveris 처리 시간이 초과됐습니다. 다시 시도하거나, 가능하면 vector PDF/MusicXML/MIDI를 사용하세요.'

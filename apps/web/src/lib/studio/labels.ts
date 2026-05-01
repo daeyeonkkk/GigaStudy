@@ -4,7 +4,7 @@ export const statusLabels: Record<TrackSlot['status'], string> = {
   empty: '공란',
   recording: '녹음 중',
   uploading: '업로드 중',
-  extracting: '악보화 중',
+  extracting: '분석 중',
   generating: 'AI 생성 중',
   needs_review: '검토 필요',
   registered: '등록 완료',
@@ -15,7 +15,7 @@ export const sourceLabels: Record<SourceKind, string> = {
   recording: '녹음',
   audio: '음성파일',
   midi: 'MIDI',
-  score: '악보',
+  score: '문서',
   music: '음악',
   ai: 'AI 생성',
 }

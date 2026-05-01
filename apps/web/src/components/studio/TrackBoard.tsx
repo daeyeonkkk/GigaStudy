@@ -1,23 +1,21 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
   TRACK_UPLOAD_ACCEPT,
-  buildEngravingMeasureWidths,
+  buildArrangementRegions,
   formatDurationSeconds,
   formatSeconds,
-  getTrackSourceLabel,
-  getTrackRenderModel,
+  getArrangementDurationSeconds,
   getJobStatusLabel,
+  getPitchEventRange,
+  getPitchedEvents,
+  getTrackSourceLabel,
   statusLabels,
 } from '../../lib/studio'
-import type { TrackExtractionJob, TrackSlot } from '../../types/studio'
+import type { ArrangementRegion, PitchEvent, TrackExtractionJob, TrackSlot } from '../../types/studio'
 import './TrackBoard.css'
-
-const EngravedScoreStrip = lazy(() =>
-  import('./EngravedScoreStrip').then((module) => ({ default: module.EngravedScoreStrip })),
-)
 
 type TrackRecordingMeter = {
   durationSeconds: number
@@ -54,11 +52,6 @@ type TrackBoardProps = {
   onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }
 
-function getRegisteredTrackKeySignature(track: TrackSlot): string | null {
-  const keySignature = track.notes.find((note) => note.key_signature)?.key_signature
-  return keySignature && keySignature !== 'C' ? keySignature : null
-}
-
 function formatSyncStep(seconds: number): string {
   const rounded = Number(seconds.toFixed(3))
   return rounded.toString()
@@ -86,6 +79,45 @@ function getTrackActiveJob(track: TrackSlot, jobs: TrackExtractionJob[]): TrackE
           job.status === 'failed'),
     ) ?? null
   )
+}
+
+function getMeasureStarts(timelineSeconds: number, bpm: number, beatsPerMeasure: number): number[] {
+  const beatSeconds = 60 / Math.max(1, bpm)
+  const measureSeconds = Math.max(beatSeconds, beatSeconds * Math.max(1, beatsPerMeasure))
+  const measureCount = Math.max(2, Math.ceil(timelineSeconds / measureSeconds) + 1)
+  return Array.from({ length: measureCount }, (_, index) => index * measureSeconds)
+}
+
+function getTimelinePercent(seconds: number, timelineSeconds: number): number {
+  return Math.max(0, Math.min(100, (seconds / Math.max(0.25, timelineSeconds)) * 100))
+}
+
+function getRegionStyle(region: ArrangementRegion, timelineSeconds: number): CSSProperties {
+  return {
+    '--region-left': `${getTimelinePercent(region.start_seconds, timelineSeconds)}%`,
+    '--region-width': `${Math.max(1.5, getTimelinePercent(region.duration_seconds, timelineSeconds))}%`,
+  } as CSSProperties
+}
+
+function getPlayheadStyle(playheadSeconds: number | null, timelineSeconds: number): CSSProperties {
+  return {
+    '--playhead-left': `${getTimelinePercent(playheadSeconds ?? 0, timelineSeconds)}%`,
+  } as CSSProperties
+}
+
+function getEventLeftPercent(event: PitchEvent, region: ArrangementRegion): number {
+  return getTimelinePercent(event.start_seconds - region.start_seconds, region.duration_seconds)
+}
+
+function getEventWidthPercent(event: PitchEvent, region: ArrangementRegion): number {
+  return Math.max(1.4, getTimelinePercent(event.duration_seconds, region.duration_seconds))
+}
+
+function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {
+  const pitchRange = getPitchEventRange(events)
+  const midi = typeof event.pitch_midi === 'number' ? event.pitch_midi : pitchRange.minMidi
+  const span = Math.max(1, pitchRange.maxMidi - pitchRange.minMidi)
+  return Math.max(3, Math.min(91, ((pitchRange.maxMidi - midi) / span) * 88 + 3))
 }
 
 function TrackVolumeControl({
@@ -168,13 +200,110 @@ function TrackVolumeControl({
   )
 }
 
-function EngravingFallback({ track }: { track: TrackSlot }) {
+function PianoRollPanel({ region }: { region: ArrangementRegion | null }) {
+  const events = region ? getPitchedEvents(region.pitch_events) : []
+  const pitchRange = getPitchEventRange(events)
+  const pitchLabels = Array.from({ length: 5 }, (_, index) => {
+    const midi = Math.round(
+      pitchRange.maxMidi - ((pitchRange.maxMidi - pitchRange.minMidi) / 4) * index,
+    )
+    return `M${midi}`
+  })
+
   return (
-    <div
-      aria-label={`${track.name} 악보 엔진을 불러오는 중입니다`}
-      className="track-card__measure-strip track-card__engraved-strip track-card__engraved-strip--loading"
-      data-testid={`track-score-strip-loading-${track.slot_id}`}
-    />
+    <section className="piano-roll-panel" aria-label="피아노 롤 편집기">
+      <header>
+        <div>
+          <p className="eyebrow">Micro editor</p>
+          <h3>{region ? `${region.track_name} Piano Roll` : 'Piano Roll'}</h3>
+        </div>
+        <div className="piano-roll-panel__tools" aria-label="피아노 롤 도구">
+          <button type="button">Snap</button>
+          <button type="button">Quantize</button>
+          <button type="button">Pitch</button>
+        </div>
+      </header>
+
+      <div className="piano-roll">
+        <div className="piano-roll__keys" aria-hidden="true">
+          {pitchLabels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+        <div className="piano-roll__grid">
+          {region && events.length > 0 ? (
+            events.map((event) => (
+              <button
+                className="piano-roll__event"
+                key={event.event_id}
+                style={
+                  {
+                    '--event-left': `${getEventLeftPercent(event, region)}%`,
+                    '--event-top': `${getEventTopPercent(event, events)}%`,
+                    '--event-width': `${getEventWidthPercent(event, region)}%`,
+                  } as CSSProperties
+                }
+                title={`${event.label} · ${formatDurationSeconds(event.duration_seconds)}`}
+                type="button"
+              >
+                {event.label}
+              </button>
+            ))
+          ) : (
+            <p>선택한 리전에 피치 이벤트가 없습니다.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PracticeWaterfall({
+  playheadSeconds,
+  regions,
+  timelineSeconds,
+}: {
+  playheadSeconds: number | null
+  regions: ArrangementRegion[]
+  timelineSeconds: number
+}) {
+  const events = regions.flatMap((region) =>
+    getPitchedEvents(region.pitch_events).map((event) => ({ event, region })),
+  )
+
+  return (
+    <section className="practice-waterfall" aria-label="폭포수 연습 미리보기">
+      <header>
+        <div>
+          <p className="eyebrow">Practice mode</p>
+          <h3>Waterfall</h3>
+        </div>
+        <span>{events.length} events</span>
+      </header>
+      <div className="practice-waterfall__stage" style={getPlayheadStyle(playheadSeconds, timelineSeconds)}>
+        <i className="practice-waterfall__playhead" aria-hidden="true" />
+        {regions.map((region) => (
+          <div className="practice-waterfall__lane" key={region.region_id}>
+            <span>{region.track_name}</span>
+          </div>
+        ))}
+        {events.map(({ event, region }) => (
+          <i
+            aria-label={`${region.track_name} ${event.label}`}
+            className="practice-waterfall__note"
+            key={`${region.region_id}-${event.event_id}`}
+            style={
+              {
+                '--waterfall-left': `${getTimelinePercent(region.track_slot_id - 1, 6)}%`,
+                '--waterfall-top': `${getTimelinePercent(event.start_seconds, timelineSeconds)}%`,
+                '--waterfall-height': `${Math.max(1.2, getTimelinePercent(event.duration_seconds, timelineSeconds))}%`,
+              } as CSSProperties
+            }
+            title={`${region.track_name} · ${event.label}`}
+          />
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -201,45 +330,50 @@ export function TrackBoard({
   onUpload,
   onVolumeChange,
 }: TrackBoardProps) {
-  const sharedMeasureWidths = useMemo(() => {
-    const registeredModels = registeredTracks.map((track) =>
-      getTrackRenderModel(
-        {
-          ...track,
-          sync_offset_seconds: 0,
-        },
-        bpm,
-        beatsPerMeasure,
+  const regions = useMemo(() => buildArrangementRegions(tracks, bpm), [bpm, tracks])
+  const regionsByTrack = useMemo(
+    () => new Map(regions.map((region) => [region.track_slot_id, region])),
+    [regions],
+  )
+  const timelineSeconds = useMemo(
+    () =>
+      Math.max(
+        getArrangementDurationSeconds(tracks, bpm, 12),
+        playheadSeconds ?? 0,
       ),
-    )
-    const measureCount = Math.max(1, ...registeredModels.map((model) => model.measureCount))
-    const widthSets = registeredModels.map((model, index) => {
-      const track = registeredTracks[index]
-      return buildEngravingMeasureWidths(
-        model.notes,
-        measureCount,
-        beatsPerMeasure,
-        track ? getRegisteredTrackKeySignature(track) : null,
-      )
-    })
-
-    return Array.from({ length: measureCount }, (_, measureIndex) =>
-      Math.max(260, ...widthSets.map((widths) => widths[measureIndex] ?? 0)),
-    )
-  }, [beatsPerMeasure, bpm, registeredTracks])
+    [bpm, playheadSeconds, tracks],
+  )
+  const measureStarts = useMemo(
+    () => getMeasureStarts(timelineSeconds, bpm, beatsPerMeasure),
+    [beatsPerMeasure, bpm, timelineSeconds],
+  )
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const selectedRegion =
+    regions.find((region) => region.region_id === selectedRegionId) ?? regions[0] ?? null
 
   return (
-    <section className="studio-tracks" aria-label="6개 트랙">
+    <section className="studio-tracks" aria-label="6트랙 리전 편곡">
       <div className="studio-tracks__header">
         <div>
-          <p className="eyebrow">Track board</p>
-          <h2>6 Track Score</h2>
+          <p className="eyebrow">Arrangement</p>
+          <h2>Region View + Piano Roll</h2>
         </div>
         <div className="studio-tracks__summary">
           <span>{registeredTracks.length} registered</span>
           <span>{pendingCandidateCount} review</span>
           <span>{playingSlots.size} playing</span>
         </div>
+      </div>
+
+      <div className="arrangement-ruler" aria-hidden="true">
+        {measureStarts.map((seconds, index) => (
+          <span
+            key={`measure-${seconds}`}
+            style={{ '--measure-left': `${getTimelinePercent(seconds, timelineSeconds)}%` } as CSSProperties}
+          >
+            {index + 1}
+          </span>
+        ))}
       </div>
 
       <div className="track-stack">
@@ -250,6 +384,7 @@ export function TrackBoard({
           const isCountingIn = trackCountIn?.slotId === track.slot_id
           const isPlaying = playingSlots.has(track.slot_id)
           const activeJob = getTrackActiveJob(track, extractionJobs)
+          const region = regionsByTrack.get(track.slot_id) ?? null
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
@@ -288,19 +423,38 @@ export function TrackBoard({
                 </div>
               </header>
 
-              <div className="track-card__score" aria-label={`${track.name} 악보`}>
-                {isRegistered ? (
-                  <Suspense fallback={<EngravingFallback track={track} />}>
-                    <EngravedScoreStrip
-                      beatsPerMeasure={beatsPerMeasure}
-                      bpm={bpm}
-                      playheadSeconds={isPlaying ? playheadSeconds : null}
-                      sharedMeasureWidths={sharedMeasureWidths}
-                      track={track}
+              <div
+                className="track-card__score track-card__region-lane"
+                aria-label={`${track.name} 리전 레인`}
+                style={getPlayheadStyle(isPlaying ? playheadSeconds : null, timelineSeconds)}
+              >
+                <div className="track-card__measure-grid" aria-hidden="true">
+                  {measureStarts.map((seconds) => (
+                    <i
+                      key={`${track.slot_id}-${seconds}`}
+                      style={{ '--measure-left': `${getTimelinePercent(seconds, timelineSeconds)}%` } as CSSProperties}
                     />
-                  </Suspense>
+                  ))}
+                </div>
+                {isPlaying && playheadSeconds !== null ? (
+                  <i className="track-card__playhead" aria-hidden="true" />
+                ) : null}
+                {region ? (
+                  <button
+                    aria-pressed={selectedRegion?.region_id === region.region_id}
+                    className="track-card__region-block"
+                    data-testid={`track-region-${track.slot_id}`}
+                    style={getRegionStyle(region, timelineSeconds)}
+                    type="button"
+                    onClick={() => setSelectedRegionId(region.region_id)}
+                    onDoubleClick={() => setSelectedRegionId(region.region_id)}
+                  >
+                    <span>{region.source_label ?? track.name}</span>
+                    <strong>{getPitchedEvents(region.pitch_events).length} events</strong>
+                    <em>{formatDurationSeconds(region.duration_seconds)}</em>
+                  </button>
                 ) : (
-                  <p>{needsReview ? '검토 대기 트랙' : '공란 트랙'}</p>
+                  <p>{needsReview ? '검토 대기 트랙' : '비어 있는 트랙'}</p>
                 )}
               </div>
 
@@ -316,7 +470,7 @@ export function TrackBoard({
                     {isRecording ? '중지' : isCountingIn ? '취소' : '녹음'}
                   </button>
                   <label className="app-button app-button--secondary track-upload">
-                    <span aria-hidden="true">↑</span>
+                    <span aria-hidden="true">↥</span>
                     업로드
                     <input
                       accept={TRACK_UPLOAD_ACCEPT}
@@ -336,8 +490,8 @@ export function TrackBoard({
                     type="button"
                     onClick={() => onGenerate(track)}
                   >
-                    <span aria-hidden="true">✦</span>
-                    AI 생성
+                    <span aria-hidden="true">AI</span>
+                    생성
                   </button>
                 </div>
 
@@ -417,6 +571,15 @@ export function TrackBoard({
             </article>
           )
         })}
+      </div>
+
+      <div className="editor-panels">
+        <PianoRollPanel region={selectedRegion} />
+        <PracticeWaterfall
+          playheadSeconds={playheadSeconds}
+          regions={regions}
+          timelineSeconds={timelineSeconds}
+        />
       </div>
     </section>
   )

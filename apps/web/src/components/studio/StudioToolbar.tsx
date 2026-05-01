@@ -23,7 +23,6 @@ type StudioToolbarProps = {
   selectedPlaybackSlotIds: Set<number>
   studioTitle: string
   syncStepSeconds: number
-  onExportPdf: () => void
   onMetronomeChange: (enabled: boolean) => void
   onPlaybackSourceChange: (source: PlaybackSourceMode) => void
   onSeekPlayback: (seconds: number) => void
@@ -61,7 +60,6 @@ export function StudioToolbar({
   selectedPlaybackSlotIds,
   studioTitle,
   syncStepSeconds,
-  onExportPdf,
   onMetronomeChange,
   onPlaybackSourceChange,
   onSeekPlayback,
@@ -145,7 +143,7 @@ export function StudioToolbar({
         <span>File</span>
         <span>Track</span>
         <span>Play</span>
-        <span>Score</span>
+        <span>Practice</span>
         <span>Tools</span>
         <span>Help</span>
       </nav>
@@ -243,18 +241,9 @@ export function StudioToolbar({
             type="button"
             onClick={() => onPlaybackSourceChange('score')}
           >
-            악보
+            노트
           </button>
         </div>
-        <button
-          className="composer-tool composer-tool--text"
-          data-testid="export-pdf-button"
-          disabled={registeredTrackCount === 0 || actionState.phase === 'busy'}
-          type="button"
-          onClick={onExportPdf}
-        >
-          PDF
-        </button>
       </div>
 
       {(playbackPickerOpen || globalPlaying) && (

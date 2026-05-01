@@ -122,7 +122,6 @@ export function StudioPage() {
     studioMeter,
   })
   const {
-    handleExportPdf,
     handleGenerate,
     handleShiftAllSync,
     handleSync,
@@ -248,7 +247,6 @@ export function StudioPage() {
           selectedPlaybackSlotIds={selectedPlaybackSlotIds}
           studioTitle={studio.title}
           syncStepSeconds={syncStepSeconds}
-          onExportPdf={() => void handleExportPdf()}
           onMetronomeChange={setMetronomeEnabled}
           onPlaybackSourceChange={changePlaybackSource}
           onSeekPlayback={seekSelectedPlayback}
@@ -261,9 +259,9 @@ export function StudioPage() {
           onTogglePlaybackSelection={togglePlaybackSelection}
           onToggleGlobalPlayback={() => void toggleGlobalPlayback()}
         />
-        <section className="composer-score-viewport">
-          <div className="composer-score-paper">
-            <div className="composer-score-heading">
+        <section className="composer-arrange-viewport">
+          <div className="composer-arrange-paper">
+            <div className="composer-arrange-heading">
               <h1>{studio.title}</h1>
               <p>
                 {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}

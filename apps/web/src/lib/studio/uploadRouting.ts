@@ -2,7 +2,7 @@ import { AUDIO_UPLOAD_EXTENSIONS, isAudioUploadFile } from '../audio/audioUpload
 
 type UploadKind = 'audio' | 'midi' | 'score'
 
-const SCORE_UPLOAD_EXTENSIONS = [
+const DOCUMENT_UPLOAD_EXTENSIONS = [
   '.musicxml',
   '.mxl',
   '.xml',
@@ -20,7 +20,7 @@ export const TRACK_UPLOAD_ACCEPT = [
   ...AUDIO_UPLOAD_EXTENSIONS,
   '.mid',
   '.midi',
-  ...SCORE_UPLOAD_EXTENSIONS,
+  ...DOCUMENT_UPLOAD_EXTENSIONS,
 ].join(',')
 
 export function detectUploadKind(file: File): UploadKind | null {
@@ -28,7 +28,7 @@ export function detectUploadKind(file: File): UploadKind | null {
   if (name.endsWith('.mid') || name.endsWith('.midi')) {
     return 'midi'
   }
-  if (SCORE_UPLOAD_EXTENSIONS.some((extension) => name.endsWith(extension))) {
+  if (DOCUMENT_UPLOAD_EXTENSIONS.some((extension) => name.endsWith(extension))) {
     return 'score'
   }
   if (isAudioUploadFile(file)) {

@@ -171,10 +171,10 @@ export function CandidateReviewPanel({
 
               {sourcePreviewUrl ? (
                 <details className="candidate-review__source-preview">
-                  <summary>원본 악보 대조</summary>
+                  <summary>원본 문서 대조</summary>
                   <div>
                     <img
-                      alt={`${candidate.source_label} 원본 악보 첫 페이지`}
+                      alt={`${candidate.source_label} 원본 문서 첫 페이지`}
                       loading="lazy"
                       src={sourcePreviewUrl}
                     />
@@ -227,7 +227,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   if (candidate.notes.length === 0) {
     return {
       label: '재시도 권장',
-      reason: '등록할 음표가 감지되지 않았습니다.',
+      reason: '등록할 노트 이벤트가 감지되지 않았습니다.',
       tone: 'retry',
     }
   }
@@ -268,7 +268,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
 
   return {
     label: '추천',
-    reason: '트랙 배정과 악보화 품질이 안정적인 후보입니다.',
+    reason: '트랙 배정과 노트 추출 품질이 안정적인 후보입니다.',
     tone: 'recommended',
   }
 }

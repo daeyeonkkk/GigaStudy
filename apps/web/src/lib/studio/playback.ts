@@ -5,7 +5,7 @@ import {
   isMeasureDownbeat,
   type MeterContext,
 } from './timing'
-import type { TrackSlot } from '../../types/studio'
+import type { ScoreNote, TrackSlot } from '../../types/studio'
 
 export type PlaybackNode = {
   filters?: BiquadFilterNode[]
@@ -159,6 +159,75 @@ export function trackHasPlayableScore(track: TrackSlot): boolean {
   return track.notes.some((note) => note.is_rest !== true)
 }
 
+const noteSemitones: Record<string, number> = {
+  C: 0,
+  D: 2,
+  E: 4,
+  F: 5,
+  G: 7,
+  A: 9,
+  B: 11,
+}
+
+function parsePitchLabel(label: string): { octave: number; semitone: number } | null {
+  const match = /^([A-G])([#b]?)(-?\d+)$/u.exec(label.trim())
+  if (!match) {
+    return null
+  }
+
+  const [, noteName, accidental, octaveText] = match
+  const octave = Number(octaveText)
+  let semitone = noteSemitones[noteName]
+  if (accidental === '#') {
+    semitone += 1
+  } else if (accidental === 'b') {
+    semitone -= 1
+  }
+
+  return {
+    octave,
+    semitone: ((semitone % 12) + 12) % 12,
+  }
+}
+
+function getNoteFrequency(label: string): number | null {
+  const parsed = parsePitchLabel(label)
+  if (!parsed) {
+    return null
+  }
+
+  const octaveOffset = parsed.octave - 4
+  const pitchClassOffset = parsed.semitone - 9
+  return 440 * 2 ** ((octaveOffset * 12 + pitchClassOffset) / 12)
+}
+
+function getPercussionFrequency(label: string): number {
+  const normalized = label.toLowerCase()
+  if (normalized.includes('kick')) {
+    return 90
+  }
+  if (normalized.includes('snare')) {
+    return 180
+  }
+  if (normalized.includes('hat')) {
+    return 620
+  }
+  return 260
+}
+
+export function getNotePlaybackFrequency(note: ScoreNote): number | null {
+  if (note.is_rest === true) {
+    return null
+  }
+  if (note.pitch_hz && Number.isFinite(note.pitch_hz)) {
+    return note.pitch_hz
+  }
+  if (note.pitch_midi === 35 || note.label.toLowerCase().includes('kick')) {
+    return getPercussionFrequency(note.label)
+  }
+  return getNoteFrequency(note.label)
+}
+
 export function trackHasPlayableAudio(track: TrackSlot): boolean {
   return Boolean(track.audio_source_path)
 }
@@ -175,12 +244,12 @@ export function getPlaybackPreparationMessage(
   ).length
   const parts = [
     audioCount > 0 ? `원음 ${audioCount}개` : null,
-    scoreCount > 0 ? `악보 음 ${scoreCount}개` : null,
+    scoreCount > 0 ? `노트 이벤트 ${scoreCount}개` : null,
     includeMetronome ? '메트로놈' : null,
   ].filter(Boolean)
 
   if (parts.length === 0) {
-    return '재생 가능한 원음이나 악보 음을 확인합니다.'
+    return '재생 가능한 원음이나 노트 이벤트를 확인합니다.'
   }
   if (parts.length === 1 && audioCount === 1) {
     return '녹음 원본을 불러옵니다. 기준 트랙이 없으면 거의 즉시 재생됩니다.'

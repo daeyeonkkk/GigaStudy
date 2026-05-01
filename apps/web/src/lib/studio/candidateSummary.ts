@@ -35,7 +35,7 @@ const sourceDecisionLabels: Record<SourceKind, string> = {
   recording: '녹음 추출',
   audio: '오디오 추출',
   midi: 'MIDI 파트',
-  score: '악보 파트',
+  score: '문서 파트',
   music: '음원 추출',
   ai: 'AI 화음',
 }
@@ -128,12 +128,12 @@ export function getCandidateDecisionSummary(
   if (candidate.notes.length === 0) {
     return {
       title: '비어 있는 후보',
-      headline: '등록할 음표가 없습니다.',
+      headline: '등록할 노트 이벤트가 없습니다.',
       support: '다른 후보를 선택하거나 입력 소스를 다시 확인하세요.',
-      tags: ['음표 없음'],
+      tags: ['노트 없음'],
       phrasePreview: '-',
       metrics: [
-        { label: '음표', value: '0' },
+        { label: '노트', value: '0' },
         { label: '신뢰도', value: confidence },
       ],
       diagnostics,
@@ -186,7 +186,7 @@ export function getCandidateDecisionSummary(
       { label: '리듬', value: rhythm.label },
       { label: '시작/끝', value: startEnd },
       { label: '신뢰도', value: confidence },
-      { label: '길이', value: `${durationSeconds.toFixed(2)}s · ${candidate.notes.length} notes` },
+      { label: '길이', value: `${durationSeconds.toFixed(2)}s · ${candidate.notes.length} events` },
     ],
     diagnostics,
     technical: [
@@ -371,7 +371,7 @@ function getRhythmSummary(notes: ScoreNote[], beatsPerMeasure: number): {
   const densityLabel =
     notesPerMeasure >= 7 ? '촘촘한 리듬' : notesPerMeasure >= 4 ? '보통 밀도' : '여유 있는 리듬'
   return {
-    detail: `마디당 약 ${notesPerMeasure.toFixed(1)}개 음표, 최단 ${shortestDuration.toFixed(2)}박입니다`,
+    detail: `마디당 약 ${notesPerMeasure.toFixed(1)}개 이벤트, 최단 ${shortestDuration.toFixed(2)}박입니다`,
     label: `${densityLabel} · ${notesPerMeasure.toFixed(1)} notes/measure`,
     tag: densityLabel,
   }
@@ -527,12 +527,12 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
   return (
     {
       few_notes: {
-        tag: '음표 수 적음',
-        sentence: '음표 수가 적어 파트 누락 여부를 확인하세요.',
+        tag: '노트 수 적음',
+        sentence: '노트 수가 적어 파트 누락 여부를 확인하세요.',
       },
       low_note_confidence: {
         tag: '원본 대조 필요',
-        sentence: '음표별 신뢰도가 낮아 원본 대조가 필요합니다.',
+        sentence: '노트별 신뢰도가 낮아 원본 대조가 필요합니다.',
       },
       range_outliers: {
         tag: '음역 확인',

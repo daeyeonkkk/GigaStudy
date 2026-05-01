@@ -1,6 +1,5 @@
 import {
   createTrackUploadTarget,
-  exportStudioPdf,
   generateTrack,
   putDirectUpload,
   readFileAsDataUrl,
@@ -14,7 +13,6 @@ import {
   detectUploadKind,
   formatSeconds,
   isOmrUpload,
-  safeDownloadName,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
 import type { RunStudioAction, SetStudioActionState } from './studioActionState'
@@ -40,30 +38,6 @@ export function useStudioTrackActions({
   stopPlaybackSession,
   studio,
 }: UseStudioTrackActionsArgs) {
-  async function handleExportPdf() {
-    if (!studio) {
-      return
-    }
-    setActionState({ phase: 'busy', message: 'PDF 악보를 생성하는 중입니다.' })
-    try {
-      const pdfBlob = await exportStudioPdf(studio.studio_id)
-      const url = URL.createObjectURL(pdfBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${safeDownloadName(studio.title)}-score.pdf`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-      setActionState({ phase: 'success', message: 'PDF 악보를 생성했습니다.' })
-    } catch (error) {
-      setActionState({
-        phase: 'error',
-        message: error instanceof Error ? error.message : 'PDF를 생성하지 못했습니다.',
-      })
-    }
-  }
-
   async function handleUpload(track: TrackSlot, file: File | null) {
     if (!studio || !file) {
       return
@@ -125,7 +99,7 @@ export function useStudioTrackActions({
     if (isOmrUpload(file)) {
       setActionState({
         phase: 'success',
-        message: `${track.name} PDF/image OMR 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
+        message: `${track.name} 문서 분석 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
       })
     } else if (sourceKind === 'audio') {
       setActionState({
@@ -152,7 +126,7 @@ export function useStudioTrackActions({
       `${track.name} 파트 후보를 생성하는 중입니다.`,
       track.slot_id === 6
         ? '퍼커션 트랙에 BPM 기반 비트 후보 3개를 만들었습니다.'
-        : `${track.name} 트랙에 참고 트랙 기반 악보 후보 3개를 만들었습니다.`,
+        : `${track.name} 트랙에 참고 트랙 기반 노트 후보 3개를 만들었습니다.`,
     )
   }
 
@@ -197,7 +171,6 @@ export function useStudioTrackActions({
   }
 
   return {
-    handleExportPdf,
     handleGenerate,
     handleShiftAllSync,
     handleSync,

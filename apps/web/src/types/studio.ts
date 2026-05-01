@@ -9,7 +9,8 @@ type TrackStatus =
   | 'failed'
 
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'score' | 'music' | 'ai'
-type NoteSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
+export type PitchEventSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
+type NoteSource = PitchEventSource
 export type ScoreMode = 'answer' | 'harmony'
 
 export type ScoreNote = {
@@ -37,6 +38,38 @@ export type ScoreNote = {
   staff_index: number | null
   quantization_grid?: number | null
   notation_warnings?: string[]
+}
+
+export type PitchEvent = {
+  event_id: string
+  track_slot_id: number
+  region_id: string
+  label: string
+  pitch_midi: number | null
+  pitch_hz: number | null
+  start_seconds: number
+  duration_seconds: number
+  start_beat: number
+  duration_beats: number
+  confidence: number
+  source: PitchEventSource
+  is_rest: boolean
+}
+
+export type ArrangementRegion = {
+  region_id: string
+  track_slot_id: number
+  track_name: string
+  source_kind: SourceKind | null
+  source_label: string | null
+  audio_source_path: string | null
+  audio_mime_type: string | null
+  start_seconds: number
+  duration_seconds: number
+  sync_offset_seconds: number
+  volume_percent: number
+  pitch_events: PitchEvent[]
+  diagnostics: Record<string, unknown>
 }
 
 export type TrackExtractionJob = {

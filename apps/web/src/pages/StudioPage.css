@@ -342,7 +342,7 @@
   background: #c2362d;
 }
 
-.composer-score-viewport {
+.composer-arrange-viewport {
   min-height: 0;
   max-height: calc(100svh - 220px);
   padding: 24px 28px 30px;
@@ -350,7 +350,7 @@
   overflow: auto;
 }
 
-.composer-score-paper {
+.composer-arrange-paper {
   width: min(100%, 1360px);
   min-width: 880px;
   min-height: 760px;
@@ -362,24 +362,23 @@
   box-shadow: 0 1px 0 #ffffff, 0 18px 50px rgba(30, 38, 45, 0.14);
 }
 
-.composer-score-heading {
+.composer-arrange-heading {
   display: grid;
   gap: 8px;
   justify-items: center;
   padding-bottom: 20px;
 }
 
-.composer-score-heading h1 {
+.composer-arrange-heading h1 {
   max-width: none;
   color: #080808;
-  font-family: Georgia, 'Times New Roman', serif;
   font-size: clamp(1.7rem, 3vw, 2.6rem);
   font-weight: 800;
   line-height: 1.1;
   text-align: center;
 }
 
-.composer-score-heading p {
+.composer-arrange-heading p {
   color: #4a5560;
   font-weight: 700;
 }
@@ -448,11 +447,11 @@
 }
 
 @media (max-width: 1120px) {
-  .composer-score-viewport {
+  .composer-arrange-viewport {
     padding: 14px;
   }
 
-  .composer-score-paper {
+  .composer-arrange-paper {
     min-width: 760px;
   }
 }
@@ -480,18 +479,18 @@
     justify-content: flex-start;
   }
 
-  .composer-score-viewport {
+  .composer-arrange-viewport {
     max-height: none;
     padding: 10px;
   }
 
-  .composer-score-paper {
+  .composer-arrange-paper {
     min-width: 0;
     min-height: 0;
     padding: 18px 10px 22px;
   }
 
-  .composer-score-heading h1 {
+  .composer-arrange-heading h1 {
     font-size: clamp(1.55rem, 10vw, 2.4rem);
   }
 

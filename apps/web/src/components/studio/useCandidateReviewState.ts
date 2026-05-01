@@ -119,13 +119,13 @@ export function useCandidateReviewState({
     }
     const allowOverwrite = jobOverwriteApprovals[jobId] === true
     if (jobWouldOverwrite(jobId) && !allowOverwrite) {
-      setActionError('OMR 결과가 기존 등록 트랙에 덮어씁니다. 덮어쓰기 확인을 체크하세요.')
+      setActionError('문서 분석 결과가 기존 등록 트랙에 덮어씁니다. 덮어쓰기 확인을 체크하세요.')
       return
     }
     await runStudioAction(
       () => approveJobCandidates(studio.studio_id, jobId, allowOverwrite),
-      'OMR 결과를 각 트랙에 등록하는 중입니다.',
-      'OMR 결과를 제안된 트랙에 등록했습니다.',
+      '문서 분석 결과를 각 트랙에 등록하는 중입니다.',
+      '문서 분석 결과를 제안된 트랙에 등록했습니다.',
     )
   }
 

@@ -90,36 +90,6 @@ async function requestJson<T>(
   }
 }
 
-async function requestBlob(path: string, fallbackMessage: string): Promise<Blob> {
-  try {
-    const response = await fetch(new URL(path, apiBaseUrl), {
-      headers: ownerHeaders(),
-    })
-    if (response.ok) {
-      return await response.blob()
-    }
-    try {
-      const payload = (await response.json()) as { detail?: unknown; message?: unknown }
-      if (typeof payload.detail === 'string' && payload.detail.trim()) {
-        throw new Error(payload.detail.trim())
-      }
-      if (typeof payload.message === 'string' && payload.message.trim()) {
-        throw new Error(payload.message.trim())
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message !== fallbackMessage) {
-        throw error
-      }
-    }
-    throw new Error(fallbackMessage)
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new Error('API 서버에 연결할 수 없습니다.')
-    }
-    throw error
-  }
-}
-
 export function listStudios(limit = 12, offset = 0): Promise<StudioListItem[]> {
   const params = new URLSearchParams({
     limit: String(limit),
@@ -525,8 +495,4 @@ export function drainAdminEngineQueue(
     },
     'Engine queue could not be drained.',
   )
-}
-
-export function exportStudioPdf(studioId: string): Promise<Blob> {
-  return requestBlob(`/api/studios/${studioId}/export/pdf`, 'PDF를 생성하지 못했습니다.')
 }

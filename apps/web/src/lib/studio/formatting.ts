@@ -2,7 +2,7 @@ import type { ReportIssue, ScoringReport, TrackSlot } from '../../types/studio'
 
 export function safeDownloadName(value: string): string {
   const normalized = value.trim().replace(/[^a-zA-Z0-9가-힣_-]+/g, '-')
-  return normalized || 'gigastudy-score'
+  return normalized || 'gigastudy-session'
 }
 
 export function formatSeconds(seconds: number): string {

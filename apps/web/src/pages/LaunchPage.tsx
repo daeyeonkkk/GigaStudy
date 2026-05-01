@@ -29,7 +29,7 @@ type PreparedLaunchSource = {
   contentBase64?: string
 }
 
-const SCORE_SOURCE_EXTENSIONS = new Set([
+const DOCUMENT_SOURCE_EXTENSIONS = new Set([
   '.musicxml',
   '.mxl',
   '.xml',
@@ -45,18 +45,18 @@ const SCORE_SOURCE_EXTENSIONS = new Set([
   '.tiff',
 ])
 const SUPPORTED_SOURCE_ACCEPT = [
-  ...SCORE_SOURCE_EXTENSIONS,
+  ...DOCUMENT_SOURCE_EXTENSIONS,
   ...AUDIO_UPLOAD_EXTENSIONS,
 ].join(',')
 
 function isSupportedSourceFile(file: File): boolean {
   const extension = getFileExtension(file.name)
-  return SCORE_SOURCE_EXTENSIONS.has(extension) || isAudioUploadFile(file)
+  return DOCUMENT_SOURCE_EXTENSIONS.has(extension) || isAudioUploadFile(file)
 }
 
 function detectSourceKind(file: File): 'score' | 'music' {
   const extension = getFileExtension(file.name)
-  if (SCORE_SOURCE_EXTENSIONS.has(extension)) {
+  if (DOCUMENT_SOURCE_EXTENSIONS.has(extension)) {
     return 'score'
   }
   return 'music'
@@ -152,7 +152,7 @@ export function LaunchPage() {
       return
     }
     if (!canUploadStart) {
-      setSubmitState({ phase: 'error', message: '악보나 음악 파일을 선택하세요.' })
+      setSubmitState({ phase: 'error', message: '문서나 음악 파일을 선택하세요.' })
       return
     }
 
@@ -244,13 +244,13 @@ export function LaunchPage() {
         </div>
 
         <div className="launch-document">
-          <section className="launch-score-preview" aria-label="빈 6트랙 악보 미리보기">
-            <div className="launch-score-title">
+          <section className="launch-arrange-preview" aria-label="빈 6트랙 리전 미리보기">
+            <div className="launch-arrange-title">
               <strong>GigaStudy</strong>
               <span>Six-track a cappella studio</span>
             </div>
             {['Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass', 'Percussion'].map((track) => (
-              <div className="launch-staff-row" key={track}>
+              <div className="launch-region-row" key={track}>
                 <span>{track}</span>
                 <div aria-hidden="true">
                   <i />
@@ -318,7 +318,7 @@ export function LaunchPage() {
               ) : null}
 
               <label className="launch-field">
-                <span>악보 또는 음악</span>
+                <span>문서 또는 음악</span>
                 <input
                   key={sourceInputKey}
                   ref={sourceInputRef}
@@ -355,7 +355,7 @@ export function LaunchPage() {
                   }
                 >
                   <option value="auto">자동 판단</option>
-                  <option value="score">악보</option>
+                  <option value="score">문서/노트</option>
                   <option value="music">음악</option>
                 </select>
               </label>
@@ -400,7 +400,7 @@ export function LaunchPage() {
         <footer className="launch-statusbar">
           <span>Ready</span>
           <span>Tracks 1-6</span>
-          <span>Score / Music / Blank</span>
+          <span>Region / Music / Blank</span>
         </footer>
       </section>
 

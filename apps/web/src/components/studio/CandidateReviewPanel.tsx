@@ -66,6 +66,7 @@ export function CandidateReviewPanel({
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
           const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
           const contourPoints = getCandidateContourPoints(candidate)
+          const engineLabel = getCandidateEngineLabel(candidate)
           const verdict = getCandidateVerdict(candidate, wouldOverwrite)
           const sourcePreviewUrl =
             candidate.job_id && shouldShowSourcePreview(candidate) && getJobSourcePreviewUrl
@@ -79,6 +80,7 @@ export function CandidateReviewPanel({
                   {sourceLabels[candidate.source_kind]}
                   {candidate.variant_label ? ` · ${candidate.variant_label}` : ''}
                 </span>
+                <span className="candidate-review__engine">{engineLabel}</span>
                 <h3>{suggestedTrack?.name ?? `Track ${candidate.suggested_slot_id}`} 후보</h3>
                 <div className={`candidate-review__verdict candidate-review__verdict--${verdict.tone}`}>
                   <strong>{verdict.label}</strong>
@@ -286,6 +288,16 @@ function getDiagnosticStringList(diagnostics: Record<string, unknown>, key: stri
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : []
+}
+
+function getCandidateEngineLabel(candidate: ExtractionCandidate): string {
+  if (candidate.method.includes('deepseek')) {
+    return 'Engine: DeepSeek plan + voice-leading'
+  }
+  if (candidate.method.includes('rule_based')) {
+    return 'Engine: rule-based voice-leading'
+  }
+  return `Engine: ${candidate.method}`
 }
 
 function shouldShowSourcePreview(candidate: ExtractionCandidate): boolean {

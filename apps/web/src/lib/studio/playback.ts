@@ -102,9 +102,9 @@ function createPianoTone(
     oscillator.type = partial.type
     oscillator.frequency.setValueAtTime(frequency * partial.ratio, startTime)
     partialGain.gain.setValueAtTime(0.0001, startTime)
-    partialGain.gain.linearRampToValueAtTime(volume * partial.gain, startTime + attackTime)
+    partialGain.gain.linearRampToValueAtTime(partial.gain, startTime + attackTime)
     partialGain.gain.exponentialRampToValueAtTime(
-      Math.max(0.0001, volume * partial.gain * 0.12),
+      Math.max(0.0001, partial.gain * 0.12),
       startTime + attackTime + decayTime * partial.releaseScale,
     )
     partialGain.gain.exponentialRampToValueAtTime(

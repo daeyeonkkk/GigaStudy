@@ -66,6 +66,18 @@ def test_generation_planning_skips_llm_for_large_context() -> None:
     assert planning_settings.deepseek_harmony_enabled is False
 
 
+def test_generation_planning_uses_llm_for_typical_multitrack_context() -> None:
+    settings = Settings(
+        deepseek_harmony_enabled=True,
+        deepseek_api_key="secret",
+        deepseek_timeout_seconds=8,
+    )
+
+    planning_settings = _generation_planning_settings(settings, context_note_count=54)
+
+    assert planning_settings.deepseek_harmony_enabled is True
+
+
 def test_generation_planning_caps_llm_latency_for_small_context() -> None:
     settings = Settings(
         deepseek_harmony_enabled=True,
@@ -78,7 +90,7 @@ def test_generation_planning_caps_llm_latency_for_small_context() -> None:
     planning_settings = _generation_planning_settings(settings, context_note_count=4)
 
     assert planning_settings.deepseek_harmony_enabled is True
-    assert planning_settings.deepseek_timeout_seconds == 2.5
+    assert planning_settings.deepseek_timeout_seconds == 6.0
     assert planning_settings.deepseek_max_retries == 0
     assert planning_settings.deepseek_revision_cycles == 0
 

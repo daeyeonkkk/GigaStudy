@@ -13,8 +13,8 @@ from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_ca
 from gigastudy_api.services.engine.timeline import notes_with_sync_offset
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan, plan_harmony_with_deepseek
 
-DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT = 40
-DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 2.5
+DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT = 160
+DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 6.0
 
 
 @dataclass(frozen=True)
@@ -129,7 +129,7 @@ def generate_track_material(
         "DeepSeek V4 Flash planned candidate directions; deterministic engine generated valid "
         "TrackNote candidates."
         if llm_plan is not None
-        else "AI generated multiple candidates. Approve one candidate to register it."
+        else "Deterministic voice-leading generated multiple candidates. Approve one candidate to register it."
     )
     return GeneratedTrackMaterial(
         candidate_notes=candidate_notes,

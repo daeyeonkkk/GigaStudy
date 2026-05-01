@@ -373,9 +373,12 @@ async function installDecodedAudioUploadStub(page: Page) {
 async function installScorePlaybackClockStub(page: Page) {
   await page.addInitScript(() => {
     const playbackWindow = window as Window & {
+      __gigastudyGainLinearRamps?: number[]
       __gigastudyToneStarts?: Array<{ frequency: number; startTime: number }>
     }
+    const gainLinearRamps: number[] = []
     const toneStarts: Array<{ frequency: number; startTime: number }> = []
+    playbackWindow.__gigastudyGainLinearRamps = gainLinearRamps
     playbackWindow.__gigastudyToneStarts = toneStarts
 
     class FakeAudioParam {
@@ -392,6 +395,7 @@ async function installScorePlaybackClockStub(page: Page) {
 
       linearRampToValueAtTime(value: number) {
         this.value = value
+        gainLinearRamps.push(value)
         return undefined
       }
 
@@ -807,6 +811,7 @@ test('AI generated registered track plays synthesized score from the track play 
   await approveFirstCandidate(page)
 
   await generateTrackAndWait(page, 2)
+  await expect(page.getByTestId('candidate-review')).toContainText('Engine: rule-based voice-leading')
   await approveFirstCandidate(page)
   await expect(page.getByTestId('track-card-2')).toContainText('Voice-leading harmony score')
   await expect(page.getByTestId('playback-source-audio')).toHaveAttribute('aria-pressed', 'true')
@@ -823,6 +828,11 @@ test('AI generated registered track plays synthesized score from the track play 
       }),
     )
     .toBeGreaterThan(0)
+  const hasAudibleMasterGain = await page.evaluate(() => {
+    const playbackWindow = window as Window & { __gigastudyGainLinearRamps?: number[] }
+    return (playbackWindow.__gigastudyGainLinearRamps ?? []).some((value) => value >= 0.3 && value <= 0.35)
+  })
+  expect(hasAudibleMasterGain).toBe(true)
 })
 
 test('six-track studio supports create, register, generate, sync, play, and score', async ({ page, browserName }) => {

@@ -39,12 +39,20 @@ export function useCandidateReviewState({
     )
   }
 
+  function trackHasArrangementMaterial(track: TrackSlot): boolean {
+    const region = studio?.regions.find((item) => item.track_slot_id === track.slot_id)
+    return (
+      track.status === 'registered' ||
+      Boolean(region && (region.pitch_events.length > 0 || region.audio_source_path))
+    )
+  }
+
   function candidateWouldOverwrite(candidate: ExtractionCandidate): boolean {
     const targetTrack = getSelectedCandidateTrack(candidate)
     if (!targetTrack) {
       return false
     }
-    return targetTrack.status === 'registered' || targetTrack.notes.length > 0
+    return trackHasArrangementMaterial(targetTrack)
   }
 
   function getPendingJobCandidates(jobId: string): ExtractionCandidate[] {
@@ -54,7 +62,7 @@ export function useCandidateReviewState({
   function jobWouldOverwrite(jobId: string): boolean {
     return getPendingJobCandidates(jobId).some((candidate) => {
       const targetTrack = studio?.tracks.find((track) => track.slot_id === candidate.suggested_slot_id)
-      return targetTrack ? targetTrack.status === 'registered' || targetTrack.notes.length > 0 : false
+      return targetTrack ? trackHasArrangementMaterial(targetTrack) : false
     })
   }
 

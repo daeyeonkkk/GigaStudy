@@ -335,7 +335,10 @@ export function useStudioRecording({
       return
     }
 
-    const wouldOverwrite = track.status === 'registered' || track.notes.length > 0
+    const existingRegion = studio?.regions.find((region) => region.track_slot_id === track.slot_id)
+    const wouldOverwrite =
+      track.status === 'registered' ||
+      Boolean(existingRegion && (existingRegion.pitch_events.length > 0 || existingRegion.audio_source_path))
     const allowOverwrite =
       !wouldOverwrite || window.confirm(`${track.name} 트랙의 기존 노트 이벤트를 새 녹음으로 덮어쓸까요?`)
     if (!allowOverwrite) {

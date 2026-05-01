@@ -287,7 +287,7 @@ export function CandidateReviewPanel({
 }
 
 function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boolean): CandidateVerdict {
-  if (candidate.notes.length === 0) {
+  if (candidate.region.pitch_events.length === 0) {
     return {
       label: '재시도 권장',
       reason: '등록할 노트 이벤트가 감지되지 않았습니다.',

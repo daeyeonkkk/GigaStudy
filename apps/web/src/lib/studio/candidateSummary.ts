@@ -1,4 +1,4 @@
-import type { ExtractionCandidate, ScoreNote, SourceKind, TrackSlot } from '../../types/studio'
+import type { ExtractionCandidate, PitchEvent, SourceKind, TrackSlot } from '../../types/studio'
 
 type CandidateMetric = {
   label: string
@@ -21,6 +21,8 @@ type CandidateDecisionSummary = {
   diagnostics: CandidateMetric[]
   technical: CandidateMetric[]
 }
+
+type PitchedCandidateEvent = PitchEvent & { pitch_midi: number }
 
 const TRACK_CENTER_MIDI: Record<number, number> = {
   1: 74,
@@ -74,35 +76,34 @@ const RHYTHM_POLICY_LABELS: Record<string, string> = {
 }
 
 function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
-  if (candidate.notes.length === 0) {
+  const events = getCandidateEvents(candidate)
+  if (events.length === 0) {
     return 0
   }
-  return Math.max(...candidate.notes.map((note) => note.onset_seconds + note.duration_seconds))
+  return Math.max(...events.map((event) => event.start_seconds + event.duration_seconds))
 }
 
 function getCandidatePitchRange(candidate: ExtractionCandidate): string {
-  const pitchedNotes = candidate.notes.filter((note) => note.is_rest !== true)
-  if (pitchedNotes.length === 0) {
+  const pitchedEvents = getPitchedEvents(candidate)
+  if (pitchedEvents.length === 0) {
     return '-'
   }
-  const midiNotes = pitchedNotes.filter(
-    (note): note is ScoreNote & { pitch_midi: number } =>
-      typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi),
-  )
-  if (midiNotes.length === 0) {
-    return [...new Set(pitchedNotes.map((note) => note.label))].slice(0, 3).join(' / ')
+  const midiEvents = getMidiEvents(pitchedEvents)
+  if (midiEvents.length === 0) {
+    return [...new Set(pitchedEvents.map((event) => event.label))].slice(0, 3).join(' / ')
   }
-  const sorted = [...midiNotes].sort((left, right) => left.pitch_midi - right.pitch_midi)
+  const sorted = [...midiEvents].sort((left, right) => left.pitch_midi - right.pitch_midi)
   return `${sorted[0].label} - ${sorted[sorted.length - 1].label}`
 }
 
 export function getCandidatePreviewText(candidate: ExtractionCandidate): string {
-  if (candidate.notes.length === 0) {
-    return 'no notes'
+  const events = getCandidateEvents(candidate)
+  if (events.length === 0) {
+    return 'no events'
   }
-  return candidate.notes
+  return events
     .slice(0, 8)
-    .map((note) => `${note.label}@${note.beat}`)
+    .map((event) => `${event.label}@${event.start_beat}`)
     .join(', ')
 }
 
@@ -111,21 +112,22 @@ export function getCandidateDecisionSummary(
   targetTrack: TrackSlot | null,
   beatsPerMeasure: number,
 ): CandidateDecisionSummary {
-  const pitchedNotes = getPitchedNotes(candidate)
-  const midiNotes = getMidiNotes(pitchedNotes)
+  const events = getCandidateEvents(candidate)
+  const pitchedEvents = getPitchedEvents(candidate)
+  const midiEvents = getMidiEvents(pitchedEvents)
   const durationSeconds = getCandidateDurationSeconds(candidate)
   const range = getCandidatePitchRange(candidate)
-  const register = getRegisterSummary(midiNotes, targetTrack)
-  const movement = getMovementSummary(midiNotes)
-  const rhythm = getRhythmSummary(candidate.notes, beatsPerMeasure)
-  const contour = getContourSummary(midiNotes)
-  const startEnd = getStartEndSummary(pitchedNotes)
+  const register = getRegisterSummary(midiEvents, targetTrack)
+  const movement = getMovementSummary(midiEvents)
+  const rhythm = getRhythmSummary(events, beatsPerMeasure)
+  const contour = getContourSummary(midiEvents)
+  const startEnd = getStartEndSummary(pitchedEvents)
   const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
   const diagnostics = getCandidateDiagnostics(candidate)
   const reviewHint = getReviewHintSummary(candidate)
   const llmInsight = getDeepSeekDecisionInsight(candidate)
 
-  if (candidate.notes.length === 0) {
+  if (events.length === 0) {
     return {
       title: '비어 있는 후보',
       headline: '등록할 노트 이벤트가 없습니다.',
@@ -186,7 +188,7 @@ export function getCandidateDecisionSummary(
       { label: '리듬', value: rhythm.label },
       { label: '시작/끝', value: startEnd },
       { label: '신뢰도', value: confidence },
-      { label: '길이', value: `${durationSeconds.toFixed(2)}s · ${candidate.notes.length} events` },
+      { label: '길이', value: `${durationSeconds.toFixed(2)}s · ${events.length} events` },
     ],
     diagnostics,
     technical: [
@@ -199,43 +201,47 @@ export function getCandidateDecisionSummary(
 }
 
 export function getCandidateContourPoints(candidate: ExtractionCandidate): CandidateContourPoint[] {
-  const midiNotes = getMidiNotes(getPitchedNotes(candidate)).slice(0, 28)
-  if (midiNotes.length === 0) {
+  const midiEvents = getMidiEvents(getPitchedEvents(candidate)).slice(0, 28)
+  if (midiEvents.length === 0) {
     return []
   }
 
-  const minMidi = Math.min(...midiNotes.map((note) => note.pitch_midi))
-  const maxMidi = Math.max(...midiNotes.map((note) => note.pitch_midi))
+  const minMidi = Math.min(...midiEvents.map((event) => event.pitch_midi))
+  const maxMidi = Math.max(...midiEvents.map((event) => event.pitch_midi))
   const midiSpan = Math.max(1, maxMidi - minMidi)
-  const firstBeat = Math.min(...midiNotes.map((note) => note.beat))
-  const lastBeat = Math.max(...midiNotes.map((note) => note.beat + Math.max(0.25, note.duration_beats)))
+  const firstBeat = Math.min(...midiEvents.map((event) => event.start_beat))
+  const lastBeat = Math.max(...midiEvents.map((event) => event.start_beat + Math.max(0.25, event.duration_beats)))
   const beatSpan = Math.max(0.25, lastBeat - firstBeat)
 
-  return midiNotes.map((note) => ({
-    label: `${note.label}@${note.beat}`,
-    x: midiNotes.length === 1 ? 50 : ((note.beat - firstBeat) / beatSpan) * 100,
-    y: 100 - ((note.pitch_midi - minMidi) / midiSpan) * 100,
+  return midiEvents.map((event) => ({
+    label: `${event.label}@${event.start_beat}`,
+    x: midiEvents.length === 1 ? 50 : ((event.start_beat - firstBeat) / beatSpan) * 100,
+    y: 100 - ((event.pitch_midi - minMidi) / midiSpan) * 100,
   }))
 }
 
-function getPitchedNotes(candidate: ExtractionCandidate): ScoreNote[] {
-  return candidate.notes
-    .filter((note) => note.is_rest !== true)
-    .sort((left, right) => left.beat - right.beat || left.id.localeCompare(right.id))
+function getCandidateEvents(candidate: ExtractionCandidate): PitchEvent[] {
+  return candidate.region.pitch_events
+    .slice()
+    .sort((left, right) => left.start_beat - right.start_beat || left.event_id.localeCompare(right.event_id))
 }
 
-function getMidiNotes(notes: ScoreNote[]): Array<ScoreNote & { pitch_midi: number }> {
-  return notes.filter(
-    (note): note is ScoreNote & { pitch_midi: number } =>
-      typeof note.pitch_midi === 'number' && Number.isFinite(note.pitch_midi),
+function getPitchedEvents(candidate: ExtractionCandidate): PitchEvent[] {
+  return getCandidateEvents(candidate).filter((event) => event.is_rest !== true)
+}
+
+function getMidiEvents(events: PitchEvent[]): PitchedCandidateEvent[] {
+  return events.filter(
+    (event): event is PitchedCandidateEvent =>
+      typeof event.pitch_midi === 'number' && Number.isFinite(event.pitch_midi),
   )
 }
 
-function getAverageMidiLabel(midiNotes: Array<ScoreNote & { pitch_midi: number }>): string {
-  if (midiNotes.length === 0) {
+function getAverageMidiLabel(midiEvents: PitchedCandidateEvent[]): string {
+  if (midiEvents.length === 0) {
     return ''
   }
-  return getNearestNoteLabel(midiNotes.reduce((sum, note) => sum + note.pitch_midi, 0) / midiNotes.length)
+  return getNearestNoteLabel(midiEvents.reduce((sum, event) => sum + event.pitch_midi, 0) / midiEvents.length)
 }
 
 function getNearestNoteLabel(midi: number): string {
@@ -247,7 +253,7 @@ function getNearestNoteLabel(midi: number): string {
 }
 
 function getRegisterSummary(
-  midiNotes: Array<ScoreNote & { pitch_midi: number }>,
+  midiNotes: PitchedCandidateEvent[],
   targetTrack: TrackSlot | null,
 ): { averageLabel: string; headline: string; shortLabel: string; tag: string } {
   if (midiNotes.length === 0) {
@@ -296,7 +302,7 @@ function getRegisterSummary(
   }
 }
 
-function getMovementSummary(midiNotes: Array<ScoreNote & { pitch_midi: number }>): {
+function getMovementSummary(midiNotes: PitchedCandidateEvent[]): {
   detail: string
   label: string
   leapCount: number
@@ -348,12 +354,12 @@ function getMovementSummary(midiNotes: Array<ScoreNote & { pitch_midi: number }>
   }
 }
 
-function getRhythmSummary(notes: ScoreNote[], beatsPerMeasure: number): {
+function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
   detail: string
   label: string
   tag: string
 } {
-  if (notes.length === 0) {
+  if (events.length === 0) {
     return {
       detail: '리듬 정보가 없습니다',
       label: '-',
@@ -362,11 +368,11 @@ function getRhythmSummary(notes: ScoreNote[], beatsPerMeasure: number): {
   }
 
   const safeBeatsPerMeasure = Math.max(0.25, beatsPerMeasure)
-  const startBeat = Math.min(...notes.map((note) => note.beat))
-  const endBeat = Math.max(...notes.map((note) => note.beat + Math.max(0.25, note.duration_beats)))
+  const startBeat = Math.min(...events.map((event) => event.start_beat))
+  const endBeat = Math.max(...events.map((event) => event.start_beat + Math.max(0.25, event.duration_beats)))
   const measureSpan = Math.max(1, Math.ceil((endBeat - startBeat) / safeBeatsPerMeasure))
-  const notesPerMeasure = notes.length / measureSpan
-  const shortestDuration = Math.min(...notes.map((note) => Math.max(0.25, note.duration_beats)))
+  const notesPerMeasure = events.length / measureSpan
+  const shortestDuration = Math.min(...events.map((event) => Math.max(0.25, event.duration_beats)))
 
   const densityLabel =
     notesPerMeasure >= 7 ? '촘촘한 리듬' : notesPerMeasure >= 4 ? '보통 밀도' : '여유 있는 리듬'
@@ -377,7 +383,7 @@ function getRhythmSummary(notes: ScoreNote[], beatsPerMeasure: number): {
   }
 }
 
-function getContourSummary(midiNotes: Array<ScoreNote & { pitch_midi: number }>): { tag: string } {
+function getContourSummary(midiNotes: PitchedCandidateEvent[]): { tag: string } {
   if (midiNotes.length < 2) {
     return { tag: '수평 흐름' }
   }
@@ -392,23 +398,23 @@ function getContourSummary(midiNotes: Array<ScoreNote & { pitch_midi: number }>)
   return { tag: '수평 종지' }
 }
 
-function getStartEndSummary(notes: ScoreNote[]): string {
-  if (notes.length === 0) {
+function getStartEndSummary(events: PitchEvent[]): string {
+  if (events.length === 0) {
     return '-'
   }
-  const first = notes[0]
-  const last = notes[notes.length - 1]
-  return `${first.label}@${first.beat} -> ${last.label}@${last.beat}`
+  const first = events[0]
+  const last = events[events.length - 1]
+  return `${first.label}@${first.start_beat} -> ${last.label}@${last.start_beat}`
 }
 
 function getCandidatePhrasePreview(candidate: ExtractionCandidate): string {
-  const notes = getPitchedNotes(candidate)
-  if (notes.length === 0) {
+  const events = getPitchedEvents(candidate)
+  if (events.length === 0) {
     return getCandidatePreviewText(candidate)
   }
 
-  const labels = notes.slice(0, 12).map((note) => note.label)
-  const suffix = notes.length > labels.length ? ' ...' : ''
+  const labels = events.slice(0, 12).map((event) => event.label)
+  const suffix = events.length > labels.length ? ' ...' : ''
   return `${labels.join(' -> ')}${suffix}`
 }
 
@@ -495,7 +501,7 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   }
 
   const measureCount = getDiagnosticNumber(diagnostics, 'measure_count')
-  const noteCount = getDiagnosticNumber(diagnostics, 'note_count') ?? candidate.notes.length
+  const noteCount = getDiagnosticNumber(diagnostics, 'note_count') ?? candidate.region.pitch_events.length
   metrics.push({
     label: '감지량',
     value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인'} · ${noteCount} notes`,

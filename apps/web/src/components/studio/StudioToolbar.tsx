@@ -244,11 +244,11 @@ export function StudioToolbar({
             녹음
           </button>
           <button
-            aria-pressed={playbackSource === 'score'}
-            className={playbackSource === 'score' ? 'is-active' : ''}
-            data-testid="playback-source-score"
+            aria-pressed={playbackSource === 'events'}
+            className={playbackSource === 'events' ? 'is-active' : ''}
+            data-testid="playback-source-events"
             type="button"
-            onClick={() => onPlaybackSourceChange('score')}
+            onClick={() => onPlaybackSourceChange('events')}
           >
             노트
           </button>

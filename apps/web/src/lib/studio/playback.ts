@@ -5,7 +5,7 @@ import {
   isMeasureDownbeat,
   type MeterContext,
 } from './timing'
-import type { ScoreNote, TrackSlot } from '../../types/studio'
+import type { ArrangementRegion, PitchEvent, TrackSlot } from '../../types/studio'
 
 export type PlaybackNode = {
   filters?: BiquadFilterNode[]
@@ -16,7 +16,7 @@ export type PlaybackNode = {
   gains?: GainNode[]
 }
 
-export type PlaybackSourceMode = 'audio' | 'score'
+export type PlaybackSourceMode = 'audio' | 'events'
 
 export type PlaybackSession = {
   context?: AudioContext
@@ -155,8 +155,8 @@ export function createAudioBufferPlayback(
   return { source, gain }
 }
 
-export function trackHasPlayableScore(track: TrackSlot): boolean {
-  return track.notes.some((note) => note.is_rest !== true)
+export function regionHasPlayableEvents(region: ArrangementRegion | null | undefined): boolean {
+  return Boolean(region?.pitch_events.some((event) => event.is_rest !== true))
 }
 
 const noteSemitones: Record<string, number> = {
@@ -215,17 +215,17 @@ function getPercussionFrequency(label: string): number {
   return 260
 }
 
-export function getNotePlaybackFrequency(note: ScoreNote): number | null {
-  if (note.is_rest === true) {
+export function getPitchEventPlaybackFrequency(event: PitchEvent): number | null {
+  if (event.is_rest === true) {
     return null
   }
-  if (note.pitch_hz && Number.isFinite(note.pitch_hz)) {
-    return note.pitch_hz
+  if (event.pitch_hz && Number.isFinite(event.pitch_hz)) {
+    return event.pitch_hz
   }
-  if (note.pitch_midi === 35 || note.label.toLowerCase().includes('kick')) {
-    return getPercussionFrequency(note.label)
+  if (event.pitch_midi === 35 || event.label.toLowerCase().includes('kick')) {
+    return getPercussionFrequency(event.label)
   }
-  return getNoteFrequency(note.label)
+  return getNoteFrequency(event.label)
 }
 
 export function trackHasPlayableAudio(track: TrackSlot): boolean {
@@ -236,15 +236,17 @@ export function getPlaybackPreparationMessage(
   tracksToPlay: TrackSlot[],
   includeMetronome: boolean,
   playbackSource: PlaybackSourceMode,
+  regionsBySlot: Map<number, ArrangementRegion> = new Map(),
 ): string {
   const audioCount = playbackSource === 'audio' ? tracksToPlay.filter(trackHasPlayableAudio).length : 0
-  const scoreCount = tracksToPlay.filter(
+  const eventCount = tracksToPlay.filter(
     (track) =>
-      !(playbackSource === 'audio' && trackHasPlayableAudio(track)) && trackHasPlayableScore(track),
+      !(playbackSource === 'audio' && trackHasPlayableAudio(track)) &&
+      regionHasPlayableEvents(regionsBySlot.get(track.slot_id)),
   ).length
   const parts = [
     audioCount > 0 ? `원음 ${audioCount}개` : null,
-    scoreCount > 0 ? `노트 이벤트 ${scoreCount}개` : null,
+    eventCount > 0 ? `노트 이벤트 ${eventCount}개` : null,
     includeMetronome ? '메트로놈' : null,
   ].filter(Boolean)
 
@@ -262,15 +264,12 @@ export function getTrackVolumeScale(track: TrackSlot): number {
   return Math.max(0, Math.min(100, Math.round(volumePercent))) / 100
 }
 
-export function getTrackTimelineDurationSeconds(track: TrackSlot, beatSeconds: number): number {
-  const noteEndSeconds = Math.max(
+export function getRegionTimelineEndSeconds(region: ArrangementRegion): number {
+  const eventEndSeconds = Math.max(
     0,
-    ...track.notes.map((note) => (note.beat - 1 + note.duration_beats) * beatSeconds),
+    ...region.pitch_events.map((event) => event.start_seconds + event.duration_seconds),
   )
-  if (Number.isFinite(track.duration_seconds) && track.duration_seconds > 0) {
-    return Math.max(track.duration_seconds, noteEndSeconds)
-  }
-  return Math.max(0.25, noteEndSeconds)
+  return Math.max(region.start_seconds + region.duration_seconds, eventEndSeconds)
 }
 
 export function startLoopingMetronomeSession(

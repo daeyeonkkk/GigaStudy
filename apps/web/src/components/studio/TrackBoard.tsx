@@ -7,7 +7,7 @@ import {
   buildArrangementRegions,
   formatDurationSeconds,
   formatSeconds,
-  getArrangementDurationSeconds,
+  getArrangementRegionDurationSeconds,
   getJobStatusLabel,
   getPitchEventRange,
   getPitchedEvents,
@@ -343,10 +343,10 @@ export function TrackBoard({
   const timelineSeconds = useMemo(
     () =>
       Math.max(
-        getArrangementDurationSeconds(tracks, bpm, 12),
+        getArrangementRegionDurationSeconds(regions, 12),
         playheadSeconds ?? 0,
       ),
-    [bpm, playheadSeconds, tracks],
+    [playheadSeconds, regions],
   )
   const measureStarts = useMemo(
     () => getMeasureStarts(timelineSeconds, bpm, beatsPerMeasure),

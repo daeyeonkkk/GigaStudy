@@ -97,6 +97,13 @@ export function getArrangementDurationSeconds(
   minimumSeconds = DEFAULT_REGION_SECONDS,
 ): number {
   const regions = buildArrangementRegions(tracks, bpm)
+  return getArrangementRegionDurationSeconds(regions, minimumSeconds)
+}
+
+export function getArrangementRegionDurationSeconds(
+  regions: ArrangementRegion[],
+  minimumSeconds = DEFAULT_REGION_SECONDS,
+): number {
   const regionEnd = Math.max(0, ...regions.map((region) => region.start_seconds + region.duration_seconds))
   return Math.max(minimumSeconds, regionEnd)
 }

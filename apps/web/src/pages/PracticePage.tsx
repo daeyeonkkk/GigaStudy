@@ -324,10 +324,10 @@ export function PracticePage() {
               Audio
             </button>
             <button
-              aria-pressed={playbackSource === 'score'}
-              className={playbackSource === 'score' ? 'is-active' : ''}
+              aria-pressed={playbackSource === 'events'}
+              className={playbackSource === 'events' ? 'is-active' : ''}
               type="button"
-              onClick={() => changePlaybackSource('score')}
+              onClick={() => changePlaybackSource('events')}
             >
               Notes
             </button>
@@ -365,7 +365,7 @@ export function PracticePage() {
         <footer className="composer-statusbar">
           <span>{globalPlaying ? 'Playing' : 'Ready'}</span>
           <span>{selectedTrackCount}/{registeredTracks.length} tracks</span>
-          <span>{playbackSource === 'audio' ? 'Audio source' : 'Note source'}</span>
+          <span>{playbackSource === 'audio' ? 'Audio source' : 'Event source'}</span>
           <span>
             {formatDurationSeconds(playheadSeconds ?? 0)} /{' '}
             {formatDurationSeconds(playbackTimeline?.maxSeconds ?? timelineBounds.maxSeconds)}

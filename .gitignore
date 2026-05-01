@@ -25,6 +25,7 @@ Thumbs.db
 *.db
 *.sqlite3
 apps/api/storage/
+apps/api/.e2e-storage/
 playwright-report/
 test-results/
 output/

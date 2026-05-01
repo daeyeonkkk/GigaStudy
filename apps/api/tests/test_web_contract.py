@@ -39,7 +39,7 @@ def test_web_studio_response_types_cover_api_schema_fields() -> None:
         (PitchEvent, "PitchEvent", set()),
         (ArrangementRegion, "ArrangementRegion", set()),
         (CandidateRegion, "CandidateRegion", set()),
-        (TrackNote, "ScoreNote", set()),
+        (TrackNote, "TrackNote", set()),
         (TrackExtractionJob, "TrackExtractionJob", set()),
         (ExtractionCandidate, "ExtractionCandidate", set()),
         (TrackSlot, "TrackSlot", set()),

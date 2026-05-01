@@ -163,7 +163,7 @@ def _build_chat_completion_payload(
     context = {
         "product_rule": (
             "The model plans harmony only. It must not output TrackNote arrays, MIDI pitch sequences, "
-            "exact beats, or final notation."
+            "exact beats, or final pitch-event lists."
         ),
         "studio": {
             "title": title,
@@ -178,12 +178,12 @@ def _build_chat_completion_payload(
         "allowed_profile_names": sorted(ALLOWED_PROFILE_NAMES),
         "candidate_count": candidate_count,
         "a_cappella_arrangement_rules": [
-            "Treat the output as one part inside one six-track a cappella score.",
+            "Treat the output as one part inside one six-track a cappella region arrangement.",
             "Keep the target singable for its assigned voice and avoid exposed large leaps unless the role is explicitly active_motion.",
             "Prefer contrary or oblique motion against the most active context voice when it improves independence.",
             "Avoid voice crossing, cramped adjacent spacing, repeated parallel perfect fifths/octaves, and bass lines that lose foundation on structural downbeats.",
             "Candidates must be meaningfully different by role: safe blend, counterline, lower/open support, upper blend, or active motion.",
-            "Do not ask for human voice audio generation; all output will become symbolic TrackNotes.",
+            "Do not ask for human voice audio generation; all output will become pitch-event regions.",
         ],
         "context_tracks": [
             _summarize_track(slot_id, notes)
@@ -234,7 +234,7 @@ def _build_chat_completion_payload(
             "role": "system",
             "content": (
                 "You are GigaStudy's harmony planning layer. Return JSON only. "
-                "Plan practical vocal harmony for a six-track a cappella score. "
+                "Plan practical vocal harmony for a six-track a cappella region arrangement. "
                 "Use measure-level harmonic intent and distinct candidate goals. "
                 "Choose distinct candidate_directions from the allowed profile names. "
                 "Write title, role, selection_hint, risk_tags, phrase_summary, and warnings in Korean. "

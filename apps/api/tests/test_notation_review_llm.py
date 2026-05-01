@@ -668,4 +668,4 @@ def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monke
     assert user_context["ensemble_context"]["registered_or_reference_tracks"][0]["slot_id"] == 1
     assert user_context["ensemble_context"]["proposed_batch_tracks"][0]["slot_id"] == 2
     assert user_context["ensemble_context"]["vertical_snapshots"][0]["active"]
-    assert any("six-track a cappella score" in item for item in user_context["review_checklist"])
+    assert any("six-track a cappella region arrangement" in item for item in user_context["review_checklist"])

@@ -80,12 +80,12 @@ def prepare_notes_for_track_registration(
     time_signature_denominator: int = 4,
     reference_tracks: list[list[TrackNote]] | None = None,
 ) -> RegistrationNotationResult:
-    """Prepare TrackNote material for final track registration.
+    """Prepare TrackNote material for final region-event registration.
 
-    This is the single quality gate for user-visible track registration. Audio
-    and generated material is rewritten onto the studio's fixed BPM grid; score
-    imports are treated as symbolic input but still receive the same clef,
-    spelling, range, and measure metadata policy as the other tracks.
+    This is the single cleanup gate for user-visible track registration. Audio
+    and generated material is rewritten onto the studio's fixed BPM grid;
+    symbolic document imports keep their timing unless extraction noise needs
+    deterministic cleanup.
     """
 
     original_count = len(notes)
@@ -239,12 +239,12 @@ def apply_notation_review_instruction(
     baseline_result: RegistrationNotationResult | None = None,
     reference_tracks: list[list[TrackNote]] | None = None,
 ) -> RegistrationNotationResult:
-    """Apply a bounded LLM notation review plan through deterministic code.
+    """Apply a bounded LLM registration cleanup plan through deterministic code.
 
     The LLM never writes TrackNotes. It can only request a small set of repairs
     such as coarser quantization, sustain merging, dense-measure simplification,
     voice-noise filtering, and key-spelling preference. This function validates
-    those requests and re-runs the local notation engine against the studio's
+    those requests and re-runs the local registration engine against the studio's
     fixed BPM/meter.
     """
 
@@ -588,7 +588,7 @@ def _polish_voice_notation(
     collapse_short_note_clusters: bool = True,
     sustain_repetitions: bool = True,
 ) -> tuple[list[TrackNote], list[str]]:
-    """Make voice-like TrackNotes read like sung notation, not frame artifacts."""
+    """Make voice-like TrackNotes behave like sung pitch events, not frame artifacts."""
 
     if len(notes) < 2:
         return notes, []

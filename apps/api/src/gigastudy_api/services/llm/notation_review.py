@@ -33,11 +33,11 @@ AllowedKeySignature = Literal["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G",
 
 
 class NotationReviewInstruction(BaseModel):
-    """Bounded notation repair plan returned by the LLM.
+    """Bounded registration cleanup plan returned by the LLM.
 
     The LLM is intentionally not allowed to write TrackNotes. It may only pick
-    small, deterministic post-processing directives that the local notation
-    engine can validate and apply.
+    small, deterministic post-processing directives that the local registration
+    engine can validate and apply before the notes become pitch events.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -281,7 +281,7 @@ def _build_notation_review_payload(
     review_checklist = [
         "BPM and time signature are immutable.",
         "Plan registration cleanup before final commit; the deterministic engine will apply and validate the plan.",
-        "Find unnatural note density, fragmented ties, excessive accidentals, and noise-like micro events.",
+        "Find unnatural event density, fragmented timing, excessive accidentals, and noise-like micro events.",
         "Prefer 0.25-beat grid for expressive but readable singing, 0.5-beat grid for noisy or too-dense input.",
         "Prefer sustain/merge for repeated same-pitch fragments that look like one held vocal tone.",
         "Use collapse_pitch_blips when a short neighbor tone is likely vibrato, scoop, or tracker jitter rather than melody.",
@@ -290,21 +290,21 @@ def _build_notation_review_payload(
         "Use bridge_measure_tail_gaps when a confident sung note ends just before a barline and the phrase continues after it.",
         "Use collapse_short_note_clusters when several low-confidence sixteenth notes in one beat look like pitch-tracker chatter.",
         "Suggest a key signature only when it reduces accidental clutter.",
-        "For symbolic score imports, avoid rhythm rewrites unless the notation clearly looks like extraction noise.",
+        "For symbolic document imports, avoid rhythm rewrites unless the extracted events clearly look like noise.",
     ]
     if review_scope == "single_track_registration_plan":
         review_checklist.extend(
             [
                 "Use sibling-track context when available to choose cleanup direction, key spelling, octave warnings, and readability risk.",
                 "Do not copy sibling rhythms into the target; only align unreadable extracted material to the fixed studio BPM/meter grid.",
-                "If sibling context is absent, enforce standalone track notation quality without inventing ensemble assumptions.",
+                "If sibling context is absent, enforce standalone track event quality without inventing ensemble assumptions.",
             ]
         )
     if review_scope == "a_cappella_ensemble_registration":
         review_checklist.extend(
             [
-                "Review this target as one part inside a six-track a cappella score, not as an isolated solo line.",
-                "Use sibling-track context to detect likely extraction octave errors, awkward density, or notation choices that make the ensemble unreadable.",
+                "Review this target as one part inside a six-track a cappella region arrangement, not as an isolated solo line.",
+                "Use sibling-track context to detect likely extraction octave errors, awkward density, or event choices that make the ensemble hard to follow.",
                 "Do not request a repair for intentional unison, open spacing, counterpoint, syncopation, or dissonance unless it also looks like extraction noise.",
                 "Prefer no repair directive when the deterministic ensemble diagnostics are warnings about plausible artistic choices.",
             ]
@@ -312,7 +312,7 @@ def _build_notation_review_payload(
     context = {
         "product_rule": (
             "The LLM must not generate TrackNote arrays or change BPM/meter. "
-            "It may only choose bounded registration-plan directives for the deterministic notation engine."
+            "It may only choose bounded registration-plan directives for the deterministic region-event engine."
         ),
         "review_scope": review_scope,
         "studio": {
@@ -378,8 +378,8 @@ def _build_notation_review_payload(
         {
             "role": "system",
             "content": (
-                "You are GigaStudy's notation review conductor. Return JSON only. "
-                "You plan whether extracted TrackNotes will read like a real score at registration time, then choose "
+                "You are GigaStudy's region-event registration reviewer. Return JSON only. "
+                "You plan whether extracted TrackNotes will become stable pitch events at registration time, then choose "
                 "bounded repair directives for the deterministic engine. Never output notes, melodies, markdown, or prose. "
                 "Do not change BPM or meter. Write reasons and warnings in Korean."
             ),

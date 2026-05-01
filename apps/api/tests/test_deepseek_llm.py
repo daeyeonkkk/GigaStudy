@@ -181,7 +181,7 @@ def test_deepseek_payload_uses_json_mode_and_non_thinking_by_default() -> None:
     assert "measure_summaries" in payload["messages"][1]["content"]
     user_context = json.loads(payload["messages"][1]["content"])
     assert "a_cappella_arrangement_rules" in user_context
-    assert any("six-track a cappella score" in rule for rule in user_context["a_cappella_arrangement_rules"])
+    assert any("six-track a cappella region arrangement" in rule for rule in user_context["a_cappella_arrangement_rules"])
     assert any("meaningfully different" in rule for rule in user_context["a_cappella_arrangement_rules"])
 
 

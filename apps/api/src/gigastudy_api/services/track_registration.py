@@ -21,7 +21,7 @@ LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS: set[str] = {"ai"}
 
 
 class TrackRegistrationPreparer:
-    """Single quality gate for material before it becomes registered TrackNote truth."""
+    """Single cleanup gate before imported TrackNotes become registered pitch-event regions."""
 
     def prepare_notes(
         self,

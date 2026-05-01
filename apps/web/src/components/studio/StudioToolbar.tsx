@@ -21,6 +21,7 @@ type StudioToolbarProps = {
   registeredTrackCount: number
   registeredTracks: TrackSlot[]
   selectedPlaybackSlotIds: Set<number>
+  studioId: string
   studioTitle: string
   syncStepSeconds: number
   onMetronomeChange: (enabled: boolean) => void
@@ -58,6 +59,7 @@ export function StudioToolbar({
   registeredTrackCount,
   registeredTracks,
   selectedPlaybackSlotIds,
+  studioId,
   studioTitle,
   syncStepSeconds,
   onMetronomeChange,
@@ -152,6 +154,13 @@ export function StudioToolbar({
         <Link className="composer-tool composer-tool--home" to="/" aria-label="홈으로">
           <span aria-hidden="true">H</span>
           <span>Home</span>
+        </Link>
+        <Link
+          className="composer-tool composer-tool--text"
+          data-testid="practice-mode-link"
+          to={`/studios/${studioId}/practice`}
+        >
+          Practice
         </Link>
         <button
           aria-label={globalPlaying ? '선택 재생 일시정지' : '트랙 선택 재생'}

@@ -1,0 +1,210 @@
+.practice-page {
+  min-height: 100svh;
+}
+
+.practice-window {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  min-height: calc(100svh - 48px);
+  border: 1px solid #687783;
+  border-radius: 8px;
+  background: #d8dde2;
+  box-shadow: 0 16px 44px rgba(20, 31, 42, 0.18);
+  overflow: hidden;
+}
+
+.practice-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 42px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #a8b2bb;
+  background: #e6eaed;
+}
+
+.practice-track-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #a8b2bb;
+  background: #f3f6f8;
+}
+
+.practice-track-picker p {
+  color: #52606b;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.practice-track-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #b6c0c8;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1c2c3a;
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.practice-track-picker input {
+  width: 15px;
+  height: 15px;
+  accent-color: #082fbd;
+}
+
+.practice-status-line {
+  border-bottom-color: #9ba7b2;
+}
+
+.practice-stage {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  min-height: 0;
+  padding: 16px;
+  background: #eceff2;
+}
+
+.practice-stage__labels {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  padding: 8px 10px 8px 0;
+  color: #46535e;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-align: right;
+}
+
+.practice-stage__labels span:nth-child(2) {
+  writing-mode: vertical-rl;
+  justify-self: end;
+  text-orientation: mixed;
+}
+
+.practice-stage__grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(82px, 1fr));
+  min-width: 620px;
+  min-height: 620px;
+  border: 1px solid #7f8e9a;
+  background:
+    linear-gradient(#d7dee4 0 1px, transparent 1px) 0 0 / 100% 44px,
+    linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / 44px 100%,
+    #ffffff;
+  overflow: hidden;
+}
+
+.practice-stage__lane {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid #cbd3da;
+  background: rgba(247, 249, 250, 0.56);
+}
+
+.practice-stage__lane:first-of-type {
+  border-left: 0;
+}
+
+.practice-stage__lane span {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  overflow: hidden;
+  color: #53616c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.practice-stage__playhead {
+  position: absolute;
+  z-index: 5;
+  top: var(--playhead-top);
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #c2362d;
+  box-shadow: 0 0 0 1px rgba(194, 54, 45, 0.14);
+}
+
+.practice-stage__note {
+  position: absolute;
+  z-index: 3;
+  top: var(--note-top);
+  left: calc((100% / 6) * var(--note-lane-index) + 12px);
+  display: flex;
+  align-items: center;
+  width: calc((100% / 6) - 24px);
+  height: var(--note-height);
+  min-height: 16px;
+  padding: 0 7px;
+  border: 1px solid hsl(var(--note-hue) 64% 30%);
+  border-radius: 4px;
+  background: hsl(var(--note-hue) 78% 72%);
+  color: #111111;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.practice-stage__note span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.practice-stage__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #5d6974;
+  font-weight: 900;
+}
+
+@media (max-width: 820px) {
+  .practice-window {
+    min-height: calc(100svh - 24px);
+  }
+
+  .practice-stage {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    overflow: auto;
+  }
+
+  .practice-stage__labels {
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto;
+    padding: 0 0 8px;
+    text-align: left;
+  }
+
+  .practice-stage__labels span:nth-child(2) {
+    justify-self: center;
+    writing-mode: horizontal-tb;
+  }
+
+  .practice-stage__grid {
+    min-height: 540px;
+  }
+
+  .practice-toolbar {
+    align-items: stretch;
+  }
+}

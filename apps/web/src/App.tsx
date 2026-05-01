@@ -5,6 +5,7 @@ import './App.css'
 
 const AdminPage = lazy(() => import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })))
 const LaunchPage = lazy(() => import('./pages/LaunchPage').then((module) => ({ default: module.LaunchPage })))
+const PracticePage = lazy(() => import('./pages/PracticePage').then((module) => ({ default: module.PracticePage })))
 const ReportPage = lazy(() => import('./pages/ReportPage').then((module) => ({ default: module.ReportPage })))
 const StudioPage = lazy(() => import('./pages/StudioPage').then((module) => ({ default: module.StudioPage })))
 
@@ -31,6 +32,7 @@ function App() {
         <Route path="/" element={<LaunchPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/studios/:studioId" element={<StudioPage />} />
+        <Route path="/studios/:studioId/practice" element={<PracticePage />} />
         <Route path="/studios/:studioId/reports/:reportId" element={<ReportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

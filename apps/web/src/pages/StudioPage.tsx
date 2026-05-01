@@ -245,6 +245,7 @@ export function StudioPage() {
           registeredTrackCount={registeredTracks.length}
           registeredTracks={registeredTracks}
           selectedPlaybackSlotIds={selectedPlaybackSlotIds}
+          studioId={studio.studio_id}
           studioTitle={studio.title}
           syncStepSeconds={syncStepSeconds}
           onMetronomeChange={setMetronomeEnabled}

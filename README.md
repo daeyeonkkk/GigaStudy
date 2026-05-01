@@ -5,14 +5,16 @@ The product is now centered on three user flows:
 
 1. Create a studio from a document/music upload or from an empty six-track board.
 2. Complete six fixed tracks: Soprano, Alto, Tenor, Baritone, Bass, and Percussion.
-3. Score a singer against selected reference tracks and append a timing/pitch report to the studio feed.
+3. Arrange with region lanes and piano-roll events, then practice in the dedicated waterfall view.
+4. Score a singer against selected reference tracks and append a timing/pitch report to the studio feed.
 
 Everything outside those flows is intentionally removed from the current foundation and implementation.
 
 ## Repository Layout
 
 - `apps/web`
-  React + Vite client for the home screen and main six-track studio.
+  React + Vite client for the home screen, six-track region studio, and
+  practice waterfall mode.
 - `apps/api`
   FastAPI service with pitch-event engines, optional Postgres metadata
   persistence, and optional S3-compatible asset persistence.
@@ -88,7 +90,7 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
 - Set `GIGASTUDY_API_DATABASE_URL` to use Postgres/Neon for studio metadata.
 - Set `GIGASTUDY_API_STORAGE_BACKEND=s3` plus the `GIGASTUDY_API_S3_*`
   settings to use Cloudflare R2 or another S3-compatible object store for
-  uploads, retained recordings, and OMR outputs.
+  uploads, retained recordings, and document extraction outputs.
 - Keep `GIGASTUDY_API_STORAGE_ROOT` as temporary engine/cache space only.
 - Use `GIGASTUDY_API_MAX_UPLOAD_BYTES` to keep base64 JSON uploads inside the
   Cloud Run request and memory envelope.
@@ -98,7 +100,7 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
 - Local API-proxy direct uploads use signed, expiring upload tokens. Owner-token
   mode also binds those proxy upload tokens to the studio owner hash before any
   bytes are written.
-- OMR quality/runtime can be tuned with `GIGASTUDY_API_OMR_BACKEND`
+- Document extraction quality/runtime can be tuned with `GIGASTUDY_API_OMR_BACKEND`
   (`auto`, `audiveris`, `pdf_vector`, `vector_first`) plus
   `GIGASTUDY_API_OMR_PREPROCESS_MODE` and
   `GIGASTUDY_API_OMR_PREPROCESS_DPI` for scanned PDF/image retry.
@@ -157,8 +159,8 @@ curl https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app/api/studio
 
 ## Foundation Docs
 
-- [Master Plan](./PROJECT_FOUNDATION/GigaStudy_master_plan.md)
-- [Roadmap](./PROJECT_FOUNDATION/ROADMAP.md)
-- [Checklist](./PROJECT_FOUNDATION/GigaStudy_check_list.md)
-- [Foundation Status](./PROJECT_FOUNDATION/FOUNDATION_STATUS.md)
-- [UI Screen Spec Package](./PROJECT_FOUNDATION/DESIGN/UI_SCREEN_SPEC_PACKAGE/README.md)
+- [Current Architecture](./PROJECT_FOUNDATION/CURRENT_ARCHITECTURE.md)
+- [Region/Piano Roll Reset Plan](./PROJECT_FOUNDATION/REGION_PIANOROLL_RESET_PLAN.md)
+- [Working Protocol](./PROJECT_FOUNDATION/WORKING_PROTOCOL.md)
+- [A Cappella Arrangement Audit](./PROJECT_FOUNDATION/ACAPPELLA_ARRANGEMENT_AUDIT.md)
+- [AI Harmony Generation Design](./PROJECT_FOUNDATION/AI_HARMONY_GENERATION_DESIGN.md)

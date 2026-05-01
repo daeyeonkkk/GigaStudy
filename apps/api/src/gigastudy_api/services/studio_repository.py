@@ -298,9 +298,6 @@ class StudioRepository:
             require_studio_access(studio, owner_token)
         return studio
 
-    def export_score_pdf(self, studio_id: str, *, owner_token: str | None = None) -> tuple[str, bytes]:
-        return self._resources.export_score_pdf(studio_id, owner_token=owner_token)
-
     def get_track_audio(
         self,
         studio_id: str,

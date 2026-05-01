@@ -5,7 +5,6 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from gigastudy_api.services.engine.pdf_export import ScorePdfExportError, build_studio_score_pdf
 from gigastudy_api.services.engine.score_preview import ScorePreviewError, render_score_source_preview
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
@@ -20,13 +19,6 @@ class StudioResourceCommands:
     ) -> None:
         self._assets = assets
         self._repository = repository
-
-    def export_score_pdf(self, studio_id: str, *, owner_token: str | None = None) -> tuple[str, bytes]:
-        studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
-        try:
-            return f"{studio.studio_id}-score.pdf", build_studio_score_pdf(studio)
-        except ScorePdfExportError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
 
     def get_track_audio(
         self,
@@ -61,7 +53,7 @@ class StudioResourceCommands:
         if job is None:
             raise HTTPException(status_code=404, detail="Extraction job not found.")
         if job.job_type != "omr":
-            raise HTTPException(status_code=409, detail="Only OMR jobs have score previews.")
+            raise HTTPException(status_code=409, detail="Only document jobs have source previews.")
         if job.input_path is None:
             raise HTTPException(status_code=404, detail="OMR source file is missing.")
 

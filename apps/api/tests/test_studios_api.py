@@ -1,9 +1,8 @@
 import base64
-from io import BytesIO
 from pathlib import Path
 
+import fitz
 from fastapi.testclient import TestClient
-from reportlab.pdfgen import canvas
 
 from gigastudy_api.config import get_settings
 from gigastudy_api.api.schemas.studios import TrackNote
@@ -101,14 +100,11 @@ OWNER_TOKEN_B = "b" * 32
 
 
 def build_preview_pdf_bytes() -> bytes:
-    buffer = BytesIO()
-    page = canvas.Canvas(buffer, pagesize=(320, 240))
-    page.setFont("Helvetica", 16)
-    page.drawString(40, 170, "GigaStudy preview")
-    page.line(40, 120, 280, 120)
-    page.showPage()
-    page.save()
-    return buffer.getvalue()
+    document = fitz.open()
+    page = document.new_page(width=320, height=240)
+    page.insert_text((40, 70), "GigaStudy preview", fontsize=16)
+    page.draw_line((40, 120), (280, 120))
+    return document.tobytes()
 
 
 def fake_audiveris_omr(
@@ -715,45 +711,6 @@ def test_scoring_audio_extraction_uses_context_aware_plan(tmp_path: Path, monkey
     assert plan.slot_id == 1
     assert plan.provider == "deterministic"
     assert any("Existing tracks are present" in reason for reason in plan.reasons)
-
-
-def test_pdf_export_requires_registered_track(tmp_path: Path, monkeypatch) -> None:
-    client = build_client(tmp_path, monkeypatch)
-    create_response = client.post(
-        "/api/studios",
-        json={
-            "title": "Empty export",
-            "bpm": 120,
-            "start_mode": "blank",
-        },
-    )
-    studio_id = create_response.json()["studio_id"]
-
-    export_response = client.get(f"/api/studios/{studio_id}/export/pdf")
-
-    assert export_response.status_code == 409
-    assert "registered track" in export_response.json()["detail"]
-
-
-def test_pdf_export_returns_score_pdf_for_registered_tracks(tmp_path: Path, monkeypatch) -> None:
-    client = build_client(tmp_path, monkeypatch)
-    create_response = client.post(
-        "/api/studios",
-        json={
-            "title": "Export score",
-            "bpm": 120,
-            "start_mode": "blank",
-        },
-    )
-    studio_id = create_response.json()["studio_id"]
-    upload_musicxml_track(client, studio_id)
-
-    export_response = client.get(f"/api/studios/{studio_id}/export/pdf")
-
-    assert export_response.status_code == 200
-    assert export_response.headers["content-type"] == "application/pdf"
-    assert export_response.content.startswith(b"%PDF")
-    assert len(export_response.content) > 1000
 
 
 def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, monkeypatch) -> None:

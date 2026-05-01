@@ -75,20 +75,6 @@ def get_studio(
     )
 
 
-@router.get("/{studio_id}/export/pdf")
-def export_studio_pdf(
-    studio_id: str,
-    owner_token: str | None = Depends(studio_owner_token),
-    repository: StudioRepository = Depends(get_studio_repository),
-) -> Response:
-    filename, content = repository.export_score_pdf(studio_id, owner_token=owner_token)
-    return Response(
-        content=content,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @router.get("/{studio_id}/tracks/{slot_id}/audio")
 def get_track_audio(
     studio_id: str,

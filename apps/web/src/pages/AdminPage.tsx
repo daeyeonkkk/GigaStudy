@@ -170,7 +170,7 @@ export function AdminPage() {
   }
 
   function handleDeleteAsset(asset: AdminAssetSummary) {
-    if (!window.confirm(`Delete ${asset.filename}? TrackNote and report data will remain.`)) {
+    if (!window.confirm(`Delete ${asset.filename}? Pitch-event and report data will remain.`)) {
       return
     }
     void runDeletion(`asset:${asset.asset_id}`, () =>
@@ -181,7 +181,7 @@ export function AdminPage() {
   function handleDeleteStudioAssets(studio: AdminStudioSummary) {
     if (
       !window.confirm(
-        `Delete stored file(s) for ${studio.title}? Normalized TrackNote data will remain. Legacy file counts may be incomplete until a storage scan runs.`,
+        `Delete stored file(s) for ${studio.title}? Normalized pitch-event data will remain. Legacy file counts may be incomplete until a storage scan runs.`,
       )
     ) {
       return

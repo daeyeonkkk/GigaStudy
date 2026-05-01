@@ -187,7 +187,7 @@ function getJobStateHint(job: TrackExtractionJob): string {
   }
   if (job.status === 'running') {
     return job.job_type === 'voice'
-      ? '녹음 파일을 내부 메트로놈 기준으로 정렬하고 TrackNote 후보를 만드는 중입니다.'
+      ? '녹음 파일을 내부 메트로놈 기준으로 정렬하고 pitch-event 후보를 만드는 중입니다.'
       : '문서 파트와 트랙 후보를 추출하는 중입니다. 완료되면 등록 가능한 후보가 표시됩니다.'
   }
   if (job.status === 'needs_review') {

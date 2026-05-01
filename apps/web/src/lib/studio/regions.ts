@@ -1,4 +1,4 @@
-import type { ArrangementRegion, PitchEvent, ScoreNote, TrackSlot } from '../../types/studio'
+import type { ArrangementRegion, PitchEvent, TrackNote, TrackSlot } from '../../types/studio'
 import { getBeatSeconds } from './timing'
 
 const DEFAULT_REGION_SECONDS = 4
@@ -9,14 +9,14 @@ function isFiniteNumber(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function getNoteStartSeconds(note: ScoreNote, bpm: number): number {
+function getNoteStartSeconds(note: TrackNote, bpm: number): number {
   if (isFiniteNumber(note.onset_seconds) && note.onset_seconds >= 0) {
     return note.onset_seconds
   }
   return Math.max(0, (note.beat - 1) * getBeatSeconds(bpm))
 }
 
-function getNoteDurationSeconds(note: ScoreNote, bpm: number): number {
+function getNoteDurationSeconds(note: TrackNote, bpm: number): number {
   if (isFiniteNumber(note.duration_seconds) && note.duration_seconds > 0) {
     return note.duration_seconds
   }
@@ -33,7 +33,7 @@ function getTrackContentDurationSeconds(track: TrackSlot, events: PitchEvent[]):
 }
 
 export function mapNoteToPitchEvent(
-  note: ScoreNote,
+  note: TrackNote,
   track: TrackSlot,
   regionId: string,
   bpm: number,

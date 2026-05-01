@@ -1,4 +1,4 @@
-import type { ScoreNote, Studio } from '../../types/studio'
+import type { Studio } from '../../types/studio'
 
 export type MeterContext = {
   beatsPerMeasure: number
@@ -37,10 +37,6 @@ export function getStudioMeter(studio: Studio): MeterContext {
 export function isMeasureDownbeat(quarterBeatOffset: number, beatsPerMeasure: number): boolean {
   const quotient = quarterBeatOffset / Math.max(0.25, beatsPerMeasure)
   return Math.abs(quotient - Math.round(quotient)) < 0.001
-}
-
-export function getDisplayBeat(note: ScoreNote, syncOffsetSeconds: number, bpm: number): number {
-  return note.beat + syncOffsetSeconds / getBeatSeconds(bpm)
 }
 
 export function getMeasureIndexFromBeat(beat: number, beatsPerMeasure: number): number {

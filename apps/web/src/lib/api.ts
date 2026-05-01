@@ -5,9 +5,9 @@ import type {
   CreateStudioRequest,
   DirectUploadTarget,
   ScoreMode,
-  ScoreNote,
   Studio,
   StudioListItem,
+  TrackNote,
 } from '../types/studio'
 
 const defaultApiBaseUrl = import.meta.env.PROD
@@ -324,7 +324,7 @@ export function scoreTrack(
     score_mode?: ScoreMode
     reference_slot_ids: number[]
     include_metronome: boolean
-    performance_notes?: ScoreNote[]
+    performance_notes?: TrackNote[]
     performance_audio_base64?: string
     performance_filename?: string
   },

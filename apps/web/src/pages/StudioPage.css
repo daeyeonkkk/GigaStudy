@@ -524,7 +524,7 @@
     padding-left: 48px;
   }
 
-  .track-card__score {
+  .track-card__timeline {
     grid-column: auto;
     grid-row: auto;
     grid-template-columns: repeat(4, minmax(66px, 1fr));

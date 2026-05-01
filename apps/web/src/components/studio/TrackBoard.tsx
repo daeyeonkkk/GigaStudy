@@ -429,7 +429,7 @@ export function TrackBoard({
               </header>
 
               <div
-                className="track-card__score track-card__region-lane"
+                className="track-card__timeline track-card__region-lane"
                 aria-label={`${track.name} 리전 레인`}
                 style={getPlayheadStyle(isPlaying ? playheadSeconds : null, timelineSeconds)}
               >

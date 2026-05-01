@@ -773,6 +773,31 @@ test('AI regeneration replaces pending candidates for the same track', async ({ 
   await expectPendingCandidateCount(page, 3)
 })
 
+test('AI generated registered track plays synthesized score from the track play button', async ({ page }) => {
+  await installScorePlaybackClockStub(page)
+  await createBlankStudio(page, 'AI generated playback session')
+  await uploadSopranoMusicXml(page, musicXmlUpload, 'soprano.musicxml')
+  await approveFirstCandidate(page)
+
+  await generateTrackAndWait(page, 2)
+  await approveFirstCandidate(page)
+  await expect(page.getByTestId('track-card-2')).toContainText('Voice-leading harmony score')
+  await expect(page.getByTestId('playback-source-audio')).toHaveAttribute('aria-pressed', 'true')
+
+  await page.getByTestId('track-play-2').click()
+  await expect(page.getByTestId('track-playhead-2')).toBeVisible()
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const playbackWindow = window as Window & {
+          __gigastudyToneStarts?: Array<{ frequency: number; startTime: number }>
+        }
+        return playbackWindow.__gigastudyToneStarts?.length ?? 0
+      }),
+    )
+    .toBeGreaterThan(0)
+})
+
 test('six-track studio supports create, register, generate, sync, play, and score', async ({ page, browserName }) => {
   await createBlankStudio(page, 'Playwright six-track session', '104')
 

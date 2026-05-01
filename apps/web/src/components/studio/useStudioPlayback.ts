@@ -202,6 +202,7 @@ export function useStudioPlayback({
     try {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
+      const scoreToneVolume = Math.max(0.07, Math.min(0.16, 0.16 / Math.sqrt(Math.max(1, scoreTracks.length))))
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
 
@@ -335,7 +336,7 @@ export function useStudioPlayback({
             0.05,
             noteEndSeconds - Math.max(noteStartSeconds, startSeconds),
           )
-          const volume = track.slot_id === 6 ? 0.055 : 0.06
+          const volume = track.slot_id === 6 ? Math.min(0.09, scoreToneVolume * 0.75) : scoreToneVolume
           const toneType: OscillatorType | 'piano' = track.slot_id === 6 ? 'square' : 'piano'
 
           nodes.push(

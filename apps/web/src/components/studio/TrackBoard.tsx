@@ -364,6 +364,7 @@ export function TrackBoard({
                   <button
                     aria-label={isPlaying ? `${track.name} 일시정지` : `${track.name} 재생`}
                     className="studio-icon-button"
+                    data-testid={`track-play-${track.slot_id}`}
                     disabled={!isRegistered}
                     type="button"
                     onClick={() => onTogglePlayback(track)}
@@ -373,6 +374,7 @@ export function TrackBoard({
                   <button
                     aria-label={`${track.name} 중지`}
                     className="studio-icon-button"
+                    data-testid={`track-stop-${track.slot_id}`}
                     disabled={!isRegistered}
                     type="button"
                     onClick={() => onStopPlayback(track)}

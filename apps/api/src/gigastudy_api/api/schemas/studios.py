@@ -87,6 +87,17 @@ class ArrangementRegion(BaseModel):
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
+class CandidateRegion(BaseModel):
+    region_id: str
+    suggested_slot_id: int
+    source_kind: SourceKind
+    source_label: str
+    start_seconds: float
+    duration_seconds: float
+    pitch_events: list[PitchEvent] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
 class TrackExtractionJob(BaseModel):
     job_id: str
     job_type: ExtractionJobType = "omr"
@@ -127,6 +138,11 @@ class ExtractionCandidate(BaseModel):
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: str
+
+    @computed_field(return_type=CandidateRegion)
+    @property
+    def region(self) -> CandidateRegion:
+        return build_candidate_region(self)
 
 
 class TrackSlot(BaseModel):
@@ -228,6 +244,52 @@ def _note_duration_seconds(note: TrackNote, bpm: int) -> float:
 
 def _beat_seconds(bpm: int) -> float:
     return 60 / max(1, bpm)
+
+
+def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
+    region_id = f"candidate-{candidate.candidate_id}-region-1"
+    pitch_events = [
+        _candidate_pitch_event_from_note(note, candidate=candidate, region_id=region_id)
+        for note in sorted(candidate.notes, key=lambda item: (item.beat, item.id))
+    ]
+    region_start = min((event.start_seconds for event in pitch_events), default=0.0)
+    region_end = max(
+        (event.start_seconds + event.duration_seconds for event in pitch_events),
+        default=region_start,
+    )
+    return CandidateRegion(
+        region_id=region_id,
+        suggested_slot_id=candidate.suggested_slot_id,
+        source_kind=candidate.source_kind,
+        source_label=candidate.source_label,
+        start_seconds=region_start,
+        duration_seconds=max(4.0, region_end - region_start),
+        pitch_events=pitch_events,
+        diagnostics=candidate.diagnostics,
+    )
+
+
+def _candidate_pitch_event_from_note(
+    note: TrackNote,
+    *,
+    candidate: ExtractionCandidate,
+    region_id: str,
+) -> PitchEvent:
+    return PitchEvent(
+        event_id=f"{region_id}-{note.id}",
+        track_slot_id=candidate.suggested_slot_id,
+        region_id=region_id,
+        label=note.label,
+        pitch_midi=note.pitch_midi,
+        pitch_hz=note.pitch_hz,
+        start_seconds=note.onset_seconds if isfinite(note.onset_seconds) else max(0.0, note.beat - 1),
+        duration_seconds=note.duration_seconds if isfinite(note.duration_seconds) and note.duration_seconds > 0 else max(0.08, note.duration_beats),
+        start_beat=note.beat,
+        duration_beats=note.duration_beats,
+        confidence=note.confidence,
+        source=note.source,
+        is_rest=note.is_rest,
+    )
 
 
 class ReportIssue(BaseModel):

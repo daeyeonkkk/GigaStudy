@@ -72,6 +72,17 @@ export type ArrangementRegion = {
   diagnostics: Record<string, unknown>
 }
 
+export type CandidateRegion = {
+  region_id: string
+  suggested_slot_id: number
+  source_kind: SourceKind
+  source_label: string
+  start_seconds: number
+  duration_seconds: number
+  pitch_events: PitchEvent[]
+  diagnostics: Record<string, unknown>
+}
+
 export type TrackExtractionJob = {
   job_id: string
   job_type: 'omr' | 'voice'
@@ -110,6 +121,7 @@ export type ExtractionCandidate = {
   job_id: string | null
   message: string | null
   diagnostics: Record<string, unknown>
+  region: CandidateRegion
   created_at: string
   updated_at: string
 }

@@ -16,6 +16,7 @@ from gigastudy_api.api.schemas.admin import (
 )
 from gigastudy_api.api.schemas.studios import (
     ArrangementRegion,
+    CandidateRegion,
     DirectUploadTarget,
     ExtractionCandidate,
     PitchEvent,
@@ -37,6 +38,7 @@ def test_web_studio_response_types_cover_api_schema_fields() -> None:
     contracts: list[tuple[Type[BaseModel], str, set[str]]] = [
         (PitchEvent, "PitchEvent", set()),
         (ArrangementRegion, "ArrangementRegion", set()),
+        (CandidateRegion, "CandidateRegion", set()),
         (TrackNote, "ScoreNote", set()),
         (TrackExtractionJob, "TrackExtractionJob", set()),
         (ExtractionCandidate, "ExtractionCandidate", set()),
@@ -94,6 +96,35 @@ def test_studio_response_includes_arrangement_regions() -> None:
 
     assert payload["regions"][0]["region_id"] == "track-1-region-1"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
+
+
+def test_candidate_response_includes_region_candidate() -> None:
+    candidate = ExtractionCandidate(
+        candidate_id="candidate-region-contract",
+        suggested_slot_id=2,
+        source_kind="ai",
+        source_label="AI harmony",
+        method="rule_based",
+        notes=[
+            TrackNote(
+                label="E4",
+                pitch_midi=64,
+                beat=1,
+                duration_beats=1,
+                onset_seconds=0,
+                duration_seconds=0.5,
+                source="ai",
+            )
+        ],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = candidate.model_dump(mode="json")
+
+    assert payload["region"]["region_id"] == "candidate-candidate-region-contract-region-1"
+    assert payload["region"]["suggested_slot_id"] == 2
+    assert payload["region"]["pitch_events"][0]["label"] == "E4"
 
 
 def _extract_ts_type_fields(source: str, type_name: str) -> set[str]:

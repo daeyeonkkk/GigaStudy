@@ -134,12 +134,12 @@ constraint/search engine realize that plan.
    - Candidate goal influences register, motion, contrary motion, chord tone
      choice, and rhythmic density.
 
-5. Normalize notation.
+5. Normalize generated events.
 
-   - Reuse the shared notation normalization contract.
-   - Split/tie only on measure/rhythm boundaries.
+   - Reuse the shared pitch-event normalization contract.
+   - Split long events only where the region grid needs editable boundaries.
    - Preserve fixed BPM/meter.
-   - Apply track display policy, clef, key signature, spelling, and warnings.
+   - Apply track range, timing grid, density, and diagnostics policy.
 
 6. Score candidates before exposing them.
 
@@ -294,10 +294,10 @@ All policies still quantize to the studio beat grid and measure boundaries.
 
 After beam search:
 
-- merge adjacent same-pitch notes only when rhythmically readable;
-- split measure-crossing notes into tied display segments;
-- remove weak-beat ornamental notes if they create dense unreadable notation;
-- prefer fewer accidentals when pitch alternatives are musically equivalent;
+- merge adjacent same-pitch events only when the region remains easy to edit;
+- split long events at musically useful grid boundaries;
+- remove weak-beat ornamental events if they create dense unreadable piano-roll lanes;
+- prefer stable pitch labels when alternatives are musically equivalent;
 - recompute confidence from actual violations and plan adherence.
 
 ### 6. Candidate Diversity Gate
@@ -325,11 +325,11 @@ DeepSeek may decide:
 DeepSeek may later be added as an event critic for extracted pitch events, but
 that role is advisory repair policy, not unchecked authorship. The current
 registration quality gate is deterministic and owns final BPM-grid timing,
-measure ownership, clef/key/spelling, density cleanup, and range validation.
+region/event ownership, density cleanup, and range validation.
 
 DeepSeek may also act as an ensemble registration critic when explicitly
 enabled. In that role it receives sibling-track summaries and vertical
-snapshots, then returns only bounded notation repair instructions. It does not
+snapshots, then returns only bounded event repair instructions. It does not
 compose replacement notes or override the deterministic ensemble gate.
 
 DeepSeek may not decide:

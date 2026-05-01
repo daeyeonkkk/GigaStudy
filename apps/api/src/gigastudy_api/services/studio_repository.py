@@ -307,7 +307,7 @@ class StudioRepository:
     ) -> tuple[Path, str, str]:
         return self._resources.get_track_audio(studio_id, slot_id, owner_token=owner_token)
 
-    def get_omr_source_preview(
+    def get_document_source_preview(
         self,
         studio_id: str,
         job_id: str,
@@ -315,7 +315,7 @@ class StudioRepository:
         page_index: int = 0,
         owner_token: str | None = None,
     ) -> tuple[bytes, str]:
-        return self._resources.get_omr_source_preview(
+        return self._resources.get_document_source_preview(
             studio_id,
             job_id,
             page_index=page_index,

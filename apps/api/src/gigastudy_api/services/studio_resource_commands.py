@@ -5,7 +5,10 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from gigastudy_api.services.engine.score_preview import ScorePreviewError, render_score_source_preview
+from gigastudy_api.services.engine.document_preview import (
+    DocumentPreviewError,
+    render_document_source_preview,
+)
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
 
@@ -40,7 +43,7 @@ class StudioResourceCommands:
         filename = track.audio_source_label or track.source_label or source_path.name
         return source_path, media_type, filename
 
-    def get_omr_source_preview(
+    def get_document_source_preview(
         self,
         studio_id: str,
         job_id: str,
@@ -55,12 +58,12 @@ class StudioResourceCommands:
         if job.job_type != "omr":
             raise HTTPException(status_code=409, detail="Only document jobs have source previews.")
         if job.input_path is None:
-            raise HTTPException(status_code=404, detail="OMR source file is missing.")
+            raise HTTPException(status_code=404, detail="Document source file is missing.")
 
         source_path = self._assets.resolve_data_asset_path(job.input_path)
         try:
-            content = render_score_source_preview(source_path, page_index=page_index)
-        except ScorePreviewError as error:
+            content = render_document_source_preview(source_path, page_index=page_index)
+        except DocumentPreviewError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
         filename_root = Path(job.source_label or job.job_id).stem or job.job_id

@@ -92,7 +92,7 @@ def get_track_audio(
 
 
 @router.get("/{studio_id}/jobs/{job_id}/source-preview")
-def get_omr_job_source_preview(
+def get_document_job_source_preview(
     studio_id: str,
     job_id: str,
     page_index: int = Query(default=0, ge=0, le=200),
@@ -100,7 +100,7 @@ def get_omr_job_source_preview(
     owner_token_header: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> Response:
-    content, filename = repository.get_omr_source_preview(
+    content, filename = repository.get_document_source_preview(
         studio_id,
         job_id,
         page_index=page_index,

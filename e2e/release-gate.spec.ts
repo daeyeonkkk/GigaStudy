@@ -747,6 +747,33 @@ test('track recording shows zero on the count-in downbeat before capture continu
   await expect(page.getByTestId('pending-recording-dialog')).toHaveCount(0)
 })
 
+test('track recording registration surfaces the engine queue result', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Chromium project supplies fake microphone permissions.')
+
+  await createBlankStudio(page, 'Recording queue session', '240')
+
+  await page.getByTestId('track-record-2').click()
+  await expect(page.getByTestId('track-count-in-2')).toBeVisible()
+  await expect(page.getByTestId('track-recording-meter-2')).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(250)
+  await page.getByTestId('track-record-2').click()
+  await expect(page.getByTestId('pending-recording-dialog')).toBeVisible()
+
+  const uploadResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/tracks/2/upload') &&
+      response.request().method() === 'POST',
+    { timeout: 60_000 },
+  )
+  await page.getByTestId('pending-recording-register').click()
+  const uploadResponse = await uploadResponsePromise
+  expect(uploadResponse.ok()).toBeTruthy()
+
+  await expect(page.getByTestId('extraction-jobs')).toBeVisible()
+  await expect(page.getByTestId('extraction-jobs')).toContainText('Alto-recorded-take.wav')
+  await expect(page.getByTestId('track-card-2')).toContainText('Alto-recorded-take.wav', { timeout: 45_000 })
+})
+
 test('admin login can inspect storage and run the engine queue trigger', async ({ page }) => {
   await page.goto('/admin')
   await page.getByLabel('ID').fill('admin')

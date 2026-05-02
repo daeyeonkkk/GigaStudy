@@ -430,10 +430,15 @@ class StudioResponse(BaseModel):
 
 
 def studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
-    return studio.regions or build_arrangement_regions(studio.tracks, studio.bpm)
+    return _merged_arrangement_regions(studio)
 
 
 def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
+    studio.regions = _merged_arrangement_regions(studio)
+    return studio.regions
+
+
+def _merged_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     derived_regions = build_arrangement_regions(studio.tracks, studio.bpm)
     derived_slot_ids = {region.track_slot_id for region in derived_regions}
     tracks_by_slot = {track.slot_id: track for track in studio.tracks}
@@ -443,11 +448,10 @@ def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
         if region.track_slot_id not in derived_slot_ids
         and _should_preserve_explicit_region(region, tracks_by_slot.get(region.track_slot_id))
     ]
-    studio.regions = sorted(
+    return sorted(
         [*preserved_regions, *derived_regions],
         key=lambda region: (region.track_slot_id, region.start_seconds, region.region_id),
     )
-    return studio.regions
 
 
 def _should_preserve_explicit_region(region: ArrangementRegion, track: TrackSlot | None) -> bool:

@@ -272,6 +272,54 @@ def test_studio_payload_preserves_explicit_region_without_track_notes() -> None:
     assert payload["regions"][0]["pitch_events"][0]["label"] == "D4"
 
 
+def test_studio_response_drops_stale_explicit_region_for_empty_track() -> None:
+    studio = Studio(
+        studio_id="studio-drop-stale-region",
+        title="Drop stale region",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="empty",
+                duration_seconds=0,
+                notes=[],
+                updated_at="2026-01-01T00:00:00Z",
+            )
+        ],
+        regions=[
+            ArrangementRegion(
+                region_id="stale-track-1-region",
+                track_slot_id=1,
+                track_name="Soprano",
+                start_seconds=0,
+                duration_seconds=1,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="stale-track-1-event",
+                        track_slot_id=1,
+                        region_id="stale-track-1-region",
+                        label="D4",
+                        pitch_midi=62,
+                        start_seconds=0,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+            )
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = build_studio_response(studio).model_dump(mode="json")
+
+    assert payload["regions"] == []
+
+
 def test_candidate_response_includes_region_candidate() -> None:
     candidate = ExtractionCandidate(
         candidate_id="candidate-region-contract",

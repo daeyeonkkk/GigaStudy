@@ -14,7 +14,7 @@ import {
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
   getTrackVolumeScale,
-  loadSynthPadChoirInstrument,
+  loadDrawbarOrganInstrument,
   scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
   trackHasPlayableAudio,
@@ -352,7 +352,7 @@ export function useStudioPlayback({
           message: '연습용 연주음 샘플을 불러오는 중입니다.',
         })
         try {
-          melodicPlaybackInstrument = await loadSynthPadChoirInstrument(activeContext)
+          melodicPlaybackInstrument = await loadDrawbarOrganInstrument(activeContext)
         } catch (error) {
           console.warn('Failed to load sampled playback instrument.', error)
           melodicPlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT

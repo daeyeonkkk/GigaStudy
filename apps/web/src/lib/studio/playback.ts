@@ -159,6 +159,10 @@ export function regionHasPlayableEvents(region: ArrangementRegion | null | undef
   return Boolean(region?.pitch_events.some((event) => event.is_rest !== true))
 }
 
+export function regionsHavePlayableEvents(regions: ArrangementRegion[] | null | undefined): boolean {
+  return Boolean(regions?.some((region) => regionHasPlayableEvents(region)))
+}
+
 const pitchClassSemitones: Record<string, number> = {
   C: 0,
   D: 2,
@@ -236,13 +240,13 @@ export function getPlaybackPreparationMessage(
   tracksToPlay: TrackSlot[],
   includeMetronome: boolean,
   playbackSource: PlaybackSourceMode,
-  regionsBySlot: Map<number, ArrangementRegion> = new Map(),
+  regionsBySlot: Map<number, ArrangementRegion[]> = new Map(),
 ): string {
   const audioCount = playbackSource === 'audio' ? tracksToPlay.filter(trackHasPlayableAudio).length : 0
   const eventCount = tracksToPlay.filter(
     (track) =>
       !(playbackSource === 'audio' && trackHasPlayableAudio(track)) &&
-      regionHasPlayableEvents(regionsBySlot.get(track.slot_id)),
+      regionsHavePlayableEvents(regionsBySlot.get(track.slot_id)),
   ).length
   const parts = [
     audioCount > 0 ? `audio ${audioCount}` : null,
@@ -270,6 +274,10 @@ export function getRegionTimelineEndSeconds(region: ArrangementRegion): number {
     ...region.pitch_events.map((event) => event.start_seconds + event.duration_seconds),
   )
   return Math.max(region.start_seconds + region.duration_seconds, eventEndSeconds)
+}
+
+export function getRegionsTimelineEndSeconds(regions: ArrangementRegion[] | null | undefined): number {
+  return Math.max(0, ...(regions ?? []).map((region) => getRegionTimelineEndSeconds(region)))
 }
 
 export function startLoopingMetronomeSession(

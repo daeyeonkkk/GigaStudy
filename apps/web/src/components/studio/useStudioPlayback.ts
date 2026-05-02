@@ -9,12 +9,12 @@ import {
   fetchAudioArrayBuffer,
   getPitchEventPlaybackFrequency,
   getPlaybackPreparationMessage,
-  getRegionTimelineEndSeconds,
+  getRegionsTimelineEndSeconds,
   getTrackVolumeScale,
   scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
   trackHasPlayableAudio,
-  regionHasPlayableEvents,
+  regionsHavePlayableEvents,
   type MeterContext,
   type PlaybackNode,
   type PlaybackSession,
@@ -134,11 +134,20 @@ export function useStudioPlayback({
     })
   }, [registeredSlotIds])
 
-  function getPlaybackRegionsBySlot(): Map<number, ArrangementRegion> {
+  function getPlaybackRegionsBySlot(): Map<number, ArrangementRegion[]> {
     if (!studio) {
       return new Map()
     }
-    return new Map(studio.regions.map((region) => [region.track_slot_id, region]))
+    const regionsBySlot = new Map<number, ArrangementRegion[]>()
+    for (const region of studio.regions) {
+      const trackRegions = regionsBySlot.get(region.track_slot_id) ?? []
+      trackRegions.push(region)
+      regionsBySlot.set(region.track_slot_id, trackRegions)
+    }
+    for (const trackRegions of regionsBySlot.values()) {
+      trackRegions.sort((left, right) => left.start_seconds - right.start_seconds)
+    }
+    return regionsBySlot
   }
 
   async function startPlaybackSession(
@@ -151,7 +160,7 @@ export function useStudioPlayback({
     }
 
     const regionsBySlot = getPlaybackRegionsBySlot()
-    const hasPlayableEvents = (track: TrackSlot) => regionHasPlayableEvents(regionsBySlot.get(track.slot_id))
+    const hasPlayableEvents = (track: TrackSlot) => regionsHavePlayableEvents(regionsBySlot.get(track.slot_id))
     const playableTracks = tracksToPlay.filter(
       (track) =>
         track.status === 'registered' &&
@@ -215,9 +224,11 @@ export function useStudioPlayback({
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
 
-      function updateMaxBeatFromRegion(region: ArrangementRegion | null | undefined) {
-        region?.pitch_events.forEach((event) => {
-          maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
+      function updateMaxBeatFromRegions(regions: ArrangementRegion[] | null | undefined) {
+        regions?.forEach((region) => {
+          region.pitch_events.forEach((event) => {
+            maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
+          })
         })
       }
 
@@ -310,10 +321,10 @@ export function useStudioPlayback({
           return
         }
         nodes.push(node)
-        const region = regionsBySlot.get(track.slot_id)
+        const trackRegions = regionsBySlot.get(track.slot_id)
         const trackEndSeconds = Math.max(
           trackStartSeconds + buffer.duration,
-          region ? getRegionTimelineEndSeconds(region) : trackStartSeconds + buffer.duration,
+          getRegionsTimelineEndSeconds(trackRegions) || trackStartSeconds + buffer.duration,
         )
         latestStop = Math.max(
           latestStop,
@@ -323,60 +334,62 @@ export function useStudioPlayback({
         maxBeat = Math.max(maxBeat, Math.ceil(trackEndSeconds / beatSeconds) + 1)
         scheduledAnyTrack = true
 
-        updateMaxBeatFromRegion(region)
+        updateMaxBeatFromRegions(trackRegions)
       })
 
       eventTracks.forEach((track) => {
-        const region = regionsBySlot.get(track.slot_id)
-        if (!region) {
+        const trackRegions = regionsBySlot.get(track.slot_id)
+        if (!trackRegions?.length) {
           return
         }
         if (!activeContext) {
-          updateMaxBeatFromRegion(region)
+          updateMaxBeatFromRegions(trackRegions)
           return
         }
 
-        region.pitch_events.forEach((event) => {
-          const frequency = getPitchEventPlaybackFrequency(event)
-          if (frequency === null) {
-            return
-          }
-          const eventStartSeconds = event.start_seconds
-          const duration = Math.max(0.11, event.duration_seconds * 0.9)
-          const eventEndSeconds = eventStartSeconds + duration
-          timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
-          if (eventEndSeconds <= startSeconds) {
-            maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
-            return
-          }
-          const relativeStartSeconds = Math.max(0, eventStartSeconds - startSeconds)
-          const remainingDuration = Math.max(
-            0.05,
-            eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
-          )
-          const volume = track.slot_id === 6 ? Math.min(0.14, eventToneVolume * 0.7) : eventToneVolume
-          const toneType: OscillatorType | 'piano' = track.slot_id === 6 ? 'square' : 'piano'
+        trackRegions.forEach((region) => {
+          region.pitch_events.forEach((event) => {
+            const frequency = getPitchEventPlaybackFrequency(event)
+            if (frequency === null) {
+              return
+            }
+            const eventStartSeconds = event.start_seconds
+            const duration = Math.max(0.11, event.duration_seconds * 0.9)
+            const eventEndSeconds = eventStartSeconds + duration
+            timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
+            if (eventEndSeconds <= startSeconds) {
+              maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
+              return
+            }
+            const relativeStartSeconds = Math.max(0, eventStartSeconds - startSeconds)
+            const remainingDuration = Math.max(
+              0.05,
+              eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
+            )
+            const volume = track.slot_id === 6 ? Math.min(0.14, eventToneVolume * 0.7) : eventToneVolume
+            const toneType: OscillatorType | 'piano' = track.slot_id === 6 ? 'square' : 'piano'
 
-          nodes.push(
-            createTone(
-              activeContext,
-              scheduledStart + relativeStartSeconds,
-              remainingDuration,
-              frequency,
-              volume,
-              toneType,
-              getTrackOutput(track) ?? activeContext.destination,
-            ),
-          )
-          latestStop = Math.max(latestStop, relativeStartSeconds + remainingDuration)
-          maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
-          scheduledAnyTrack = true
+            nodes.push(
+              createTone(
+                activeContext,
+                scheduledStart + relativeStartSeconds,
+                remainingDuration,
+                frequency,
+                volume,
+                toneType,
+                getTrackOutput(track) ?? activeContext.destination,
+              ),
+            )
+            latestStop = Math.max(latestStop, relativeStartSeconds + remainingDuration)
+            maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
+            scheduledAnyTrack = true
+          })
         })
       })
 
       if (!scheduledAnyTrack) {
         disposePlaybackSession({ context, nodes, timeoutIds })
-      setActionState({ phase: 'error', message: 'No playable recorded audio or pitch events are available.' })
+        setActionState({ phase: 'error', message: 'No playable recorded audio or pitch events are available.' })
         return false
       }
 

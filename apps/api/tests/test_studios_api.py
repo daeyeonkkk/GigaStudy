@@ -527,6 +527,91 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     assert reports[0]["overall_score"] == 100
 
 
+def test_region_and_piano_roll_mutation_api_uses_explicit_regions(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Region mutation",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_payload = upload_musicxml_track(client, studio_id).json()
+    source_region = upload_payload["regions"][0]
+    source_region_id = source_region["region_id"]
+
+    copy_response = client.post(
+        f"/api/studios/{studio_id}/regions/{source_region_id}/copy",
+        json={"start_seconds": 4.0},
+    )
+
+    assert copy_response.status_code == 200
+    copied_payload = copy_response.json()
+    slot_one_regions = [
+        region
+        for region in copied_payload["regions"]
+        if region["track_slot_id"] == 1
+    ]
+    assert len(slot_one_regions) == 2
+    copied_region = next(region for region in slot_one_regions if region["region_id"] != source_region_id)
+    copied_event = copied_region["pitch_events"][0]
+
+    event_response = client.patch(
+        f"/api/studios/{studio_id}/regions/{copied_region['region_id']}/events/{copied_event['event_id']}",
+        json={"pitch_midi": 73},
+    )
+
+    assert event_response.status_code == 200
+    edited_region = next(
+        region
+        for region in event_response.json()["regions"]
+        if region["region_id"] == copied_region["region_id"]
+    )
+    assert edited_region["pitch_events"][0]["label"] == "C#5"
+    assert edited_region["pitch_events"][0]["pitch_midi"] == 73
+    assert event_response.json()["tracks"][0]["status"] == "registered"
+
+    split_seconds = copied_region["start_seconds"] + 0.5
+    split_response = client.post(
+        f"/api/studios/{studio_id}/regions/{copied_region['region_id']}/split",
+        json={"split_seconds": split_seconds},
+    )
+
+    assert split_response.status_code == 200
+    split_payload = split_response.json()
+    assert len([region for region in split_payload["regions"] if region["track_slot_id"] == 1]) == 3
+    right_region = next(
+        region
+        for region in split_payload["regions"]
+        if region["track_slot_id"] == 1 and region["start_seconds"] == split_seconds
+    )
+
+    move_response = client.patch(
+        f"/api/studios/{studio_id}/regions/{right_region['region_id']}",
+        json={"target_track_slot_id": 2, "start_seconds": 6.0},
+    )
+
+    assert move_response.status_code == 200
+    moved_payload = move_response.json()
+    moved_region = next(
+        region
+        for region in moved_payload["regions"]
+        if region["region_id"] == right_region["region_id"]
+    )
+    assert moved_region["track_slot_id"] == 2
+    assert moved_region["track_name"] == "Alto"
+    assert moved_payload["tracks"][1]["status"] == "registered"
+
+    delete_response = client.delete(f"/api/studios/{studio_id}/regions/{source_region_id}")
+
+    assert delete_response.status_code == 200
+    delete_payload = delete_response.json()
+    assert all(region["region_id"] != source_region_id for region in delete_payload["regions"])
+    assert delete_payload["tracks"][0]["status"] == "registered"
+
+
 def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

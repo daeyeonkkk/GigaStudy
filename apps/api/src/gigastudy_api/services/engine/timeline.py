@@ -51,16 +51,20 @@ def events_from_region(region: ArrangementRegion, *, bpm: int) -> list[TrackPitc
 
 
 def registered_region_events_for_slot(studio: Studio, slot_id: int) -> list[TrackPitchEvent]:
-    region = next(
+    regions = sorted(
         (
             candidate
             for candidate in studio.regions
             if candidate.track_slot_id == slot_id and candidate.pitch_events
         ),
-        None,
+        key=lambda region: (region.start_seconds, region.region_id),
     )
-    if region is not None:
-        return events_from_region(region, bpm=studio.bpm)
+    if regions:
+        return [
+            event
+            for region in regions
+            for event in events_from_region(region, bpm=studio.bpm)
+        ]
 
     track = next((candidate for candidate in studio.tracks if candidate.slot_id == slot_id), None)
     if track is None or track.status != "registered" or not track.events:

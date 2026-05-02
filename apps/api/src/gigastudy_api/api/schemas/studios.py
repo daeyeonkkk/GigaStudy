@@ -436,17 +436,23 @@ def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
 
 
 def _merged_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
+    tracks_by_slot = {track.slot_id: track for track in studio.tracks}
     derived_regions = build_arrangement_regions(studio.tracks, studio.bpm)
     derived_slot_ids = {region.track_slot_id for region in derived_regions}
-    tracks_by_slot = {track.slot_id: track for track in studio.tracks}
-    preserved_regions = [
+    explicit_regions = [
         region
         for region in studio.regions
-        if region.track_slot_id not in derived_slot_ids
-        and _should_preserve_explicit_region(region, tracks_by_slot.get(region.track_slot_id))
+        if _should_preserve_explicit_region(region, tracks_by_slot.get(region.track_slot_id))
+        and _explicit_region_can_override_derived(
+            region,
+            tracks_by_slot.get(region.track_slot_id),
+            derived_slot_ids=derived_slot_ids,
+        )
     ]
+    explicit_slot_ids = {region.track_slot_id for region in explicit_regions}
+    derived_regions = [region for region in derived_regions if region.track_slot_id not in explicit_slot_ids]
     return sorted(
-        [*preserved_regions, *derived_regions],
+        [*explicit_regions, *derived_regions],
         key=lambda region: (region.track_slot_id, region.start_seconds, region.region_id),
     )
 
@@ -455,6 +461,17 @@ def _should_preserve_explicit_region(region: ArrangementRegion, track: TrackSlot
     if track is not None and track.status == "empty":
         return False
     return bool(region.pitch_events or region.audio_source_path)
+
+
+def _explicit_region_can_override_derived(
+    region: ArrangementRegion,
+    track: TrackSlot | None,
+    *,
+    derived_slot_ids: set[int],
+) -> bool:
+    if region.track_slot_id not in derived_slot_ids:
+        return True
+    return track is None or not track.events
 
 
 def sync_studio_candidate_regions(studio: Studio) -> list[CandidateRegion]:
@@ -585,6 +602,46 @@ class ShiftTrackSyncRequest(BaseModel):
 
 class VolumeTrackRequest(BaseModel):
     volume_percent: int = Field(ge=0, le=100)
+
+
+class UpdateRegionRequest(BaseModel):
+    target_track_slot_id: int | None = Field(default=None, ge=1, le=6)
+    start_seconds: float | None = Field(default=None, ge=0, le=3600)
+    duration_seconds: float | None = Field(default=None, gt=0, le=3600)
+    volume_percent: int | None = Field(default=None, ge=0, le=100)
+    source_label: str | None = Field(default=None, max_length=180)
+
+    @model_validator(mode="after")
+    def validate_update_fields(self) -> "UpdateRegionRequest":
+        if not self.model_fields_set:
+            raise ValueError("Region update requires at least one field.")
+        return self
+
+
+class CopyRegionRequest(BaseModel):
+    target_track_slot_id: int | None = Field(default=None, ge=1, le=6)
+    start_seconds: float | None = Field(default=None, ge=0, le=3600)
+
+
+class SplitRegionRequest(BaseModel):
+    split_seconds: float = Field(gt=0, le=3600)
+
+
+class UpdatePitchEventRequest(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=32)
+    pitch_midi: int | None = Field(default=None, ge=0, le=127)
+    start_seconds: float | None = Field(default=None, ge=0, le=3600)
+    duration_seconds: float | None = Field(default=None, gt=0, le=3600)
+    start_beat: float | None = Field(default=None, ge=0)
+    duration_beats: float | None = Field(default=None, gt=0)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    is_rest: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_update_fields(self) -> "UpdatePitchEventRequest":
+        if not self.model_fields_set:
+            raise ValueError("Pitch event update requires at least one field.")
+        return self
 
 
 class PerformanceEvent(BaseModel):

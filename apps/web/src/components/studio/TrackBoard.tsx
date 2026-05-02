@@ -13,7 +13,13 @@ import {
   getTrackSourceLabel,
   statusLabels,
 } from '../../lib/studio'
-import type { ArrangementRegion, PitchEvent, TrackExtractionJob, TrackSlot } from '../../types/studio'
+import type {
+  ArrangementRegion,
+  PitchEvent,
+  TrackExtractionJob,
+  TrackSlot,
+  UpdatePitchEventRequest,
+} from '../../types/studio'
 import './TrackBoard.css'
 
 type TrackRecordingMeter = {
@@ -44,12 +50,17 @@ type TrackBoardProps = {
   trackCountIn: TrackCountInState | null
   trackRecordingMeter: TrackRecordingMeter
   tracks: TrackSlot[]
+  onCopyRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
+  onDeleteRegion: (region: ArrangementRegion) => void
   onGenerate: (track: TrackSlot) => void
+  onMoveRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
   onOpenScore: (track: TrackSlot) => void
   onRecord: (track: TrackSlot) => void
+  onSplitRegion: (region: ArrangementRegion, splitSeconds: number) => void
   onStopPlayback: (track: TrackSlot) => void
   onSync: (track: TrackSlot, nextOffset: number) => void
   onTogglePlayback: (track: TrackSlot) => void
+  onUpdateEvent: (region: ArrangementRegion, event: PitchEvent, patch: UpdatePitchEventRequest) => void
   onUpload: (track: TrackSlot, file: File | null) => void
   onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }
@@ -94,10 +105,23 @@ function getTimelinePercent(seconds: number, timelineSeconds: number): number {
   return Math.max(0, Math.min(100, (seconds / Math.max(0.25, timelineSeconds)) * 100))
 }
 
-function getRegionStyle(region: ArrangementRegion, timelineSeconds: number): CSSProperties {
+function getRegionStyle(region: ArrangementRegion, timelineSeconds: number, laneIndex: number): CSSProperties {
   return {
     '--region-left': `${getTimelinePercent(region.start_seconds, timelineSeconds)}%`,
+    '--region-top': `${10 + laneIndex * 36}px`,
     '--region-width': `${Math.max(1.5, getTimelinePercent(region.duration_seconds, timelineSeconds))}%`,
+  } as CSSProperties
+}
+
+function getRegionLaneStyle(
+  isPlaying: boolean,
+  playheadSeconds: number | null,
+  timelineSeconds: number,
+  regionCount: number,
+): CSSProperties {
+  return {
+    '--lane-min-height': `${Math.max(94, 24 + regionCount * 38)}px`,
+    '--playhead-left': `${getTimelinePercent(isPlaying ? playheadSeconds ?? 0 : 0, timelineSeconds)}%`,
   } as CSSProperties
 }
 
@@ -120,6 +144,18 @@ function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {
   const midi = typeof event.pitch_midi === 'number' ? event.pitch_midi : pitchRange.minMidi
   const span = Math.max(1, pitchRange.maxMidi - pitchRange.minMidi)
   return Math.max(3, Math.min(91, ((pitchRange.maxMidi - midi) / span) * 88 + 3))
+}
+
+function getGridSeconds(bpm: number): number {
+  return (60 / Math.max(1, bpm)) / 2
+}
+
+function roundToGrid(value: number, gridSeconds: number): number {
+  return Math.max(0, Math.round(value / gridSeconds) * gridSeconds)
+}
+
+function clampRegionStart(value: number): number {
+  return Math.max(0, Math.round(value * 1000) / 1000)
 }
 
 function TrackVolumeControl({
@@ -202,14 +238,96 @@ function TrackVolumeControl({
   )
 }
 
+function RegionTools({
+  gridSeconds,
+  region,
+  tracks,
+  onCopyRegion,
+  onDeleteRegion,
+  onMoveRegion,
+  onSplitRegion,
+}: {
+  gridSeconds: number
+  region: ArrangementRegion | null
+  tracks: TrackSlot[]
+  onCopyRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
+  onDeleteRegion: (region: ArrangementRegion) => void
+  onMoveRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
+  onSplitRegion: (region: ArrangementRegion, splitSeconds: number) => void
+}) {
+  if (!region) {
+    return <p className="piano-roll-panel__hint">Select a region to edit arrangement blocks.</p>
+  }
+
+  const canMoveUp = region.track_slot_id > Math.min(...tracks.map((track) => track.slot_id))
+  const canMoveDown = region.track_slot_id < Math.max(...tracks.map((track) => track.slot_id))
+  const midpoint = region.start_seconds + region.duration_seconds / 2
+
+  return (
+    <div className="region-tools" aria-label="Region editing tools">
+      <button
+        type="button"
+        onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds - gridSeconds))}
+      >
+        Move left
+      </button>
+      <button
+        type="button"
+        onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds + gridSeconds))}
+      >
+        Move right
+      </button>
+      <button type="button" onClick={() => onSplitRegion(region, midpoint)}>
+        Split
+      </button>
+      <button
+        type="button"
+        onClick={() => onCopyRegion(region, region.track_slot_id, region.start_seconds + region.duration_seconds)}
+      >
+        Copy
+      </button>
+      <button
+        disabled={!canMoveUp}
+        type="button"
+        onClick={() => onMoveRegion(region, region.track_slot_id - 1, region.start_seconds)}
+      >
+        Track up
+      </button>
+      <button
+        disabled={!canMoveDown}
+        type="button"
+        onClick={() => onMoveRegion(region, region.track_slot_id + 1, region.start_seconds)}
+      >
+        Track down
+      </button>
+      <button className="region-tools__danger" type="button" onClick={() => onDeleteRegion(region)}>
+        Delete
+      </button>
+    </div>
+  )
+}
+
 function PianoRollPanel({
   focusedEventId,
+  gridSeconds,
   region,
+  selectedEventId,
+  onSelectEvent,
+  onUpdateEvent,
 }: {
   focusedEventId?: string | null
+  gridSeconds: number
   region: ArrangementRegion | null
+  selectedEventId: string | null
+  onSelectEvent: (eventId: string) => void
+  onUpdateEvent: (region: ArrangementRegion, event: PitchEvent, patch: UpdatePitchEventRequest) => void
 }) {
   const events = region ? getPitchedEvents(region.pitch_events) : []
+  const selectedEvent =
+    events.find((event) => event.event_id === selectedEventId) ??
+    events.find((event) => event.event_id === focusedEventId) ??
+    events[0] ??
+    null
   const pitchRange = getPitchEventRange(events)
   const pitchLabels = Array.from({ length: 5 }, (_, index) => {
     const midi = Math.round(
@@ -218,17 +336,109 @@ function PianoRollPanel({
     return `M${midi}`
   })
 
+  function updateSelectedEvent(patch: UpdatePitchEventRequest) {
+    if (!region || !selectedEvent) {
+      return
+    }
+    onUpdateEvent(region, selectedEvent, patch)
+  }
+
   return (
-    <section className="piano-roll-panel" aria-label="피아노 롤 편집기">
+    <section className="piano-roll-panel" aria-label="Piano roll editor">
       <header>
         <div>
           <p className="eyebrow">Micro editor</p>
           <h3>{region ? `${region.track_name} Piano Roll` : 'Piano Roll'}</h3>
         </div>
-        <div className="piano-roll-panel__tools" aria-label="피아노 롤 도구">
-          <button type="button">Snap</button>
-          <button type="button">Quantize</button>
-          <button type="button">Pitch</button>
+        <div className="piano-roll-panel__tools" aria-label="Piano roll tools">
+          <button
+            disabled={!selectedEvent}
+            type="button"
+            onClick={() => {
+              if (selectedEvent?.pitch_midi !== null && selectedEvent?.pitch_midi !== undefined) {
+                updateSelectedEvent({ pitch_midi: Math.max(0, selectedEvent.pitch_midi - 1) })
+              }
+            }}
+          >
+            Pitch -
+          </button>
+          <button
+            disabled={!selectedEvent}
+            type="button"
+            onClick={() => {
+              if (selectedEvent?.pitch_midi !== null && selectedEvent?.pitch_midi !== undefined) {
+                updateSelectedEvent({ pitch_midi: Math.min(127, selectedEvent.pitch_midi + 1) })
+              }
+            }}
+          >
+            Pitch +
+          </button>
+          <button
+            disabled={!selectedEvent}
+            type="button"
+            onClick={() =>
+              selectedEvent
+                ? updateSelectedEvent({
+                    start_seconds: clampRegionStart(selectedEvent.start_seconds - gridSeconds),
+                  })
+                : undefined
+            }
+          >
+            Nudge -
+          </button>
+          <button
+            disabled={!selectedEvent}
+            type="button"
+            onClick={() =>
+              selectedEvent
+                ? updateSelectedEvent({
+                    start_seconds: clampRegionStart(selectedEvent.start_seconds + gridSeconds),
+                  })
+                : undefined
+            }
+          >
+            Nudge +
+          </button>
+          <button
+            disabled={!selectedEvent}
+            type="button"
+            onClick={() =>
+              selectedEvent
+                ? updateSelectedEvent({
+                    duration_seconds: Math.max(0.08, selectedEvent.duration_seconds - gridSeconds),
+                  })
+                : undefined
+            }
+          >
+            Shorter
+          </button>
+          <button
+            disabled={!selectedEvent}
+            type="button"
+            onClick={() =>
+              selectedEvent
+                ? updateSelectedEvent({
+                    duration_seconds: selectedEvent.duration_seconds + gridSeconds,
+                  })
+                : undefined
+            }
+          >
+            Longer
+          </button>
+          <button
+            disabled={!selectedEvent}
+            type="button"
+            onClick={() =>
+              selectedEvent
+                ? updateSelectedEvent({
+                    duration_seconds: Math.max(gridSeconds, roundToGrid(selectedEvent.duration_seconds, gridSeconds)),
+                    start_seconds: roundToGrid(selectedEvent.start_seconds, gridSeconds),
+                  })
+                : undefined
+            }
+          >
+            Snap
+          </button>
         </div>
       </header>
 
@@ -242,7 +452,12 @@ function PianoRollPanel({
           {region && events.length > 0 ? (
             events.map((event) => (
               <button
-                className={`piano-roll__event ${event.event_id === focusedEventId ? 'is-focused' : ''}`}
+                aria-pressed={event.event_id === selectedEvent?.event_id}
+                className={`piano-roll__event ${
+                  event.event_id === focusedEventId || event.event_id === selectedEvent?.event_id
+                    ? 'is-focused'
+                    : ''
+                }`}
                 data-testid={`piano-event-${event.event_id}`}
                 key={event.event_id}
                 style={
@@ -252,14 +467,15 @@ function PianoRollPanel({
                     '--event-width': `${getEventWidthPercent(event, region)}%`,
                   } as CSSProperties
                 }
-                title={`${event.label} · ${formatDurationSeconds(event.duration_seconds)}`}
+                title={`${event.label} - ${formatDurationSeconds(event.duration_seconds)}`}
                 type="button"
+                onClick={() => onSelectEvent(event.event_id)}
               >
                 {event.label}
               </button>
             ))
           ) : (
-            <p>선택한 리전에 피치 이벤트가 없습니다.</p>
+            <p>Select a region with pitch events.</p>
           )}
         </div>
       </div>
@@ -281,7 +497,7 @@ function PracticeWaterfall({
   )
 
   return (
-    <section className="practice-waterfall" aria-label="폭포수 연습 미리보기">
+    <section className="practice-waterfall" aria-label="Practice preview">
       <header>
         <div>
           <p className="eyebrow">Practice mode</p>
@@ -308,7 +524,7 @@ function PracticeWaterfall({
                 '--waterfall-height': `${Math.max(1.2, getTimelinePercent(event.duration_seconds, timelineSeconds))}%`,
               } as CSSProperties
             }
-            title={`${region.track_name} · ${event.label}`}
+            title={`${region.track_name} - ${event.label}`}
           />
         ))}
       </div>
@@ -333,20 +549,40 @@ export function TrackBoard({
   trackCountIn,
   trackRecordingMeter,
   tracks,
+  onCopyRegion,
+  onDeleteRegion,
   onGenerate,
+  onMoveRegion,
   onOpenScore,
   onRecord,
+  onSplitRegion,
   onStopPlayback,
   onSync,
   onTogglePlayback,
+  onUpdateEvent,
   onUpload,
   onVolumeChange,
 }: TrackBoardProps) {
-  const regions = useMemo(() => arrangementRegions, [arrangementRegions])
-  const regionsByTrack = useMemo(
-    () => new Map(regions.map((region) => [region.track_slot_id, region])),
-    [regions],
+  const regions = useMemo(
+    () =>
+      arrangementRegions
+        .slice()
+        .sort((left, right) =>
+          left.track_slot_id === right.track_slot_id
+            ? left.start_seconds - right.start_seconds || left.region_id.localeCompare(right.region_id)
+            : left.track_slot_id - right.track_slot_id,
+        ),
+    [arrangementRegions],
   )
+  const regionsByTrack = useMemo(() => {
+    const next = new Map<number, ArrangementRegion[]>()
+    for (const region of regions) {
+      const trackRegions = next.get(region.track_slot_id) ?? []
+      trackRegions.push(region)
+      next.set(region.track_slot_id, trackRegions)
+    }
+    return next
+  }, [regions])
   const timelineSeconds = useMemo(
     () =>
       Math.max(
@@ -359,16 +595,27 @@ export function TrackBoard({
     () => getMeasureStarts(timelineSeconds, bpm, beatsPerMeasure),
     [beatsPerMeasure, bpm, timelineSeconds],
   )
+  const gridSeconds = getGridSeconds(bpm)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+
   const focusedRegionExists = focusedRegionId
     ? regions.some((region) => region.region_id === focusedRegionId)
     : false
   const effectiveSelectedRegionId = selectedRegionId ?? (focusedRegionExists ? focusedRegionId : null)
   const selectedRegion =
-    regions.find((region) => region.region_id === effectiveSelectedRegionId) ?? regions[0] ?? null
+    regions.find((region) => region.region_id === effectiveSelectedRegionId) ??
+    regions[0] ??
+    null
+  const effectiveSelectedEventId =
+    selectedRegion?.pitch_events.some((event) => event.event_id === selectedEventId)
+      ? selectedEventId
+      : selectedRegion?.pitch_events.some((event) => event.event_id === focusedEventId)
+        ? focusedEventId ?? null
+        : selectedRegion?.pitch_events[0]?.event_id ?? null
 
   return (
-    <section className="studio-tracks" aria-label="6트랙 리전 편곡">
+    <section className="studio-tracks" aria-label="Six-track region editor">
       <div className="studio-tracks__header">
         <div>
           <p className="eyebrow">Arrangement</p>
@@ -376,6 +623,7 @@ export function TrackBoard({
         </div>
         <div className="studio-tracks__summary">
           <span>{registeredTracks.length} registered</span>
+          <span>{regions.length} regions</span>
           <span>{pendingCandidateCount} review</span>
           <span>{playingSlots.size} playing</span>
         </div>
@@ -400,7 +648,7 @@ export function TrackBoard({
           const isCountingIn = trackCountIn?.slotId === track.slot_id
           const isPlaying = playingSlots.has(track.slot_id)
           const activeJob = getTrackActiveJob(track, extractionJobs)
-          const region = regionsByTrack.get(track.slot_id) ?? null
+          const trackRegions = regionsByTrack.get(track.slot_id) ?? []
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
@@ -441,8 +689,8 @@ export function TrackBoard({
 
               <div
                 className="track-card__timeline track-card__region-lane"
-                aria-label={`${track.name} 리전 레인`}
-                style={getPlayheadStyle(isPlaying ? playheadSeconds : null, timelineSeconds)}
+                aria-label={`${track.name} region lane`}
+                style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineSeconds, trackRegions.length)}
               >
                 <div className="track-card__measure-grid" aria-hidden="true">
                   {measureStarts.map((seconds) => (
@@ -455,22 +703,36 @@ export function TrackBoard({
                 {isPlaying && playheadSeconds !== null ? (
                   <i className="track-card__playhead" aria-hidden="true" />
                 ) : null}
-                {region ? (
-                  <button
-                    aria-pressed={selectedRegion?.region_id === region.region_id}
-                    className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
-                    data-testid={`track-region-${track.slot_id}`}
-                    style={getRegionStyle(region, timelineSeconds)}
-                    type="button"
-                    onClick={() => setSelectedRegionId(region.region_id)}
-                    onDoubleClick={() => setSelectedRegionId(region.region_id)}
-                  >
-                    <span>{region.source_label ?? track.name}</span>
-                    <strong>{getPitchedEvents(region.pitch_events).length} events</strong>
-                    <em>{formatDurationSeconds(region.duration_seconds)}</em>
-                  </button>
+                {trackRegions.length > 0 ? (
+                  trackRegions.map((region, index) => (
+                    <button
+                      aria-label={`${track.name} region ${index + 1}`}
+                      aria-pressed={selectedRegion?.region_id === region.region_id}
+                      className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
+                      data-region-id={region.region_id}
+                      data-testid={index === 0 ? `track-region-${track.slot_id}` : `track-region-${track.slot_id}-${index + 1}`}
+                      key={region.region_id}
+                      style={getRegionStyle(region, timelineSeconds, index)}
+                      type="button"
+                      onClick={() => {
+                        setSelectedRegionId(region.region_id)
+                        setSelectedEventId(region.pitch_events[0]?.event_id ?? null)
+                      }}
+                      onDoubleClick={() => {
+                        setSelectedRegionId(region.region_id)
+                        setSelectedEventId(region.pitch_events[0]?.event_id ?? null)
+                      }}
+                    >
+                      <span>{region.source_label ?? track.name}</span>
+                      <strong>{getPitchedEvents(region.pitch_events).length} events</strong>
+                      <em>
+                        {formatDurationSeconds(region.start_seconds)} -{' '}
+                        {formatDurationSeconds(region.start_seconds + region.duration_seconds)}
+                      </em>
+                    </button>
+                  ))
                 ) : (
-                  <p>{needsReview ? '검토 대기 트랙' : '비어 있는 트랙'}</p>
+                  <p>{needsReview ? 'Review pending for this track' : 'Empty track'}</p>
                 )}
               </div>
 
@@ -482,15 +744,15 @@ export function TrackBoard({
                     type="button"
                     onClick={() => onRecord(track)}
                   >
-                    <span aria-hidden="true">{isRecording || isCountingIn ? '■' : '●'}</span>
-                    {isRecording ? '중지' : isCountingIn ? '취소' : '녹음'}
+                    <span aria-hidden="true">{isRecording || isCountingIn ? 'Stop' : 'Rec'}</span>
+                    {isRecording ? 'Recording' : isCountingIn ? 'Cancel' : 'Record'}
                   </button>
                   <label className="app-button app-button--secondary track-upload">
-                    <span aria-hidden="true">↥</span>
-                    업로드
+                    <span aria-hidden="true">Up</span>
+                    Upload
                     <input
                       accept={TRACK_UPLOAD_ACCEPT}
-                      aria-label={`${track.name} 업로드`}
+                      aria-label={`${track.name} upload`}
                       type="file"
                       onChange={(event) => {
                         const file = event.currentTarget.files?.[0] ?? null
@@ -507,13 +769,13 @@ export function TrackBoard({
                     onClick={() => onGenerate(track)}
                   >
                     <span aria-hidden="true">AI</span>
-                    생성
+                    Generate
                   </button>
                 </div>
 
                 <div className="track-card__secondary-actions">
                   <button
-                    aria-label={`${track.name} 싱크 ${formatSyncStep(syncStepSeconds)}초 빠르게`}
+                    aria-label={`${track.name} sync ${formatSyncStep(syncStepSeconds)} seconds earlier`}
                     className="studio-step-button"
                     data-testid={`track-sync-earlier-${track.slot_id}`}
                     type="button"
@@ -522,7 +784,7 @@ export function TrackBoard({
                     -{formatSyncStep(syncStepSeconds)}
                   </button>
                   <button
-                    aria-label={`${track.name} 싱크 ${formatSyncStep(syncStepSeconds)}초 느리게`}
+                    aria-label={`${track.name} sync ${formatSyncStep(syncStepSeconds)} seconds later`}
                     className="studio-step-button"
                     data-testid={`track-sync-later-${track.slot_id}`}
                     type="button"
@@ -532,24 +794,24 @@ export function TrackBoard({
                   </button>
                   <TrackVolumeControl track={track} onVolumeChange={onVolumeChange} />
                   <button
-                    aria-label={isPlaying ? `${track.name} 일시정지` : `${track.name} 재생`}
+                    aria-label={isPlaying ? `${track.name} pause` : `${track.name} play`}
                     className="studio-icon-button"
                     data-testid={`track-play-${track.slot_id}`}
                     disabled={!isRegistered}
                     type="button"
                     onClick={() => onTogglePlayback(track)}
                   >
-                    <span aria-hidden="true">{isPlaying ? 'II' : '▶'}</span>
+                    <span aria-hidden="true">{isPlaying ? 'II' : 'Play'}</span>
                   </button>
                   <button
-                    aria-label={`${track.name} 중지`}
+                    aria-label={`${track.name} stop`}
                     className="studio-icon-button"
                     data-testid={`track-stop-${track.slot_id}`}
                     disabled={!isRegistered}
                     type="button"
                     onClick={() => onStopPlayback(track)}
                   >
-                    <span aria-hidden="true">■</span>
+                    <span aria-hidden="true">Stop</span>
                   </button>
                   <button
                     className="app-button app-button--secondary"
@@ -558,7 +820,7 @@ export function TrackBoard({
                     type="button"
                     onClick={() => onOpenScore(track)}
                   >
-                    채점
+                    Score
                   </button>
                 </div>
                 {isCountingIn ? (
@@ -567,7 +829,7 @@ export function TrackBoard({
                     data-testid={`track-count-in-${track.slot_id}`}
                     style={recordingMeterStyle}
                   >
-                    <span>1마디 준비</span>
+                    <span>One-bar count-in</span>
                     <strong>{trackCountIn.pulsesRemaining}</strong>
                     <i aria-hidden="true" />
                     <em>{metronomeEnabled ? 'metronome on' : 'silent clock'}</em>
@@ -590,7 +852,25 @@ export function TrackBoard({
       </div>
 
       <div className="editor-panels">
-        <PianoRollPanel focusedEventId={focusedEventId} region={selectedRegion} />
+        <div className="piano-roll-shell">
+          <RegionTools
+            gridSeconds={gridSeconds}
+            region={selectedRegion}
+            tracks={tracks}
+            onCopyRegion={onCopyRegion}
+            onDeleteRegion={onDeleteRegion}
+            onMoveRegion={onMoveRegion}
+            onSplitRegion={onSplitRegion}
+          />
+          <PianoRollPanel
+            focusedEventId={focusedEventId}
+            gridSeconds={gridSeconds}
+            region={selectedRegion}
+            selectedEventId={effectiveSelectedEventId}
+            onSelectEvent={setSelectedEventId}
+            onUpdateEvent={onUpdateEvent}
+          />
+        </div>
         <PracticeWaterfall
           playheadSeconds={playheadSeconds}
           regions={regions}

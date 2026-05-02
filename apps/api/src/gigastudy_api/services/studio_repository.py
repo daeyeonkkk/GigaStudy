@@ -14,8 +14,10 @@ from gigastudy_api.api.schemas.admin import (
     AdminStorageSummary,
 )
 from gigastudy_api.api.schemas.studios import (
+    ArrangementRegion,
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
+    CopyRegionRequest,
     DirectUploadRequest,
     DirectUploadTarget,
     ExtractionCandidate,
@@ -24,12 +26,15 @@ from gigastudy_api.api.schemas.studios import (
     SeedSourceKind,
     ShiftTrackSyncRequest,
     SourceKind,
+    SplitRegionRequest,
     Studio,
     StudioListItem,
     StudioSeedUploadRequest,
     SyncTrackRequest,
     TrackExtractionJob,
     TrackSlot,
+    UpdatePitchEventRequest,
+    UpdateRegionRequest,
     UploadTrackRequest,
     VolumeTrackRequest,
 )
@@ -74,6 +79,7 @@ from gigastudy_api.services.studio_engine_queue_commands import StudioEngineQueu
 from gigastudy_api.services.studio_extraction_job_commands import StudioExtractionJobCommands
 from gigastudy_api.services.studio_candidate_commands import StudioCandidateCommands
 from gigastudy_api.services.studio_generation_commands import StudioGenerationCommands
+from gigastudy_api.services.studio_region_commands import StudioRegionCommands
 from gigastudy_api.services.studio_scoring_commands import StudioScoringCommands
 from gigastudy_api.services.studio_upload_commands import StudioUploadCommands
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
@@ -111,6 +117,23 @@ def _now() -> str:
 
 SYNC_OFFSET_PRECISION = 3
 _engine_execution_lock = Lock()
+
+
+def _shift_explicit_regions_for_slot(
+    regions: list[ArrangementRegion],
+    *,
+    slot_id: int,
+    delta_seconds: float,
+) -> None:
+    if abs(delta_seconds) < 0.0005:
+        return
+    for region in regions:
+        if region.track_slot_id != slot_id:
+            continue
+        region.start_seconds = round(max(0.0, region.start_seconds + delta_seconds), 4)
+        region.sync_offset_seconds = round(region.start_seconds, 4)
+        for event in region.pitch_events:
+            event.start_seconds = round(max(0.0, event.start_seconds + delta_seconds), 4)
 
 
 class StudioRepository:
@@ -175,6 +198,7 @@ class StudioRepository:
             repository=self,
         )
         self._generation = StudioGenerationCommands(repository=self)
+        self._regions = StudioRegionCommands(now=_now, repository=self)
         self._scoring = StudioScoringCommands(
             assets=self._assets,
             now=_now,
@@ -450,11 +474,17 @@ class StudioRepository:
             require_studio_access(studio, owner_token)
             timestamp = _now()
             track = self._find_track(studio, slot_id)
+            previous_offset = track.sync_offset_seconds
             set_track_sync_offset(
                 track,
                 sync_offset_seconds=request.sync_offset_seconds,
                 precision=SYNC_OFFSET_PRECISION,
                 timestamp=timestamp,
+            )
+            _shift_explicit_regions_for_slot(
+                studio.regions,
+                slot_id=slot_id,
+                delta_seconds=track.sync_offset_seconds - previous_offset,
             )
             studio.updated_at = timestamp
             self._save_studio(studio)
@@ -473,6 +503,7 @@ class StudioRepository:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             require_studio_access(studio, owner_token)
             timestamp = _now()
+            previous_offsets = {track.slot_id: track.sync_offset_seconds for track in studio.tracks}
             try:
                 shift_registered_track_sync_offsets(
                     studio,
@@ -484,6 +515,12 @@ class StudioRepository:
                 )
             except TrackSettingsError as error:
                 raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+            for track in studio.tracks:
+                _shift_explicit_regions_for_slot(
+                    studio.regions,
+                    slot_id=track.slot_id,
+                    delta_seconds=track.sync_offset_seconds - previous_offsets.get(track.slot_id, 0),
+                )
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
@@ -508,9 +545,87 @@ class StudioRepository:
                 volume_percent=request.volume_percent,
                 timestamp=timestamp,
             )
+            for region in studio.regions:
+                if region.track_slot_id == slot_id:
+                    region.volume_percent = request.volume_percent
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
+
+    def update_region(
+        self,
+        studio_id: str,
+        region_id: str,
+        request: UpdateRegionRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        return self._regions.update_region(
+            studio_id,
+            region_id,
+            request,
+            owner_token=owner_token,
+        )
+
+    def copy_region(
+        self,
+        studio_id: str,
+        region_id: str,
+        request: CopyRegionRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        return self._regions.copy_region(
+            studio_id,
+            region_id,
+            request,
+            owner_token=owner_token,
+        )
+
+    def split_region(
+        self,
+        studio_id: str,
+        region_id: str,
+        request: SplitRegionRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        return self._regions.split_region(
+            studio_id,
+            region_id,
+            request,
+            owner_token=owner_token,
+        )
+
+    def delete_region(
+        self,
+        studio_id: str,
+        region_id: str,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        return self._regions.delete_region(
+            studio_id,
+            region_id,
+            owner_token=owner_token,
+        )
+
+    def update_pitch_event(
+        self,
+        studio_id: str,
+        region_id: str,
+        event_id: str,
+        request: UpdatePitchEventRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        return self._regions.update_pitch_event(
+            studio_id,
+            region_id,
+            event_id,
+            request,
+            owner_token=owner_token,
+        )
 
     def _update_time_signature(
         self,

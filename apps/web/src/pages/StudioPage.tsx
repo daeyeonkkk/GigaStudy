@@ -18,7 +18,12 @@ import { useStudioScoring } from '../components/studio/useStudioScoring'
 import { useStudioTrackActions } from '../components/studio/useStudioTrackActions'
 
 import {
+  copyRegion,
+  deleteRegion,
   getDocumentJobSourcePreviewUrl,
+  splitRegion,
+  updatePitchEvent,
+  updateRegion,
 } from '../lib/api'
 import {
   DEFAULT_METER,
@@ -27,8 +32,11 @@ import {
   getStudioMeter,
 } from '../lib/studio'
 import type {
+  ArrangementRegion,
+  PitchEvent,
   Studio,
   TrackSlot,
+  UpdatePitchEventRequest,
 } from '../types/studio'
 import './StudioPage.css'
 
@@ -198,6 +206,80 @@ export function StudioPage() {
     await handleTrackRecording(track)
   }
 
+  async function handleMoveRegion(region: ArrangementRegion, targetSlotId: number, startSeconds: number) {
+    if (!studio) {
+      return
+    }
+    const targetTrack = studio.tracks.find((track) => track.slot_id === targetSlotId)
+    const targetName = targetTrack?.name ?? `Track ${targetSlotId}`
+    await runStudioAction(
+      () =>
+        updateRegion(studio.studio_id, region.region_id, {
+          start_seconds: Math.max(0, Math.round(startSeconds * 1000) / 1000),
+          target_track_slot_id: targetSlotId,
+        }),
+      `${region.track_name} region을 이동하는 중입니다.`,
+      `${targetName} 위치로 region을 이동했습니다.`,
+    )
+  }
+
+  async function handleCopyRegion(region: ArrangementRegion, targetSlotId: number, startSeconds: number) {
+    if (!studio) {
+      return
+    }
+    const targetTrack = studio.tracks.find((track) => track.slot_id === targetSlotId)
+    const targetName = targetTrack?.name ?? `Track ${targetSlotId}`
+    await runStudioAction(
+      () =>
+        copyRegion(studio.studio_id, region.region_id, {
+          start_seconds: Math.max(0, Math.round(startSeconds * 1000) / 1000),
+          target_track_slot_id: targetSlotId,
+        }),
+      `${region.track_name} region을 복사하는 중입니다.`,
+      `${targetName}에 region을 복사했습니다.`,
+    )
+  }
+
+  async function handleSplitRegion(region: ArrangementRegion, splitSeconds: number) {
+    if (!studio) {
+      return
+    }
+    await runStudioAction(
+      () =>
+        splitRegion(studio.studio_id, region.region_id, {
+          split_seconds: Math.round(splitSeconds * 1000) / 1000,
+        }),
+      `${region.track_name} region을 자르는 중입니다.`,
+      `${region.track_name} region을 두 블록으로 나눴습니다.`,
+    )
+  }
+
+  async function handleDeleteRegion(region: ArrangementRegion) {
+    if (!studio) {
+      return
+    }
+    await runStudioAction(
+      () => deleteRegion(studio.studio_id, region.region_id),
+      `${region.track_name} region을 삭제하는 중입니다.`,
+      `${region.track_name} region을 삭제했습니다.`,
+    )
+  }
+
+  async function handleUpdateEvent(
+    region: ArrangementRegion,
+    event: PitchEvent,
+    patch: UpdatePitchEventRequest,
+  ) {
+    if (!studio) {
+      return
+    }
+    await runStudioAction(
+      () => updatePitchEvent(studio.studio_id, region.region_id, event.event_id, patch),
+      `${event.label} 이벤트를 저장하는 중입니다.`,
+      `${event.label} 이벤트를 업데이트했습니다.`,
+    )
+  }
+
   if (!studioId) {
     return (
       <StudioRouteState
@@ -290,12 +372,21 @@ export function StudioPage() {
               recordingSlotId={recordingSlotId}
               trackRecordingMeter={trackRecordingMeter}
               tracks={studio.tracks}
+              onCopyRegion={(region, targetSlotId, startSeconds) =>
+                void handleCopyRegion(region, targetSlotId, startSeconds)
+              }
+              onDeleteRegion={(region) => void handleDeleteRegion(region)}
               onGenerate={(track) => void handleGenerate(track)}
+              onMoveRegion={(region, targetSlotId, startSeconds) =>
+                void handleMoveRegion(region, targetSlotId, startSeconds)
+              }
               onOpenScore={openScoreSession}
               onRecord={(track) => void handleRecord(track)}
+              onSplitRegion={(region, splitSeconds) => void handleSplitRegion(region, splitSeconds)}
               onStopPlayback={stopTrackPlayback}
               onSync={(track, nextOffset) => void handleSync(track, nextOffset)}
               onTogglePlayback={(track) => void toggleTrackPlayback(track)}
+              onUpdateEvent={(region, event, patch) => void handleUpdateEvent(region, event, patch)}
               onUpload={(track, file) => void handleUpload(track, file)}
               onVolumeChange={(track, nextVolume) => void handleVolume(track, nextVolume)}
             />

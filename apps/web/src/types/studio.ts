@@ -48,6 +48,34 @@ export type ArrangementRegion = {
   diagnostics: Record<string, unknown>
 }
 
+export type UpdateRegionRequest = {
+  target_track_slot_id?: number | null
+  start_seconds?: number | null
+  duration_seconds?: number | null
+  volume_percent?: number | null
+  source_label?: string | null
+}
+
+export type CopyRegionRequest = {
+  target_track_slot_id?: number | null
+  start_seconds?: number | null
+}
+
+export type SplitRegionRequest = {
+  split_seconds: number
+}
+
+export type UpdatePitchEventRequest = {
+  label?: string | null
+  pitch_midi?: number | null
+  start_seconds?: number | null
+  duration_seconds?: number | null
+  start_beat?: number | null
+  duration_beats?: number | null
+  confidence?: number | null
+  is_rest?: boolean | null
+}
+
 export type CandidateRegion = {
   region_id: string
   suggested_slot_id: number

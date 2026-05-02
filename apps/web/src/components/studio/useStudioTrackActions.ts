@@ -89,7 +89,7 @@ export function useStudioTrackActions({
         })
       },
       `${track.name} 파일을 서버에 올리고 추출 대기열에 등록하는 중입니다.`,
-      `${track.name} 트랙에 ${file.name} 추출 후보를 준비했습니다.`,
+      `${track.name} 트랙의 ${file.name} 추출 후보를 준비했습니다.`,
     )
 
     if (!uploadSucceeded) {
@@ -99,12 +99,12 @@ export function useStudioTrackActions({
     if (isDocumentImageUpload(file)) {
       setActionState({
         phase: 'success',
-        message: `${track.name} 문서 분석 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
+        message: `${track.name} 문서 분석 작업을 시작했습니다. 추출 후보가 준비되면 표시됩니다.`,
       })
     } else if (sourceKind === 'audio') {
       setActionState({
         phase: 'success',
-        message: `${track.name} 음성 추출 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,
+        message: `${track.name} 오디오 추출 작업을 시작했습니다. 추출 후보가 준비되면 표시됩니다.`,
       })
     }
   }
@@ -126,7 +126,7 @@ export function useStudioTrackActions({
       `${track.name} 파트 후보를 생성하는 중입니다.`,
       track.slot_id === 6
         ? '퍼커션 트랙에 BPM 기반 비트 후보 3개를 만들었습니다.'
-          : `${track.name} 트랙에 참고 트랙 기반 이벤트 후보 3개를 만들었습니다.`,
+        : `${track.name} 트랙에 참고 트랙 기반 이벤트 후보 3개를 만들었습니다.`,
     )
   }
 
@@ -165,8 +165,8 @@ export function useStudioTrackActions({
     setActiveTrackVolume(track.slot_id, volumePercent)
     await runStudioAction(
       () => updateTrackVolume(studio.studio_id, track.slot_id, volumePercent),
-      `${track.name} 음량을 저장하는 중입니다.`,
-      `${track.name} 음량을 ${volumePercent}%로 맞췄습니다.`,
+      `${track.name} 볼륨을 저장하는 중입니다.`,
+      `${track.name} 볼륨을 ${volumePercent}%로 맞췄습니다.`,
     )
   }
 

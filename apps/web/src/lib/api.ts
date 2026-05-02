@@ -4,10 +4,14 @@ import type {
   AdminStorageSummary,
   CreateStudioRequest,
   DirectUploadTarget,
+  CopyRegionRequest,
   PitchEvent,
   ScoreMode,
+  SplitRegionRequest,
   Studio,
   StudioListItem,
+  UpdatePitchEventRequest,
+  UpdateRegionRequest,
 } from '../types/studio'
 
 const defaultApiBaseUrl = import.meta.env.PROD
@@ -314,6 +318,75 @@ export function updateTrackVolume(
       body: JSON.stringify({ volume_percent: volumePercent }),
     },
     'Could not save track volume.',
+  )
+}
+
+export function updateRegion(
+  studioId: string,
+  regionId: string,
+  payload: UpdateRegionRequest,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/regions/${regionId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+    'Could not save the region.',
+  )
+}
+
+export function copyRegion(
+  studioId: string,
+  regionId: string,
+  payload: CopyRegionRequest = {},
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/regions/${regionId}/copy`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    'Could not copy the region.',
+  )
+}
+
+export function splitRegion(
+  studioId: string,
+  regionId: string,
+  payload: SplitRegionRequest,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/regions/${regionId}/split`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    'Could not split the region.',
+  )
+}
+
+export function deleteRegion(studioId: string, regionId: string): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/regions/${regionId}`,
+    { method: 'DELETE' },
+    'Could not delete the region.',
+  )
+}
+
+export function updatePitchEvent(
+  studioId: string,
+  regionId: string,
+  eventId: string,
+  payload: UpdatePitchEventRequest,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/regions/${regionId}/events/${eventId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+    'Could not save the piano-roll event.',
   )
 }
 

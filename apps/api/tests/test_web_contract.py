@@ -314,6 +314,86 @@ def test_studio_payload_preserves_explicit_region_without_track_notes() -> None:
     assert payload["regions"][0]["pitch_events"][0]["label"] == "D4"
 
 
+def test_explicit_multi_regions_are_authoritative_after_track_shadow_is_cleared() -> None:
+    studio = Studio(
+        studio_id="studio-explicit-multi-region",
+        title="Explicit multi-region",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="registered",
+                source_kind="midi",
+                source_label="region-edited.mid",
+                duration_seconds=4,
+                events=[],
+                updated_at="2026-01-01T00:00:00Z",
+            )
+        ],
+        regions=[
+            ArrangementRegion(
+                region_id="explicit-region-a",
+                track_slot_id=1,
+                track_name="Soprano",
+                source_kind="midi",
+                source_label="region-edited.mid",
+                start_seconds=0,
+                duration_seconds=1,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="explicit-region-a-event",
+                        track_slot_id=1,
+                        region_id="explicit-region-a",
+                        label="C4",
+                        pitch_midi=60,
+                        start_seconds=0,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+            ),
+            ArrangementRegion(
+                region_id="explicit-region-b",
+                track_slot_id=1,
+                track_name="Soprano",
+                source_kind="midi",
+                source_label="region-edited.mid",
+                start_seconds=2,
+                duration_seconds=1,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="explicit-region-b-event",
+                        track_slot_id=1,
+                        region_id="explicit-region-b",
+                        label="D4",
+                        pitch_midi=62,
+                        start_seconds=2,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+            ),
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = build_studio_response(studio).model_dump(mode="json")
+    events = registered_region_events_for_slot(studio, 1)
+
+    assert [region["region_id"] for region in payload["regions"]] == [
+        "explicit-region-a",
+        "explicit-region-b",
+    ]
+    assert [event.label for event in events] == ["C4", "D4"]
+
+
 def test_studio_response_drops_stale_explicit_region_for_empty_track() -> None:
     studio = Studio(
         studio_id="studio-drop-stale-region",
@@ -583,6 +663,10 @@ def test_public_openapi_exposes_region_event_contracts() -> None:
     assert "PitchEvent" in schemas
     assert "ArrangementRegion" in schemas
     assert "CandidateRegion" in schemas
+    assert "UpdateRegionRequest" in schemas
+    assert "CopyRegionRequest" in schemas
+    assert "SplitRegionRequest" in schemas
+    assert "UpdatePitchEventRequest" in schemas
     assert "TrackSlotResponse" in schemas
     assert "performance_events" in schemas["ScoreTrackRequest"]["properties"]
     assert {

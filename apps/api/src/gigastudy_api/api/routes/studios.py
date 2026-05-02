@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
+    CopyRegionRequest,
     CreateStudioRequest,
     DirectUploadRequest,
     DirectUploadTarget,
@@ -14,8 +15,11 @@ from gigastudy_api.api.schemas.studios import (
     StudioListItem,
     StudioResponse,
     StudioSeedUploadRequest,
+    SplitRegionRequest,
     SyncTrackRequest,
     UploadTrackRequest,
+    UpdatePitchEventRequest,
+    UpdateRegionRequest,
     VolumeTrackRequest,
     build_studio_response,
 )
@@ -241,6 +245,71 @@ def update_track_volume(
 ) -> StudioResponse:
     return _studio_response(
         repository.update_volume(studio_id, slot_id, request, owner_token=owner_token)
+    )
+
+
+@router.patch("/{studio_id}/regions/{region_id}", response_model=StudioResponse)
+def update_region(
+    studio_id: str,
+    region_id: str,
+    request: UpdateRegionRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.update_region(studio_id, region_id, request, owner_token=owner_token)
+    )
+
+
+@router.post("/{studio_id}/regions/{region_id}/copy", response_model=StudioResponse)
+def copy_region(
+    studio_id: str,
+    region_id: str,
+    request: CopyRegionRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.copy_region(studio_id, region_id, request, owner_token=owner_token)
+    )
+
+
+@router.post("/{studio_id}/regions/{region_id}/split", response_model=StudioResponse)
+def split_region(
+    studio_id: str,
+    region_id: str,
+    request: SplitRegionRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.split_region(studio_id, region_id, request, owner_token=owner_token)
+    )
+
+
+@router.delete("/{studio_id}/regions/{region_id}", response_model=StudioResponse)
+def delete_region(
+    studio_id: str,
+    region_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.delete_region(studio_id, region_id, owner_token=owner_token)
+    )
+
+
+@router.patch("/{studio_id}/regions/{region_id}/events/{event_id}", response_model=StudioResponse)
+def update_pitch_event(
+    studio_id: str,
+    region_id: str,
+    event_id: str,
+    request: UpdatePitchEventRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.update_pitch_event(studio_id, region_id, event_id, request, owner_token=owner_token)
     )
 
 

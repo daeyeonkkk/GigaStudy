@@ -1,7 +1,7 @@
 import type { SourceKind, TrackExtractionJob, TrackSlot } from '../../types/studio'
 
 export const statusLabels: Record<TrackSlot['status'], string> = {
-  empty: '공란',
+  empty: '비어 있음',
   recording: '녹음 중',
   uploading: '업로드 중',
   extracting: '분석 중',
@@ -13,10 +13,10 @@ export const statusLabels: Record<TrackSlot['status'], string> = {
 
 export const sourceLabels: Record<SourceKind, string> = {
   recording: '녹음',
-  audio: '음성파일',
+  audio: '오디오 파일',
   midi: 'MIDI',
   document: '문서',
-  music: '음악',
+  music: '음악 파일',
   ai: 'AI 생성',
 }
 

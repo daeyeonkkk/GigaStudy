@@ -62,6 +62,15 @@ scoring event input.
 - `apps/api/src/gigastudy_api/domain/track_events.py`
   Internal legacy event adapters for extraction, registration, and scoring.
   `TrackNote` belongs here instead of the API schema module.
+- `apps/api/src/gigastudy_api/services/engine/event_normalization.py`
+  Internal pitch-event preparation helpers for timing quantization, range
+  metadata, spelling, and measure positions.
+- `apps/api/src/gigastudy_api/services/engine/event_quality.py`
+  The registration quality gate before extracted material becomes product
+  regions. It replaces the staff-notation quality layer.
+- `apps/api/src/gigastudy_api/services/llm/registration_review.py`
+  Optional bounded LLM review for registration cleanup; the model can only
+  choose deterministic repair directives and cannot author canonical events.
 - `apps/api/src/gigastudy_api/services/studio_store.py`
   Studio persistence abstraction.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`
@@ -201,6 +210,9 @@ The remaining compatibility layer is mostly naming and storage shape:
 
 - `TrackNote` is no longer modeled by the web client or exported by the studio
   API schema module. It remains only as an internal import/scoring adapter.
+- The old notation registration layer has been renamed around event
+  normalization, event quality, and registration review. Remaining work should
+  remove legacy storage field names, not reintroduce staff rendering.
 - Studio API responses now use `StudioResponse` to prevent `TrackSlot.notes`
   and `ExtractionCandidate.notes` from leaking back into product clients.
 - Score requests accept `performance_events`; `performance_notes` is no longer

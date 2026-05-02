@@ -4,18 +4,18 @@ from gigastudy_api.api.schemas.studios import SourceKind, Studio
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.arrangement import prepare_ensemble_registration
-from gigastudy_api.services.engine.notation_quality import (
-    RegistrationNotationResult,
-    apply_notation_review_instruction,
+from gigastudy_api.services.engine.event_quality import (
+    RegistrationQualityResult,
+    apply_registration_review_instruction,
     prepare_notes_for_track_registration,
 )
 from gigastudy_api.services.engine.timeline import (
     registered_sync_resolved_tracks,
     registered_sync_resolved_tracks_by_slot,
 )
-from gigastudy_api.services.llm.notation_review import (
+from gigastudy_api.services.llm.registration_review import (
     review_ensemble_registration_with_deepseek,
-    review_notation_with_deepseek,
+    review_track_registration_with_deepseek,
 )
 
 LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS: set[str] = {"ai"}
@@ -31,8 +31,8 @@ class TrackRegistrationPreparer:
         *,
         source_kind: SourceKind,
         notes: list[TrackNote],
-    ) -> RegistrationNotationResult:
-        registration = self._prepare_single_track_notation(
+    ) -> RegistrationQualityResult:
+        registration = self._prepare_single_track_events(
             studio,
             slot_id,
             source_kind=source_kind,
@@ -51,9 +51,9 @@ class TrackRegistrationPreparer:
         mapped_notes: dict[int, list[TrackNote]],
         *,
         source_kind: SourceKind,
-    ) -> dict[int, RegistrationNotationResult]:
+    ) -> dict[int, RegistrationQualityResult]:
         first_pass = {
-            slot_id: self._prepare_single_track_notation(
+            slot_id: self._prepare_single_track_events(
                 studio,
                 slot_id,
                 source_kind=source_kind,
@@ -76,14 +76,14 @@ class TrackRegistrationPreparer:
             for slot_id, registration in first_pass.items()
         }
 
-    def _prepare_single_track_notation(
+    def _prepare_single_track_events(
         self,
         studio: Studio,
         slot_id: int,
         *,
         source_kind: SourceKind,
         notes: list[TrackNote],
-    ) -> RegistrationNotationResult:
+    ) -> RegistrationQualityResult:
         reference_tracks = self._reference_tracks(studio, exclude_slot_id=slot_id)
         reference_tracks_by_slot = self._reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
         registration = prepare_notes_for_track_registration(
@@ -101,7 +101,7 @@ class TrackRegistrationPreparer:
                 reason="ai_candidate_generation",
             )
         settings = get_settings()
-        instruction = review_notation_with_deepseek(
+        instruction = review_track_registration_with_deepseek(
             settings=settings,
             title=studio.title,
             bpm=studio.bpm,
@@ -116,7 +116,7 @@ class TrackRegistrationPreparer:
         )
         if instruction is None:
             return registration
-        return apply_notation_review_instruction(
+        return apply_registration_review_instruction(
             notes,
             instruction=instruction.model_dump(exclude_none=True),
             bpm=studio.bpm,
@@ -132,11 +132,11 @@ class TrackRegistrationPreparer:
         self,
         studio: Studio,
         slot_id: int,
-        registration: RegistrationNotationResult,
+        registration: RegistrationQualityResult,
         *,
         source_kind: SourceKind,
         proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
-    ) -> RegistrationNotationResult:
+    ) -> RegistrationQualityResult:
         existing_tracks_by_slot = self._reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
         if proposed_tracks_by_slot:
             existing_tracks_by_slot.update(
@@ -155,7 +155,7 @@ class TrackRegistrationPreparer:
             time_signature_numerator=studio.time_signature_numerator,
             time_signature_denominator=studio.time_signature_denominator,
         )
-        ensemble_registration = RegistrationNotationResult(
+        ensemble_registration = RegistrationQualityResult(
             notes=ensemble_result.notes,
             diagnostics={
                 **registration.diagnostics,
@@ -185,7 +185,7 @@ class TrackRegistrationPreparer:
         if instruction is None:
             return ensemble_registration
 
-        reviewed_registration = apply_notation_review_instruction(
+        reviewed_registration = apply_registration_review_instruction(
             ensemble_registration.notes,
             instruction=instruction.model_dump(exclude_none=True),
             bpm=studio.bpm,
@@ -205,7 +205,7 @@ class TrackRegistrationPreparer:
             time_signature_numerator=studio.time_signature_numerator,
             time_signature_denominator=studio.time_signature_denominator,
         )
-        return RegistrationNotationResult(
+        return RegistrationQualityResult(
             notes=reviewed_ensemble_result.notes,
             diagnostics={
                 **reviewed_registration.diagnostics,
@@ -240,31 +240,31 @@ class TrackRegistrationPreparer:
 
 
 def _with_llm_registration_review_skip(
-    registration: RegistrationNotationResult,
+    registration: RegistrationQualityResult,
     *,
     reason: str,
-) -> RegistrationNotationResult:
+) -> RegistrationQualityResult:
     diagnostics = dict(registration.diagnostics)
     actions = list(diagnostics.get("actions", []))
-    skip_action = f"llm_notation_review_skipped_{reason}"
+    skip_action = f"llm_registration_review_skipped_{reason}"
     if skip_action not in actions:
         actions.append(skip_action)
     diagnostics["actions"] = actions
-    diagnostics["llm_notation_review"] = {
+    diagnostics["llm_registration_review"] = {
         "applied": False,
         "skipped_reason": reason,
     }
-    return RegistrationNotationResult(notes=registration.notes, diagnostics=diagnostics)
+    return RegistrationQualityResult(notes=registration.notes, diagnostics=diagnostics)
 
 
 def _with_ensemble_llm_review_skip(
-    registration: RegistrationNotationResult,
+    registration: RegistrationQualityResult,
     *,
     reason: str,
-) -> RegistrationNotationResult:
+) -> RegistrationQualityResult:
     diagnostics = dict(registration.diagnostics)
     diagnostics["llm_ensemble_review"] = {
         "applied": False,
         "skipped_reason": reason,
     }
-    return RegistrationNotationResult(notes=registration.notes, diagnostics=diagnostics)
+    return RegistrationQualityResult(notes=registration.notes, diagnostics=diagnostics)

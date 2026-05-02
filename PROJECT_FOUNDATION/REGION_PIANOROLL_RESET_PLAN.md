@@ -92,10 +92,13 @@ These should not be carried into the new core:
 - Staff notation fields as core data:
   clef, key signature, spelling, accidentals, rest/tie display, staff index,
   display octave policy, notation warnings.
-- Notation registration gate as currently designed:
-  `notation.py`, `notation_quality.py`, `track_registration.py`.
-- Ensemble arrangement gate as a pre-registration staff-score quality gate.
-  Some range/crossing checks may later return as piano-roll diagnostics.
+- Staff-era registration gate as previously designed:
+  `notation.py`, `notation_quality.py`, and staff-score diagnostics.
+  The surviving code should be event normalization, event quality, and
+  registration review only.
+- Ensemble arrangement must behave as region-event diagnostics, not as a
+  pre-registration staff-score quality gate. Some range/crossing checks may
+  remain as piano-roll diagnostics.
 - OMR as a first-class core path:
   user-facing OMR labels, OMR-specific job UI, and staff-shaped preview
   assumptions. PDF/MusicXML/MIDI ingestion may remain as a document extraction
@@ -275,7 +278,7 @@ The first implementation cut should be intentionally small:
 - No PDF export.
 - No OMR-specific UI. Document ingestion may exist only as a region candidate
   adapter.
-- No notation quality gate.
+- No staff-notation quality gate; only event registration quality.
 
 Once that vertical slice exists, reconnect upload, recording, extraction, AI,
 and scoring one at a time.

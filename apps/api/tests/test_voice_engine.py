@@ -148,7 +148,7 @@ def test_voice_transcription_tracks_singing_under_noise(tmp_path: Path) -> None:
     assert min(note.confidence for note in notes) > 0.5
 
 
-def test_voice_transcription_estimates_pre_notation_metronome_alignment() -> None:
+def test_voice_transcription_estimates_pre_registration_metronome_alignment() -> None:
     alignment = _estimate_metronome_phase_alignment(
         [
             (0.13, 0.4, 0.9),

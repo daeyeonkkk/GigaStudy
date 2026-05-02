@@ -2,17 +2,17 @@ import json
 
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.music_theory import note_from_pitch
-from gigastudy_api.services.engine.notation_quality import (
-    apply_notation_review_instruction,
+from gigastudy_api.services.engine.event_quality import (
+    apply_registration_review_instruction,
     prepare_notes_for_track_registration,
 )
-from gigastudy_api.services.llm.notation_review import (
+from gigastudy_api.services.llm.registration_review import (
     review_ensemble_registration_with_deepseek,
-    review_notation_with_deepseek,
+    review_track_registration_with_deepseek,
 )
 
 
-def test_notation_review_instruction_applies_coarser_voice_grid_and_noise_filter() -> None:
+def test_registration_review_instruction_applies_coarser_voice_grid_and_noise_filter() -> None:
     noisy_notes = [
         note_from_pitch(
             beat=1 + index * 0.13,
@@ -34,7 +34,7 @@ def test_notation_review_instruction_applies_coarser_voice_grid_and_noise_filter
         time_signature_denominator=4,
     )
 
-    result = apply_notation_review_instruction(
+    result = apply_registration_review_instruction(
         noisy_notes,
         instruction={
             "confidence": 0.86,
@@ -53,7 +53,7 @@ def test_notation_review_instruction_applies_coarser_voice_grid_and_noise_filter
     )
 
     assert result.notes
-    assert result.diagnostics["llm_notation_review"]["applied"] is True
+    assert result.diagnostics["llm_registration_review"]["applied"] is True
     assert result.diagnostics["pre_llm_registration_quality"]["registered_note_count"] == len(baseline.notes)
     assert result.diagnostics["registered_note_count"] <= 8
     assert result.diagnostics["max_notes_per_measure"] <= 8
@@ -303,14 +303,14 @@ def test_registration_quality_collapses_low_confidence_short_note_cluster() -> N
     assert result.diagnostics["short_note_cluster_count"] == 0
 
 
-def test_notation_review_instruction_can_force_key_spelling_without_llm_writing_notes() -> None:
+def test_registration_review_instruction_can_force_key_spelling_without_llm_writing_notes() -> None:
     notes = [
         note_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
             source="musicxml",
-            extraction_method="test_score",
+            extraction_method="test_document",
             pitch_midi=70,
         )
     ]
@@ -323,7 +323,7 @@ def test_notation_review_instruction_can_force_key_spelling_without_llm_writing_
         time_signature_denominator=4,
     )
 
-    result = apply_notation_review_instruction(
+    result = apply_registration_review_instruction(
         notes,
         instruction={
             "confidence": 0.91,
@@ -345,9 +345,9 @@ def test_notation_review_instruction_can_force_key_spelling_without_llm_writing_
     assert "llm_prefer_key_F" in result.diagnostics["actions"]
 
 
-def test_deepseek_notation_review_is_disabled_without_feature_flag() -> None:
+def test_deepseek_registration_review_is_disabled_without_feature_flag() -> None:
     settings = Settings(
-        deepseek_notation_review_enabled=False,
+        deepseek_registration_review_enabled=False,
         deepseek_api_key="test-key",
     )
     note = note_from_pitch(
@@ -359,7 +359,7 @@ def test_deepseek_notation_review_is_disabled_without_feature_flag() -> None:
         pitch_midi=60,
     )
 
-    instruction = review_notation_with_deepseek(
+    instruction = review_track_registration_with_deepseek(
         settings=settings,
         title="test",
         bpm=92,
@@ -406,7 +406,7 @@ def test_deepseek_ensemble_registration_review_is_disabled_without_feature_flag(
     assert instruction is None
 
 
-def test_deepseek_notation_review_parses_bounded_json_instruction(monkeypatch) -> None:
+def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatch) -> None:
     captured_payload: dict[str, object] = {}
 
     class FakeResponse:
@@ -439,9 +439,9 @@ def test_deepseek_notation_review_parses_bounded_json_instruction(monkeypatch) -
         captured_payload["body"] = json.loads(request.data.decode("utf-8"))
         return FakeResponse()
 
-    monkeypatch.setattr("gigastudy_api.services.llm.notation_review.urlopen", fake_urlopen)
+    monkeypatch.setattr("gigastudy_api.services.llm.registration_review.urlopen", fake_urlopen)
     settings = Settings(
-        deepseek_notation_review_enabled=True,
+        deepseek_registration_review_enabled=True,
         deepseek_api_key="test-key",
         deepseek_base_url="https://openrouter.ai/api/v1",
         deepseek_model="deepseek/deepseek-v4-flash:free",
@@ -477,7 +477,7 @@ def test_deepseek_notation_review_parses_bounded_json_instruction(monkeypatch) -
         ),
     ]
 
-    instruction = review_notation_with_deepseek(
+    instruction = review_track_registration_with_deepseek(
         settings=settings,
         title="test",
         bpm=92,
@@ -515,7 +515,7 @@ def test_deepseek_notation_review_parses_bounded_json_instruction(monkeypatch) -
     ]
 
 
-def test_deepseek_notation_registration_plan_sends_sibling_context(monkeypatch) -> None:
+def test_deepseek_registration_plan_sends_sibling_context(monkeypatch) -> None:
     captured_payload: dict[str, object] = {}
 
     class FakeResponse:
@@ -541,9 +541,9 @@ def test_deepseek_notation_registration_plan_sends_sibling_context(monkeypatch) 
         captured_payload["body"] = json.loads(request.data.decode("utf-8"))
         return FakeResponse()
 
-    monkeypatch.setattr("gigastudy_api.services.llm.notation_review.urlopen", fake_urlopen)
+    monkeypatch.setattr("gigastudy_api.services.llm.registration_review.urlopen", fake_urlopen)
     settings = Settings(
-        deepseek_notation_review_enabled=True,
+        deepseek_registration_review_enabled=True,
         deepseek_api_key="test-key",
         deepseek_base_url="https://openrouter.ai/api/v1",
         deepseek_model="deepseek/deepseek-v4-flash",
@@ -567,7 +567,7 @@ def test_deepseek_notation_registration_plan_sends_sibling_context(monkeypatch) 
         confidence=0.78,
     )
 
-    instruction = review_notation_with_deepseek(
+    instruction = review_track_registration_with_deepseek(
         settings=settings,
         title="test",
         bpm=92,
@@ -617,7 +617,7 @@ def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monke
         captured_payload["body"] = json.loads(request.data.decode("utf-8"))
         return FakeResponse()
 
-    monkeypatch.setattr("gigastudy_api.services.llm.notation_review.urlopen", fake_urlopen)
+    monkeypatch.setattr("gigastudy_api.services.llm.registration_review.urlopen", fake_urlopen)
     settings = Settings(
         deepseek_ensemble_review_enabled=True,
         deepseek_api_key="test-key",

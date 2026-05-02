@@ -13,8 +13,8 @@ from gigastudy_api.api.schemas.studios import SourceKind
 from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.music_theory import label_to_midi, quarter_beats_per_measure, track_name
-from gigastudy_api.services.engine.notation import KEY_FIFTHS, normalize_track_notes
-from gigastudy_api.services.engine.notation_quality import (
+from gigastudy_api.services.engine.event_normalization import KEY_FIFTHS, normalize_track_notes
+from gigastudy_api.services.engine.event_quality import (
     count_isolated_short_voice_artifacts,
     count_measure_tail_gaps,
     count_short_note_clusters,
@@ -33,7 +33,7 @@ AllowedReviewGrid = Literal[0.25, 0.5]
 AllowedKeySignature = Literal["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#"]
 
 
-class NotationReviewInstruction(BaseModel):
+class RegistrationReviewInstruction(BaseModel):
     """Bounded registration cleanup plan returned by the LLM.
 
     The LLM is intentionally not allowed to write TrackNotes. It may only pick
@@ -127,7 +127,7 @@ class NotationReviewInstruction(BaseModel):
         )
 
 
-def review_notation_with_deepseek(
+def review_track_registration_with_deepseek(
     *,
     settings: Settings,
     title: str,
@@ -140,14 +140,14 @@ def review_notation_with_deepseek(
     prepared_notes: list[TrackNote],
     diagnostics: dict[str, Any],
     context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
-) -> NotationReviewInstruction | None:
-    if not settings.deepseek_notation_review_enabled or not settings.deepseek_api_key:
+) -> RegistrationReviewInstruction | None:
+    if not settings.deepseek_registration_review_enabled or not settings.deepseek_api_key:
         return None
     if not original_notes and not prepared_notes:
         return None
 
     endpoint = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
-    request_body = _build_notation_review_payload(
+    request_body = _build_registration_review_payload(
         settings=settings,
         title=title,
         bpm=bpm,
@@ -165,7 +165,7 @@ def review_notation_with_deepseek(
     last_error: Exception | None = None
     for attempt_index in range(max(1, settings.deepseek_max_retries + 1)):
         try:
-            instruction = _request_notation_instruction(
+            instruction = _request_registration_instruction(
                 endpoint=endpoint,
                 settings=settings,
                 request_body=request_body,
@@ -178,7 +178,7 @@ def review_notation_with_deepseek(
             if attempt_index >= settings.deepseek_max_retries:
                 break
 
-    LOGGER.warning("DeepSeek notation review failed; keeping deterministic registration result: %s", last_error)
+    LOGGER.warning("DeepSeek registration review failed; keeping deterministic registration result: %s", last_error)
     return None
 
 
@@ -196,7 +196,7 @@ def review_ensemble_registration_with_deepseek(
     diagnostics: dict[str, Any],
     context_tracks_by_slot: dict[int, list[TrackNote]],
     proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
-) -> NotationReviewInstruction | None:
+) -> RegistrationReviewInstruction | None:
     if not settings.deepseek_ensemble_review_enabled or not settings.deepseek_api_key:
         return None
     if not prepared_notes:
@@ -205,7 +205,7 @@ def review_ensemble_registration_with_deepseek(
         return None
 
     endpoint = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
-    request_body = _build_notation_review_payload(
+    request_body = _build_registration_review_payload(
         settings=settings,
         title=title,
         bpm=bpm,
@@ -224,7 +224,7 @@ def review_ensemble_registration_with_deepseek(
     last_error: Exception | None = None
     for attempt_index in range(max(1, settings.deepseek_max_retries + 1)):
         try:
-            instruction = _request_notation_instruction(
+            instruction = _request_registration_instruction(
                 endpoint=endpoint,
                 settings=settings,
                 request_body=request_body,
@@ -241,12 +241,12 @@ def review_ensemble_registration_with_deepseek(
     return None
 
 
-def _request_notation_instruction(
+def _request_registration_instruction(
     *,
     endpoint: str,
     settings: Settings,
     request_body: dict[str, Any],
-) -> NotationReviewInstruction:
+) -> RegistrationReviewInstruction:
     payload = json.dumps(request_body).encode("utf-8")
     request = Request(
         endpoint,
@@ -256,14 +256,14 @@ def _request_notation_instruction(
     )
     with urlopen(request, timeout=settings.deepseek_timeout_seconds) as response:
         response_payload = json.loads(response.read().decode("utf-8"))
-    return _parse_deepseek_notation_response(
+    return _parse_deepseek_registration_response(
         response_payload,
         model=settings.deepseek_model,
         provider=_chat_completion_provider(settings),
     )
 
 
-def _build_notation_review_payload(
+def _build_registration_review_payload(
     *,
     settings: Settings,
     title: str,
@@ -393,12 +393,12 @@ def _build_notation_review_payload(
     return _build_json_chat_payload(settings=settings, messages=messages)
 
 
-def _parse_deepseek_notation_response(
+def _parse_deepseek_registration_response(
     payload: dict[str, Any],
     *,
     model: str,
     provider: str,
-) -> NotationReviewInstruction:
+) -> RegistrationReviewInstruction:
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise ValueError("DeepSeek response did not include choices.")
@@ -407,7 +407,7 @@ def _parse_deepseek_notation_response(
     if not isinstance(content, str) or not content.strip():
         raise ValueError("DeepSeek response content was empty.")
     decoded = _loads_json_object(content)
-    instruction = NotationReviewInstruction.model_validate(decoded)
+    instruction = RegistrationReviewInstruction.model_validate(decoded)
     instruction.provider = provider
     instruction.model = model
     instruction.used = True

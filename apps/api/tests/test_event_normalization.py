@@ -1,14 +1,14 @@
 from gigastudy_api.services.engine.music_theory import note_from_pitch
-from gigastudy_api.services.engine.notation import (
+from gigastudy_api.services.engine.event_normalization import (
     accidental_for_key,
     estimate_key_signature,
     normalize_track_notes,
     spell_midi_label,
 )
-from gigastudy_api.services.engine.notation_quality import prepare_notes_for_track_registration
+from gigastudy_api.services.engine.event_quality import prepare_notes_for_track_registration
 
 
-def test_notation_normalization_uses_studio_bpm_as_absolute_grid() -> None:
+def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:
     note = note_from_pitch(
         beat=2.24,
         duration_beats=0.62,
@@ -30,7 +30,7 @@ def test_notation_normalization_uses_studio_bpm_as_absolute_grid() -> None:
     assert normalized[0].quantization_grid == 0.25
 
 
-def test_notation_normalization_splits_measure_crossing_notes_with_ties() -> None:
+def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
     note = note_from_pitch(
         beat=4.5,
         duration_beats=1,
@@ -50,7 +50,7 @@ def test_notation_normalization_splits_measure_crossing_notes_with_ties() -> Non
     assert all("measure_boundary_tie" in entry.notation_warnings for entry in normalized)
 
 
-def test_notation_normalization_applies_track_clef_policy() -> None:
+def test_event_normalization_applies_track_clef_policy() -> None:
     tenor = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55)
     baritone = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=50)
 
@@ -63,7 +63,7 @@ def test_notation_normalization_applies_track_clef_policy() -> None:
     assert baritone_note.display_octave_shift == 0
 
 
-def test_notation_spelling_uses_key_signature_for_accidentals() -> None:
+def test_event_spelling_uses_key_signature_for_accidentals() -> None:
     assert spell_midi_label(70, spelling_mode="flat") == "Bb4"
     assert accidental_for_key("Bb4", "F") is None
     assert accidental_for_key("B4", "F") == "n"
@@ -75,7 +75,7 @@ def test_notation_spelling_uses_key_signature_for_accidentals() -> None:
     assert estimate_key_signature(f_major_material) in {"F", "Bb"}
 
 
-def test_registration_quality_simplifies_dense_voice_noise_to_score_grid() -> None:
+def test_registration_quality_simplifies_dense_voice_noise_to_event_grid() -> None:
     noisy_notes = [
         note_from_pitch(
             beat=1 + index * 0.13,
@@ -193,7 +193,7 @@ def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> 
     assert "reference_track_grid_alignment" not in result.diagnostics["actions"]
 
 
-def test_registration_quality_enforces_final_score_contract() -> None:
+def test_registration_quality_enforces_final_event_contract() -> None:
     note = note_from_pitch(
         beat=2.24,
         duration_beats=0.62,
@@ -228,6 +228,6 @@ def test_registration_quality_enforces_final_score_contract() -> None:
     assert registered_note.clef == "treble_8vb"
     assert registered_note.display_octave_shift == 12
     assert registered_note.key_signature
-    assert result.diagnostics["score_contract"]["single_voice_index"] is True
-    assert result.diagnostics["score_contract"]["seconds_follow_beat_grid"] is True
-    assert any(action.startswith("score_contract_enforced_") for action in result.diagnostics["actions"])
+    assert result.diagnostics["event_contract"]["single_voice_index"] is True
+    assert result.diagnostics["event_contract"]["seconds_follow_beat_grid"] is True
+    assert any(action.startswith("event_contract_enforced_") for action in result.diagnostics["actions"])

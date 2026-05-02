@@ -18,7 +18,7 @@ from gigastudy_api.services.engine.music_theory import (
     rank_slot_candidates,
     slot_assignment_diagnostics,
 )
-from gigastudy_api.services.engine.notation import annotate_track_notes_for_slot
+from gigastudy_api.services.engine.event_normalization import annotate_track_notes_for_slot
 
 
 @dataclass

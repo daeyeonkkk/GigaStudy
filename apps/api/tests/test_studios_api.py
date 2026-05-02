@@ -2150,7 +2150,7 @@ def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, mon
         raise AssertionError("AI candidate generation should not block on notation-review LLM calls.")
 
     monkeypatch.setattr(
-        "gigastudy_api.services.track_registration.review_notation_with_deepseek",
+        "gigastudy_api.services.track_registration.review_track_registration_with_deepseek",
         fail_ai_notation_review,
     )
     monkeypatch.setattr(

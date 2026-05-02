@@ -14,7 +14,7 @@ from gigastudy_api.services.engine.music_theory import (
     quarter_beats_per_measure,
     track_name,
 )
-from gigastudy_api.services.engine.notation import accidental_for_key, spell_midi_label
+from gigastudy_api.services.engine.event_normalization import accidental_for_key, spell_midi_label
 
 ENSEMBLE_VALIDATION_VERSION = "ensemble_arrangement_v2"
 ENSEMBLE_REPAIR_VERSION = "ensemble_octave_repair_v1"
@@ -90,11 +90,11 @@ def validate_ensemble_registration(
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
 ) -> EnsembleValidationResult:
-    """Validate a proposed track against the full six-track score context.
+    """Validate a proposed track against the full six-track region context.
 
     The validator is intentionally diagnostic-first. It flags arrangement risks
     before registration without rewriting intentional harmony or counterpoint.
-    Deterministic note cleanup remains in notation_quality.py.
+    Deterministic note cleanup remains in event_quality.py.
     """
 
     if target_slot_id not in range(1, 7):

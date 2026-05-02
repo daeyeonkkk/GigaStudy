@@ -6,7 +6,7 @@ from pathlib import Path
 from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.music_theory import TRACKS, infer_slot_id
-from gigastudy_api.services.engine.notation import annotate_track_notes_for_slot
+from gigastudy_api.services.engine.event_normalization import annotate_track_notes_for_slot
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError, VoiceTranscriptionResult
 
 TranscribeWithAlignment = Callable[..., VoiceTranscriptionResult]

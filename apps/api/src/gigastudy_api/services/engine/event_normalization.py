@@ -12,10 +12,10 @@ from gigastudy_api.services.engine.music_theory import (
     quantize,
 )
 
-NotationClef = Literal["treble", "treble_8vb", "bass", "percussion"]
+TrackDisplayClef = Literal["treble", "treble_8vb", "bass", "percussion"]
 
 VOICE_QUANTIZATION_GRID_BEATS = 0.25
-MIN_NOTATED_DURATION_BEATS = 0.25
+MIN_EVENT_DURATION_BEATS = 0.25
 MERGE_GAP_BEATS = 0.125
 OVERLAP_EPSILON_BEATS = 0.001
 
@@ -71,7 +71,7 @@ class _NoteInterval:
     confidence: float
 
 
-def clef_for_slot(slot_id: int) -> NotationClef:
+def clef_for_slot(slot_id: int) -> TrackDisplayClef:
     if slot_id == 3:
         return "treble_8vb"
     if slot_id in {4, 5}:
@@ -95,12 +95,12 @@ def normalize_track_notes(
     quantization_grid: float = VOICE_QUANTIZATION_GRID_BEATS,
     merge_adjacent_same_pitch: bool = True,
 ) -> list[TrackNote]:
-    """Convert extracted note material into a measure-owned notation model.
+    """Convert extracted note material into a measure-owned event timeline.
 
     The studio BPM and meter are the fixed grid. This function never estimates or
     rewrites tempo from the audio; it only quantizes extracted onsets/durations
     onto the existing grid, resolves monophonic overlaps, splits measure-crossing
-    notes, and attaches clef/key/spelling metadata for renderers.
+    notes, and attaches pitch spelling/range metadata for region consumers.
     """
 
     if not notes:
@@ -147,11 +147,11 @@ def annotate_track_notes_for_slot(
     slot_id: int,
     key_signature: str | None = None,
 ) -> list[TrackNote]:
-    """Attach notation display metadata without rewriting imported rhythm.
+    """Attach event display metadata without rewriting imported rhythm.
 
     Symbolic imports and OMR exports often already contain trustworthy beat and
     duration values. They still need the same clef, key, spelling, and range
-    policy as voice-derived notes so all six tracks render as one score.
+    policy as voice-derived notes so all six tracks share the same event conventions.
     """
 
     if not notes:
@@ -247,7 +247,7 @@ def accidental_for_key(spelled_label: str, key_signature: str) -> str | None:
 
 def _normalize_intervals(notes: list[TrackNote], quantization_grid: float) -> list[_NoteInterval]:
     intervals: list[_NoteInterval] = []
-    minimum_duration = max(MIN_NOTATED_DURATION_BEATS, quantization_grid)
+    minimum_duration = max(MIN_EVENT_DURATION_BEATS, quantization_grid)
     for note in notes:
         start_beat = max(1.0, quantize(note.beat, quantization_grid))
         duration_beats = max(minimum_duration, quantize(note.duration_beats, quantization_grid))
@@ -333,14 +333,14 @@ def _split_interval_at_measure_boundaries(
     time_signature_denominator: int,
     key_signature: str,
     spelling_mode: Literal["sharp", "flat"],
-    clef: NotationClef,
+    clef: TrackDisplayClef,
     display_octave_shift: int,
     quantization_grid: float,
 ) -> list[TrackNote]:
     source_note = interval.note
     pieces: list[tuple[float, float]] = []
     cursor = interval.start_beat
-    minimum_duration = max(MIN_NOTATED_DURATION_BEATS, quantization_grid)
+    minimum_duration = max(MIN_EVENT_DURATION_BEATS, quantization_grid)
     while cursor < interval.end_beat - OVERLAP_EPSILON_BEATS:
         measure_index = int((cursor - 1) // beats_per_measure)
         measure_end = 1 + (measure_index + 1) * beats_per_measure
@@ -382,7 +382,7 @@ def _split_interval_at_measure_boundaries(
             key_signature=key_signature,
             display_octave_shift=display_octave_shift,
             quantization_grid=quantization_grid,
-            notation_warnings=_notation_warnings(source_note, clef, split_tie),
+            notation_warnings=_quality_warnings(source_note, clef, split_tie),
         )
         note.id = f"{source_note.id}-q{index + 1}" if len(pieces) > 1 else source_note.id
         normalized.append(note)
@@ -440,7 +440,7 @@ def _same_pitch(left: _NoteInterval, right: _NoteInterval) -> bool:
     return left.note.label == right.note.label
 
 
-def _notation_warnings(note: TrackNote, clef: NotationClef, is_split_tie: bool) -> list[str]:
+def _quality_warnings(note: TrackNote, clef: TrackDisplayClef, is_split_tie: bool) -> list[str]:
     warnings = list(note.notation_warnings)
     if is_split_tie:
         warnings.append("measure_boundary_tie")

@@ -12,7 +12,7 @@ ExtractionPolicy = Literal["loose", "normal", "strict"]
 
 @dataclass(frozen=True)
 class VoiceExtractionPlan:
-    """Bounded pre-transcription plan for turning voice frames into score notes.
+    """Bounded pre-transcription plan for turning voice frames into pitch events.
 
     This is the point where product rules enter before note extraction. The
     LLM may help choose this plan, but only deterministic code applies it.
@@ -86,7 +86,7 @@ def default_voice_extraction_plan(
     if strict_source:
         min_segment_confidence = 0.48
         max_pitch_std = 0.62
-        reasons.append("Recorded audio is filtered for stable singing before notation.")
+        reasons.append("Recorded audio is filtered for stable singing before registration.")
 
     if context_note_count:
         reasons.append("Existing tracks are present; keep extraction compatible with the ensemble grid.")

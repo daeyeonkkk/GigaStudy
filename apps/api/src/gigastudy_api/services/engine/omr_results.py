@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from gigastudy_api.domain.track_events import TrackNote
-from gigastudy_api.services.engine.notation import annotate_track_notes_for_slot
+from gigastudy_api.services.engine.event_normalization import annotate_track_notes_for_slot
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 
 

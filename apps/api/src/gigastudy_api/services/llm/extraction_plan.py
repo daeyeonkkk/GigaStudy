@@ -32,7 +32,7 @@ class VoiceExtractionPlanInstruction(BaseModel):
     """Bounded LLM instruction for pre-transcription voice extraction.
 
     The LLM can choose extraction rules, never final notes. Deterministic DSP and
-    notation code remain responsible for pitch frames, quantization, and TrackNote
+    event extraction code remains responsible for pitch frames, quantization, and TrackNote
     output.
     """
 
@@ -263,7 +263,7 @@ def _build_extraction_plan_payload(
                 "You are GigaStudy's pre-transcription planning layer. Return JSON only. "
                 "You choose bounded extraction parameters before DSP/ML pitch extraction. "
                 "Never invent notes. Never estimate a new tempo. "
-                "Prefer practical, score-readable a cappella notation."
+                "Prefer practical, readable a cappella region events."
             ),
         },
         {

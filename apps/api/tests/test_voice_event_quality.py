@@ -69,7 +69,7 @@ def _write_vocal_fixture(
         wav_file.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
-def test_voice_notation_quantizes_human_timing_to_fixed_bpm_grid(tmp_path: Path) -> None:
+def test_voice_event_quantizes_human_timing_to_fixed_bpm_grid(tmp_path: Path) -> None:
     wav_path = tmp_path / "late-but-on-grid.wav"
     _write_vocal_fixture(
         wav_path,
@@ -92,7 +92,7 @@ def test_voice_notation_quantizes_human_timing_to_fixed_bpm_grid(tmp_path: Path)
     assert all(note.onset_seconds == round((note.beat - 1) * 0.5, 4) for note in notes)
 
 
-def test_voice_notation_splits_sustained_note_at_measure_boundary(tmp_path: Path) -> None:
+def test_voice_event_splits_sustained_note_at_measure_boundary(tmp_path: Path) -> None:
     wav_path = tmp_path / "measure-crossing-note.wav"
     _write_vocal_fixture(
         wav_path,
@@ -114,7 +114,7 @@ def test_voice_notation_splits_sustained_note_at_measure_boundary(tmp_path: Path
     assert all("measure_boundary_tie" in note.notation_warnings for note in notes)
 
 
-def test_voice_notation_tolerates_vibrato_and_attack_scoop(tmp_path: Path) -> None:
+def test_voice_event_tolerates_vibrato_and_attack_scoop(tmp_path: Path) -> None:
     wav_path = tmp_path / "vibrato-scoop.wav"
     _write_vocal_fixture(
         wav_path,
@@ -136,7 +136,7 @@ def test_voice_notation_tolerates_vibrato_and_attack_scoop(tmp_path: Path) -> No
     assert notes[0].key_signature
 
 
-def test_voice_notation_keeps_track_display_policy_consistent(tmp_path: Path) -> None:
+def test_voice_event_keeps_track_display_policy_consistent(tmp_path: Path) -> None:
     wav_path = tmp_path / "tenor-line.wav"
     _write_vocal_fixture(
         wav_path,

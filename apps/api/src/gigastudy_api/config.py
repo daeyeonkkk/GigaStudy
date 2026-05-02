@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     engine_processing_timeout_seconds: int = 120
     deepseek_harmony_enabled: bool = False
     deepseek_extraction_plan_enabled: bool = False
-    deepseek_notation_review_enabled: bool = False
+    deepseek_registration_review_enabled: bool = False
     deepseek_ensemble_review_enabled: bool = False
     deepseek_api_key: str | None = None
     deepseek_base_url: str = "https://api.deepseek.com"

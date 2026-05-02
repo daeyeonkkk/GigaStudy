@@ -17,7 +17,7 @@ from gigastudy_api.services.engine.harmony_plan import (
     MeasureHarmonyIntent,
     key_tonic_from_name,
 )
-from gigastudy_api.services.engine.notation import normalize_track_notes
+from gigastudy_api.services.engine.event_normalization import normalize_track_notes
 
 VOICE_LEADING_METHOD = "rule_based_voice_leading_v1"
 PERCUSSION_METHOD = "rule_based_percussion_v0"

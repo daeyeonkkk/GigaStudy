@@ -16,7 +16,7 @@ from gigastudy_api.services.engine.music_theory import (
     quantize,
 )
 from gigastudy_api.services.engine.extraction_plan import VoiceExtractionPlan, default_voice_extraction_plan
-from gigastudy_api.services.engine.notation import normalize_track_notes
+from gigastudy_api.services.engine.event_normalization import normalize_track_notes
 
 
 class VoiceTranscriptionError(ValueError):
@@ -845,8 +845,8 @@ def _voice_transcription_diagnostics(
     return {
         "engine": extraction_method,
         "voice_extraction_plan": plan.diagnostics(),
-        "pre_notation_frame_count": frame_count,
-        "pre_notation_segment_count": segment_count,
+        "pre_registration_frame_count": frame_count,
+        "pre_registration_segment_count": segment_count,
         "pre_normalization_note_count": note_count,
         "bpm_is_absolute": True,
     }

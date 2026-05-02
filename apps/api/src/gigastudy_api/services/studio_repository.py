@@ -58,7 +58,7 @@ from gigastudy_api.services.engine.music_theory import (
     track_name,
 )
 from gigastudy_api.services.engine.omr import run_audiveris_omr
-from gigastudy_api.services.engine.notation_quality import RegistrationNotationResult
+from gigastudy_api.services.engine.event_quality import RegistrationQualityResult
 from gigastudy_api.services.engine.pdf_vector_omr import parse_born_digital_pdf_score
 from gigastudy_api.services.engine.voice import (
     NO_METRONOME_ALIGNMENT,
@@ -742,7 +742,7 @@ class StudioRepository:
         *,
         source_kind: SourceKind,
         notes: list[TrackNote],
-    ) -> RegistrationNotationResult:
+    ) -> RegistrationQualityResult:
         return self._registration_preparer.prepare_notes(
             studio,
             slot_id,
@@ -756,7 +756,7 @@ class StudioRepository:
         mapped_notes: dict[int, list[TrackNote]],
         *,
         source_kind: SourceKind,
-    ) -> dict[int, RegistrationNotationResult]:
+    ) -> dict[int, RegistrationQualityResult]:
         return self._registration_preparer.prepare_batch(
             studio,
             mapped_notes,

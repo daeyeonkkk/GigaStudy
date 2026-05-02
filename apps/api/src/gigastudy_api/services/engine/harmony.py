@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
-    note_from_pitch,
+    event_from_pitch,
     quarter_beats_per_measure,
 )
 from gigastudy_api.services.engine.harmony_plan import (
@@ -94,7 +94,7 @@ class HarmonyEvent:
     duration_beats: float
     reference: TrackPitchEvent
     active_by_slot: dict[int, TrackPitchEvent]
-    active_notes: tuple[TrackPitchEvent, ...]
+    active_events: tuple[TrackPitchEvent, ...]
     strength: float
 
 
@@ -238,18 +238,18 @@ def generate_rule_based_harmony_candidates(
         return []
 
     context_by_slot = _normalize_context_map(context_tracks, context_events_by_slot)
-    events = _build_harmony_events(
+    harmony_events = _build_harmony_events(
         context_by_slot,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    if not events:
+    if not harmony_events:
         return []
 
-    key = _resolve_generation_key(_estimate_key(events), harmony_plan)
+    key = _resolve_generation_key(_estimate_key(harmony_events), harmony_plan)
     selected_paths = _select_voice_leading_paths(
         target_slot_id=target_slot_id,
-        events=events,
+        events=harmony_events,
         key=key,
         candidate_count=resolved_candidate_count,
         profile_names=profile_names,
@@ -259,8 +259,8 @@ def generate_rule_based_harmony_candidates(
         return []
 
     generated_candidates = [
-        _notes_from_harmony_path(
-            events=events,
+        _events_from_harmony_path(
+            harmony_events=harmony_events,
             path=path,
             bpm=bpm,
             key=key,
@@ -272,14 +272,14 @@ def generate_rule_based_harmony_candidates(
     ]
     return [
         normalize_track_events(
-            notes,
+            candidate_events,
             bpm=bpm,
             slot_id=target_slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
             merge_adjacent_same_pitch=False,
         )
-        for notes in generated_candidates
+        for candidate_events in generated_candidates
     ]
 
 
@@ -289,19 +289,19 @@ def _normalize_context_map(
 ) -> dict[int, list[TrackPitchEvent]]:
     if context_events_by_slot:
         normalized = {
-            slot_id: _pitched_notes(notes)
-            for slot_id, notes in context_events_by_slot.items()
+            slot_id: _pitched_events(events)
+            for slot_id, events in context_events_by_slot.items()
             if 1 <= slot_id <= 5
         }
         if any(normalized.values()):
             return normalized
-    return {0: _pitched_notes(context_tracks)}
+    return {0: _pitched_events(context_tracks)}
 
 
-def _pitched_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
+def _pitched_events(events: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     return sorted(
-        [note for note in notes if note.pitch_midi is not None and not note.is_rest],
-        key=lambda note: (note.beat, note.pitch_midi or 0),
+        [event for event in events if event.pitch_midi is not None and not event.is_rest],
+        key=lambda event: (event.beat, event.pitch_midi or 0),
     )
 
 
@@ -313,26 +313,26 @@ def _build_harmony_events(
 ) -> list[HarmonyEvent]:
     starts = sorted(
         {
-            round(note.beat, 4)
-            for notes in context_by_slot.values()
-            for note in notes
-            if note.pitch_midi is not None
+            round(event.beat, 4)
+            for events in context_by_slot.values()
+            for event in events
+            if event.pitch_midi is not None
         }
     )
     events: list[HarmonyEvent] = []
     for index, beat in enumerate(starts):
-        active_by_slot = _active_notes_at_beat(context_by_slot, beat)
-        active_notes = tuple(active_by_slot.values())
-        if not active_notes:
+        active_by_slot = _active_events_at_beat(context_by_slot, beat)
+        active_events = tuple(active_by_slot.values())
+        if not active_events:
             continue
 
         next_beat = starts[index + 1] if index + 1 < len(starts) else None
         reference = max(
-            active_notes,
-            key=lambda note: (
-                _event_strength(note, time_signature_numerator, time_signature_denominator),
-                note.duration_beats,
-                note.pitch_midi or 0,
+            active_events,
+            key=lambda event: (
+                _event_strength(event, time_signature_numerator, time_signature_denominator),
+                event.duration_beats,
+                event.pitch_midi or 0,
             ),
         )
         reference_end = reference.beat + max(0.25, reference.duration_beats)
@@ -347,7 +347,7 @@ def _build_harmony_events(
                 duration_beats=round(duration_beats, 4),
                 reference=reference,
                 active_by_slot=active_by_slot,
-                active_notes=active_notes,
+                active_events=active_events,
                 strength=_event_strength(
                     reference,
                     time_signature_numerator,
@@ -358,9 +358,9 @@ def _build_harmony_events(
     return events
 
 
-def _notes_from_harmony_path(
+def _events_from_harmony_path(
     *,
-    events: list[HarmonyEvent],
+    harmony_events: list[HarmonyEvent],
     path: HarmonyPath,
     bpm: int,
     key: KeyEstimate,
@@ -368,82 +368,82 @@ def _notes_from_harmony_path(
     time_signature_denominator: int,
     candidate_goal: DeepSeekCandidateDirection | None,
 ) -> list[TrackPitchEvent]:
-    notes = [
-        note_from_pitch(
-            beat=event.beat,
-            duration_beats=event.duration_beats,
+    generated_events = [
+        event_from_pitch(
+            beat=harmony_event.beat,
+            duration_beats=harmony_event.duration_beats,
             bpm=bpm,
             source="ai",
             extraction_method=VOICE_LEADING_METHOD,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
             pitch_midi=pitch,
-            confidence=_generation_confidence(path.cost, len(events), key.confidence),
-            measure_index=event.reference.measure_index,
-            beat_in_measure=event.reference.beat_in_measure,
+            confidence=_generation_confidence(path.cost, len(harmony_events), key.confidence),
+            measure_index=harmony_event.reference.measure_index,
+            beat_in_measure=harmony_event.reference.beat_in_measure,
         )
-        for event, pitch in zip(events, path.pitches, strict=False)
+        for harmony_event, pitch in zip(harmony_events, path.pitches, strict=False)
     ]
-    return _apply_candidate_rhythm_policy(notes, candidate_goal)
+    return _apply_candidate_rhythm_policy(generated_events, candidate_goal)
 
 
 def _apply_candidate_rhythm_policy(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     candidate_goal: DeepSeekCandidateDirection | None,
 ) -> list[TrackPitchEvent]:
     if candidate_goal is None or candidate_goal.rhythm_policy in {"follow_context", "answer_melody"}:
-        return notes
+        return events
     if candidate_goal.rhythm_policy == "simplify":
-        return _merge_weak_repeated_notes(notes)
+        return _merge_weak_repeated_events(events)
     if candidate_goal.rhythm_policy == "sustain_support":
-        return _sustain_support_notes(notes)
-    return notes
+        return _sustain_support_events(events)
+    return events
 
 
-def _merge_weak_repeated_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
+def _merge_weak_repeated_events(events: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     merged: list[TrackPitchEvent] = []
-    for note in notes:
+    for event in events:
         if (
             merged
-            and note.pitch_midi == merged[-1].pitch_midi
-            and note.measure_index == merged[-1].measure_index
+            and event.pitch_midi == merged[-1].pitch_midi
+            and event.measure_index == merged[-1].measure_index
         ):
             previous = merged[-1]
-            new_duration = (note.beat + note.duration_beats) - previous.beat
-            merged[-1] = _copy_note_duration(previous, new_duration)
+            new_duration = (event.beat + event.duration_beats) - previous.beat
+            merged[-1] = _copy_event_duration(previous, new_duration)
         else:
-            merged.append(note)
+            merged.append(event)
     return merged
 
 
-def _sustain_support_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
-    if len(notes) < 3:
-        return notes
+def _sustain_support_events(events: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
+    if len(events) < 3:
+        return events
     sustained: list[TrackPitchEvent] = []
-    for note in notes:
+    for event in events:
         if not sustained:
-            sustained.append(note)
+            sustained.append(event)
             continue
         previous = sustained[-1]
-        weak_beat = note.beat_in_measure is not None and abs(note.beat_in_measure - round(note.beat_in_measure)) > 0.001
+        weak_beat = event.beat_in_measure is not None and abs(event.beat_in_measure - round(event.beat_in_measure)) > 0.001
         small_motion = (
-            note.pitch_midi is not None
+            event.pitch_midi is not None
             and previous.pitch_midi is not None
-            and abs(note.pitch_midi - previous.pitch_midi) <= 2
+            and abs(event.pitch_midi - previous.pitch_midi) <= 2
         )
-        same_measure = note.measure_index == previous.measure_index
+        same_measure = event.measure_index == previous.measure_index
         if weak_beat and small_motion and same_measure:
-            new_duration = (note.beat + note.duration_beats) - previous.beat
-            sustained[-1] = _copy_note_duration(previous, new_duration)
+            new_duration = (event.beat + event.duration_beats) - previous.beat
+            sustained[-1] = _copy_event_duration(previous, new_duration)
             continue
-        sustained.append(note)
+        sustained.append(event)
     return sustained
 
 
-def _copy_note_duration(note: TrackPitchEvent, duration_beats: float) -> TrackPitchEvent:
+def _copy_event_duration(event: TrackPitchEvent, duration_beats: float) -> TrackPitchEvent:
     duration_beats = round(max(0.25, duration_beats), 4)
-    duration_seconds = duration_beats * (note.duration_seconds / max(0.0001, note.duration_beats))
-    return note.model_copy(
+    duration_seconds = duration_beats * (event.duration_seconds / max(0.0001, event.duration_beats))
+    return event.model_copy(
         update={
             "duration_beats": duration_beats,
             "duration_seconds": round(duration_seconds, 4),
@@ -451,34 +451,34 @@ def _copy_note_duration(note: TrackPitchEvent, duration_beats: float) -> TrackPi
     )
 
 
-def _active_notes_at_beat(
+def _active_events_at_beat(
     context_by_slot: dict[int, list[TrackPitchEvent]],
     beat: float,
 ) -> dict[int, TrackPitchEvent]:
     active_by_slot: dict[int, TrackPitchEvent] = {}
-    for slot_id, notes in context_by_slot.items():
+    for slot_id, events in context_by_slot.items():
         candidates = [
-            note
-            for note in notes
-            if note.beat <= beat + 0.0001 and beat < note.beat + max(0.25, note.duration_beats) - 0.0001
+            event
+            for event in events
+            if event.beat <= beat + 0.0001 and beat < event.beat + max(0.25, event.duration_beats) - 0.0001
         ]
         if candidates:
-            active_by_slot[slot_id] = max(candidates, key=lambda note: (note.beat, note.duration_beats))
+            active_by_slot[slot_id] = max(candidates, key=lambda event: (event.beat, event.duration_beats))
     return active_by_slot
 
 
 def _event_strength(
-    note: TrackPitchEvent,
+    event: TrackPitchEvent,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> float:
-    beat_in_measure = note.beat_in_measure
+    beat_in_measure = event.beat_in_measure
     if beat_in_measure is None:
         beats_per_measure = quarter_beats_per_measure(
             time_signature_numerator,
             time_signature_denominator,
         )
-        beat_in_measure = ((max(note.beat, 1) - 1) % beats_per_measure) + 1
+        beat_in_measure = ((max(event.beat, 1) - 1) % beats_per_measure) + 1
     if abs(beat_in_measure - 1) < 0.001:
         return 1.5
     if abs((beat_in_measure % 1) - 0) < 0.001:
@@ -488,11 +488,11 @@ def _event_strength(
 
 def _estimate_key(events: list[HarmonyEvent]) -> KeyEstimate:
     histogram = [0.0] * 12
-    for event in events:
-        for note in event.active_notes:
-            if note.pitch_midi is None:
+    for harmony_event in events:
+        for active_event in harmony_event.active_events:
+            if active_event.pitch_midi is None:
                 continue
-            histogram[note.pitch_midi % 12] += max(0.25, event.duration_beats) * event.strength
+            histogram[active_event.pitch_midi % 12] += max(0.25, active_event.duration_beats) * harmony_event.strength
 
     scored_keys: list[tuple[float, int, str]] = []
     for tonic in range(12):
@@ -578,10 +578,10 @@ def _chord_candidates_for_event(
 
 def _event_pitch_class_weights(event: HarmonyEvent) -> dict[int, float]:
     weights: dict[int, float] = {}
-    for note in event.active_notes:
-        if note.pitch_midi is None:
+    for active_event in event.active_events:
+        if active_event.pitch_midi is None:
             continue
-        weights[note.pitch_midi % 12] = weights.get(note.pitch_midi % 12, 0.0) + event.strength
+        weights[active_event.pitch_midi % 12] = weights.get(active_event.pitch_midi % 12, 0.0) + event.strength
     return weights
 
 
@@ -1060,14 +1060,14 @@ def _crosses_known_voice(target_slot_id: int, pitch: int, event: HarmonyEvent) -
     if 0 in event.active_by_slot:
         return False
     higher_pitches = [
-        note.pitch_midi
-        for slot_id, note in event.active_by_slot.items()
-        if slot_id < target_slot_id and note.pitch_midi is not None
+        active_event.pitch_midi
+        for slot_id, active_event in event.active_by_slot.items()
+        if slot_id < target_slot_id and active_event.pitch_midi is not None
     ]
     lower_pitches = [
-        note.pitch_midi
-        for slot_id, note in event.active_by_slot.items()
-        if target_slot_id < slot_id <= 5 and note.pitch_midi is not None
+        active_event.pitch_midi
+        for slot_id, active_event in event.active_by_slot.items()
+        if target_slot_id < slot_id <= 5 and active_event.pitch_midi is not None
     ]
     if higher_pitches and pitch >= min(higher_pitches):
         return True
@@ -1080,14 +1080,14 @@ def _voice_ordering_cost(target_slot_id: int, pitch: int, event: HarmonyEvent) -
     if 0 in event.active_by_slot:
         return 0.0
     higher_pitches = [
-        note.pitch_midi
-        for slot_id, note in event.active_by_slot.items()
-        if slot_id < target_slot_id and note.pitch_midi is not None
+        active_event.pitch_midi
+        for slot_id, active_event in event.active_by_slot.items()
+        if slot_id < target_slot_id and active_event.pitch_midi is not None
     ]
     lower_pitches = [
-        note.pitch_midi
-        for slot_id, note in event.active_by_slot.items()
-        if target_slot_id < slot_id <= 5 and note.pitch_midi is not None
+        active_event.pitch_midi
+        for slot_id, active_event in event.active_by_slot.items()
+        if target_slot_id < slot_id <= 5 and active_event.pitch_midi is not None
     ]
     cost = 0.0
     if higher_pitches:
@@ -1106,14 +1106,14 @@ def _ordered_gap_filler_pitches(target_slot_id: int, event: HarmonyEvent) -> lis
         return []
     low, high = SLOT_RANGES[target_slot_id]
     higher_pitches = [
-        note.pitch_midi
-        for slot_id, note in event.active_by_slot.items()
-        if slot_id < target_slot_id and note.pitch_midi is not None
+        active_event.pitch_midi
+        for slot_id, active_event in event.active_by_slot.items()
+        if slot_id < target_slot_id and active_event.pitch_midi is not None
     ]
     lower_pitches = [
-        note.pitch_midi
-        for slot_id, note in event.active_by_slot.items()
-        if target_slot_id < slot_id <= 5 and note.pitch_midi is not None
+        active_event.pitch_midi
+        for slot_id, active_event in event.active_by_slot.items()
+        if target_slot_id < slot_id <= 5 and active_event.pitch_midi is not None
     ]
     if not higher_pitches or not lower_pitches:
         return []
@@ -1163,10 +1163,10 @@ def _nearest_known_voice_pitch(
 
 def _chord_tone_counts(event: HarmonyEvent, chord: ChordCandidate) -> Counter[str]:
     counts: Counter[str] = Counter()
-    for note in event.active_notes:
-        if note.pitch_midi is None:
+    for active_event in event.active_events:
+        if active_event.pitch_midi is None:
             continue
-        counts[_tone_degree(note.pitch_midi % 12, chord)] += 1
+        counts[_tone_degree(active_event.pitch_midi % 12, chord)] += 1
     return counts
 
 
@@ -1186,7 +1186,7 @@ def _leading_tone(key: KeyEstimate) -> int:
 
 
 def _duplicates_exact_context_pitch(pitch: int, event: HarmonyEvent) -> bool:
-    return any(note.pitch_midi == pitch for note in event.active_notes)
+    return any(active_event.pitch_midi == pitch for active_event in event.active_events)
 
 
 def _profile_center(target_slot_id: int, profile: VoiceLeadingProfile) -> int:
@@ -1370,13 +1370,13 @@ def _contrary_motion_cost(
 
 def _reference_motion(previous_event: HarmonyEvent, event: HarmonyEvent) -> int:
     scored_motions: list[tuple[float, int]] = []
-    for slot_id, current_note in event.active_by_slot.items():
-        if current_note.pitch_midi is None:
+    for slot_id, current_event in event.active_by_slot.items():
+        if current_event.pitch_midi is None:
             continue
-        previous_note = previous_event.active_by_slot.get(slot_id)
-        if previous_note is None or previous_note.pitch_midi is None:
+        previous_context_event = previous_event.active_by_slot.get(slot_id)
+        if previous_context_event is None or previous_context_event.pitch_midi is None:
             continue
-        motion = _motion_direction(previous_note.pitch_midi, current_note.pitch_midi)
+        motion = _motion_direction(previous_context_event.pitch_midi, current_event.pitch_midi)
         if motion != 0:
             scored_motions.append((event.strength, motion))
 
@@ -1397,19 +1397,19 @@ def _parallel_perfect_cost(
     target_slot_id: int,
 ) -> float:
     cost = 0.0
-    for slot_id, current_context_note in event.active_by_slot.items():
-        if slot_id == 0 or slot_id == target_slot_id or current_context_note.pitch_midi is None:
+    for slot_id, current_context_event in event.active_by_slot.items():
+        if slot_id == 0 or slot_id == target_slot_id or current_context_event.pitch_midi is None:
             continue
-        previous_context_note = previous_event.active_by_slot.get(slot_id)
-        if previous_context_note is None or previous_context_note.pitch_midi is None:
+        previous_context_event = previous_event.active_by_slot.get(slot_id)
+        if previous_context_event is None or previous_context_event.pitch_midi is None:
             continue
         target_motion = _motion_direction(previous_target_pitch, target_pitch)
-        context_motion = _motion_direction(previous_context_note.pitch_midi, current_context_note.pitch_midi)
+        context_motion = _motion_direction(previous_context_event.pitch_midi, current_context_event.pitch_midi)
         if target_motion == 0 or context_motion == 0:
             continue
 
-        previous_interval = _vertical_interval_class(previous_target_pitch, previous_context_note.pitch_midi)
-        current_interval = _vertical_interval_class(target_pitch, current_context_note.pitch_midi)
+        previous_interval = _vertical_interval_class(previous_target_pitch, previous_context_event.pitch_midi)
+        current_interval = _vertical_interval_class(target_pitch, current_context_event.pitch_midi)
         similar_motion = target_motion == context_motion
         outer_pair = {target_slot_id, slot_id} in ({1, 5}, {1, 4})
 
@@ -1448,7 +1448,7 @@ def _generate_percussion(
     variant_index: int = 0,
 ) -> list[TrackPitchEvent]:
     max_beat = max(
-        (note.beat + max(0.25, note.duration_beats) - 1 for note in context_tracks),
+        (event.beat + max(0.25, event.duration_beats) - 1 for event in context_tracks),
         default=8,
     )
     beats_per_measure = quarter_beats_per_measure(
@@ -1470,7 +1470,7 @@ def _generate_percussion(
             variant_index=variant_index,
         )
         generated.append(
-            note_from_pitch(
+            event_from_pitch(
                 beat=beat,
                 duration_beats=min(1, pulse_quarter_beats),
                 bpm=bpm,

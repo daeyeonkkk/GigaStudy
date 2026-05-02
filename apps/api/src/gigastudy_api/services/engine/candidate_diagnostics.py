@@ -7,10 +7,10 @@ from gigastudy_api.services.engine.music_theory import SLOT_RANGES, midi_to_labe
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 
 
-def track_duration_seconds(notes: list[TrackPitchEvent]) -> float:
-    if not notes:
+def track_duration_seconds(events: list[TrackPitchEvent]) -> float:
+    if not events:
         return 0
-    return round(max(note.onset_seconds + note.duration_seconds for note in notes), 4)
+    return round(max(event.onset_seconds + event.duration_seconds for event in events), 4)
 
 
 def parsed_track_diagnostics_by_slot(
@@ -33,42 +33,42 @@ def parsed_track_diagnostics_by_slot(
 
 def candidate_diagnostics(
     slot_id: int,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     method: str,
     confidence: float,
     source_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     diagnostics = dict(source_diagnostics or {})
-    pitched_notes = [
-        note
-        for note in notes
-        if not note.is_rest and note.pitch_midi is not None
+    pitched_events = [
+        event
+        for event in events
+        if not event.is_rest and event.pitch_midi is not None
     ]
     measure_indices = {
-        note.measure_index
-        for note in notes
-        if note.measure_index is not None
+        event.measure_index
+        for event in events
+        if event.measure_index is not None
     }
-    duration_seconds = track_duration_seconds(notes) if notes else 0
+    duration_seconds = track_duration_seconds(events) if events else 0
     measure_count = len(measure_indices)
-    if measure_count == 0 and notes:
-        measure_count = max(1, int(max(note.beat + note.duration_beats for note in notes) // 4) + 1)
-    avg_note_confidence = sum(note.confidence for note in notes) / len(notes) if notes else 0
-    range_fit_ratio = candidate_range_fit_ratio(slot_id, pitched_notes)
-    timing_grid_ratio = candidate_timing_grid_ratio(notes)
-    event_count = len(notes)
+    if measure_count == 0 and events:
+        measure_count = max(1, int(max(event.beat + event.duration_beats for event in events) // 4) + 1)
+    avg_event_confidence = sum(event.confidence for event in events) / len(events) if events else 0
+    range_fit_ratio = candidate_range_fit_ratio(slot_id, pitched_events)
+    timing_grid_ratio = candidate_timing_grid_ratio(events)
+    event_count = len(events)
     diagnostics.update(
         {
             "candidate_method": method,
             "track": track_name(slot_id),
             "event_count": event_count,
-            "pitched_event_count": len(pitched_notes),
-            "rest_event_count": event_count - len(pitched_notes),
+            "pitched_event_count": len(pitched_events),
+            "rest_event_count": event_count - len(pitched_events),
             "measure_count": measure_count,
             "duration_seconds": round(duration_seconds, 3),
-            "range": candidate_range_label(pitched_notes),
-            "avg_note_confidence": round(avg_note_confidence, 3),
+            "range": candidate_range_label(pitched_events),
+            "avg_event_confidence": round(avg_event_confidence, 3),
             "range_fit_ratio": round(range_fit_ratio, 3),
             "timing_grid_ratio": round(timing_grid_ratio, 3),
             "density_events_per_measure": round(event_count / max(1, measure_count), 2),
@@ -79,7 +79,7 @@ def candidate_diagnostics(
                 event_count=event_count,
                 range_fit_ratio=range_fit_ratio,
                 timing_grid_ratio=timing_grid_ratio,
-                avg_note_confidence=avg_note_confidence,
+                avg_event_confidence=avg_event_confidence,
             ),
         }
     )
@@ -88,13 +88,13 @@ def candidate_diagnostics(
 
 def estimate_candidate_confidence(
     slot_id: int,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     method: str,
     fallback_confidence: float,
     diagnostics: dict[str, Any] | None = None,
 ) -> float:
-    if not notes:
+    if not events:
         return 0
 
     if method.startswith("audiveris"):
@@ -106,30 +106,30 @@ def estimate_candidate_confidence(
     else:
         base = fallback_confidence
 
-    avg_note_confidence = sum(note.confidence for note in notes) / len(notes)
+    avg_event_confidence = sum(event.confidence for event in events) / len(events)
     range_fit_ratio = diagnostic_float(
         diagnostics,
         "range_fit_ratio",
-        default=candidate_range_fit_ratio(slot_id, [note for note in notes if note.pitch_midi is not None]),
+        default=candidate_range_fit_ratio(slot_id, [event for event in events if event.pitch_midi is not None]),
     )
     timing_grid_ratio = diagnostic_float(
         diagnostics,
         "timing_grid_ratio",
-        default=candidate_timing_grid_ratio(notes),
+        default=candidate_timing_grid_ratio(events),
     )
     measure_count = diagnostic_int(diagnostics, "measure_count", default=0)
 
-    note_volume_bonus = min(0.12, len(notes) / 1200)
+    event_volume_bonus = min(0.12, len(events) / 1200)
     measure_bonus = min(0.08, measure_count / 80)
     confidence = (
         base * 0.52
-        + avg_note_confidence * 0.3
+        + avg_event_confidence * 0.3
         + range_fit_ratio * 0.12
         + timing_grid_ratio * 0.06
-        + note_volume_bonus
+        + event_volume_bonus
         + measure_bonus
     )
-    if len(notes) < 4:
+    if len(events) < 4:
         confidence -= 0.08
     if range_fit_ratio < 0.85:
         confidence -= (0.85 - range_fit_ratio) * 0.16
@@ -140,25 +140,25 @@ def estimate_candidate_confidence(
 
 def candidate_review_message(
     slot_id: int,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     method: str,
     diagnostics: dict[str, Any] | None,
     default_message: str | None,
 ) -> str | None:
-    if not notes:
+    if not events:
         return default_message
     if diagnostics is None:
         diagnostics = candidate_diagnostics(
             slot_id,
-            notes,
+            events,
             method=method,
             confidence=0.5,
         )
     event_count = diagnostic_int(
         diagnostics,
         "event_count",
-        default=len(notes),
+        default=len(events),
     )
     measure_count = diagnostic_int(diagnostics, "measure_count", default=0)
     candidate_confidence_label = str(diagnostics.get("confidence_label") or "review")
@@ -177,19 +177,19 @@ def candidate_review_message(
     return default_message
 
 
-def generation_variant_label(index: int, slot_id: int, notes: list[TrackPitchEvent]) -> str:
+def generation_variant_label(index: int, slot_id: int, events: list[TrackPitchEvent]) -> str:
     if slot_id == 6:
-        return percussion_variant_label(index, notes)
+        return percussion_variant_label(index, events)
 
-    pitched_notes = [
-        note
-        for note in notes
-        if note.pitch_midi is not None and not note.is_rest
+    pitched_events = [
+        event
+        for event in events
+        if event.pitch_midi is not None and not event.is_rest
     ]
-    if not pitched_notes:
+    if not pitched_events:
         return f"Candidate {index}"
 
-    midi_values = [note.pitch_midi for note in pitched_notes if note.pitch_midi is not None]
+    midi_values = [event.pitch_midi for event in pitched_events if event.pitch_midi is not None]
     average_midi = sum(midi_values) / len(midi_values)
     low, high = SLOT_RANGES.get(slot_id, (min(midi_values), max(midi_values)))
     slot_center = (low + high) / 2
@@ -225,8 +225,8 @@ def generation_variant_label(index: int, slot_id: int, notes: list[TrackPitchEve
     return f"{register_label} {motion_label} - {contour_label} - avg {average_label}"
 
 
-def percussion_variant_label(index: int, notes: list[TrackPitchEvent]) -> str:
-    labels = [note.label for note in notes[:8]]
+def percussion_variant_label(index: int, events: list[TrackPitchEvent]) -> str:
+    labels = [event.label for event in events[:8]]
     kick_count = labels.count("Kick")
     snare_count = labels.count("Snare")
     if kick_count > snare_count:
@@ -252,41 +252,41 @@ def diagnostic_int(diagnostics: dict[str, Any] | None, key: str, *, default: int
     return int(value) if isinstance(value, (int, float)) else default
 
 
-def candidate_range_fit_ratio(slot_id: int, notes: list[TrackPitchEvent]) -> float:
-    pitched = [note for note in notes if note.pitch_midi is not None]
+def candidate_range_fit_ratio(slot_id: int, events: list[TrackPitchEvent]) -> float:
+    pitched = [event for event in events if event.pitch_midi is not None]
     if not pitched:
         return 0
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
     in_range = [
-        note
-        for note in pitched
-        if note.pitch_midi is not None and low <= note.pitch_midi <= high
+        event
+        for event in pitched
+        if event.pitch_midi is not None and low <= event.pitch_midi <= high
     ]
     return len(in_range) / len(pitched)
 
 
-def candidate_timing_grid_ratio(notes: list[TrackPitchEvent]) -> float:
-    if not notes:
+def candidate_timing_grid_ratio(events: list[TrackPitchEvent]) -> float:
+    if not events:
         return 0
     aligned = 0
-    for note in notes:
-        beat_aligned = abs(note.beat * 4 - round(note.beat * 4)) <= 0.03
-        duration_aligned = abs(note.duration_beats * 4 - round(note.duration_beats * 4)) <= 0.03
+    for event in events:
+        beat_aligned = abs(event.beat * 4 - round(event.beat * 4)) <= 0.03
+        duration_aligned = abs(event.duration_beats * 4 - round(event.duration_beats * 4)) <= 0.03
         if beat_aligned and duration_aligned:
             aligned += 1
-    return aligned / len(notes)
+    return aligned / len(events)
 
 
-def candidate_range_label(notes: list[TrackPitchEvent]) -> str:
-    midi_notes = [
-        note
-        for note in notes
-        if note.pitch_midi is not None
+def candidate_range_label(events: list[TrackPitchEvent]) -> str:
+    midi_pitchs = [
+        event
+        for event in events
+        if event.pitch_midi is not None
     ]
-    if not midi_notes:
+    if not midi_pitchs:
         return "-"
-    sorted_notes = sorted(midi_notes, key=lambda note: note.pitch_midi or 0)
-    return f"{sorted_notes[0].label} - {sorted_notes[-1].label}"
+    sorted_events = sorted(midi_pitchs, key=lambda event: event.pitch_midi or 0)
+    return f"{sorted_events[0].label} - {sorted_events[-1].label}"
 
 
 def confidence_label(confidence: float) -> str:
@@ -303,11 +303,11 @@ def review_hint_for_candidate(
     event_count: int,
     range_fit_ratio: float,
     timing_grid_ratio: float,
-    avg_note_confidence: float,
+    avg_event_confidence: float,
 ) -> str:
     if event_count < 4:
         return "few_events"
-    if avg_note_confidence < 0.52:
+    if avg_event_confidence < 0.52:
         return "low_event_confidence"
     if range_fit_ratio < 0.85:
         return "range_outliers"

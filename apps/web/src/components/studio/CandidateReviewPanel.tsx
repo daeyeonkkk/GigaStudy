@@ -367,6 +367,6 @@ function shouldShowSourcePreview(candidate: ExtractionCandidate): boolean {
   return (
     candidate.source_kind === 'document' &&
     candidate.job_id !== null &&
-    (candidate.method.includes('omr') || candidate.method.includes('score'))
+    (candidate.method.includes('document') || candidate.method.includes('score'))
   )
 }

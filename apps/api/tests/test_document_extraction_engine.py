@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from gigastudy_api.services.engine.omr import OmrUnavailableError, run_audiveris_omr
-from gigastudy_api.services.engine.pdf_vector_omr import (
-    _RawNote,
-    _finalize_track_notes,
+from gigastudy_api.services.engine.audiveris_document import AudiverisDocumentError, run_audiveris_document_extraction
+from gigastudy_api.services.engine.pdf_vector_document import (
+    _RawDocumentEvent,
+    _finalize_track_events,
     _measure_position_for_x,
 )
 
@@ -16,14 +16,14 @@ except ImportError:  # pragma: no cover
     fitz = None
 
 
-def test_run_audiveris_omr_converts_timeout_to_unavailable(tmp_path: Path, monkeypatch) -> None:
+def test_run_audiveris_document_extraction_converts_timeout_to_unavailable(tmp_path: Path, monkeypatch) -> None:
     def timeout_run(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))
 
     monkeypatch.setattr(subprocess, "run", timeout_run)
 
-    with pytest.raises(OmrUnavailableError, match="Audiveris timed out after 7 seconds"):
-        run_audiveris_omr(
+    with pytest.raises(AudiverisDocumentError, match="Audiveris timed out after 7 seconds"):
+        run_audiveris_document_extraction(
             input_path=tmp_path / "score.pdf",
             output_dir=tmp_path / "out",
             audiveris_bin=str(tmp_path / "Audiveris"),
@@ -31,8 +31,8 @@ def test_run_audiveris_omr_converts_timeout_to_unavailable(tmp_path: Path, monke
         )
 
 
-@pytest.mark.skipif(fitz is None, reason="PyMuPDF is required for OMR preprocessing")
-def test_run_audiveris_omr_retries_with_preprocessed_pdf(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.skipif(fitz is None, reason="PyMuPDF is required for document preprocessing")
+def test_run_audiveris_document_extraction_retries_with_preprocessed_pdf(tmp_path: Path, monkeypatch) -> None:
     source_pdf = tmp_path / "scan.pdf"
     document = fitz.open()
     page = document.new_page(width=200, height=120)
@@ -54,7 +54,7 @@ def test_run_audiveris_omr_retries_with_preprocessed_pdf(tmp_path: Path, monkeyp
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    output = run_audiveris_omr(
+    output = run_audiveris_document_extraction(
         input_path=source_pdf,
         output_dir=tmp_path / "out",
         audiveris_bin=str(tmp_path / "Audiveris"),
@@ -67,16 +67,16 @@ def test_run_audiveris_omr_retries_with_preprocessed_pdf(tmp_path: Path, monkeyp
     assert calls[1].exists()
 
 
-def test_vector_omr_positions_stay_inside_measure_grid() -> None:
+def test_vector_document_positions_stay_inside_measure_grid() -> None:
     _, beat_in_measure = _measure_position_for_x(120, [(0, 100)], 4)
 
     assert beat_in_measure == 4.75
 
 
-def test_vector_omr_caps_duration_at_measure_boundary() -> None:
-    notes = _finalize_track_notes(
+def test_vector_document_caps_duration_at_measure_boundary() -> None:
+    events = _finalize_track_events(
         [
-            _RawNote(
+            _RawDocumentEvent(
                 slot_id=1,
                 page_index=0,
                 beat=4.75,
@@ -85,7 +85,7 @@ def test_vector_omr_caps_duration_at_measure_boundary() -> None:
                 pitch_midi=72,
                 confidence=0.62,
             ),
-            _RawNote(
+            _RawDocumentEvent(
                 slot_id=1,
                 page_index=0,
                 beat=9,
@@ -101,6 +101,6 @@ def test_vector_omr_caps_duration_at_measure_boundary() -> None:
         beats_per_measure=4,
     )
 
-    assert notes[0].duration_beats == 0.25
-    assert notes[0].measure_index == 1
-    assert notes[0].beat_in_measure == 4.75
+    assert events[0].duration_beats == 0.25
+    assert events[0].measure_index == 1
+    assert events[0].beat_in_measure == 4.75

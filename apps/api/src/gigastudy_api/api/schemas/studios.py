@@ -20,7 +20,7 @@ ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["document", "music"]
 ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
-ExtractionJobType = Literal["omr", "voice"]
+ExtractionJobType = Literal["document", "voice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
 
@@ -78,7 +78,7 @@ class CandidateRegion(SourceKindModel):
 
 class TrackExtractionJob(SourceKindModel):
     job_id: str
-    job_type: ExtractionJobType = "omr"
+    job_type: ExtractionJobType = "document"
     slot_id: int
     source_kind: SourceKind
     source_label: str
@@ -150,8 +150,8 @@ def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
 
     region_id = f"track-{track.slot_id}-region-1"
     pitch_events = [
-        _pitch_event_from_note(note, track=track, region_id=region_id, bpm=bpm)
-        for note in sorted(track.events, key=lambda item: (item.beat, item.id))
+        _pitch_event_from_track_event(event, track=track, region_id=region_id, bpm=bpm)
+        for event in sorted(track.events, key=lambda item: (item.beat, item.id))
     ]
     region_start = track.sync_offset_seconds
     event_end_seconds = max(
@@ -180,44 +180,44 @@ def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
     )
 
 
-def _pitch_event_from_note(
-    note: _TrackPitchEvent,
+def _pitch_event_from_track_event(
+    event: _TrackPitchEvent,
     *,
     track: TrackSlot,
     region_id: str,
     bpm: int,
 ) -> PitchEvent:
     return PitchEvent(
-        event_id=f"{region_id}-{note.id}",
+        event_id=f"{region_id}-{event.id}",
         track_slot_id=track.slot_id,
         region_id=region_id,
-        label=note.label,
-        pitch_midi=note.pitch_midi,
-        pitch_hz=note.pitch_hz,
-        start_seconds=track.sync_offset_seconds + _note_start_seconds(note, bpm),
-        duration_seconds=_note_duration_seconds(note, bpm),
-        start_beat=note.beat,
-        duration_beats=note.duration_beats,
-        confidence=note.confidence,
-        source=note.source,
-        extraction_method=note.extraction_method,
-        is_rest=note.is_rest,
-        measure_index=note.measure_index,
-        beat_in_measure=note.beat_in_measure,
-        quality_warnings=note.quality_warnings,
+        label=event.label,
+        pitch_midi=event.pitch_midi,
+        pitch_hz=event.pitch_hz,
+        start_seconds=track.sync_offset_seconds + _track_event_start_seconds(event, bpm),
+        duration_seconds=_track_event_duration_seconds(event, bpm),
+        start_beat=event.beat,
+        duration_beats=event.duration_beats,
+        confidence=event.confidence,
+        source=event.source,
+        extraction_method=event.extraction_method,
+        is_rest=event.is_rest,
+        measure_index=event.measure_index,
+        beat_in_measure=event.beat_in_measure,
+        quality_warnings=event.quality_warnings,
     )
 
 
-def _note_start_seconds(note: _TrackPitchEvent, bpm: int) -> float:
-    if isfinite(note.onset_seconds) and note.onset_seconds > 0:
-        return note.onset_seconds
-    return max(0.0, (note.beat - 1) * _beat_seconds(bpm))
+def _track_event_start_seconds(event: _TrackPitchEvent, bpm: int) -> float:
+    if isfinite(event.onset_seconds) and event.onset_seconds > 0:
+        return event.onset_seconds
+    return max(0.0, (event.beat - 1) * _beat_seconds(bpm))
 
 
-def _note_duration_seconds(note: _TrackPitchEvent, bpm: int) -> float:
-    if isfinite(note.duration_seconds) and note.duration_seconds > 0:
-        return note.duration_seconds
-    return max(0.08, note.duration_beats * _beat_seconds(bpm))
+def _track_event_duration_seconds(event: _TrackPitchEvent, bpm: int) -> float:
+    if isfinite(event.duration_seconds) and event.duration_seconds > 0:
+        return event.duration_seconds
+    return max(0.08, event.duration_beats * _beat_seconds(bpm))
 
 
 def _beat_seconds(bpm: int) -> float:
@@ -227,8 +227,8 @@ def _beat_seconds(bpm: int) -> float:
 def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
     region_id = f"candidate-{candidate.candidate_id}-region-1"
     pitch_events = [
-        _candidate_pitch_event_from_note(note, candidate=candidate, region_id=region_id)
-        for note in sorted(candidate.events, key=lambda item: (item.beat, item.id))
+        _candidate_pitch_event_from_track_event(event, candidate=candidate, region_id=region_id)
+        for event in sorted(candidate.events, key=lambda item: (item.beat, item.id))
     ]
     region_start = min((event.start_seconds for event in pitch_events), default=0.0)
     region_end = max(
@@ -258,30 +258,30 @@ def sync_extraction_candidate_region(candidate: ExtractionCandidate) -> Candidat
     return candidate.region
 
 
-def _candidate_pitch_event_from_note(
-    note: _TrackPitchEvent,
+def _candidate_pitch_event_from_track_event(
+    event: _TrackPitchEvent,
     *,
     candidate: ExtractionCandidate,
     region_id: str,
 ) -> PitchEvent:
     return PitchEvent(
-        event_id=f"{region_id}-{note.id}",
+        event_id=f"{region_id}-{event.id}",
         track_slot_id=candidate.suggested_slot_id,
         region_id=region_id,
-        label=note.label,
-        pitch_midi=note.pitch_midi,
-        pitch_hz=note.pitch_hz,
-        start_seconds=note.onset_seconds if isfinite(note.onset_seconds) else max(0.0, note.beat - 1),
-        duration_seconds=note.duration_seconds if isfinite(note.duration_seconds) and note.duration_seconds > 0 else max(0.08, note.duration_beats),
-        start_beat=note.beat,
-        duration_beats=note.duration_beats,
-        confidence=note.confidence,
-        source=note.source,
-        extraction_method=note.extraction_method,
-        is_rest=note.is_rest,
-        measure_index=note.measure_index,
-        beat_in_measure=note.beat_in_measure,
-        quality_warnings=note.quality_warnings,
+        label=event.label,
+        pitch_midi=event.pitch_midi,
+        pitch_hz=event.pitch_hz,
+        start_seconds=event.onset_seconds if isfinite(event.onset_seconds) else max(0.0, event.beat - 1),
+        duration_seconds=event.duration_seconds if isfinite(event.duration_seconds) and event.duration_seconds > 0 else max(0.08, event.duration_beats),
+        start_beat=event.beat,
+        duration_beats=event.duration_beats,
+        confidence=event.confidence,
+        source=event.source,
+        extraction_method=event.extraction_method,
+        is_rest=event.is_rest,
+        measure_index=event.measure_index,
+        beat_in_measure=event.beat_in_measure,
+        quality_warnings=event.quality_warnings,
     )
 
 

@@ -19,7 +19,7 @@ function RouteFallback() {
       </div>
       <div>
         <p className="eyebrow">GigaStudy</p>
-        <h1>화면을 불러오는 중입니다</h1>
+        <h1>Loading page</h1>
       </div>
     </main>
   )

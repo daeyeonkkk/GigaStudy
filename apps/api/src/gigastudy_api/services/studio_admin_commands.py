@@ -138,7 +138,7 @@ class StudioAdminCommands:
         deleted_files, deleted_bytes = self._delete_studio_asset_prefixes(studio_id)
         return AdminDeleteResult(
             deleted=True,
-            message="Studio assets deleted. Normalized track notes and reports were kept.",
+            message="Studio assets deleted. Normalized track events and reports were kept.",
             studio_id=studio_id,
             deleted_files=deleted_files,
             deleted_bytes=deleted_bytes,

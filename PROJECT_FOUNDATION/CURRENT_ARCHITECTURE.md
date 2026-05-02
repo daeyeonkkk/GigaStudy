@@ -2,9 +2,9 @@
 
 Date: 2026-05-02
 
-This is the current canonical architecture after the staff-notation reset.
+This is the current canonical architecture after the region/piano-roll rebuild.
 GigaStudy is a six-track vocal arrangement and practice workspace, not an
-engraved-score editor.
+engraved notation editor.
 
 ## Product Center
 
@@ -16,7 +16,7 @@ Internal engine flow:
 
 `TrackPitchEvent` lives in `gigastudy_api.domain.track_events` as an internal
 extraction, registration, storage-shadow, and scoring event type. It is not a
-staff-era adapter and is not exported as a public contract. Internal event records
+legacy adapter and is not exported as a public contract. Internal event records
 are converted to `PitchEvent`/`ArrangementRegion` for the product UI, API
 response, and submitted scoring event input.
 
@@ -32,7 +32,7 @@ response, and submitted scoring event input.
 - `apps/web/src/components/studio/StudioToolbar.tsx`
   Global transport, sync step, playback source, metronome, and selected-track
   playback controls. Playback source is now audio clips or region events, not
-  score rendering.
+  notation rendering.
 - `apps/web/src/components/studio/TrackBoard.tsx`
   Main arrangement surface. It renders:
   - macro region lanes for all six tracks,
@@ -53,7 +53,7 @@ response, and submitted scoring event input.
   Internal storage plus public response contracts. `Studio.regions` is the
   product arrangement truth. `TrackSlot.events` and
   `ExtractionCandidate.events` are internal storage shadows for import,
-  registration, and scoring. They accept only `"events"`; old `"notes"` payloads
+  registration, and scoring. They accept only the current event shape; obsolete pre-region payloads
   are rejected with the rest of the obsolete storage shape. Studio routes return
   `StudioResponse`, whose tracks and candidates omit internal event arrays.
   `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
@@ -70,7 +70,7 @@ response, and submitted scoring event input.
   metadata, spelling, and measure positions.
 - `apps/api/src/gigastudy_api/services/engine/event_quality.py`
   The registration quality gate before extracted material becomes product
-  regions. It replaces the staff-notation quality layer.
+  regions. It replaces the old notation quality layer.
 - `apps/api/src/gigastudy_api/services/llm/registration_review.py`
   Optional bounded LLM review for registration cleanup; the model can only
   choose deterministic repair directives and cannot author canonical events.
@@ -194,10 +194,10 @@ flowchart TD
 ## Removed Surface
 
 - Browser VexFlow rendering.
-- Engraved score strip components.
-- Staff-specific score rendering helpers.
-- Staff PDF export endpoint and reportlab dependency.
-- Foundation documents that described the old staff UI as canonical.
+- Engraved notation strip components.
+- Notation-specific rendering helpers.
+- PDF export endpoint and reportlab dependency.
+- Foundation documents that described the old notation UI as canonical.
 
 ## Preserved Assets
 
@@ -218,8 +218,8 @@ The rebuild now follows the intended separation:
   practice, playback, and report focus consume region/event payloads only.
 - Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,
   and scoring can use `TrackPitchEvent` internally, then publish regions.
-- No obsolete compatibility path: old `"notes"` storage arrays, `"score"` source
-  kind, staff-notation aliases, and old report note IDs/counts are rejected
+- No obsolete compatibility path: obsolete pre-region storage arrays, deprecated document source aliases,
+  and old report comparison IDs/counts are rejected
   rather than translated.
 - Responsibility split: schemas own public/private contracts; repository and
   command services orchestrate persistence and workflows; engines own
@@ -228,15 +228,10 @@ The rebuild now follows the intended separation:
 
 ## Remaining Boundaries
 
-These are accepted residuals, not staff-UI anchors:
+These are accepted residuals, not legacy UI anchors:
 
-- Engine-local variables may still say `note` where they mean a musical pitched
-  event. This is domain language inside algorithms, not a product data contract.
-- Engine diagnostics may still use ordinary musical terms such as note, pitch,
-  chord, or beat when describing algorithmic analysis. Public contracts and UI
-  flow remain region/event based.
 - Report focus currently targets persisted answer regions. Performance-take
   focus should be expanded after recorded takes become explicit persisted
   regions instead of report-local comparison payloads.
 - PDF/MusicXML/MIDI ingestion should stay behind document-extraction naming and
-  never reintroduce staff rendering as a product surface.
+  never reintroduce notation rendering as a product surface.

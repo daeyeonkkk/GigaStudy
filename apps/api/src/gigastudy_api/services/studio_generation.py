@@ -54,7 +54,7 @@ def build_generation_context_events_by_slot(
 def flattened_generation_context_events(
     context_events_by_slot: dict[int, list[TrackPitchEvent]],
 ) -> list[TrackPitchEvent]:
-    return [note for notes in context_events_by_slot.values() for note in notes]
+    return [event for events in context_events_by_slot.values() for event in events]
 
 
 def generate_track_material(
@@ -116,13 +116,13 @@ def generate_track_material(
         "rule_based_percussion_candidates_v0"
         if target_slot_id == 6
         else (
-            "deepseek_v4_flash_guided_voice_leading_candidates_v1"
+            "deepseek_guided_voice_leading_candidates_v1"
             if llm_plan is not None
             else "rule_based_voice_leading_candidates_v1"
         )
     )
     message = (
-        "DeepSeek V4 Flash planned candidate directions; deterministic engine generated valid "
+        "DeepSeek planner planned candidate directions; deterministic engine generated valid "
         "pitch-event candidates."
         if llm_plan is not None
         else "Deterministic voice-leading generated multiple candidates. Approve one candidate to register it."
@@ -154,7 +154,7 @@ def _generation_planning_settings(settings: Settings, *, context_event_count: in
 def generation_candidate_review_metadata(
     *,
     slot_id: int,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     method: str,
     confidence: float,
     candidate_index: int,
@@ -163,7 +163,7 @@ def generation_candidate_review_metadata(
     llm_direction = llm_plan.direction_for_index(candidate_index) if llm_plan is not None else None
     diagnostics: dict[str, Any] = candidate_diagnostics(
         slot_id,
-        notes,
+        events,
         method=method,
         confidence=confidence,
     )
@@ -191,6 +191,6 @@ def generation_candidate_review_metadata(
     variant_label = (
         llm_direction.title
         if llm_direction is not None
-        else generation_variant_label(candidate_index, slot_id, notes)
+        else generation_variant_label(candidate_index, slot_id, events)
     )
     return diagnostics, variant_label

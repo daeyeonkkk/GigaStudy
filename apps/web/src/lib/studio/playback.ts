@@ -159,7 +159,7 @@ export function regionHasPlayableEvents(region: ArrangementRegion | null | undef
   return Boolean(region?.pitch_events.some((event) => event.is_rest !== true))
 }
 
-const noteSemitones: Record<string, number> = {
+const pitchClassSemitones: Record<string, number> = {
   C: 0,
   D: 2,
   E: 4,
@@ -175,9 +175,9 @@ function parsePitchLabel(label: string): { octave: number; semitone: number } | 
     return null
   }
 
-  const [, noteName, accidental, octaveText] = match
+  const [, pitchName, accidental, octaveText] = match
   const octave = Number(octaveText)
-  let semitone = noteSemitones[noteName]
+  let semitone = pitchClassSemitones[pitchName]
   if (accidental === '#') {
     semitone += 1
   } else if (accidental === 'b') {
@@ -190,7 +190,7 @@ function parsePitchLabel(label: string): { octave: number; semitone: number } | 
   }
 }
 
-function getNoteFrequency(label: string): number | null {
+function getPitchLabelFrequency(label: string): number | null {
   const parsed = parsePitchLabel(label)
   if (!parsed) {
     return null
@@ -225,7 +225,7 @@ export function getPitchEventPlaybackFrequency(event: PitchEvent): number | null
   if (event.pitch_midi === 35 || event.label.toLowerCase().includes('kick')) {
     return getPercussionFrequency(event.label)
   }
-  return getNoteFrequency(event.label)
+  return getPitchLabelFrequency(event.label)
 }
 
 export function trackHasPlayableAudio(track: TrackSlot): boolean {
@@ -245,18 +245,18 @@ export function getPlaybackPreparationMessage(
       regionHasPlayableEvents(regionsBySlot.get(track.slot_id)),
   ).length
   const parts = [
-    audioCount > 0 ? `원음 ${audioCount}개` : null,
-    eventCount > 0 ? `피치 이벤트 ${eventCount}개` : null,
-    includeMetronome ? '메트로놈' : null,
+    audioCount > 0 ? `audio ${audioCount}` : null,
+    eventCount > 0 ? `pitch events ${eventCount}` : null,
+    includeMetronome ? 'metronome' : null,
   ].filter(Boolean)
 
   if (parts.length === 0) {
-    return '재생 가능한 원음이나 피치 이벤트를 확인합니다.'
+    return 'Checking for playable audio or pitch events.'
   }
   if (parts.length === 1 && audioCount === 1) {
-    return '녹음 원본을 불러옵니다. 기준 트랙이 없으면 거의 즉시 재생됩니다.'
+    return 'Loading the recorded audio. Playback will start almost immediately if no reference tracks are needed.'
   }
-  return `${parts.join(', ')}을 준비한 뒤 하나의 시작점에서 동시에 재생합니다.`
+  return `${parts.join(', ')} will start together from one timeline point.`
 }
 
 export function getTrackVolumeScale(track: TrackSlot): number {
@@ -411,7 +411,7 @@ export function scheduleMetronomeClicksFromTimeline(
 export async function fetchAudioArrayBuffer(audioUrl: string): Promise<ArrayBuffer> {
   const response = await fetch(audioUrl)
   if (!response.ok) {
-    throw new Error('녹음 원본 파일을 불러오지 못했습니다.')
+    throw new Error('Could not load the recorded audio file.')
   }
   return response.arrayBuffer()
 }

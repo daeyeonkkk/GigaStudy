@@ -37,7 +37,7 @@ def read_readiness() -> dict[str, str | int | bool]:
         "max_upload_bytes": settings.max_upload_bytes,
         "max_active_engine_jobs": settings.max_active_engine_jobs,
         "engine_drain_max_jobs": settings.engine_drain_max_jobs,
-        "omr_backend": settings.omr_backend,
+        "document_extraction_backend": settings.document_extraction_backend,
         "voice_transcription_backend": settings.voice_transcription_backend,
         "deepseek_configured": deepseek_configured,
         "deepseek_harmony_enabled": deepseek_configured and settings.deepseek_harmony_enabled,

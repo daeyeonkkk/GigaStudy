@@ -2,7 +2,7 @@ import json
 
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
-from gigastudy_api.services.engine.music_theory import note_from_pitch
+from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.llm.deepseek import (
     _build_chat_completion_payload,
     _build_plan_revision_payload,
@@ -21,7 +21,7 @@ from gigastudy_api.services.studio_generation import (
 
 
 def _note(beat: float = 1, label: str = "C5"):
-    return note_from_pitch(
+    return event_from_pitch(
         beat=beat,
         duration_beats=1,
         bpm=120,
@@ -127,7 +127,7 @@ def test_deepseek_extraction_response_applies_bounded_plan() -> None:
                             "confidence_policy": "loose",
                             "widen_range_semitones": 2,
                             "merge_adjacent_same_pitch": True,
-                            "suppress_unstable_notes": True,
+                            "suppress_unstable_events": True,
                             "reasons": ["Dense tenor input should be simplified before extraction."],
                             "warnings": ["Do not alter the studio BPM."],
                         }

@@ -14,7 +14,7 @@ ExtractionPolicy = Literal["loose", "normal", "strict"]
 class VoiceExtractionPlan:
     """Bounded pre-transcription plan for turning voice frames into pitch events.
 
-    This is the point where product rules enter before note extraction. The
+    This is the point where product rules enter before event extraction. The
     LLM may help choose this plan, but only deterministic code applies it.
     """
 
@@ -35,7 +35,7 @@ class VoiceExtractionPlan:
     segment_pitch_tolerance: float = 0.75
     max_gap_seconds: float = 0.11
     merge_adjacent_same_pitch: bool = True
-    suppress_unstable_notes: bool = True
+    suppress_unstable_events: bool = True
     reasons: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
 
@@ -55,7 +55,7 @@ def default_voice_extraction_plan(
 ) -> VoiceExtractionPlan:
     low, high = SLOT_RANGES.get(slot_id, (40, 81))
     track = track_name(slot_id)
-    context_event_count = sum(len(notes) for notes in (context_tracks_by_slot or {}).values())
+    context_event_count = sum(len(events) for events in (context_tracks_by_slot or {}).values())
     slower_piece = bpm <= 72
     fast_piece = bpm >= 144
     strict_source = source_kind in {"recording", "audio", "music"}
@@ -119,7 +119,7 @@ def apply_voice_extraction_instruction(
     confidence_policy: ExtractionPolicy | None = None,
     widen_range_semitones: int = 0,
     merge_adjacent_same_pitch: bool | None = None,
-    suppress_unstable_notes: bool | None = None,
+    suppress_unstable_events: bool | None = None,
     reasons: list[str] | tuple[str, ...] | None = None,
     warnings: list[str] | tuple[str, ...] | None = None,
 ) -> VoiceExtractionPlan:
@@ -189,10 +189,10 @@ def apply_voice_extraction_instruction(
             if merge_adjacent_same_pitch is None
             else bool(merge_adjacent_same_pitch)
         ),
-        suppress_unstable_notes=(
-            base_plan.suppress_unstable_notes
-            if suppress_unstable_notes is None
-            else bool(suppress_unstable_notes)
+        suppress_unstable_events=(
+            base_plan.suppress_unstable_events
+            if suppress_unstable_events is None
+            else bool(suppress_unstable_events)
         ),
         reasons=base_plan.reasons + _clean_text_tuple(reasons),
         warnings=base_plan.warnings + _clean_text_tuple(warnings),

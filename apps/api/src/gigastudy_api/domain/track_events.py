@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-PitchEventSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
+PitchEventSource = Literal["musicxml", "midi", "document", "voice", "ai", "recording", "audio"]
 
 
 class TrackPitchEvent(BaseModel):

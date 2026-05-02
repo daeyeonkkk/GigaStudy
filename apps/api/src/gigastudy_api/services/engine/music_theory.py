@@ -51,7 +51,7 @@ class SlotAssignmentScore:
     median_pitch: float | None
     average_pitch: float | None
 
-NOTE_SEMITONES: dict[str, int] = {
+PITCH_CLASS_SEMITONES: dict[str, int] = {
     "C": 0,
     "D": 2,
     "E": 4,
@@ -108,9 +108,9 @@ def beat_in_measure_from_beat(
     return ((max(beat, 1) - 1) % beats_per_measure) + 1
 
 
-def midi_to_label(midi_note: int) -> str:
-    octave = midi_note // 12 - 1
-    return f"{MIDI_LABELS_SHARP[midi_note % 12]}{octave}"
+def midi_to_label(midi_pitch: int) -> str:
+    octave = midi_pitch // 12 - 1
+    return f"{MIDI_LABELS_SHARP[midi_pitch % 12]}{octave}"
 
 
 def label_to_midi(label: str) -> int | None:
@@ -118,8 +118,8 @@ def label_to_midi(label: str) -> int | None:
     if not match:
         return None
 
-    note_name, accidental, octave_text = match.groups()
-    semitone = NOTE_SEMITONES[note_name]
+    pitch_name, accidental, octave_text = match.groups()
+    semitone = PITCH_CLASS_SEMITONES[pitch_name]
     if accidental == "#":
         semitone += 1
     elif accidental == "b":
@@ -128,8 +128,8 @@ def label_to_midi(label: str) -> int | None:
     return (int(octave_text) + 1) * 12 + semitone
 
 
-def midi_to_frequency(midi_note: int) -> float:
-    return 440 * 2 ** ((midi_note - 69) / 12)
+def midi_to_frequency(midi_pitch: int) -> float:
+    return 440 * 2 ** ((midi_pitch - 69) / 12)
 
 
 def frequency_to_midi(frequency_hz: float) -> int | None:
@@ -144,8 +144,8 @@ def quantize(value: float, step: float = 0.25) -> float:
     return round(round(value / step) * step, 4)
 
 
-def infer_slot_id(name: str | None, notes: list[TrackPitchEvent] | None = None, fallback: int = 1) -> int:
-    ranked = rank_slot_candidates(name, notes or [], fallback=fallback)
+def infer_slot_id(name: str | None, events: list[TrackPitchEvent] | None = None, fallback: int = 1) -> int:
+    ranked = rank_slot_candidates(name, events or [], fallback=fallback)
     return ranked[0].slot_id if ranked else fallback
 
 
@@ -169,24 +169,24 @@ def slot_id_from_name(name: str | None) -> int | None:
 
 def rank_slot_candidates(
     name: str | None,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     fallback: int = 1,
     allowed_slots: tuple[int, ...] = (1, 2, 3, 4, 5, 6),
 ) -> list[SlotAssignmentScore]:
     name_slot_id = slot_id_from_name(name)
-    pitched_notes = [
-        note
-        for note in notes
-        if note.pitch_midi is not None and not note.is_rest
+    pitched_events = [
+        event
+        for event in events
+        if event.pitch_midi is not None and not event.is_rest
     ]
-    percussion_hint = _has_percussion_label_hint(name, notes)
-    median_pitch = _weighted_pitch_percentile(pitched_notes, 0.5)
-    average_pitch = _weighted_average_pitch(pitched_notes)
+    percussion_hint = _has_percussion_label_hint(name, events)
+    median_pitch = _weighted_pitch_percentile(pitched_events, 0.5)
+    average_pitch = _weighted_average_pitch(pitched_events)
 
     scores: list[SlotAssignmentScore] = []
     for slot_id in allowed_slots:
-        range_fit_ratio = _slot_range_fit_ratio(slot_id, pitched_notes)
+        range_fit_ratio = _slot_range_fit_ratio(slot_id, pitched_events)
         name_match = name_slot_id == slot_id
         score = 0.0
 
@@ -198,7 +198,7 @@ def rank_slot_candidates(
         if slot_id == 6:
             if percussion_hint:
                 score += 5.0
-            if pitched_notes:
+            if pitched_events:
                 score -= 4.0
             scores.append(
                 SlotAssignmentScore(
@@ -214,7 +214,7 @@ def rank_slot_candidates(
 
         if percussion_hint:
             score -= 1.2
-        if pitched_notes:
+        if pitched_events:
             center = SLOT_COMFORT_CENTERS[slot_id]
             pitch_anchor = median_pitch if median_pitch is not None else average_pitch
             if pitch_anchor is not None:
@@ -222,7 +222,7 @@ def rank_slot_candidates(
                 score -= abs(pitch_anchor - center) * 0.085
             if average_pitch is not None:
                 score -= abs(average_pitch - center) * 0.025
-            score += _slot_percentile_overlap_bonus(slot_id, pitched_notes)
+            score += _slot_percentile_overlap_bonus(slot_id, pitched_events)
         else:
             score -= 0.25
 
@@ -242,12 +242,12 @@ def rank_slot_candidates(
 
 def slot_assignment_diagnostics(
     name: str | None,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     assigned_slot_id: int,
     fallback: int = 1,
 ) -> dict[str, float | int | bool | str | None]:
-    ranked = rank_slot_candidates(name, notes, fallback=fallback)
+    ranked = rank_slot_candidates(name, events, fallback=fallback)
     selected = next((candidate for candidate in ranked if candidate.slot_id == assigned_slot_id), None)
     runner_up = next((candidate for candidate in ranked if candidate.slot_id != assigned_slot_id), None)
     if selected is None:
@@ -268,26 +268,26 @@ def _normalize_assignment_name(name: str | None) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", (name or "").strip().lower())).strip()
 
 
-def _has_percussion_label_hint(name: str | None, notes: list[TrackPitchEvent]) -> bool:
+def _has_percussion_label_hint(name: str | None, events: list[TrackPitchEvent]) -> bool:
     normalized_name = _normalize_assignment_name(name)
     if any(hint in normalized_name for hint in PERCUSSION_LABEL_HINTS):
         return True
-    for note in notes:
-        normalized_label = _normalize_assignment_name(note.label)
+    for event in events:
+        normalized_label = _normalize_assignment_name(event.label)
         if any(hint in normalized_label for hint in PERCUSSION_LABEL_HINTS):
             return True
     return False
 
 
-def _weighted_note_value(note: TrackPitchEvent) -> float:
-    return max(0.05, note.duration_beats) * max(0.15, min(1.0, note.confidence))
+def _weighted_event_value(event: TrackPitchEvent) -> float:
+    return max(0.05, event.duration_beats) * max(0.15, min(1.0, event.confidence))
 
 
-def _weighted_average_pitch(notes: list[TrackPitchEvent]) -> float | None:
+def _weighted_average_pitch(events: list[TrackPitchEvent]) -> float | None:
     weighted = [
-        (float(note.pitch_midi), _weighted_note_value(note))
-        for note in notes
-        if note.pitch_midi is not None
+        (float(event.pitch_midi), _weighted_event_value(event))
+        for event in events
+        if event.pitch_midi is not None
     ]
     total_weight = sum(weight for _pitch, weight in weighted)
     if total_weight <= 0:
@@ -295,11 +295,11 @@ def _weighted_average_pitch(notes: list[TrackPitchEvent]) -> float | None:
     return sum(pitch * weight for pitch, weight in weighted) / total_weight
 
 
-def _weighted_pitch_percentile(notes: list[TrackPitchEvent], percentile: float) -> float | None:
+def _weighted_pitch_percentile(events: list[TrackPitchEvent], percentile: float) -> float | None:
     weighted = sorted(
-        (float(note.pitch_midi), _weighted_note_value(note))
-        for note in notes
-        if note.pitch_midi is not None
+        (float(event.pitch_midi), _weighted_event_value(event))
+        for event in events
+        if event.pitch_midi is not None
     )
     total_weight = sum(weight for _pitch, weight in weighted)
     if total_weight <= 0:
@@ -313,25 +313,25 @@ def _weighted_pitch_percentile(notes: list[TrackPitchEvent], percentile: float) 
     return weighted[-1][0]
 
 
-def _slot_range_fit_ratio(slot_id: int, notes: list[TrackPitchEvent]) -> float:
-    if not notes:
+def _slot_range_fit_ratio(slot_id: int, events: list[TrackPitchEvent]) -> float:
+    if not events:
         return 0.0
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
-    total_weight = sum(_weighted_note_value(note) for note in notes)
+    total_weight = sum(_weighted_event_value(event) for event in events)
     if total_weight <= 0:
         return 0.0
     in_range_weight = sum(
-        _weighted_note_value(note)
-        for note in notes
-        if note.pitch_midi is not None and low <= note.pitch_midi <= high
+        _weighted_event_value(event)
+        for event in events
+        if event.pitch_midi is not None and low <= event.pitch_midi <= high
     )
     return in_range_weight / total_weight
 
 
-def _slot_percentile_overlap_bonus(slot_id: int, notes: list[TrackPitchEvent]) -> float:
+def _slot_percentile_overlap_bonus(slot_id: int, events: list[TrackPitchEvent]) -> float:
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
-    low_percentile = _weighted_pitch_percentile(notes, 0.1)
-    high_percentile = _weighted_pitch_percentile(notes, 0.9)
+    low_percentile = _weighted_pitch_percentile(events, 0.1)
+    high_percentile = _weighted_pitch_percentile(events, 0.9)
     if low_percentile is None or high_percentile is None:
         return 0.0
     expanded_low = low - 3
@@ -346,7 +346,7 @@ def _slot_percentile_overlap_bonus(slot_id: int, notes: list[TrackPitchEvent]) -
     return bonus
 
 
-def note_from_pitch(
+def event_from_pitch(
     *,
     beat: float,
     duration_beats: float,

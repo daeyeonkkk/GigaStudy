@@ -38,7 +38,7 @@ def register_track_material(
     timestamp: str,
     source_kind: SourceKind,
     source_label: str,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     duration_seconds: float,
     registration_diagnostics: dict[str, Any],
     audio_source_path: str | None = None,
@@ -52,7 +52,7 @@ def register_track_material(
     track.audio_source_label = audio_source_label
     track.audio_mime_type = audio_mime_type
     track.duration_seconds = duration_seconds
-    track.events = notes
+    track.events = events
     track.diagnostics = {"registration_quality": registration_diagnostics}
     track.updated_at = timestamp
 

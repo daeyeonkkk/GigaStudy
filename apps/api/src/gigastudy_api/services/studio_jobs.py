@@ -7,7 +7,7 @@ from gigastudy_api.api.schemas.studios import SourceKind, Studio, TrackExtractio
 from gigastudy_api.services.engine_queue import EngineQueueJob
 
 
-def create_omr_extraction_job(
+def create_document_extraction_job(
     *,
     input_path: str,
     max_attempts: int,
@@ -19,7 +19,7 @@ def create_omr_extraction_job(
 ) -> TrackExtractionJob:
     return TrackExtractionJob(
         job_id=uuid4().hex,
-        job_type="omr",
+        job_type="document",
         slot_id=slot_id,
         source_kind=source_kind,
         source_label=source_label,
@@ -64,7 +64,7 @@ def create_voice_extraction_job(
     )
 
 
-def omr_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
+def document_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
     return {
         "input_path": job.input_path,
         "source_kind": job.source_kind,
@@ -120,7 +120,7 @@ def existing_extraction_queue_payload(
         "source_kind": job.source_kind,
         "source_label": job.source_label,
     }
-    if job.job_type == "omr":
+    if job.job_type == "document":
         payload["parse_all_parts"] = job.parse_all_parts
         return payload
     if job.job_type == "voice":
@@ -219,7 +219,7 @@ def mark_extraction_job_completed(
     studio.updated_at = timestamp
 
 
-def clear_unmapped_omr_placeholders(
+def clear_unmapped_document_placeholders(
     studio: Studio,
     job: TrackExtractionJob,
     *,

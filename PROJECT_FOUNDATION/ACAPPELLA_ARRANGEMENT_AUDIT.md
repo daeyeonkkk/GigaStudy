@@ -2,7 +2,7 @@
 
 Date: 2026-04-28
 
-This note evaluates whether GigaStudy's six-track region/timeline model matches
+This audit evaluates whether GigaStudy's six-track region/timeline model matches
 practical a cappella arranging principles.
 
 ## Arrangement Principles
@@ -20,7 +20,7 @@ timeline where parts have complementary roles:
 - Every voice must remain singable: comfortable range, smooth melodic motion,
   breathing room, and manageable articulation matter as much as chord spelling.
 - Vertical sonority and horizontal line quality must be checked together. Good
-  output cannot be judged only by each track's local note cleanliness.
+  output cannot be judged only by each track's local event cleanliness.
 
 ## Fit Check
 
@@ -66,19 +66,19 @@ The current model is musically plausible but not yet a full a cappella arranger:
 
 The current registration rule is directionally right:
 
-- Keep BPM/meter as the score paper.
+- Keep BPM/meter as the shared timeline grid.
 - Keep barlines fixed across all tracks.
 - Quantize new material onto that paper.
 - Correct only small whole-track capture/extraction drift automatically.
 - Preserve intentional symbolic rhythm and syncopation.
-- Treat sync controls as playback/display translation, not score mutation.
+- Treat sync controls as playback/display translation, not arrangement mutation.
 
 The ensemble-aware registration bar is now implemented for registration:
 
 1. Before final commit, compute an ensemble snapshot against registered sibling
    tracks.
-2. For multi-track import and bulk OMR approval, prepare all incoming parts
-   first and validate each part against the whole proposed score, not only
+2. For multi-track import and bulk document approval, prepare all incoming parts
+   first and validate each part against the whole proposed arrangement, not only
    against the tracks that happened to be committed earlier.
 3. Check range, voice crossing, adjacent spacing, chord coverage, parallel
    perfect intervals, singability leaps, doubled tendency tones, and bass
@@ -87,7 +87,7 @@ The ensemble-aware registration bar is now implemented for registration:
    extractable octave/latency/noise problem. The new contextual octave repair
    is limited to voice/audio/AI material and preserves pitch class, rhythm,
    measure ownership, BPM, and barlines.
-5. Persist diagnostics and note warning flags when the issue may be an
+5. Persist diagnostics and event warning flags when the issue may be an
    intentional arrangement choice.
 
 Remaining improvement areas are deeper bass groove quality, lyric/syllable

@@ -12,10 +12,10 @@ from gigastudy_api.services.engine_queue import EngineQueueStore
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_documents import track_has_content
 from gigastudy_api.services.studio_jobs import (
-    create_omr_extraction_job,
+    create_document_extraction_job,
     create_voice_extraction_job,
     engine_queue_job_from_extraction,
-    omr_queue_payload,
+    document_queue_payload,
     voice_queue_payload,
 )
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
@@ -37,7 +37,7 @@ class StudioExtractionJobCommands:
         self._repository = repository
         self._schedule_processing = schedule_processing
 
-    def enqueue_omr(
+    def enqueue_document(
         self,
         studio_id: str,
         slot_id: int,
@@ -50,7 +50,7 @@ class StudioExtractionJobCommands:
     ) -> Studio:
         timestamp = self._now()
         settings = get_settings()
-        job = create_omr_extraction_job(
+        job = create_document_extraction_job(
             input_path=self._assets.relative_data_asset_path(source_path),
             max_attempts=settings.engine_job_max_attempts,
             parse_all_parts=parse_all_parts,
@@ -83,7 +83,7 @@ class StudioExtractionJobCommands:
         self._engine_queue.enqueue(
             engine_queue_job_from_extraction(
                 job,
-                payload=omr_queue_payload(job),
+                payload=document_queue_payload(job),
                 studio_id=studio_id,
                 timestamp=timestamp,
             )

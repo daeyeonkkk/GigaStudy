@@ -66,7 +66,7 @@ class StudioScoringCommands:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
 
         performance_events = [
-            _track_note_from_performance_event(event)
+            _track_event_from_performance_event(event)
             for event in request.performance_events
         ]
         has_submitted_performance = score_track_request_has_performance(request)
@@ -88,7 +88,7 @@ class StudioScoringCommands:
         if not has_submitted_performance:
             raise HTTPException(
                 status_code=422,
-                detail="Scoring requires a recorded performance with detectable notes.",
+                detail="Scoring requires a recorded performance with detectable pitch events.",
             )
 
         timestamp = self._now()
@@ -174,10 +174,10 @@ class StudioScoringCommands:
             track_events = registered_region_events_for_slot(studio, track.slot_id)
             if track_events:
                 context_tracks_by_slot[track.slot_id] = track_events
-        expected_notes: list[TrackPitchEvent] = []
+        expected_events: list[TrackPitchEvent] = []
         if score_mode == "answer":
-            expected_notes = registered_region_events_for_slot(studio, target_track.slot_id)
-            context_tracks_by_slot[target_track.slot_id] = expected_notes
+            expected_events = registered_region_events_for_slot(studio, target_track.slot_id)
+            context_tracks_by_slot[target_track.slot_id] = expected_events
 
         extraction_plan = default_voice_extraction_plan(
             slot_id=slot_id,
@@ -192,15 +192,15 @@ class StudioScoringCommands:
             bpm=studio.bpm,
             time_signature_numerator=studio.time_signature_numerator,
             time_signature_denominator=studio.time_signature_denominator,
-            source_kind=f"scoring_{score_mode}",
+            source_kind=f"evaluation_{score_mode}",
             source_label=source_label,
             context_tracks_by_slot=context_tracks_by_slot,
-            expected_track_events=expected_notes,
+            expected_track_events=expected_events,
         )
         return llm_plan or extraction_plan
 
 
-def _track_note_from_performance_event(event: PerformanceEvent) -> TrackPitchEvent:
+def _track_event_from_performance_event(event: PerformanceEvent) -> TrackPitchEvent:
     payload = {
         "label": event.label,
         "pitch_midi": event.pitch_midi,

@@ -1,7 +1,7 @@
 import json
 
 from gigastudy_api.config import Settings
-from gigastudy_api.services.engine.music_theory import note_from_pitch
+from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.engine.event_quality import (
     apply_registration_review_instruction,
     prepare_events_for_track_registration,
@@ -14,7 +14,7 @@ from gigastudy_api.services.llm.registration_review import (
 
 def test_registration_review_instruction_applies_coarser_voice_grid_and_noise_filter() -> None:
     noisy_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1 + index * 0.13,
             duration_beats=0.1,
             bpm=92,
@@ -41,7 +41,7 @@ def test_registration_review_instruction_applies_coarser_voice_grid_and_noise_fi
             "quantization_grid": 0.5,
             "merge_adjacent_same_pitch": True,
             "simplify_dense_measures": True,
-            "suppress_unstable_notes": True,
+            "suppress_unstable_events": True,
             "reasons": ["Dense voice input should use a coarser 0.5 beat grid."],
         },
         bpm=92,
@@ -64,7 +64,7 @@ def test_registration_review_instruction_applies_coarser_voice_grid_and_noise_fi
 
 def test_registration_quality_collapses_short_neighbor_pitch_blip() -> None:
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=0.5,
             bpm=92,
@@ -73,7 +73,7 @@ def test_registration_quality_collapses_short_neighbor_pitch_blip() -> None:
             pitch_midi=72,
             confidence=0.86,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1.5,
             duration_beats=0.25,
             bpm=92,
@@ -82,7 +82,7 @@ def test_registration_quality_collapses_short_neighbor_pitch_blip() -> None:
             pitch_midi=73,
             confidence=0.62,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1.75,
             duration_beats=0.75,
             bpm=92,
@@ -108,7 +108,7 @@ def test_registration_quality_collapses_short_neighbor_pitch_blip() -> None:
 
 def test_registration_quality_prefers_readable_grid_for_moderate_micro_notes() -> None:
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1 + index * 0.25,
             duration_beats=0.25,
             bpm=92,
@@ -136,7 +136,7 @@ def test_registration_quality_prefers_readable_grid_for_moderate_micro_notes() -
 
 def test_registration_quality_removes_isolated_short_artifact() -> None:
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=92,
@@ -145,7 +145,7 @@ def test_registration_quality_removes_isolated_short_artifact() -> None:
             pitch_midi=72,
             confidence=0.86,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=4,
             duration_beats=0.25,
             bpm=92,
@@ -154,7 +154,7 @@ def test_registration_quality_removes_isolated_short_artifact() -> None:
             pitch_midi=78,
             confidence=0.42,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=6,
             duration_beats=1,
             bpm=92,
@@ -182,7 +182,7 @@ def test_registration_quality_removes_isolated_short_artifact() -> None:
 
 def test_registration_quality_bridges_short_detector_gap_inside_phrase() -> None:
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=0.75,
             bpm=92,
@@ -191,7 +191,7 @@ def test_registration_quality_bridges_short_detector_gap_inside_phrase() -> None
             pitch_midi=72,
             confidence=0.84,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=2,
             duration_beats=1,
             bpm=92,
@@ -221,7 +221,7 @@ def test_registration_quality_bridges_short_detector_gap_inside_phrase() -> None
 
 def test_registration_quality_bridges_short_measure_tail_before_barline() -> None:
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=3.75,
             bpm=92,
@@ -230,7 +230,7 @@ def test_registration_quality_bridges_short_measure_tail_before_barline() -> Non
             pitch_midi=72,
             confidence=0.86,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=5,
             duration_beats=1,
             bpm=92,
@@ -258,9 +258,9 @@ def test_registration_quality_bridges_short_measure_tail_before_barline() -> Non
     assert result.diagnostics["measure_tail_gap_count"] == 0
 
 
-def test_registration_quality_collapses_low_confidence_short_note_cluster() -> None:
+def test_registration_quality_collapses_low_confidence_short_event_cluster() -> None:
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=0.25,
             bpm=92,
@@ -269,7 +269,7 @@ def test_registration_quality_collapses_low_confidence_short_note_cluster() -> N
             pitch_midi=72,
             confidence=0.62,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1.25,
             duration_beats=0.25,
             bpm=92,
@@ -278,7 +278,7 @@ def test_registration_quality_collapses_low_confidence_short_note_cluster() -> N
             pitch_midi=73,
             confidence=0.58,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1.5,
             duration_beats=0.25,
             bpm=92,
@@ -300,12 +300,12 @@ def test_registration_quality_collapses_low_confidence_short_note_cluster() -> N
 
     assert [(note.label, note.beat, note.duration_beats) for note in result.events] == [("C5", 1.0, 0.75)]
     assert "voice_short_cluster_collapse_1" in result.diagnostics["actions"]
-    assert result.diagnostics["short_note_cluster_count"] == 0
+    assert result.diagnostics["short_event_cluster_count"] == 0
 
 
 def test_registration_review_instruction_can_force_key_spelling_without_llm_writing_notes() -> None:
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -350,7 +350,7 @@ def test_deepseek_registration_review_is_disabled_without_feature_flag() -> None
         deepseek_registration_review_enabled=False,
         deepseek_api_key="test-key",
     )
-    note = note_from_pitch(
+    note = event_from_pitch(
         beat=1,
         duration_beats=1,
         bpm=92,
@@ -380,7 +380,7 @@ def test_deepseek_ensemble_registration_review_is_disabled_without_feature_flag(
         deepseek_ensemble_review_enabled=False,
         deepseek_api_key="test-key",
     )
-    note = note_from_pitch(
+    note = event_from_pitch(
         beat=1,
         duration_beats=1,
         bpm=92,
@@ -427,7 +427,7 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
                     "remove_isolated_artifacts": True,
                     "bridge_short_phrase_gaps": True,
                     "bridge_measure_tail_gaps": True,
-                    "collapse_short_note_clusters": True,
+                    "collapse_short_event_clusters": True,
                     "prefer_key_signature": "F",
                     "reasons": ["Coarser grid improves readability."],
                 }
@@ -448,7 +448,7 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
         deepseek_thinking_enabled=True,
     )
     notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=92,
@@ -457,7 +457,7 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
             pitch_midi=60,
             confidence=0.8,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=4,
             duration_beats=0.16,
             bpm=92,
@@ -466,7 +466,7 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
             pitch_midi=61,
             confidence=0.4,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=6,
             duration_beats=1,
             bpm=92,
@@ -498,7 +498,7 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
     assert instruction.remove_isolated_artifacts is True
     assert instruction.bridge_short_phrase_gaps is True
     assert instruction.bridge_measure_tail_gaps is True
-    assert instruction.collapse_short_note_clusters is True
+    assert instruction.collapse_short_event_clusters is True
     assert instruction.prefer_key_signature == "F"
     assert captured_payload["body"]["response_format"] == {"type": "json_object"}
     assert captured_payload["body"]["reasoning"] == {"enabled": True}
@@ -508,7 +508,7 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
     assert options[0]["isolated_short_event_count"] == 1
     assert "short_phrase_gap_count" in options[0]
     assert "measure_tail_gap_count" in options[0]
-    assert "short_note_cluster_count" in options[0]
+    assert "short_event_cluster_count" in options[0]
     assert [option["option"] for option in options] == [
         "current_prepared_result",
         "coarse_0_5_beat_grid_candidate",
@@ -548,7 +548,7 @@ def test_deepseek_registration_plan_sends_sibling_context(monkeypatch) -> None:
         deepseek_base_url="https://openrouter.ai/api/v1",
         deepseek_model="deepseek/deepseek-v4-flash",
     )
-    soprano = note_from_pitch(
+    soprano = event_from_pitch(
         beat=1,
         duration_beats=2,
         bpm=92,
@@ -557,7 +557,7 @@ def test_deepseek_registration_plan_sends_sibling_context(monkeypatch) -> None:
         pitch_midi=72,
         confidence=0.95,
     )
-    tenor_take = note_from_pitch(
+    tenor_take = event_from_pitch(
         beat=1,
         duration_beats=0.5,
         bpm=92,
@@ -624,7 +624,7 @@ def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monke
         deepseek_base_url="https://openrouter.ai/api/v1",
         deepseek_model="deepseek/deepseek-v4-flash:free",
     )
-    soprano = note_from_pitch(
+    soprano = event_from_pitch(
         beat=1,
         duration_beats=2,
         bpm=92,
@@ -633,7 +633,7 @@ def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monke
         pitch_midi=72,
         confidence=0.95,
     )
-    alto = note_from_pitch(
+    alto = event_from_pitch(
         beat=1,
         duration_beats=0.5,
         bpm=92,

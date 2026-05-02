@@ -7,11 +7,11 @@ from gigastudy_api.services.engine.harmony_plan import (
     DeepSeekHarmonyPlan,
     MeasureHarmonyIntent,
 )
-from gigastudy_api.services.engine.music_theory import note_from_pitch
+from gigastudy_api.services.engine.music_theory import event_from_pitch
 
 
 def _context_note(beat: float, label: str = "C5"):
-    return note_from_pitch(
+    return event_from_pitch(
         beat=beat,
         duration_beats=1,
         bpm=120,
@@ -43,7 +43,7 @@ def test_percussion_generation_uses_denominator_pulses_for_compound_meter() -> N
     notes = generate_rule_based_harmony(
         target_slot_id=6,
         context_tracks=[
-            note_from_pitch(
+            event_from_pitch(
                 beat=1,
                 duration_beats=3,
                 bpm=120,

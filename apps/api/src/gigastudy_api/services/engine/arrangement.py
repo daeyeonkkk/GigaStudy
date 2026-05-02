@@ -49,13 +49,13 @@ def prepare_ensemble_registration(
 ) -> EnsembleValidationResult:
     """Polish and validate a track in the context of the full a cappella score.
 
-    The repair stage is deliberately conservative: it may only move vocal notes
+    The repair stage is deliberately conservative: it may only move vocal events
     by octaves, preserving pitch class, rhythm, measure ownership, and source
     ids. This catches common voice-extraction octave errors and AI voicing
     mistakes without rewriting a user's melody into a new composition.
     """
 
-    repaired_notes, repair_diagnostics = _repair_contextual_octaves(
+    repaired_events, repair_diagnostics = _repair_contextual_octaves(
         target_slot_id=target_slot_id,
         candidate_events=candidate_events,
         existing_tracks_by_slot=existing_tracks_by_slot,
@@ -66,7 +66,7 @@ def prepare_ensemble_registration(
     )
     validation = validate_ensemble_registration(
         target_slot_id=target_slot_id,
-        candidate_events=repaired_notes,
+        candidate_events=repaired_events,
         existing_tracks_by_slot=existing_tracks_by_slot,
         bpm=bpm,
         time_signature_numerator=time_signature_numerator,
@@ -94,7 +94,7 @@ def validate_ensemble_registration(
 
     The validator is intentionally diagnostic-first. It flags arrangement risks
     before registration without rewriting intentional harmony or counterpoint.
-    Deterministic note cleanup remains in event_quality.py.
+    Deterministic event cleanup remains in event_quality.py.
     """
 
     if target_slot_id not in range(1, 7):
@@ -114,24 +114,24 @@ def validate_ensemble_registration(
         return EnsembleValidationResult(events=candidate_events, diagnostics=diagnostics)
 
     ensemble_tracks = {
-        slot_id: list(notes)
-        for slot_id, notes in existing_tracks_by_slot.items()
-        if slot_id in VOCAL_SLOT_IDS and slot_id != target_slot_id and notes
+        slot_id: list(events)
+        for slot_id, events in existing_tracks_by_slot.items()
+        if slot_id in VOCAL_SLOT_IDS and slot_id != target_slot_id and events
     }
     ensemble_tracks[target_slot_id] = candidate_events
 
-    target_pitched = _pitched_notes(candidate_events)
+    target_pitched = _pitched_events(candidate_events)
     if not target_pitched:
         return EnsembleValidationResult(
             events=candidate_events,
-            diagnostics=_empty_diagnostics(target_slot_id, reason="no_target_pitched_notes"),
+            diagnostics=_empty_diagnostics(target_slot_id, reason="no_target_pitched_events"),
         )
 
     issues: list[dict[str, Any]] = []
     issues.extend(_range_issues(target_slot_id, target_pitched))
     snapshot_beats = _snapshot_beats(
         ensemble_tracks,
-        target_notes=target_pitched,
+        target_events=target_pitched,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
@@ -175,8 +175,8 @@ def validate_ensemble_registration(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    annotated_notes = _attach_ensemble_warnings(candidate_events, issues)
-    return EnsembleValidationResult(events=annotated_notes, diagnostics=diagnostics)
+    annotated_events = _attach_ensemble_warnings(candidate_events, issues)
+    return EnsembleValidationResult(events=annotated_events, diagnostics=diagnostics)
 
 
 def _repair_contextual_octaves(
@@ -211,9 +211,9 @@ def _repair_contextual_octaves(
         return candidate_events, diagnostics
 
     context_tracks = {
-        slot_id: notes
-        for slot_id, notes in existing_tracks_by_slot.items()
-        if slot_id in VOCAL_SLOT_IDS and notes
+        slot_id: events
+        for slot_id, events in existing_tracks_by_slot.items()
+        if slot_id in VOCAL_SLOT_IDS and events
     }
     if not context_tracks:
         diagnostics["reason"] = "no_vocal_context"
@@ -222,47 +222,47 @@ def _repair_contextual_octaves(
     repaired: list[TrackPitchEvent] = []
     changed: list[dict[str, Any]] = []
     previous_pitch: int | None = None
-    pitched_notes = _pitched_notes(candidate_events)
-    next_pitch_by_id = _next_pitch_by_note_id(pitched_notes)
+    pitched_events = _pitched_events(candidate_events)
+    next_pitch_by_id = _next_pitch_by_event_id(pitched_events)
 
-    for note in candidate_events:
-        if note.is_rest or note.pitch_midi is None:
-            repaired.append(note)
+    for event in candidate_events:
+        if event.is_rest or event.pitch_midi is None:
+            repaired.append(event)
             continue
 
         context = _context_bounds_at(
             target_slot_id=target_slot_id,
             context_tracks=context_tracks,
-            beat=note.beat,
+            beat=event.beat,
         )
         replacement_pitch = _choose_contextual_octave(
             target_slot_id=target_slot_id,
-            note=note,
+            event=event,
             context=context,
             previous_pitch=previous_pitch,
-            next_pitch=next_pitch_by_id.get(note.id),
+            next_pitch=next_pitch_by_id.get(event.id),
         )
-        if replacement_pitch == note.pitch_midi:
-            repaired.append(note)
-            previous_pitch = note.pitch_midi
+        if replacement_pitch == event.pitch_midi:
+            repaired.append(event)
+            previous_pitch = event.pitch_midi
             continue
 
-        repaired_note = _copy_note_pitch(
-            note,
+        repaired_event = _copy_event_pitch(
+            event,
             replacement_pitch,
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
             warning="ensemble_octave_repaired",
         )
-        repaired.append(repaired_note)
+        repaired.append(repaired_event)
         changed.append(
             {
-                "note_id": note.id,
-                "beat": note.beat,
-                "from": note.label,
-                "to": repaired_note.label,
-                "from_midi": note.pitch_midi,
+                "event_id": event.id,
+                "beat": event.beat,
+                "from": event.label,
+                "to": repaired_event.label,
+                "from_midi": event.pitch_midi,
                 "to_midi": replacement_pitch,
                 "reason": context["reason"],
             }
@@ -298,27 +298,27 @@ def _empty_diagnostics(target_slot_id: int, *, reason: str) -> dict[str, Any]:
 
 def _percussion_diagnostics(
     target_slot_id: int,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> dict[str, Any]:
-    pitched_count = sum(1 for note in notes if note.pitch_midi is not None and not note.is_rest)
+    pitched_count = sum(1 for event in events if event.pitch_midi is not None and not event.is_rest)
     issues = []
     if pitched_count:
         issues.append(
             _issue(
                 code="percussion_pitch_review",
                 severity="info",
-                beat=min((note.beat for note in notes), default=1),
+                beat=min((event.beat for event in events), default=1),
                 slot_ids=[target_slot_id],
-                message="Percussion material contains pitched notes; verify this is intentional.",
+                message="Percussion material contains pitched events; verify this is intentional.",
             )
         )
     return _build_diagnostics(
         target_slot_id=target_slot_id,
-        candidate_events=notes,
+        candidate_events=events,
         existing_tracks_by_slot={},
         issues=issues,
         snapshot_count=0,
@@ -334,16 +334,16 @@ def _context_bounds_at(
     context_tracks: dict[int, list[TrackPitchEvent]],
     beat: float,
 ) -> dict[str, Any]:
-    active = _active_vocal_notes_at(context_tracks, beat)
+    active = _active_vocal_events_at(context_tracks, beat)
     upper_pitches = [
-        note.pitch_midi
-        for slot_id, note in active.items()
-        if slot_id < target_slot_id and note.pitch_midi is not None
+        event.pitch_midi
+        for slot_id, event in active.items()
+        if slot_id < target_slot_id and event.pitch_midi is not None
     ]
     lower_pitches = [
-        note.pitch_midi
-        for slot_id, note in active.items()
-        if slot_id > target_slot_id and note.pitch_midi is not None
+        event.pitch_midi
+        for slot_id, event in active.items()
+        if slot_id > target_slot_id and event.pitch_midi is not None
     ]
     higher_neighbor = min(upper_pitches) if upper_pitches else None
     lower_neighbor = max(lower_pitches) if lower_pitches else None
@@ -368,12 +368,12 @@ def _context_reason(higher_neighbor: int | None, lower_neighbor: int | None) -> 
 def _choose_contextual_octave(
     *,
     target_slot_id: int,
-    note: TrackPitchEvent,
+    event: TrackPitchEvent,
     context: dict[str, Any],
     previous_pitch: int | None,
     next_pitch: int | None,
 ) -> int:
-    original_pitch = note.pitch_midi
+    original_pitch = event.pitch_midi
     if original_pitch is None:
         return original_pitch or 0
 
@@ -522,18 +522,18 @@ def _melodic_gap_cost(interval: int) -> float:
     return 4.0 + (interval - 12) * 0.4
 
 
-def _next_pitch_by_note_id(notes: list[TrackPitchEvent]) -> dict[str, int]:
-    ordered = sorted(notes, key=lambda note: (note.beat, note.id))
+def _next_pitch_by_event_id(events: list[TrackPitchEvent]) -> dict[str, int]:
+    ordered = sorted(events, key=lambda event: (event.beat, event.id))
     result: dict[str, int] = {}
-    for index, note in enumerate(ordered[:-1]):
-        next_note = ordered[index + 1]
-        if next_note.pitch_midi is not None:
-            result[note.id] = next_note.pitch_midi
+    for index, event in enumerate(ordered[:-1]):
+        next_event = ordered[index + 1]
+        if next_event.pitch_midi is not None:
+            result[event.id] = next_event.pitch_midi
     return result
 
 
-def _copy_note_pitch(
-    note: TrackPitchEvent,
+def _copy_event_pitch(
+    event: TrackPitchEvent,
     pitch_midi: int,
     *,
     bpm: int,
@@ -542,41 +542,41 @@ def _copy_note_pitch(
     warning: str,
 ) -> TrackPitchEvent:
     label = midi_to_label(pitch_midi)
-    key_signature = note.key_signature or "C"
+    key_signature = event.key_signature or "C"
     spelling_mode = "flat" if "b" in key_signature and "#" not in key_signature else "sharp"
     spelled_label = spell_midi_label(pitch_midi, spelling_mode=spelling_mode)
-    return note.model_copy(
+    return event.model_copy(
         update={
             "pitch_midi": pitch_midi,
             "pitch_hz": midi_to_frequency(pitch_midi),
             "label": label,
             "spelled_label": spelled_label,
             "accidental": accidental_for_key(spelled_label, key_signature),
-            "onset_seconds": round(max(0, (note.beat - 1) * (60 / max(1, bpm))), 4),
+            "onset_seconds": round(max(0, (event.beat - 1) * (60 / max(1, bpm))), 4),
             "measure_index": measure_index_from_beat(
-                note.beat,
+                event.beat,
                 time_signature_numerator,
                 time_signature_denominator,
             ),
             "beat_in_measure": round(
                 beat_in_measure_from_beat(
-                    note.beat,
+                    event.beat,
                     time_signature_numerator,
                     time_signature_denominator,
                 ),
                 4,
             ),
-            "duration_seconds": round(note.duration_beats * (60 / max(1, bpm)), 4),
-            "quality_warnings": _append_warning(note.quality_warnings, warning),
+            "duration_seconds": round(event.duration_beats * (60 / max(1, bpm)), 4),
+            "quality_warnings": _append_warning(event.quality_warnings, warning),
         }
     )
 
 
-def _range_issues(target_slot_id: int, notes: list[TrackPitchEvent]) -> list[dict[str, Any]]:
+def _range_issues(target_slot_id: int, events: list[TrackPitchEvent]) -> list[dict[str, Any]]:
     low, high = SLOT_RANGES[target_slot_id]
     issues: list[dict[str, Any]] = []
-    for note in notes:
-        pitch = note.pitch_midi
+    for event in events:
+        pitch = event.pitch_midi
         if pitch is None:
             continue
         if pitch < low or pitch > high:
@@ -584,10 +584,10 @@ def _range_issues(target_slot_id: int, notes: list[TrackPitchEvent]) -> list[dic
                 _issue(
                     code="range_outlier",
                     severity="warn",
-                    beat=note.beat,
+                    beat=event.beat,
                     slot_ids=[target_slot_id],
-                    target_note_id=note.id,
-                    message=f"{_safe_track_name(target_slot_id)} note is outside the configured vocal range.",
+                    target_event_id=event.id,
+                    message=f"{_safe_track_name(target_slot_id)} event is outside the configured vocal range.",
                 )
             )
     return issues
@@ -596,19 +596,19 @@ def _range_issues(target_slot_id: int, notes: list[TrackPitchEvent]) -> list[dic
 def _snapshot_beats(
     tracks_by_slot: dict[int, list[TrackPitchEvent]],
     *,
-    target_notes: list[TrackPitchEvent],
+    target_events: list[TrackPitchEvent],
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> list[float]:
-    target_start = min(note.beat for note in target_notes)
-    target_end = max(note.beat + max(0, note.duration_beats) for note in target_notes)
+    target_start = min(event.beat for event in target_events)
+    target_end = max(event.beat + max(0, event.duration_beats) for event in target_events)
     beats = {
-        round(note.beat, 4)
-        for notes in tracks_by_slot.values()
-        for note in notes
-        if not note.is_rest and target_start - 0.001 <= note.beat <= target_end + 0.001
+        round(event.beat, 4)
+        for events in tracks_by_slot.values()
+        for event in events
+        if not event.is_rest and target_start - 0.001 <= event.beat <= target_end + 0.001
     }
-    beats.update(round(note.beat, 4) for note in target_notes)
+    beats.update(round(event.beat, 4) for event in target_events)
 
     beats_per_measure = quarter_beats_per_measure(time_signature_numerator, time_signature_denominator)
     first_measure_start = ((max(1, target_start) - 1) // beats_per_measure) * beats_per_measure + 1
@@ -625,49 +625,49 @@ def _vertical_snapshot_issues(
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     for beat in snapshot_beats:
-        active = _active_vocal_notes_at(tracks_by_slot, beat)
-        target_note = active.get(target_slot_id)
-        if target_note is None or target_note.pitch_midi is None:
+        active = _active_vocal_events_at(tracks_by_slot, beat)
+        target_event = active.get(target_slot_id)
+        if target_event is None or target_event.pitch_midi is None:
             continue
 
         for upper_slot_id in (slot_id for slot_id in VOCAL_SLOT_IDS if slot_id < target_slot_id):
-            upper_note = active.get(upper_slot_id)
-            if upper_note is not None and upper_note.pitch_midi is not None and target_note.pitch_midi >= upper_note.pitch_midi:
+            upper_event = active.get(upper_slot_id)
+            if upper_event is not None and upper_event.pitch_midi is not None and target_event.pitch_midi >= upper_event.pitch_midi:
                 issues.append(
                     _issue(
                         code="voice_crossing",
                         severity="error",
                         beat=beat,
                         slot_ids=[upper_slot_id, target_slot_id],
-                        target_note_id=target_note.id,
+                        target_event_id=target_event.id,
                         message=f"{_safe_track_name(target_slot_id)} crosses above {_safe_track_name(upper_slot_id)}.",
                     )
                 )
         for lower_slot_id in (slot_id for slot_id in VOCAL_SLOT_IDS if slot_id > target_slot_id):
-            lower_note = active.get(lower_slot_id)
-            if lower_note is not None and lower_note.pitch_midi is not None and target_note.pitch_midi <= lower_note.pitch_midi:
+            lower_event = active.get(lower_slot_id)
+            if lower_event is not None and lower_event.pitch_midi is not None and target_event.pitch_midi <= lower_event.pitch_midi:
                 issues.append(
                     _issue(
                         code="voice_crossing",
                         severity="error",
                         beat=beat,
                         slot_ids=[target_slot_id, lower_slot_id],
-                        target_note_id=target_note.id,
+                        target_event_id=target_event.id,
                         message=f"{_safe_track_name(target_slot_id)} crosses below {_safe_track_name(lower_slot_id)}.",
                     )
                 )
 
         for upper_slot_id, lower_slot_id in ADJACENT_VOCAL_PAIRS:
-            upper_note = active.get(upper_slot_id)
-            lower_note = active.get(lower_slot_id)
-            if upper_note is None or lower_note is None:
+            upper_event = active.get(upper_slot_id)
+            lower_event = active.get(lower_slot_id)
+            if upper_event is None or lower_event is None:
                 continue
-            if upper_note.pitch_midi is None or lower_note.pitch_midi is None:
+            if upper_event.pitch_midi is None or lower_event.pitch_midi is None:
                 continue
             if target_slot_id not in {upper_slot_id, lower_slot_id}:
                 continue
 
-            gap = upper_note.pitch_midi - lower_note.pitch_midi
+            gap = upper_event.pitch_midi - lower_event.pitch_midi
             max_gap = BARITONE_BASS_MAX_GAP_SEMITONES if (upper_slot_id, lower_slot_id) == (4, 5) else UPPER_PAIR_MAX_GAP_SEMITONES
             if gap > max_gap:
                 issues.append(
@@ -676,7 +676,7 @@ def _vertical_snapshot_issues(
                         severity="warn",
                         beat=beat,
                         slot_ids=[upper_slot_id, lower_slot_id],
-                        target_note_id=target_note.id,
+                        target_event_id=target_event.id,
                         message=f"{_safe_track_name(upper_slot_id)} and {_safe_track_name(lower_slot_id)} are spaced too far apart.",
                     )
                 )
@@ -687,7 +687,7 @@ def _vertical_snapshot_issues(
                         severity="info",
                         beat=beat,
                         slot_ids=[upper_slot_id, lower_slot_id],
-                        target_note_id=target_note.id,
+                        target_event_id=target_event.id,
                         message=f"{_safe_track_name(upper_slot_id)} and {_safe_track_name(lower_slot_id)} are very close.",
                     )
                 )
@@ -697,10 +697,10 @@ def _vertical_snapshot_issues(
 def _parallel_perfect_issues(
     target_slot_id: int,
     tracks_by_slot: dict[int, list[TrackPitchEvent]],
-    target_notes: list[TrackPitchEvent],
+    target_events: list[TrackPitchEvent],
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
-    ordered_target = sorted(target_notes, key=lambda note: note.beat)
+    ordered_target = sorted(target_events, key=lambda event: event.beat)
     for previous_target, current_target in zip(ordered_target, ordered_target[1:], strict=False):
         if previous_target.pitch_midi is None or current_target.pitch_midi is None:
             continue
@@ -710,8 +710,8 @@ def _parallel_perfect_issues(
         for slot_id, context_events in tracks_by_slot.items():
             if slot_id == target_slot_id or slot_id not in VOCAL_SLOT_IDS:
                 continue
-            previous_context = _active_note_at(context_events, previous_target.beat)
-            current_context = _active_note_at(context_events, current_target.beat)
+            previous_context = _active_event_at(context_events, previous_target.beat)
+            current_context = _active_event_at(context_events, current_target.beat)
             if previous_context is None or current_context is None:
                 continue
             if previous_context.pitch_midi is None or current_context.pitch_midi is None:
@@ -729,7 +729,7 @@ def _parallel_perfect_issues(
                         severity="warn",
                         beat=current_target.beat,
                         slot_ids=[target_slot_id, slot_id],
-                        target_note_id=current_target.id,
+                        target_event_id=current_target.id,
                         message=f"{_safe_track_name(target_slot_id)} moves in parallel perfect interval with {_safe_track_name(slot_id)}.",
                     )
                 )
@@ -743,23 +743,23 @@ def _thin_chord_issues(
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     for beat in snapshot_beats:
-        active = _active_vocal_notes_at(tracks_by_slot, beat)
+        active = _active_vocal_events_at(tracks_by_slot, beat)
         if target_slot_id not in active or len(active) < 4:
             continue
         pitch_classes = {
-            note.pitch_midi % 12
-            for note in active.values()
-            if note.pitch_midi is not None
+            event.pitch_midi % 12
+            for event in active.values()
+            if event.pitch_midi is not None
         }
         if len(pitch_classes) <= 2:
-            target_note = active.get(target_slot_id)
+            target_event = active.get(target_slot_id)
             issues.append(
                 _issue(
                     code="thin_chord_coverage",
                     severity="info",
                     beat=beat,
                     slot_ids=sorted(active),
-                    target_note_id=target_note.id if target_note is not None else None,
+                    target_event_id=target_event.id if target_event is not None else None,
                     message="Four or more vocal parts collapse into only one or two pitch classes.",
                 )
             )
@@ -768,29 +768,29 @@ def _thin_chord_issues(
 
 def _melodic_singability_issues(
     target_slot_id: int,
-    target_notes: list[TrackPitchEvent],
+    target_events: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
-    ordered = sorted(target_notes, key=lambda note: (note.beat, note.id))
+    ordered = sorted(target_events, key=lambda event: (event.beat, event.id))
     previous_interval = 0
     previous_direction = 0
-    for previous_note, current_note in zip(ordered, ordered[1:], strict=False):
-        if previous_note.pitch_midi is None or current_note.pitch_midi is None:
+    for previous_event, current_event in zip(ordered, ordered[1:], strict=False):
+        if previous_event.pitch_midi is None or current_event.pitch_midi is None:
             continue
-        motion = current_note.pitch_midi - previous_note.pitch_midi
+        motion = current_event.pitch_midi - previous_event.pitch_midi
         interval = abs(motion)
-        direction = _motion_direction(previous_note.pitch_midi, current_note.pitch_midi)
+        direction = _motion_direction(previous_event.pitch_midi, current_event.pitch_midi)
         if interval > MELODIC_LEAP_WARN_SEMITONES:
             issues.append(
                 _issue(
                     code="large_melodic_leap",
                     severity="warn",
-                    beat=current_note.beat,
+                    beat=current_event.beat,
                     slot_ids=[target_slot_id],
-                    target_note_id=current_note.id,
+                    target_event_id=current_event.id,
                     message=f"{_safe_track_name(target_slot_id)} has a leap larger than an octave.",
                 )
             )
@@ -799,9 +799,9 @@ def _melodic_singability_issues(
                 _issue(
                     code="tritone_melodic_leap",
                     severity="info",
-                    beat=current_note.beat,
+                    beat=current_event.beat,
                     slot_ids=[target_slot_id],
-                    target_note_id=current_note.id,
+                    target_event_id=current_event.id,
                     message=f"{_safe_track_name(target_slot_id)} has an exposed tritone leap.",
                 )
             )
@@ -815,35 +815,35 @@ def _melodic_singability_issues(
                 _issue(
                     code="repeated_same_direction_leap",
                     severity="warn",
-                    beat=current_note.beat,
+                    beat=current_event.beat,
                     slot_ids=[target_slot_id],
-                    target_note_id=current_note.id,
+                    target_event_id=current_event.id,
                     message=f"{_safe_track_name(target_slot_id)} repeats large leaps in the same direction.",
                 )
             )
         previous_interval = interval
         previous_direction = direction
 
-    notes_by_measure: dict[int, list[TrackPitchEvent]] = defaultdict(list)
-    for note in target_notes:
-        measure_index = note.measure_index or measure_index_from_beat(
-            note.beat,
+    events_by_measure: dict[int, list[TrackPitchEvent]] = defaultdict(list)
+    for event in target_events:
+        measure_index = event.measure_index or measure_index_from_beat(
+            event.beat,
             time_signature_numerator,
             time_signature_denominator,
         )
-        notes_by_measure[measure_index].append(note)
+        events_by_measure[measure_index].append(event)
     beats_per_measure = quarter_beats_per_measure(time_signature_numerator, time_signature_denominator)
     density_limit = max(6, round(beats_per_measure * DENSITY_WARN_EVENTS_PER_MEASURE_FACTOR))
-    for measure_index, measure_notes in notes_by_measure.items():
-        if len(measure_notes) > density_limit:
-            first_note = min(measure_notes, key=lambda note: note.beat)
+    for measure_index, measure_events in events_by_measure.items():
+        if len(measure_events) > density_limit:
+            first_event = min(measure_events, key=lambda event: event.beat)
             issues.append(
                 _issue(
                     code="excessive_vocal_density",
                     severity="warn",
-                    beat=first_note.beat,
+                    beat=first_event.beat,
                     slot_ids=[target_slot_id],
-                    target_note_id=first_note.id,
+                    target_event_id=first_event.id,
                     message=f"{_safe_track_name(target_slot_id)} has too many vocal events in measure {measure_index}.",
                 )
             )
@@ -864,23 +864,23 @@ def _ensemble_tendency_issues(
     for beat in snapshot_beats:
         if _beat_strength(beat, time_signature_numerator, time_signature_denominator) < 1.0:
             continue
-        active = _active_vocal_notes_at(tracks_by_slot, beat)
-        target_note = active.get(target_slot_id)
-        if target_note is None or target_note.pitch_midi is None or len(active) < 3:
+        active = _active_vocal_events_at(tracks_by_slot, beat)
+        target_event = active.get(target_slot_id)
+        if target_event is None or target_event.pitch_midi is None or len(active) < 3:
             continue
-        leading_notes = [
-            note
-            for note in active.values()
-            if note.pitch_midi is not None and note.pitch_midi % 12 == leading_tone
+        leading_events = [
+            event
+            for event in active.values()
+            if event.pitch_midi is not None and event.pitch_midi % 12 == leading_tone
         ]
-        if len(leading_notes) >= 2 and target_note in leading_notes:
+        if len(leading_events) >= 2 and target_event in leading_events:
             issues.append(
                 _issue(
                     code="doubled_leading_tone",
                     severity="info",
                     beat=beat,
                     slot_ids=sorted(active),
-                    target_note_id=target_note.id,
+                    target_event_id=target_event.id,
                     message="Multiple voices double the leading tone on a structural beat.",
                 )
             )
@@ -901,18 +901,18 @@ def _bass_foundation_issues(
     for beat in snapshot_beats:
         if _beat_strength(beat, time_signature_numerator, time_signature_denominator) < 1.45:
             continue
-        active = _active_vocal_notes_at(tracks_by_slot, beat)
-        bass_note = active.get(5)
-        if bass_note is None or bass_note.pitch_midi is None or len(active) < 3:
+        active = _active_vocal_events_at(tracks_by_slot, beat)
+        bass_event = active.get(5)
+        if bass_event is None or bass_event.pitch_midi is None or len(active) < 3:
             continue
-        if bass_note.pitch_midi > BASS_HIGH_FOUNDATION_PITCH:
+        if bass_event.pitch_midi > BASS_HIGH_FOUNDATION_PITCH:
             issues.append(
                 _issue(
                     code="bass_high_on_downbeat",
                     severity="info",
                     beat=beat,
                     slot_ids=[5],
-                    target_note_id=bass_note.id,
+                    target_event_id=bass_event.id,
                     message="Bass foundation is high on a structural downbeat.",
                 )
             )
@@ -921,11 +921,11 @@ def _bass_foundation_issues(
 
 def _estimate_major_tonic(tracks_by_slot: dict[int, list[TrackPitchEvent]]) -> int:
     weights = [0.0] * 12
-    for notes in tracks_by_slot.values():
-        for note in notes:
-            if note.is_rest or note.pitch_midi is None:
+    for events in tracks_by_slot.values():
+        for event in events:
+            if event.is_rest or event.pitch_midi is None:
                 continue
-            weights[note.pitch_midi % 12] += max(0.25, note.duration_beats) * max(0.2, note.confidence)
+            weights[event.pitch_midi % 12] += max(0.25, event.duration_beats) * max(0.2, event.confidence)
     if sum(weights) <= 0:
         return 0
     major_profile = (6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
@@ -967,10 +967,10 @@ def _build_diagnostics(
     code_counts = Counter(issue["code"] for issue in issues)
     active_vocal_track_count = sum(
         1
-        for slot_id, notes in existing_tracks_by_slot.items()
-        if slot_id in VOCAL_SLOT_IDS and _pitched_notes(notes)
+        for slot_id, events in existing_tracks_by_slot.items()
+        if slot_id in VOCAL_SLOT_IDS and _pitched_events(events)
     )
-    target_range_fit_ratio = _range_fit_ratio(target_slot_id, _pitched_notes(candidate_events))
+    target_range_fit_ratio = _range_fit_ratio(target_slot_id, _pitched_events(candidate_events))
     return {
         "version": ENSEMBLE_VALIDATION_VERSION,
         "evaluated": True,
@@ -982,7 +982,7 @@ def _build_diagnostics(
         "time_signature": f"{time_signature_numerator}/{time_signature_denominator}",
         "active_reference_vocal_track_count": active_vocal_track_count,
         "snapshot_count": snapshot_count,
-        "target_event_count": len([note for note in candidate_events if not note.is_rest]),
+        "target_event_count": len([event for event in candidate_events if not event.is_rest]),
         "target_range_fit_ratio": round(target_range_fit_ratio, 4),
         "issue_count": len(issues),
         "severity_counts": dict(severity_counts),
@@ -991,72 +991,72 @@ def _build_diagnostics(
     }
 
 
-def _attach_ensemble_warnings(notes: list[TrackPitchEvent], issues: list[dict[str, Any]]) -> list[TrackPitchEvent]:
-    warnings_by_note_id: dict[str, set[str]] = defaultdict(set)
+def _attach_ensemble_warnings(events: list[TrackPitchEvent], issues: list[dict[str, Any]]) -> list[TrackPitchEvent]:
+    warnings_by_event_id: dict[str, set[str]] = defaultdict(set)
     for issue in issues:
-        note_id = issue.get("target_note_id")
-        if isinstance(note_id, str):
-            warnings_by_note_id[note_id].add(f"ensemble_{issue['code']}")
-    if not warnings_by_note_id:
-        return notes
+        event_id = issue.get("target_event_id")
+        if isinstance(event_id, str):
+            warnings_by_event_id[event_id].add(f"ensemble_{issue['code']}")
+    if not warnings_by_event_id:
+        return events
     return [
-        note.model_copy(
+        event.model_copy(
             update={
                 "quality_warnings": sorted(
                     {
-                        *note.quality_warnings,
-                        *warnings_by_note_id.get(note.id, set()),
+                        *event.quality_warnings,
+                        *warnings_by_event_id.get(event.id, set()),
                     }
                 )
             }
         )
-        if note.id in warnings_by_note_id
-        else note
-        for note in notes
+        if event.id in warnings_by_event_id
+        else event
+        for event in events
     ]
 
 
-def _active_vocal_notes_at(
+def _active_vocal_events_at(
     tracks_by_slot: dict[int, list[TrackPitchEvent]],
     beat: float,
 ) -> dict[int, TrackPitchEvent]:
     return {
-        slot_id: note
-        for slot_id, notes in tracks_by_slot.items()
+        slot_id: event
+        for slot_id, events in tracks_by_slot.items()
         if slot_id in VOCAL_SLOT_IDS
-        for note in [_active_note_at(notes, beat)]
-        if note is not None and note.pitch_midi is not None and not note.is_rest
+        for event in [_active_event_at(events, beat)]
+        if event is not None and event.pitch_midi is not None and not event.is_rest
     }
 
 
-def _active_note_at(notes: list[TrackPitchEvent], beat: float) -> TrackPitchEvent | None:
+def _active_event_at(events: list[TrackPitchEvent], beat: float) -> TrackPitchEvent | None:
     candidates = [
-        note
-        for note in notes
-        if not note.is_rest
-        and note.pitch_midi is not None
-        and note.beat <= beat + 0.001
-        and beat < note.beat + max(0.001, note.duration_beats) - 0.001
+        event
+        for event in events
+        if not event.is_rest
+        and event.pitch_midi is not None
+        and event.beat <= beat + 0.001
+        and beat < event.beat + max(0.001, event.duration_beats) - 0.001
     ]
     if not candidates:
         return None
-    return max(candidates, key=lambda note: (note.confidence, note.duration_beats))
+    return max(candidates, key=lambda event: (event.confidence, event.duration_beats))
 
 
-def _pitched_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
+def _pitched_events(events: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     return [
-        note
-        for note in notes
-        if not note.is_rest and note.pitch_midi is not None
+        event
+        for event in events
+        if not event.is_rest and event.pitch_midi is not None
     ]
 
 
-def _range_fit_ratio(slot_id: int, notes: list[TrackPitchEvent]) -> float:
-    if not notes:
+def _range_fit_ratio(slot_id: int, events: list[TrackPitchEvent]) -> float:
+    if not events:
         return 1.0
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
-    in_range = sum(1 for note in notes if note.pitch_midi is not None and low <= note.pitch_midi <= high)
-    return in_range / len(notes)
+    in_range = sum(1 for event in events if event.pitch_midi is not None and low <= event.pitch_midi <= high)
+    return in_range / len(events)
 
 
 def _issue(
@@ -1066,7 +1066,7 @@ def _issue(
     beat: float,
     slot_ids: list[int],
     message: str,
-    target_note_id: str | None = None,
+    target_event_id: str | None = None,
 ) -> dict[str, Any]:
     issue = {
         "code": code,
@@ -1076,8 +1076,8 @@ def _issue(
         "track_names": [_safe_track_name(slot_id) for slot_id in slot_ids],
         "message": message,
     }
-    if target_note_id is not None:
-        issue["target_note_id"] = target_note_id
+    if target_event_id is not None:
+        issue["target_event_id"] = target_event_id
     return issue
 
 

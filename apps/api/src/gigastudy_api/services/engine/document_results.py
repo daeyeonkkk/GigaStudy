@@ -8,29 +8,29 @@ from gigastudy_api.services.engine.event_normalization import annotate_track_eve
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 
 
-def mark_events_as_omr(
+def mark_events_as_document(
     mapped_events: dict[int, list[TrackPitchEvent]],
     *,
-    extraction_method: str = "audiveris_omr_v0",
+    extraction_method: str = "audiveris_document_v1",
 ) -> dict[int, list[TrackPitchEvent]]:
     return {
         slot_id: annotate_track_events_for_slot(
             [
-                note.model_copy(
+                event.model_copy(
                     update={
-                        "source": "omr",
+                        "source": "document",
                         "extraction_method": extraction_method,
                     }
                 )
-                for note in notes
+                for event in events
             ],
             slot_id=slot_id,
         )
-        for slot_id, notes in mapped_events.items()
+        for slot_id, events in mapped_events.items()
     }
 
 
-def write_pdf_vector_omr_summary(
+def write_pdf_vector_document_summary(
     output_dir: Path,
     parsed_symbolic: ParsedSymbolicFile,
     *,
@@ -38,9 +38,9 @@ def write_pdf_vector_omr_summary(
     primary_error: str,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / "pdf-vector-omr-summary.json"
+    output_path = output_dir / "pdf-vector-document-summary.json"
     payload = {
-        "method": "pdf_vector_omr_v0",
+        "method": "pdf_vector_document_v1",
         "source_label": source_label,
         "fallback_reason": primary_error,
         "tracks": [

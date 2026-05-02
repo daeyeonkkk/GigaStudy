@@ -1,15 +1,15 @@
-from gigastudy_api.services.engine.music_theory import note_from_pitch
+from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.engine.scoring import build_harmony_scoring_report, build_scoring_report
 
 
 def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
     answer_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=72),
-        note_from_pitch(beat=2, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=74),
-        note_from_pitch(beat=3, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=76),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=72),
+        event_from_pitch(beat=2, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=74),
+        event_from_pitch(beat=3, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=76),
     ]
     performance_events = [
-        note_from_pitch(
+        event_from_pitch(
             beat=note.beat,
             duration_beats=note.duration_beats,
             bpm=120,
@@ -42,11 +42,11 @@ def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
 
 def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
     answer_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=72),
-        note_from_pitch(beat=2, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=74),
+        event_from_pitch(beat=1, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=72),
+        event_from_pitch(beat=2, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=74),
     ]
     performance_events = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=100,
@@ -55,7 +55,7 @@ def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
             pitch_midi=73,
             onset_seconds=0.04,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=2,
             duration_beats=1,
             bpm=100,
@@ -92,12 +92,12 @@ def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
 
 def test_harmony_scoring_rates_consonant_added_part_without_answer_track() -> None:
     reference_notes = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
-        note_from_pitch(beat=2, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=65),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=2, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=65),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=64),
-        note_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=69),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=64),
+        event_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=69),
     ]
 
     report = build_harmony_scoring_report(
@@ -122,10 +122,10 @@ def test_harmony_scoring_rates_consonant_added_part_without_answer_track() -> No
 
 def test_harmony_scoring_flags_strong_dissonance_against_reference_tracks() -> None:
     reference_notes = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=61),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=61),
     ]
 
     report = build_harmony_scoring_report(
@@ -148,7 +148,7 @@ def test_harmony_scoring_flags_strong_dissonance_against_reference_tracks() -> N
 
 def test_harmony_scoring_tolerates_short_weak_beat_passing_tone() -> None:
     reference_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1.5,
             duration_beats=0.5,
             bpm=120,
@@ -159,7 +159,7 @@ def test_harmony_scoring_tolerates_short_weak_beat_passing_tone() -> None:
         ),
     ]
     performance_events = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1.5,
             duration_beats=0.25,
             bpm=120,
@@ -189,7 +189,7 @@ def test_harmony_scoring_tolerates_short_weak_beat_passing_tone() -> None:
 
 def test_harmony_scoring_accepts_color_tone_over_clear_triad() -> None:
     reference_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -198,7 +198,7 @@ def test_harmony_scoring_accepts_color_tone_over_clear_triad() -> None:
             pitch_midi=67,
             voice_index=2,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -207,7 +207,7 @@ def test_harmony_scoring_accepts_color_tone_over_clear_triad() -> None:
             pitch_midi=64,
             voice_index=3,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -218,7 +218,7 @@ def test_harmony_scoring_accepts_color_tone_over_clear_triad() -> None:
         ),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=74),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=74),
     ]
 
     report = build_harmony_scoring_report(
@@ -241,12 +241,12 @@ def test_harmony_scoring_accepts_color_tone_over_clear_triad() -> None:
 
 def test_harmony_scoring_flags_unresolved_structural_tension() -> None:
     reference_notes = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
     ]
 
     report = build_harmony_scoring_report(
@@ -267,13 +267,13 @@ def test_harmony_scoring_flags_unresolved_structural_tension() -> None:
 
 def test_harmony_scoring_accepts_stepwise_resolved_structural_tension() -> None:
     reference_notes = [
-        note_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
-        note_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
-        note_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
+        event_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
+        event_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
-        note_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=67),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
+        event_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=67),
     ]
 
     report = build_harmony_scoring_report(
@@ -292,7 +292,7 @@ def test_harmony_scoring_accepts_stepwise_resolved_structural_tension() -> None:
 
 def test_harmony_scoring_flags_thin_structural_chord_coverage() -> None:
     reference_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -301,7 +301,7 @@ def test_harmony_scoring_flags_thin_structural_chord_coverage() -> None:
             pitch_midi=60,
             voice_index=5,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -312,7 +312,7 @@ def test_harmony_scoring_flags_thin_structural_chord_coverage() -> None:
         ),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=72),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=72),
     ]
 
     report = build_harmony_scoring_report(
@@ -331,11 +331,11 @@ def test_harmony_scoring_flags_thin_structural_chord_coverage() -> None:
 
 def test_harmony_scoring_flags_high_bass_foundation_on_structural_beat() -> None:
     reference_notes = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=57),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=57),
     ]
 
     report = build_harmony_scoring_report(
@@ -355,7 +355,7 @@ def test_harmony_scoring_flags_high_bass_foundation_on_structural_beat() -> None
 
 def test_harmony_scoring_flags_parallel_fifths_like_arranger_review() -> None:
     reference_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -364,7 +364,7 @@ def test_harmony_scoring_flags_parallel_fifths_like_arranger_review() -> None:
             pitch_midi=48,
             voice_index=5,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=2,
             duration_beats=1,
             bpm=120,
@@ -375,8 +375,8 @@ def test_harmony_scoring_flags_parallel_fifths_like_arranger_review() -> None:
         ),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55),
-        note_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=57),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55),
+        event_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=57),
     ]
 
     report = build_harmony_scoring_report(
@@ -399,7 +399,7 @@ def test_harmony_scoring_flags_parallel_fifths_like_arranger_review() -> None:
 
 def test_harmony_scoring_flags_wide_upper_voice_spacing() -> None:
     reference_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -410,7 +410,7 @@ def test_harmony_scoring_flags_wide_upper_voice_spacing() -> None:
         ),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=84),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=84),
     ]
 
     report = build_harmony_scoring_report(
@@ -431,7 +431,7 @@ def test_harmony_scoring_flags_wide_upper_voice_spacing() -> None:
 
 def test_harmony_scoring_does_not_flag_short_parallel_motion_as_structural() -> None:
     reference_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=0.25,
             bpm=120,
@@ -440,7 +440,7 @@ def test_harmony_scoring_does_not_flag_short_parallel_motion_as_structural() -> 
             pitch_midi=48,
             voice_index=5,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1.25,
             duration_beats=0.25,
             bpm=120,
@@ -451,8 +451,8 @@ def test_harmony_scoring_does_not_flag_short_parallel_motion_as_structural() -> 
         ),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=0.25, bpm=120, source="voice", extraction_method="test", pitch_midi=55),
-        note_from_pitch(
+        event_from_pitch(beat=1, duration_beats=0.25, bpm=120, source="voice", extraction_method="test", pitch_midi=55),
+        event_from_pitch(
             beat=1.25,
             duration_beats=0.25,
             bpm=120,
@@ -478,7 +478,7 @@ def test_harmony_scoring_does_not_flag_short_parallel_motion_as_structural() -> 
 
 def test_harmony_scoring_separates_chord_fit_from_simple_interval_check() -> None:
     reference_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -487,7 +487,7 @@ def test_harmony_scoring_separates_chord_fit_from_simple_interval_check() -> Non
             pitch_midi=60,
             voice_index=5,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -496,7 +496,7 @@ def test_harmony_scoring_separates_chord_fit_from_simple_interval_check() -> Non
             pitch_midi=64,
             voice_index=3,
         ),
-        note_from_pitch(
+        event_from_pitch(
             beat=1,
             duration_beats=1,
             bpm=120,
@@ -507,7 +507,7 @@ def test_harmony_scoring_separates_chord_fit_from_simple_interval_check() -> Non
         ),
     ]
     performance_events = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
+        event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
     ]
 
     report = build_harmony_scoring_report(

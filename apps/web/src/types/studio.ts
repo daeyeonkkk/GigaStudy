@@ -9,7 +9,7 @@ type TrackStatus =
   | 'failed'
 
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'document' | 'music' | 'ai'
-export type PitchEventSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
+export type PitchEventSource = 'musicxml' | 'midi' | 'document' | 'voice' | 'ai' | 'recording' | 'audio'
 export type ScoreMode = 'answer' | 'harmony'
 
 export type PitchEvent = {
@@ -61,7 +61,7 @@ export type CandidateRegion = {
 
 export type TrackExtractionJob = {
   job_id: string
-  job_type: 'omr' | 'voice'
+  job_type: 'document' | 'voice'
   slot_id: number
   source_kind: SourceKind
   source_label: string

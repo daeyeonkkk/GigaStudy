@@ -64,24 +64,24 @@ function getTrackLaneStyle(track: TrackSlot): CSSProperties {
   } as CSSProperties
 }
 
-function getNoteHue(event: PitchEvent): number {
+function getEventHue(event: PitchEvent): number {
   if (typeof event.pitch_midi !== 'number') {
     return 204
   }
   return 188 + ((event.pitch_midi % 12) * 12)
 }
 
-function getNoteStyle(
+function getEventStyle(
   item: WaterfallEvent,
   minSeconds: number,
   maxSeconds: number,
 ): CSSProperties {
   const { event, region } = item
   return {
-    '--note-hue': getNoteHue(event),
-    '--note-lane-index': region.track_slot_id - 1,
-    '--note-top': `${getTimelinePercent(event.start_seconds, minSeconds, maxSeconds)}%`,
-    '--note-height': `${Math.max(
+    '--event-hue': getEventHue(event),
+    '--event-lane-index': region.track_slot_id - 1,
+    '--event-top': `${getTimelinePercent(event.start_seconds, minSeconds, maxSeconds)}%`,
+    '--event-height': `${Math.max(
       1.3,
       getTimelinePercent(
         event.start_seconds + event.duration_seconds,
@@ -108,7 +108,7 @@ function PracticeStatus({ actionState }: { actionState: StudioActionState }) {
       <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
       <p>
         {actionState.phase === 'idle'
-          ? '연습 준비 완료.'
+          ? 'Practice ready.'
           : actionState.message}
       </p>
     </section>
@@ -159,14 +159,14 @@ function PracticeWaterfallStage({
           </div>
         ))}
         {events.length === 0 ? (
-          <p className="practice-stage__empty">등록된 pitch event가 없습니다.</p>
+          <p className="practice-stage__empty">No registered pitch events yet.</p>
         ) : (
           events.map((item) => (
             <i
               aria-label={`${item.region.track_name} ${item.event.label}`}
-              className="practice-stage__note"
+              className="practice-stage__event"
               key={`${item.region.region_id}-${item.event.event_id}`}
-              style={getNoteStyle(item, minSeconds, maxSeconds)}
+              style={getEventStyle(item, minSeconds, maxSeconds)}
               title={`${item.region.track_name} - ${item.event.label}`}
             >
               <span>{item.event.label}</span>
@@ -224,9 +224,9 @@ export function PracticePage() {
   if (!studioId) {
     return (
       <StudioRouteState
-        homeLabel="홈으로"
-        message="스튜디오 주소가 올바르지 않습니다."
-        title="연습 모드를 열 수 없습니다"
+        homeLabel="Home"
+        message="The studio address is invalid."
+        title="Practice mode cannot be opened"
         tone="Practice error"
       />
     )
@@ -236,7 +236,7 @@ export function PracticePage() {
     return (
       <StudioRouteState
         pulseCount={6}
-        title="연습 화면을 준비하는 중입니다"
+        title="Preparing the practice view"
         tone="Practice loading"
       />
     )
@@ -245,9 +245,9 @@ export function PracticePage() {
   if (loadState.phase === 'error' || !studio) {
     return (
       <StudioRouteState
-        homeLabel="홈으로"
-        message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
-        title="연습 모드를 열 수 없습니다"
+        homeLabel="Home"
+        message={loadState.phase === 'error' ? loadState.message : 'An unknown error occurred.'}
+        title="Practice mode cannot be opened"
         tone="Practice error"
       />
     )
@@ -257,7 +257,7 @@ export function PracticePage() {
     <main className="app-shell practice-page">
       <section className="practice-window" aria-label="GigaStudy practice mode">
         <header className="composer-titlebar">
-          <Link className="composer-app-mark" to="/" aria-label="홈으로">
+          <Link className="composer-app-mark" to="/" aria-label="Home">
             GS
           </Link>
           <span>GigaStudy Practice - {studio.title}</span>
@@ -268,7 +268,7 @@ export function PracticePage() {
           </div>
         </header>
 
-        <div className="practice-toolbar" aria-label="연습 재생 제어">
+        <div className="practice-toolbar" aria-label="Practice playback controls">
           <Link className="composer-tool composer-tool--text" to={`/studios/${studio.studio_id}`}>
             Edit
           </Link>
@@ -305,7 +305,7 @@ export function PracticePage() {
             />
             Metronome
           </label>
-          <div className="composer-source-toggle" role="group" aria-label="재생 소스">
+          <div className="composer-source-toggle" role="group" aria-label="Playback source">
             <button
               aria-pressed={playbackSource === 'audio'}
               className={playbackSource === 'audio' ? 'is-active' : ''}
@@ -325,9 +325,9 @@ export function PracticePage() {
           </div>
         </div>
 
-        <section className="practice-track-picker" aria-label="연습 트랙 선택">
+        <section className="practice-track-picker" aria-label="Practice track selection">
           {registeredTracks.length === 0 ? (
-            <p>등록된 트랙이 없습니다.</p>
+            <p>No registered tracks yet.</p>
           ) : (
             registeredTracks.map((track) => (
               <label key={track.slot_id}>

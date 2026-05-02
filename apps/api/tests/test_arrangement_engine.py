@@ -2,11 +2,11 @@ from gigastudy_api.services.engine.arrangement import (
     prepare_ensemble_registration,
     validate_ensemble_registration,
 )
-from gigastudy_api.services.engine.music_theory import note_from_pitch
+from gigastudy_api.services.engine.music_theory import event_from_pitch
 
 
 def _note(beat: float, label: str, *, slot_source: str = "musicxml"):
-    return note_from_pitch(
+    return event_from_pitch(
         beat=beat,
         duration_beats=1,
         bpm=120,

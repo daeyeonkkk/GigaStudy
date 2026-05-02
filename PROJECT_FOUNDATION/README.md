@@ -6,7 +6,7 @@ This folder is the source of truth for the current GigaStudy product direction.
 
 GigaStudy is now a six-track a cappella arrangement and practice studio built
 around region arrangement, piano-roll editing, and waterfall practice playback.
-It is no longer an engraved staff-score UI.
+It is no longer an engraved notation UI.
 
 ## Product Definition
 
@@ -49,8 +49,7 @@ If the user uploads a document, GigaStudy extracts track material into regions:
 - Non-a cappella source: register the main melody into the most appropriate
   track as region events.
 
-The canonical source kind for this flow is `document`; `score` is not a valid
-source kind.
+The canonical source kind for this flow is `document`; deprecated document-source aliases are invalid.
 
 If the user uploads music, GigaStudy extracts every usable part and registers
 those into the six tracks where possible. Browser-decodable MP3/M4A/OGG/FLAC
@@ -100,15 +99,11 @@ sync, missing, and extra-event data. Each issue carries region/event IDs and
 beat coordinates, and answer-side issues can deep-link back into the studio with
 the matching region and piano-roll event focused.
 
-Scoring requests submit recorded audio or `performance_events`. The route no
-longer accepts `performance_notes`; remaining track-level event arrays are
-internal adapter state inside extraction, persistence, and scoring engines.
+Scoring requests submit recorded audio or `performance_events`. Deprecated performance payloads are not compatibility inputs; remaining track-level event arrays are internal adapter state inside extraction, persistence, and scoring engines.
 
 The web client treats `Studio.regions` and `ExtractionCandidate.region` as the
 only product event contract. Studio routes return a public response model that
-omits internal event shadows from tracks and candidates. Old note-array storage,
-`performance_notes`, staff-notation aliases, and `source_kind: "score"` are not
-compatibility inputs anymore; they are rejected. Region `PitchEvent` objects
+omits internal event shadows from tracks and candidates. Old pre-region storage aliases and deprecated document-source aliases are not compatibility inputs anymore; they are rejected. Region `PitchEvent` objects
 carry source, extraction method, measure position, and quality warnings for
 product and diagnostic use.
 

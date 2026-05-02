@@ -39,12 +39,12 @@ def extract_home_audio_candidate(
         except VoiceTranscriptionError as error:
             errors.append(str(error))
             continue
-        notes = transcription.events
-        confidence = sum(note.confidence for note in notes) / len(notes)
+        events = transcription.events
+        confidence = sum(event.confidence for event in events) / len(events)
         attempts.append((slot_id, transcription, confidence))
 
     if not attempts:
-        detail = errors[0] if errors else "No usable audio notes were extracted."
+        detail = errors[0] if errors else "No usable audio events were extracted."
         raise VoiceTranscriptionError(detail)
 
     source_slot_id, transcription, confidence = max(

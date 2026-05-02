@@ -38,9 +38,9 @@ class Settings(BaseSettings):
     engine_job_lease_seconds: int = 10 * 60
     engine_drain_max_jobs: int = 3
     audiveris_bin: str | None = None
-    omr_backend: str = "auto"
-    omr_preprocess_mode: str = "retry"
-    omr_preprocess_dpi: int = 300
+    document_extraction_backend: str = "auto"
+    document_preprocess_mode: str = "retry"
+    document_preprocess_dpi: int = 300
     voice_transcription_backend: str = "auto"
     engine_processing_timeout_seconds: int = 120
     deepseek_harmony_enabled: bool = False

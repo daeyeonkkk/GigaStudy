@@ -24,19 +24,19 @@ LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS: set[str] = {"ai"}
 class TrackRegistrationPreparer:
     """Single cleanup gate before imported material becomes registered pitch-event regions."""
 
-    def prepare_notes(
+    def prepare_events(
         self,
         studio: Studio,
         slot_id: int,
         *,
         source_kind: SourceKind,
-        notes: list[TrackPitchEvent],
+        events: list[TrackPitchEvent],
     ) -> RegistrationQualityResult:
         registration = self._prepare_single_track_events(
             studio,
             slot_id,
             source_kind=source_kind,
-            notes=notes,
+            events=events,
         )
         return self._apply_ensemble_arrangement_gate(
             studio,
@@ -57,9 +57,9 @@ class TrackRegistrationPreparer:
                 studio,
                 slot_id,
                 source_kind=source_kind,
-                notes=notes,
+                events=events,
             )
-            for slot_id, notes in mapped_events.items()
+            for slot_id, events in mapped_events.items()
         }
         proposed_tracks_by_slot = {
             slot_id: registration.events
@@ -82,12 +82,12 @@ class TrackRegistrationPreparer:
         slot_id: int,
         *,
         source_kind: SourceKind,
-        notes: list[TrackPitchEvent],
+        events: list[TrackPitchEvent],
     ) -> RegistrationQualityResult:
         reference_tracks = self._reference_tracks(studio, exclude_slot_id=slot_id)
         reference_tracks_by_slot = self._reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
         registration = prepare_events_for_track_registration(
-            notes,
+            events,
             bpm=studio.bpm,
             slot_id=slot_id,
             source_kind=source_kind,
@@ -109,7 +109,7 @@ class TrackRegistrationPreparer:
             time_signature_denominator=studio.time_signature_denominator,
             slot_id=slot_id,
             source_kind=source_kind,
-            original_events=notes,
+            original_events=events,
             prepared_events=registration.events,
             diagnostics=registration.diagnostics,
             context_tracks_by_slot=reference_tracks_by_slot,
@@ -117,7 +117,7 @@ class TrackRegistrationPreparer:
         if instruction is None:
             return registration
         return apply_registration_review_instruction(
-            notes,
+            events,
             instruction=instruction.model_dump(exclude_none=True),
             bpm=studio.bpm,
             slot_id=slot_id,

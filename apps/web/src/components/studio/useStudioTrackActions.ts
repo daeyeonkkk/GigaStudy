@@ -12,7 +12,7 @@ import { prepareAudioFileForUpload } from '../../lib/audio'
 import {
   detectUploadKind,
   formatSeconds,
-  isOmrUpload,
+  isDocumentImageUpload,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
 import type { RunStudioAction, SetStudioActionState } from './studioActionState'
@@ -96,7 +96,7 @@ export function useStudioTrackActions({
       return
     }
 
-    if (isOmrUpload(file)) {
+    if (isDocumentImageUpload(file)) {
       setActionState({
         phase: 'success',
         message: `${track.name} 문서 분석 작업을 시작했습니다. 추출 후 후보가 표시됩니다.`,

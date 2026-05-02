@@ -2,8 +2,8 @@
 
 Date: 2026-05-02
 
-This document freezes the salvage map before the score-notation implementation
-is removed. The new direction is not an engraved-score studio. It is a
+This document freezes the salvage map before the notation implementation
+is removed. The new direction is not an engraved-arrangement studio. It is a
 six-track vocal arrangement and practice workspace built around:
 
 - Region view for macro arrangement
@@ -11,20 +11,20 @@ six-track vocal arrangement and practice workspace built around:
 - Waterfall practice mode for playback and singing
 
 The reset should preserve proven infrastructure and audio/pitch assets, then
-delete the score-notation stack instead of trying to bend it into the new
+delete the notation stack instead of trying to bend it into the new
 product model.
 
 ## Product Reframe
 
 Old center:
 
-`Studio -> TrackSlot -> TrackNote -> engraved staff score`
+`Studio -> TrackSlot -> extracted event -> notation document`
 
 New center:
 
 `Studio -> Track -> Region -> PitchEvent/AudioClip -> practice playback`
 
-`TrackNote` is no longer the canonical product truth or internal type name.
+The old extracted-event object is no longer the canonical product truth or internal type name.
 The temporary internal adapter is `TrackPitchEvent`, and public clients consume
 `ArrangementRegion`/`PitchEvent` only.
 
@@ -47,14 +47,14 @@ The temporary internal adapter is `TrackPitchEvent`, and public clients consume
 - Browser audio primitives:
   `audioContext.ts`, `microphoneRecorder.ts`, `wavEncoding.ts`,
   `audioUpload.ts`.
-- Count-in and meter helpers, with terminology moved away from staff notation.
+- Count-in and meter helpers, with terminology moved away from engraved notation.
 - Existing direct-upload browser flow in `apps/web/src/lib/api.ts`, but endpoint
   names and response types must be replaced.
 - Admin storage concepts, especially storage summaries and cleanup operations.
 
 ### Keep As Extractable Logic
 
-- Voice extraction in `services/engine/voice.py`: keep pitch/frame/note
+- Voice extraction in `services/engine/voice.py`: keep pitch/frame/segment
   extraction math, but output should become `PitchEvent` or
   `DetectedPitchSegment`.
 - MIDI/MusicXML parsing in `services/engine/symbolic.py`: keep parser logic as
@@ -83,32 +83,32 @@ The temporary internal adapter is `TrackPitchEvent`, and public clients consume
 
 These should not be carried into the new core:
 
-- VexFlow engraved score UI:
+- VexFlow engraved notation UI:
   `EngravedScoreStrip.tsx`, `scoreEngraving.ts`, `scoreRendering.ts`, VexFlow
   alias/chunk strategy.
-- Staff notation rendering tests:
-  key-signature spacing, tie glyph, measure-owned staff layout, staff overflow.
-- PDF score export endpoint and `pdf_export.py`.
-- Staff notation fields as core data:
-  clef, key signature, spelling, accidentals, rest/tie display, staff index,
+- Engraved notation rendering tests:
+  key-signature spacing, tie glyph, measure-owned notation layout, notation overflow.
+- PDF export endpoint and `pdf_export.py`.
+- Engraved notation fields as core data:
+  clef, key signature, spelling, accidentals, rest/tie display, notation index,
   display octave policy, notation warnings.
-- Staff-era registration gate as previously designed:
-  `notation.py`, `notation_quality.py`, and staff-score diagnostics.
+- Legacy registration gate as previously designed:
+  `notation.py`, `notation_quality.py`, and notation diagnostics.
   The surviving code should be event normalization, event quality, and
   registration review only.
 - Ensemble arrangement must behave as region-event diagnostics, not as a
-  pre-registration staff-score quality gate. Some range/crossing checks may
+  pre-registration notation quality gate. Some range/crossing checks may
   remain as piano-roll diagnostics.
-- OMR as a first-class core path:
-  user-facing OMR labels, OMR-specific job UI, and staff-shaped preview
+- document-recognition as a first-class core path:
+  user-facing document-recognition labels, document-recognition-specific job UI, and document-shaped preview
   assumptions. PDF/MusicXML/MIDI ingestion may remain as a document extraction
   adapter that emits region candidates.
-  Score import can return later as a lossy event importer, not as an engraved
-  score promise.
-- Current `TrackBoard` score-paper UI and related CSS.
-- Current report detail page if it remains tied to note/staff language.
+  Document import can return later as a lossy event importer, not as an engraved
+  notation promise.
+- Current `TrackBoard` timeline-grid UI and related CSS.
+- Current report detail page if it remains tied to legacy notation language.
 - Current foundation roadmap/checklist language that says GigaStudy is a
-  six-track score studio.
+  six-track arrangement studio.
 
 ## New Canonical Model
 
@@ -178,7 +178,7 @@ PracticeReport
 Important rule:
 
 `Region.start_seconds + PitchEvent.start_seconds` is the shared timeline. There
-is no hidden staff grid truth.
+is no hidden notation grid truth.
 
 ## New UI Data Flow
 
@@ -224,8 +224,8 @@ select references + target
 4. Replace API schema with `Region`, `PitchEvent`, `RegionCandidate`,
    `PracticeReport`.
 5. Keep storage/assets/queue, but adapt repository commands to the new schema.
-6. Remove VexFlow, staff notation, PDF score export, OMR-specific UI, and
-   staff-specific tests. Preserve PDF/MusicXML/MIDI ingestion only as document
+6. Remove VexFlow, engraved notation, PDF export, document-recognition-specific UI, and
+   notation-specific tests. Preserve PDF/MusicXML/MIDI ingestion only as document
    extraction into region candidates.
 7. Build minimal web shell:
    home -> studio arrange view -> piano roll panel -> practice waterfall route.
@@ -242,7 +242,7 @@ select references + target
 - Candidate review becomes region review, not hidden track-event registration.
 - Sync becomes region/event movement. Avoid keeping both old track sync offsets
   and new region offsets as active truth.
-- Export scope changes. PDF score export should be replaced by project JSON,
+- Export scope changes. PDF export should be replaced by project JSON,
   MIDI, or audio export later.
 - LLM prompts and diagnostics need new vocabulary: region, phrase, lane, pitch
   contour, timing grid, reference tracks.
@@ -255,14 +255,14 @@ select references + target
 - Audio alignment risk: retained audio and pitch events must share one region
   origin. Do not add hidden per-event or per-audio offsets without exposing
   them in the region model.
-- Import expectation risk: MusicXML/PDF users may expect staff rendering. The
+- Import expectation risk: MusicXML/PDF users may expect notation rendering. The
   product must state that imports become editable piano-roll regions.
 - Document extraction scope risk: retaining PDF/MusicXML/MIDI ingestion is useful,
-  but any OMR-specific UI or staff-shaped preview can drag the old staff model
+  but any document-recognition-specific UI or document-shaped preview can drag the old notation model
   back into the core.
 - Candidate approval risk: approving a candidate must insert/replace regions
-  atomically, not mutate invisible track-level note lists.
-- Report interpretation risk: old issue types based on answer notes and staff
+  atomically, not mutate invisible track-level event lists.
+- Report interpretation risk: old issue types based on answer events and notation
   measures need timeline-marker equivalents.
 - Test churn risk: E2E tests should be rewritten around visible region blocks,
   pitch-event dragging, waterfall timing, upload, recording, and scoring.
@@ -277,9 +277,9 @@ The first implementation cut should be intentionally small:
 - Waterfall read-only playback visual from the same events.
 - No VexFlow.
 - No PDF export.
-- No OMR-specific UI. Document ingestion may exist only as a region candidate
+- No document-recognition-specific UI. Document ingestion may exist only as a region candidate
   adapter.
-- No staff-notation quality gate; only event registration quality.
+- No notation quality gate; only event registration quality.
 
 Once that vertical slice exists, reconnect upload, recording, extraction, AI,
 and scoring one at a time.

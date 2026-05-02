@@ -5,7 +5,7 @@ Last updated: 2026-04-28
 ## 2026-04-28 Implemented Slice
 
 - `HarmonyPlan` V2 models now exist in the API engine layer.
-- DeepSeek V4 Flash can return measure-level harmony intent, candidate goals,
+- DeepSeek planner can return measure-level harmony intent, candidate goals,
   register/motion/rhythm policy, chord-tone priority, and user-facing review
   evidence.
 - The selected low-cost API route is compatible with OpenRouter's
@@ -32,7 +32,7 @@ Last updated: 2026-04-28
 
 ## Decision
 
-GigaStudy should keep DeepSeek V4 Flash as the single low-cost LLM planner, but
+GigaStudy should keep DeepSeek planner as the single low-cost LLM planner, but
 the planner must move from "candidate profile ordering" to "measure-level
 harmony intent." The LLM still must not write final `PitchEvent` arrays. The
 deterministic engine remains the only layer allowed to create, normalize, and
@@ -75,7 +75,7 @@ harmonically.
 Relevant evidence:
 
 - DeepBach shows that useful chorale generation is steerable when users or
-  upstream systems can impose positional constraints such as fixed notes,
+  upstream systems can impose positional constraints such as fixed events,
   rhythms, and cadences.
 - SymPAC highlights constrained symbolic generation with finite-state-machine
   style controls as a practical way to keep generated music controllable.
@@ -83,7 +83,7 @@ Relevant evidence:
   controllable symbolic generation.
 - music21 exposes explicit voice-leading and verticality concepts, which is a
   good model for validation even if we keep our runtime dependency small.
-- DeepSeek V4 Flash supports JSON output and configurable non-thinking mode,
+- DeepSeek planner supports JSON output and configurable non-thinking mode,
   which fits our bounded planner use case.
 - OpenRouter compatibility matters for the alpha cost target. When
   `GIGASTUDY_API_DEEPSEEK_BASE_URL=https://openrouter.ai/api/v1`, the API uses
@@ -99,7 +99,7 @@ constraint/search engine realize that plan.
 
    - Merge all registered vocal tracks by fixed studio beat grid.
    - Preserve known slot ids.
-   - Build measure summaries: active notes, downbeat notes, cadential moments,
+   - Build measure summaries: active events, downbeat events, cadential moments,
      density, sustained tones, and missing voices.
    - Estimate key/mode locally first; expose uncertainty to DeepSeek.
 
@@ -284,9 +284,9 @@ Do not merely copy every context onset in every candidate. Candidate rhythm can
 be:
 
 - `follow_context`: current behavior, safest;
-- `simplify`: merge repeated same-chord events into longer notes;
-- `answer_melody`: keep strong beats and add weak-beat passing notes;
-- `sustain_support`: use longer notes under active upper parts.
+- `simplify`: merge repeated same-chord events into longer events;
+- `answer_melody`: keep strong beats and add weak-beat passing events;
+- `sustain_support`: use longer events under active upper parts.
 
 All policies still quantize to the studio beat grid and measure boundaries.
 
@@ -311,7 +311,7 @@ candidate:
 - same chord degree sequence for more than 85 percent of events.
 
 Fallback regeneration should adjust candidate goal weights, not randomly jitter
-notes.
+events.
 
 ## LLM Safety Boundary
 
@@ -330,7 +330,7 @@ region/event ownership, density cleanup, and range validation.
 DeepSeek may also act as an ensemble registration critic when explicitly
 enabled. In that role it receives sibling-track summaries and vertical
 snapshots, then returns only bounded event repair instructions. It does not
-compose replacement notes or override the deterministic ensemble gate.
+compose replacement events or override the deterministic ensemble gate.
 
 DeepSeek may not decide:
 
@@ -360,7 +360,7 @@ Candidate quality assertions:
 
 - no known-voice crossing;
 - no hard parallel perfects against known voices;
-- generated notes stay in target range;
+- generated events stay in target range;
 - final cadence lands on acceptable tonic/chord tone when plan requests it;
 - sibling candidates differ beyond diversity threshold;
 - `plan_adherence_score` is exposed;
@@ -376,7 +376,7 @@ return measure-level intent, but the engine may initially use only a subset.
 ### Phase 2: Plan-Aware Search
 
 Wire measure function and candidate goals into chord ranking and pitch cost.
-This is the first phase where DeepSeek should clearly alter generated notes.
+This is the first phase where DeepSeek should clearly alter generated events.
 
 ### Phase 3: Rhythm Policies
 
@@ -398,10 +398,10 @@ auditable constraints matter more than novelty.
 
 Adopt the hybrid approach now:
 
-- DeepSeek V4 Flash: planner and candidate explainer.
+- DeepSeek planner: planner and candidate explainer.
 - Deterministic constrained search: final pitch-event generator.
 - Quality report: candidate comparison and regression gate.
 
 Do not adopt a heavyweight symbolic neural model yet. The next real quality
 gain is making DeepSeek's plan feed the cost function and rhythm policy, not
-letting an LLM directly write notes.
+letting an LLM directly write events.

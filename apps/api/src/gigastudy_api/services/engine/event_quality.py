@@ -48,7 +48,7 @@ VOICE_MEASURE_TAIL_GAP_MAX_BEATS = 0.25
 VOICE_MEASURE_TAIL_FOLLOWUP_MAX_BEATS = 0.5
 VOICE_MEASURE_TAIL_MIN_DURATION_BEATS = 0.5
 VOICE_MEASURE_TAIL_MIN_CONFIDENCE = 0.55
-VOICE_SHORT_CLUSTER_MIN_NOTES = 3
+VOICE_SHORT_CLUSTER_MIN_EVENTS = 3
 VOICE_SHORT_CLUSTER_MAX_DURATION_BEATS = 0.25
 VOICE_SHORT_CLUSTER_MAX_GAP_BEATS = 0.25
 VOICE_SHORT_CLUSTER_MAX_SPAN_BEATS = 1.0
@@ -60,7 +60,7 @@ LLM_REVIEW_MIN_CONFIDENCE = 0.55
 REFERENCE_ALIGNMENT_GRID_BEATS = 0.25
 REFERENCE_ALIGNMENT_MAX_OFFSET_BEATS = 0.25
 REFERENCE_ALIGNMENT_MAX_DISTANCE_BEATS = 0.5
-REFERENCE_ALIGNMENT_MIN_NOTES = 2
+REFERENCE_ALIGNMENT_MIN_EVENTS = 2
 REFERENCE_ALIGNMENT_MIN_MATCH_RATIO = 0.5
 REFERENCE_ALIGNMENT_MIN_IMPROVEMENT = 0.12
 
@@ -72,7 +72,7 @@ class RegistrationQualityResult:
 
 
 def prepare_events_for_track_registration(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
@@ -89,9 +89,9 @@ def prepare_events_for_track_registration(
     deterministic cleanup.
     """
 
-    original_count = len(notes)
+    original_count = len(events)
     actions: list[str] = []
-    if not notes:
+    if not events:
         return RegistrationQualityResult(
             events=[],
             diagnostics=_registration_diagnostics(
@@ -105,13 +105,13 @@ def prepare_events_for_track_registration(
             ),
         )
 
-    if _requires_grid_rewrite(source_kind, notes):
-        working_notes = notes
-        if _requires_noise_filter(source_kind, notes):
-            working_notes, filter_actions = _filter_voice_noise(notes)
+    if _requires_grid_rewrite(source_kind, events):
+        working_events = events
+        if _requires_noise_filter(source_kind, events):
+            working_events, filter_actions = _filter_voice_noise(events)
             actions.extend(filter_actions)
-        normalized_notes = normalize_track_events(
-            working_notes,
+        normalized_events = normalize_track_events(
+            working_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -121,18 +121,18 @@ def prepare_events_for_track_registration(
         )
         actions.append("fixed_bpm_grid_normalization")
         if _has_dense_voice_measures(
-            normalized_notes,
+            normalized_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ):
-            simplified_notes = _simplify_dense_voice_measures(
-                normalized_notes,
+            simplified_events = _simplify_dense_voice_measures(
+                normalized_events,
                 bpm=bpm,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
             )
-            normalized_notes = normalize_track_events(
-                simplified_notes,
+            normalized_events = normalize_track_events(
+                simplified_events,
                 bpm=bpm,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
@@ -141,37 +141,37 @@ def prepare_events_for_track_registration(
                 merge_adjacent_same_pitch=True,
             )
             actions.append("dense_voice_measure_simplification")
-        normalized_notes, polish_actions = _polish_voice_events(
-            normalized_notes,
+        normalized_events, polish_actions = _polish_voice_events(
+            normalized_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            quantization_grid=normalized_notes[0].quantization_grid or VOICE_QUANTIZATION_GRID_BEATS
-            if normalized_notes
+            quantization_grid=normalized_events[0].quantization_grid or VOICE_QUANTIZATION_GRID_BEATS
+            if normalized_events
             else VOICE_QUANTIZATION_GRID_BEATS,
         )
         actions.extend(polish_actions)
-        normalized_notes, optimizer_actions = _choose_readable_voice_candidate(
-            working_notes,
-            current_notes=normalized_notes,
+        normalized_events, optimizer_actions = _choose_readable_voice_candidate(
+            working_events,
+            current_events=normalized_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
         actions.extend(optimizer_actions)
-        prepared_events = normalized_notes
+        prepared_events = normalized_events
     else:
-        repaired_notes = _repair_symbolic_timing_metadata(
-            notes,
+        repaired_events = _repair_symbolic_timing_metadata(
+            events,
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
-        prepared_events = annotate_track_events_for_slot(repaired_notes, slot_id=slot_id)
+        prepared_events = annotate_track_events_for_slot(repaired_events, slot_id=slot_id)
         actions.append("symbolic_event_metadata_annotation")
-        if _has_measure_crossing_notes(
+        if _has_measure_crossing_events(
             prepared_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
@@ -229,7 +229,7 @@ def prepare_events_for_track_registration(
 
 
 def apply_registration_review_instruction(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     instruction: Mapping[str, Any],
     bpm: int,
@@ -250,7 +250,7 @@ def apply_registration_review_instruction(
     """
 
     baseline = baseline_result or prepare_events_for_track_registration(
-        notes,
+        events,
         bpm=bpm,
         slot_id=slot_id,
         source_kind=source_kind,
@@ -276,7 +276,7 @@ def apply_registration_review_instruction(
             reason="no_repair_directive",
         )
 
-    if not notes:
+    if not events:
         return _with_llm_review_diagnostics(
             baseline,
             instruction_data,
@@ -292,17 +292,17 @@ def apply_registration_review_instruction(
         instruction_data,
         "merge_adjacent_same_pitch",
         default=True,
-    ) or _instruction_bool(instruction_data, "sustain_repeated_notes")
+    ) or _instruction_bool(instruction_data, "sustain_repeated_events")
     preferred_key = _instruction_key_signature(instruction_data)
 
-    if _requires_grid_rewrite(source_kind, notes):
-        working_notes = notes
-        if _instruction_bool(instruction_data, "suppress_unstable_notes") and _requires_noise_filter(source_kind, notes):
-            working_notes, filter_actions = _filter_voice_noise(notes)
+    if _requires_grid_rewrite(source_kind, events):
+        working_events = events
+        if _instruction_bool(instruction_data, "suppress_unstable_events") and _requires_noise_filter(source_kind, events):
+            working_events, filter_actions = _filter_voice_noise(events)
             actions.extend(f"llm_{action}" for action in filter_actions)
 
         prepared_events = normalize_track_events(
-            working_notes,
+            working_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -318,14 +318,14 @@ def apply_registration_review_instruction(
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ):
-            simplified_notes = _simplify_dense_voice_measures(
+            simplified_events = _simplify_dense_voice_measures(
                 prepared_events,
                 bpm=bpm,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
             )
             prepared_events = normalize_track_events(
-                simplified_notes,
+                simplified_events,
                 bpm=bpm,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
@@ -357,17 +357,17 @@ def apply_registration_review_instruction(
                 "bridge_measure_tail_gaps",
                 default=True,
             ),
-            collapse_short_note_clusters=_instruction_bool(
+            collapse_short_event_clusters=_instruction_bool(
                 instruction_data,
-                "collapse_short_note_clusters",
+                "collapse_short_event_clusters",
                 default=True,
             ),
             sustain_repetitions=merge_adjacent_same_pitch,
         )
         actions.extend(f"llm_{action}" for action in polish_actions)
         prepared_events, optimizer_actions = _choose_readable_voice_candidate(
-            working_notes,
-            current_notes=prepared_events,
+            working_events,
+            current_events=prepared_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -375,13 +375,13 @@ def apply_registration_review_instruction(
         )
         actions.extend(f"llm_{action}" for action in optimizer_actions)
     else:
-        repaired_notes = _repair_symbolic_timing_metadata(
-            notes,
+        repaired_events = _repair_symbolic_timing_metadata(
+            events,
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
-        prepared_events = annotate_track_events_for_slot(repaired_notes, slot_id=slot_id)
+        prepared_events = annotate_track_events_for_slot(repaired_events, slot_id=slot_id)
         actions.append("llm_symbolic_event_review_annotation")
         if _instruction_bool(instruction_data, "simplify_dense_measures") and _has_dense_voice_measures(
             prepared_events,
@@ -398,7 +398,7 @@ def apply_registration_review_instruction(
                 merge_adjacent_same_pitch=merge_adjacent_same_pitch,
             )
             actions.append("llm_symbolic_dense_measure_rewrite")
-        elif _has_measure_crossing_notes(
+        elif _has_measure_crossing_events(
             prepared_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
@@ -442,7 +442,7 @@ def apply_registration_review_instruction(
     diagnostics = _registration_diagnostics(
         prepared_events,
         slot_id=slot_id,
-        original_count=len(notes),
+        original_count=len(events),
         source_kind=source_kind,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
@@ -465,58 +465,58 @@ def apply_registration_review_instruction(
     return RegistrationQualityResult(events=prepared_events, diagnostics=diagnostics)
 
 
-def _requires_grid_rewrite(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
+def _requires_grid_rewrite(source_kind: SourceKind, events: list[TrackPitchEvent]) -> bool:
     if source_kind in VOICE_LIKE_SOURCE_KINDS or source_kind in EVENT_GENERATION_SOURCE_KINDS:
         return True
-    return any(note.source in VOICE_LIKE_EVENT_SOURCES or note.source == "ai" for note in notes)
+    return any(event.source in VOICE_LIKE_EVENT_SOURCES or event.source == "ai" for event in events)
 
 
-def _requires_noise_filter(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
+def _requires_noise_filter(source_kind: SourceKind, events: list[TrackPitchEvent]) -> bool:
     if source_kind in EVENT_GENERATION_SOURCE_KINDS:
         return False
-    return source_kind in VOICE_LIKE_SOURCE_KINDS or any(note.source in VOICE_LIKE_EVENT_SOURCES for note in notes)
+    return source_kind in VOICE_LIKE_SOURCE_KINDS or any(event.source in VOICE_LIKE_EVENT_SOURCES for event in events)
 
 
-def _filter_voice_noise(notes: list[TrackPitchEvent]) -> tuple[list[TrackPitchEvent], list[str]]:
-    pitched_notes = [note for note in notes if not note.is_rest and _resolve_pitch_midi(note) is not None]
-    if not pitched_notes:
-        return notes, []
+def _filter_voice_noise(events: list[TrackPitchEvent]) -> tuple[list[TrackPitchEvent], list[str]]:
+    pitched_events = [event for event in events if not event.is_rest and _resolve_pitch_midi(event) is not None]
+    if not pitched_events:
+        return events, []
 
     keep_threshold = MIN_VOICE_CONFIDENCE
-    strong_notes = [note for note in pitched_notes if note.confidence >= 0.48]
-    if len(strong_notes) < 2:
-        keep_threshold = min(0.22, min(note.confidence for note in pitched_notes))
+    strong_events = [event for event in pitched_events if event.confidence >= 0.48]
+    if len(strong_events) < 2:
+        keep_threshold = min(0.22, min(event.confidence for event in pitched_events))
 
     filtered: list[TrackPitchEvent] = []
     removed_count = 0
-    for note in notes:
-        if note.is_rest:
-            if note.duration_beats >= MIN_EVENT_DURATION_BEATS:
-                filtered.append(note)
+    for event in events:
+        if event.is_rest:
+            if event.duration_beats >= MIN_EVENT_DURATION_BEATS:
+                filtered.append(event)
             else:
                 removed_count += 1
             continue
-        if _resolve_pitch_midi(note) is None:
+        if _resolve_pitch_midi(event) is None:
             removed_count += 1
             continue
-        if note.duration_beats < MIN_VOICE_DURATION_BEATS:
+        if event.duration_beats < MIN_VOICE_DURATION_BEATS:
             removed_count += 1
             continue
-        if note.confidence < keep_threshold:
+        if event.confidence < keep_threshold:
             removed_count += 1
             continue
-        filtered.append(note)
+        filtered.append(event)
 
     if not filtered:
-        filtered = [max(pitched_notes, key=lambda note: (note.confidence, note.duration_beats))]
-        removed_count = max(0, len(notes) - 1)
+        filtered = [max(pitched_events, key=lambda event: (event.confidence, event.duration_beats))]
+        removed_count = max(0, len(events) - 1)
 
     actions = [f"voice_noise_filter_removed_{removed_count}"] if removed_count else []
     return filtered, actions
 
 
 def _has_dense_voice_measures(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -525,15 +525,15 @@ def _has_dense_voice_measures(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    for measure_notes in _notes_by_measure(notes).values():
-        pitched_count = sum(1 for note in measure_notes if not note.is_rest)
+    for measure_events in _events_by_measure(events).values():
+        pitched_count = sum(1 for event in measure_events if not event.is_rest)
         if pitched_count > max_events:
             return True
     return False
 
 
 def _simplify_dense_voice_measures(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
@@ -544,10 +544,10 @@ def _simplify_dense_voice_measures(
         time_signature_denominator=time_signature_denominator,
     )
     simplified: list[TrackPitchEvent] = []
-    for measure_index, measure_notes in sorted(_notes_by_measure(notes).items()):
-        pitched_notes = [note for note in measure_notes if not note.is_rest]
-        if len(pitched_notes) <= max_events:
-            simplified.extend(measure_notes)
+    for measure_index, measure_events in sorted(_events_by_measure(events).items()):
+        pitched_events = [event for event in measure_events if not event.is_rest]
+        if len(pitched_events) <= max_events:
+            simplified.extend(measure_events)
             continue
 
         cells: dict[int, TrackPitchEvent] = {}
@@ -556,18 +556,18 @@ def _simplify_dense_voice_measures(
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
-        for note in pitched_notes:
-            cell_index = max(0, floor((note.beat - measure_start) / VOICE_DENSITY_SIMPLIFICATION_GRID))
+        for event in pitched_events:
+            cell_index = max(0, floor((event.beat - measure_start) / VOICE_DENSITY_SIMPLIFICATION_GRID))
             current = cells.get(cell_index)
-            if current is None or _note_weight(note) > _note_weight(current):
+            if current is None or _event_weight(event) > _event_weight(current):
                 cell_start = measure_start + cell_index * VOICE_DENSITY_SIMPLIFICATION_GRID
-                cells[cell_index] = note.model_copy(
+                cells[cell_index] = event.model_copy(
                     update={
                         "beat": round(cell_start, 4),
                         "duration_beats": VOICE_DENSITY_SIMPLIFICATION_GRID,
                         "onset_seconds": round(max(0, (cell_start - 1) * seconds_per_beat(bpm)), 4),
                         "duration_seconds": round(VOICE_DENSITY_SIMPLIFICATION_GRID * seconds_per_beat(bpm), 4),
-                        "quality_warnings": _append_warning(note.quality_warnings, "dense_measure_simplified"),
+                        "quality_warnings": _append_warning(event.quality_warnings, "dense_measure_simplified"),
                     }
                 )
         simplified.extend(cells[index] for index in sorted(cells))
@@ -575,7 +575,7 @@ def _simplify_dense_voice_measures(
 
 
 def _polish_voice_events(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
@@ -586,27 +586,27 @@ def _polish_voice_events(
     remove_isolated_artifacts: bool = True,
     bridge_short_phrase_gaps: bool = True,
     bridge_measure_tail_gaps: bool = True,
-    collapse_short_note_clusters: bool = True,
+    collapse_short_event_clusters: bool = True,
     sustain_repetitions: bool = True,
 ) -> tuple[list[TrackPitchEvent], list[str]]:
     """Make voice-like event records behave like sung pitch events, not frame artifacts."""
 
-    if len(notes) < 2:
-        return notes, []
+    if len(events) < 2:
+        return events, []
 
-    polished_notes = notes
+    polished_events = events
     actions: list[str] = []
     if remove_isolated_artifacts:
-        polished_notes, removed_count = _remove_isolated_short_artifacts(polished_notes)
+        polished_events, removed_count = _remove_isolated_short_artifacts(polished_events)
         if removed_count:
             actions.append(f"voice_isolated_artifact_removed_{removed_count}")
     if collapse_pitch_blips:
-        polished_notes, collapsed_count = _collapse_neighbor_pitch_blips(polished_notes, bpm=bpm)
+        polished_events, collapsed_count = _collapse_neighbor_pitch_blips(polished_events, bpm=bpm)
         if collapsed_count:
             actions.append(f"voice_pitch_blip_collapse_{collapsed_count}")
-    if collapse_short_note_clusters:
-        polished_notes, cluster_count = _collapse_short_note_clusters(
-            polished_notes,
+    if collapse_short_event_clusters:
+        polished_events, cluster_count = _collapse_short_event_clusters(
+            polished_events,
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
@@ -614,8 +614,8 @@ def _polish_voice_events(
         if cluster_count:
             actions.append(f"voice_short_cluster_collapse_{cluster_count}")
     if bridge_measure_tail_gaps:
-        polished_notes, tail_count = _bridge_measure_tail_gaps(
-            polished_notes,
+        polished_events, tail_count = _bridge_measure_tail_gaps(
+            polished_events,
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
@@ -623,19 +623,19 @@ def _polish_voice_events(
         if tail_count:
             actions.append(f"voice_measure_tail_bridge_{tail_count}")
     if bridge_short_phrase_gaps:
-        polished_notes, bridged_count = _bridge_short_voice_phrase_gaps(polished_notes, bpm=bpm)
+        polished_events, bridged_count = _bridge_short_voice_phrase_gaps(polished_events, bpm=bpm)
         if bridged_count:
             actions.append(f"voice_phrase_gap_bridge_{bridged_count}")
     if sustain_repetitions:
-        polished_notes, merged_count = _merge_voice_sustain_repetitions(polished_notes, bpm=bpm)
+        polished_events, merged_count = _merge_voice_sustain_repetitions(polished_events, bpm=bpm)
         if merged_count:
             actions.append(f"voice_sustain_merge_{merged_count}")
 
     if not actions:
-        return notes, []
+        return events, []
 
     normalized = normalize_track_events(
-        polished_notes,
+        polished_events,
         bpm=bpm,
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
@@ -646,20 +646,20 @@ def _polish_voice_events(
     return normalized, actions
 
 
-def count_isolated_short_voice_artifacts(notes: list[TrackPitchEvent]) -> int:
-    """Count short, low-confidence notes that are isolated from nearby singing."""
+def count_isolated_short_voice_artifacts(events: list[TrackPitchEvent]) -> int:
+    """Count short, low-confidence events that are isolated from nearby singing."""
 
-    return len(_isolated_short_artifact_indices(_deduplicate_and_sort(notes)))
+    return len(_isolated_short_artifact_indices(_deduplicate_and_sort(events)))
 
 
-def count_short_voice_phrase_gaps(notes: list[TrackPitchEvent]) -> int:
-    """Count tiny detector dropouts between confident adjacent sung notes."""
+def count_short_voice_phrase_gaps(events: list[TrackPitchEvent]) -> int:
+    """Count tiny detector dropouts between confident adjacent sung events."""
 
-    return len(_short_voice_phrase_gap_targets(_deduplicate_and_sort(notes)))
+    return len(_short_voice_phrase_gap_targets(_deduplicate_and_sort(events)))
 
 
 def count_measure_tail_gaps(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -668,27 +668,27 @@ def count_measure_tail_gaps(
 
     return len(
         _measure_tail_gap_targets(
-            _deduplicate_and_sort(notes),
+            _deduplicate_and_sort(events),
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
     )
 
 
-def count_short_note_clusters(
-    notes: list[TrackPitchEvent],
+def count_short_event_clusters(
+    events: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> int:
-    """Count low-confidence short-note clusters that read like tracker chatter."""
+    """Count low-confidence short-event clusters that read like tracker chatter."""
 
-    ordered_notes = _deduplicate_and_sort(notes)
+    ordered_events = _deduplicate_and_sort(events)
     cluster_count = 0
     index = 0
-    while index < len(ordered_notes):
-        cluster_indices = _short_note_cluster_at(
-            ordered_notes,
+    while index < len(ordered_events):
+        cluster_indices = _short_event_cluster_at(
+            ordered_events,
             start_index=index,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
@@ -701,266 +701,266 @@ def count_short_note_clusters(
     return cluster_count
 
 
-def _remove_isolated_short_artifacts(notes: list[TrackPitchEvent]) -> tuple[list[TrackPitchEvent], int]:
-    ordered_notes = _deduplicate_and_sort(notes)
-    remove_indices = _isolated_short_artifact_indices(ordered_notes)
+def _remove_isolated_short_artifacts(events: list[TrackPitchEvent]) -> tuple[list[TrackPitchEvent], int]:
+    ordered_events = _deduplicate_and_sort(events)
+    remove_indices = _isolated_short_artifact_indices(ordered_events)
     if not remove_indices:
-        return ordered_notes, 0
+        return ordered_events, 0
 
     pitched_indices = [
         index
-        for index, note in enumerate(ordered_notes)
-        if not note.is_rest and _resolve_pitch_midi(note) is not None
+        for index, event in enumerate(ordered_events)
+        if not event.is_rest and _resolve_pitch_midi(event) is not None
     ]
     if len(pitched_indices) - len(remove_indices) <= 0:
-        return ordered_notes, 0
+        return ordered_events, 0
 
-    filtered_notes = [note for index, note in enumerate(ordered_notes) if index not in remove_indices]
-    return filtered_notes, len(remove_indices)
+    filtered_events = [event for index, event in enumerate(ordered_events) if index not in remove_indices]
+    return filtered_events, len(remove_indices)
 
 
-def _isolated_short_artifact_indices(ordered_notes: list[TrackPitchEvent]) -> set[int]:
+def _isolated_short_artifact_indices(ordered_events: list[TrackPitchEvent]) -> set[int]:
     pitched_indices = [
         index
-        for index, note in enumerate(ordered_notes)
-        if not note.is_rest and _resolve_pitch_midi(note) is not None
+        for index, event in enumerate(ordered_events)
+        if not event.is_rest and _resolve_pitch_midi(event) is not None
     ]
     if len(pitched_indices) <= 1:
         return set()
 
     artifact_indices: set[int] = set()
-    for position, note_index in enumerate(pitched_indices):
-        note = ordered_notes[note_index]
-        if note.duration_beats > VOICE_ISOLATED_ARTIFACT_MAX_DURATION_BEATS:
+    for position, event_index in enumerate(pitched_indices):
+        event = ordered_events[event_index]
+        if event.duration_beats > VOICE_ISOLATED_ARTIFACT_MAX_DURATION_BEATS:
             continue
-        if note.confidence > VOICE_ISOLATED_ARTIFACT_MAX_CONFIDENCE:
+        if event.confidence > VOICE_ISOLATED_ARTIFACT_MAX_CONFIDENCE:
             continue
 
-        previous_note = ordered_notes[pitched_indices[position - 1]] if position > 0 else None
-        next_note = ordered_notes[pitched_indices[position + 1]] if position < len(pitched_indices) - 1 else None
-        left_gap = _gap_between(previous_note, note) if previous_note is not None else VOICE_ISOLATED_ARTIFACT_MIN_GAP_BEATS
-        right_gap = _gap_between(note, next_note) if next_note is not None else VOICE_ISOLATED_ARTIFACT_MIN_GAP_BEATS
+        previous_event = ordered_events[pitched_indices[position - 1]] if position > 0 else None
+        next_event = ordered_events[pitched_indices[position + 1]] if position < len(pitched_indices) - 1 else None
+        left_gap = _gap_between(previous_event, event) if previous_event is not None else VOICE_ISOLATED_ARTIFACT_MIN_GAP_BEATS
+        right_gap = _gap_between(event, next_event) if next_event is not None else VOICE_ISOLATED_ARTIFACT_MIN_GAP_BEATS
         if (
             left_gap >= VOICE_ISOLATED_ARTIFACT_MIN_GAP_BEATS
             and right_gap >= VOICE_ISOLATED_ARTIFACT_MIN_GAP_BEATS
         ):
-            artifact_indices.add(note_index)
+            artifact_indices.add(event_index)
 
     return artifact_indices
 
 
-def _bridge_short_voice_phrase_gaps(notes: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
-    ordered_notes = _deduplicate_and_sort(notes)
-    bridge_targets = _short_voice_phrase_gap_targets(ordered_notes)
+def _bridge_short_voice_phrase_gaps(events: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
+    ordered_events = _deduplicate_and_sort(events)
+    bridge_targets = _short_voice_phrase_gap_targets(ordered_events)
     if not bridge_targets:
-        return ordered_notes, 0
+        return ordered_events, 0
 
-    bridged_notes: list[TrackPitchEvent] = []
-    for index, note in enumerate(ordered_notes):
-        next_note = bridge_targets.get(index)
-        if next_note is None:
-            bridged_notes.append(note)
+    bridged_events: list[TrackPitchEvent] = []
+    for index, event in enumerate(ordered_events):
+        next_event = bridge_targets.get(index)
+        if next_event is None:
+            bridged_events.append(event)
             continue
-        bridged_notes.append(
-            _extend_note_to_beat(
-                note,
-                end_beat=next_note.beat,
+        bridged_events.append(
+            _extend_event_to_beat(
+                event,
+                end_beat=next_event.beat,
                 bpm=bpm,
                 warning="voice_phrase_gap_bridged",
             )
         )
-    return bridged_notes, len(bridge_targets)
+    return bridged_events, len(bridge_targets)
 
 
-def _short_voice_phrase_gap_targets(ordered_notes: list[TrackPitchEvent]) -> dict[int, TrackPitchEvent]:
+def _short_voice_phrase_gap_targets(ordered_events: list[TrackPitchEvent]) -> dict[int, TrackPitchEvent]:
     pitched_indices = [
         index
-        for index, note in enumerate(ordered_notes)
-        if not note.is_rest and _resolve_pitch_midi(note) is not None
+        for index, event in enumerate(ordered_events)
+        if not event.is_rest and _resolve_pitch_midi(event) is not None
     ]
     if len(pitched_indices) < 2:
         return {}
 
     bridge_targets: dict[int, TrackPitchEvent] = {}
     for left_index, right_index in zip(pitched_indices, pitched_indices[1:], strict=False):
-        left_note = ordered_notes[left_index]
-        right_note = ordered_notes[right_index]
-        gap = _gap_between(left_note, right_note)
+        left_event = ordered_events[left_index]
+        right_event = ordered_events[right_index]
+        gap = _gap_between(left_event, right_event)
         if gap <= 0 or gap > VOICE_PHRASE_GAP_MAX_BEATS:
             continue
-        if left_note.confidence < VOICE_PHRASE_GAP_MIN_CONFIDENCE:
+        if left_event.confidence < VOICE_PHRASE_GAP_MIN_CONFIDENCE:
             continue
-        if right_note.confidence < VOICE_PHRASE_GAP_MIN_CONFIDENCE:
+        if right_event.confidence < VOICE_PHRASE_GAP_MIN_CONFIDENCE:
             continue
-        if left_note.duration_beats < MIN_EVENT_DURATION_BEATS or right_note.duration_beats < MIN_EVENT_DURATION_BEATS:
+        if left_event.duration_beats < MIN_EVENT_DURATION_BEATS or right_event.duration_beats < MIN_EVENT_DURATION_BEATS:
             continue
-        left_pitch = _resolve_pitch_midi(left_note)
-        right_pitch = _resolve_pitch_midi(right_note)
+        left_pitch = _resolve_pitch_midi(left_event)
+        right_pitch = _resolve_pitch_midi(right_event)
         if left_pitch is None or right_pitch is None:
             continue
         if left_pitch == right_pitch:
             continue
         if abs(left_pitch - right_pitch) > VOICE_PHRASE_GAP_MAX_INTERVAL:
             continue
-        if any(note.is_rest for note in ordered_notes[left_index + 1 : right_index]):
+        if any(event.is_rest for event in ordered_events[left_index + 1 : right_index]):
             continue
-        bridge_targets[left_index] = right_note
+        bridge_targets[left_index] = right_event
     return bridge_targets
 
 
 def _bridge_measure_tail_gaps(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> tuple[list[TrackPitchEvent], int]:
-    ordered_notes = _deduplicate_and_sort(notes)
+    ordered_events = _deduplicate_and_sort(events)
     bridge_targets = _measure_tail_gap_targets(
-        ordered_notes,
+        ordered_events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
     if not bridge_targets:
-        return ordered_notes, 0
+        return ordered_events, 0
 
-    bridged_notes: list[TrackPitchEvent] = []
-    for index, note in enumerate(ordered_notes):
+    bridged_events: list[TrackPitchEvent] = []
+    for index, event in enumerate(ordered_events):
         measure_end = bridge_targets.get(index)
         if measure_end is None:
-            bridged_notes.append(note)
+            bridged_events.append(event)
             continue
-        bridged_notes.append(
-            _extend_note_to_beat(
-                note,
+        bridged_events.append(
+            _extend_event_to_beat(
+                event,
                 end_beat=measure_end,
                 bpm=bpm,
                 warning="voice_measure_tail_bridged",
             )
         )
-    return bridged_notes, len(bridge_targets)
+    return bridged_events, len(bridge_targets)
 
 
 def _measure_tail_gap_targets(
-    ordered_notes: list[TrackPitchEvent],
+    ordered_events: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> dict[int, float]:
     pitched_indices = [
         index
-        for index, note in enumerate(ordered_notes)
-        if not note.is_rest and _resolve_pitch_midi(note) is not None
+        for index, event in enumerate(ordered_events)
+        if not event.is_rest and _resolve_pitch_midi(event) is not None
     ]
     if len(pitched_indices) < 2:
         return {}
 
     beats_per_measure = quarter_beats_per_measure(time_signature_numerator, time_signature_denominator)
     bridge_targets: dict[int, float] = {}
-    for position, note_index in enumerate(pitched_indices[:-1]):
-        note = ordered_notes[note_index]
-        if note.confidence < VOICE_MEASURE_TAIL_MIN_CONFIDENCE:
+    for position, event_index in enumerate(pitched_indices[:-1]):
+        event = ordered_events[event_index]
+        if event.confidence < VOICE_MEASURE_TAIL_MIN_CONFIDENCE:
             continue
-        if note.duration_beats < VOICE_MEASURE_TAIL_MIN_DURATION_BEATS:
+        if event.duration_beats < VOICE_MEASURE_TAIL_MIN_DURATION_BEATS:
             continue
 
-        note_end = note.beat + note.duration_beats
+        event_end = event.beat + event.duration_beats
         measure_index = measure_index_from_beat(
-            note.beat,
+            event.beat,
             time_signature_numerator,
             time_signature_denominator,
         )
         measure_end = 1 + measure_index * beats_per_measure
-        tail_gap = round(measure_end - note_end, 4)
+        tail_gap = round(measure_end - event_end, 4)
         if tail_gap <= 0 or tail_gap > VOICE_MEASURE_TAIL_GAP_MAX_BEATS:
             continue
 
-        next_note = ordered_notes[pitched_indices[position + 1]]
-        if next_note.beat < measure_end - 0.001:
+        next_event = ordered_events[pitched_indices[position + 1]]
+        if next_event.beat < measure_end - 0.001:
             continue
-        if next_note.beat - measure_end > VOICE_MEASURE_TAIL_FOLLOWUP_MAX_BEATS:
+        if next_event.beat - measure_end > VOICE_MEASURE_TAIL_FOLLOWUP_MAX_BEATS:
             continue
         if any(
             candidate.is_rest and candidate.beat < measure_end
-            for candidate in ordered_notes[note_index + 1 : pitched_indices[position + 1]]
+            for candidate in ordered_events[event_index + 1 : pitched_indices[position + 1]]
         ):
             continue
-        bridge_targets[note_index] = measure_end
+        bridge_targets[event_index] = measure_end
     return bridge_targets
 
 
-def _collapse_short_note_clusters(
-    notes: list[TrackPitchEvent],
+def _collapse_short_event_clusters(
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> tuple[list[TrackPitchEvent], int]:
-    ordered_notes = _deduplicate_and_sort(notes)
-    collapsed_notes: list[TrackPitchEvent] = []
+    ordered_events = _deduplicate_and_sort(events)
+    collapsed_events: list[TrackPitchEvent] = []
     collapse_count = 0
     index = 0
-    while index < len(ordered_notes):
-        cluster_indices = _short_note_cluster_at(
-            ordered_notes,
+    while index < len(ordered_events):
+        cluster_indices = _short_event_cluster_at(
+            ordered_events,
             start_index=index,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
         if not cluster_indices:
-            collapsed_notes.append(ordered_notes[index])
+            collapsed_events.append(ordered_events[index])
             index += 1
             continue
 
-        cluster_notes = [ordered_notes[cluster_index] for cluster_index in cluster_indices]
-        representative = max(cluster_notes, key=_note_weight)
+        cluster_events = [ordered_events[cluster_index] for cluster_index in cluster_indices]
+        representative = max(cluster_events, key=_event_weight)
         representative_pitch = _resolve_pitch_midi(representative)
         if representative_pitch is None:
-            collapsed_notes.extend(cluster_notes)
+            collapsed_events.extend(cluster_events)
             index = cluster_indices[-1] + 1
             continue
 
-        collapsed_notes.append(
-            _merge_note_span(
-                cluster_notes[0],
-                cluster_notes[-1],
+        collapsed_events.append(
+            _merge_event_span(
+                cluster_events[0],
+                cluster_events[-1],
                 bpm=bpm,
                 pitch_midi=representative_pitch,
                 warning="voice_short_cluster_collapsed",
-                confidence=max(note.confidence for note in cluster_notes),
+                confidence=max(event.confidence for event in cluster_events),
             )
         )
         collapse_count += 1
         index = cluster_indices[-1] + 1
-    return collapsed_notes, collapse_count
+    return collapsed_events, collapse_count
 
 
-def _short_note_cluster_at(
-    ordered_notes: list[TrackPitchEvent],
+def _short_event_cluster_at(
+    ordered_events: list[TrackPitchEvent],
     *,
     start_index: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> list[int]:
-    if start_index >= len(ordered_notes):
+    if start_index >= len(ordered_events):
         return []
 
-    first_note = ordered_notes[start_index]
-    first_pitch = _resolve_pitch_midi(first_note)
-    if first_note.is_rest or first_pitch is None:
+    first_event = ordered_events[start_index]
+    first_pitch = _resolve_pitch_midi(first_event)
+    if first_event.is_rest or first_pitch is None:
         return []
-    if first_note.duration_beats > VOICE_SHORT_CLUSTER_MAX_DURATION_BEATS:
+    if first_event.duration_beats > VOICE_SHORT_CLUSTER_MAX_DURATION_BEATS:
         return []
 
     measure_index = measure_index_from_beat(
-        first_note.beat,
+        first_event.beat,
         time_signature_numerator,
         time_signature_denominator,
     )
     cluster_indices = [start_index]
-    previous_note = first_note
-    for candidate_index in range(start_index + 1, len(ordered_notes)):
-        candidate = ordered_notes[candidate_index]
+    previous_event = first_event
+    for candidate_index in range(start_index + 1, len(ordered_events)):
+        candidate = ordered_events[candidate_index]
         candidate_pitch = _resolve_pitch_midi(candidate)
         if candidate.is_rest or candidate_pitch is None:
             break
@@ -973,21 +973,21 @@ def _short_note_cluster_at(
         )
         if candidate_measure != measure_index:
             break
-        gap = _gap_between(previous_note, candidate)
+        gap = _gap_between(previous_event, candidate)
         if gap < -0.001 or gap > VOICE_SHORT_CLUSTER_MAX_GAP_BEATS:
             break
-        cluster_span = candidate.beat + candidate.duration_beats - first_note.beat
+        cluster_span = candidate.beat + candidate.duration_beats - first_event.beat
         if cluster_span > VOICE_SHORT_CLUSTER_MAX_SPAN_BEATS + 0.001:
             break
         cluster_indices.append(candidate_index)
-        previous_note = candidate
+        previous_event = candidate
 
-    if len(cluster_indices) < VOICE_SHORT_CLUSTER_MIN_NOTES:
+    if len(cluster_indices) < VOICE_SHORT_CLUSTER_MIN_EVENTS:
         return []
 
-    cluster_notes = [ordered_notes[index] for index in cluster_indices]
-    average_confidence = sum(note.confidence for note in cluster_notes) / len(cluster_notes)
-    pitches = [_resolve_pitch_midi(note) for note in cluster_notes]
+    cluster_events = [ordered_events[index] for index in cluster_indices]
+    average_confidence = sum(event.confidence for event in cluster_events) / len(cluster_events)
+    pitches = [_resolve_pitch_midi(event) for event in cluster_events]
     resolved_pitches = [pitch for pitch in pitches if pitch is not None]
     pitch_span = max(resolved_pitches) - min(resolved_pitches) if resolved_pitches else 999
     if average_confidence > VOICE_SHORT_CLUSTER_MAX_AVERAGE_CONFIDENCE:
@@ -997,19 +997,19 @@ def _short_note_cluster_at(
     return cluster_indices
 
 
-def _collapse_neighbor_pitch_blips(notes: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
-    ordered_notes = _deduplicate_and_sort(notes)
+def _collapse_neighbor_pitch_blips(events: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
+    ordered_events = _deduplicate_and_sort(events)
     collapsed: list[TrackPitchEvent] = []
     collapse_count = 0
     index = 0
-    while index < len(ordered_notes):
-        if index <= len(ordered_notes) - 3:
-            previous_note = ordered_notes[index]
-            current_note = ordered_notes[index + 1]
-            next_note = ordered_notes[index + 2]
-            previous_pitch = _resolve_pitch_midi(previous_note)
-            current_pitch = _resolve_pitch_midi(current_note)
-            next_pitch = _resolve_pitch_midi(next_note)
+    while index < len(ordered_events):
+        if index <= len(ordered_events) - 3:
+            previous_event = ordered_events[index]
+            current_event = ordered_events[index + 1]
+            next_event = ordered_events[index + 2]
+            previous_pitch = _resolve_pitch_midi(previous_event)
+            current_pitch = _resolve_pitch_midi(current_event)
+            next_pitch = _resolve_pitch_midi(next_event)
             if (
                 previous_pitch is not None
                 and current_pitch is not None
@@ -1017,76 +1017,76 @@ def _collapse_neighbor_pitch_blips(notes: list[TrackPitchEvent], *, bpm: int) ->
                 and previous_pitch == next_pitch
                 and current_pitch != previous_pitch
                 and abs(current_pitch - previous_pitch) <= VOICE_NEIGHBOR_BLIP_MAX_INTERVAL
-                and current_note.duration_beats <= VOICE_NEIGHBOR_BLIP_MAX_DURATION_BEATS
-                and current_note.confidence <= max(previous_note.confidence, next_note.confidence) + 0.04
-                and _gap_between(previous_note, current_note) <= VOICE_SUSTAIN_MERGE_GAP_BEATS
-                and _gap_between(current_note, next_note) <= VOICE_SUSTAIN_MERGE_GAP_BEATS
+                and current_event.duration_beats <= VOICE_NEIGHBOR_BLIP_MAX_DURATION_BEATS
+                and current_event.confidence <= max(previous_event.confidence, next_event.confidence) + 0.04
+                and _gap_between(previous_event, current_event) <= VOICE_SUSTAIN_MERGE_GAP_BEATS
+                and _gap_between(current_event, next_event) <= VOICE_SUSTAIN_MERGE_GAP_BEATS
             ):
-                merged_note = _merge_note_span(
-                    previous_note,
-                    next_note,
+                merged_event = _merge_event_span(
+                    previous_event,
+                    next_event,
                     bpm=bpm,
                     pitch_midi=previous_pitch,
                     warning="voice_pitch_blip_collapsed",
-                    confidence=max(previous_note.confidence, next_note.confidence, current_note.confidence * 0.94),
+                    confidence=max(previous_event.confidence, next_event.confidence, current_event.confidence * 0.94),
                 )
-                collapsed.append(merged_note)
+                collapsed.append(merged_event)
                 collapse_count += 1
                 index += 3
                 continue
-        collapsed.append(ordered_notes[index])
+        collapsed.append(ordered_events[index])
         index += 1
     return collapsed, collapse_count
 
 
-def _merge_voice_sustain_repetitions(notes: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
-    ordered_notes = _deduplicate_and_sort(notes)
-    if len(ordered_notes) < 2:
-        return ordered_notes, 0
+def _merge_voice_sustain_repetitions(events: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
+    ordered_events = _deduplicate_and_sort(events)
+    if len(ordered_events) < 2:
+        return ordered_events, 0
 
     merged: list[TrackPitchEvent] = []
     merge_count = 0
-    current = ordered_notes[0]
-    for next_note in ordered_notes[1:]:
+    current = ordered_events[0]
+    for next_event in ordered_events[1:]:
         current_pitch = _resolve_pitch_midi(current)
-        next_pitch = _resolve_pitch_midi(next_note)
+        next_pitch = _resolve_pitch_midi(next_event)
         if (
             current_pitch is not None
             and next_pitch == current_pitch
             and not current.is_rest
-            and not next_note.is_rest
-            and _gap_between(current, next_note) <= VOICE_SUSTAIN_MERGE_GAP_BEATS
+            and not next_event.is_rest
+            and _gap_between(current, next_event) <= VOICE_SUSTAIN_MERGE_GAP_BEATS
         ):
-            current = _merge_note_span(
+            current = _merge_event_span(
                 current,
-                next_note,
+                next_event,
                 bpm=bpm,
                 pitch_midi=current_pitch,
                 warning="voice_sustain_merged",
-                confidence=max(current.confidence, next_note.confidence),
+                confidence=max(current.confidence, next_event.confidence),
             )
             merge_count += 1
             continue
         merged.append(current)
-        current = next_note
+        current = next_event
     merged.append(current)
     return merged, merge_count
 
 
 def _choose_readable_voice_candidate(
-    source_notes: list[TrackPitchEvent],
+    source_events: list[TrackPitchEvent],
     *,
-    current_notes: list[TrackPitchEvent],
+    current_events: list[TrackPitchEvent],
     bpm: int,
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> tuple[list[TrackPitchEvent], list[str]]:
-    if not current_notes:
-        return current_notes, []
+    if not current_events:
+        return current_events, []
 
-    coarse_notes = normalize_track_events(
-        source_notes,
+    coarse_events = normalize_track_events(
+        source_events,
         bpm=bpm,
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
@@ -1094,8 +1094,8 @@ def _choose_readable_voice_candidate(
         quantization_grid=VOICE_DENSITY_SIMPLIFICATION_GRID,
         merge_adjacent_same_pitch=True,
     )
-    coarse_notes, polish_actions = _polish_voice_events(
-        coarse_notes,
+    coarse_events, polish_actions = _polish_voice_events(
+        coarse_events,
         bpm=bpm,
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
@@ -1104,61 +1104,61 @@ def _choose_readable_voice_candidate(
     )
 
     current_score = _voice_readability_score(
-        current_notes,
+        current_events,
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
     coarse_score = _voice_readability_score(
-        coarse_notes,
+        coarse_events,
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
 
     if coarse_score + 0.75 < current_score:
-        return coarse_notes, ["readability_grid_0.5", *polish_actions]
-    return current_notes, []
+        return coarse_events, ["readability_grid_0.5", *polish_actions]
+    return current_events, []
 
 
 def _voice_readability_score(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> float:
-    if not notes:
+    if not events:
         return 999.0
 
-    pitched_notes = [note for note in notes if not note.is_rest and _resolve_pitch_midi(note) is not None]
-    if not pitched_notes:
+    pitched_events = [event for event in events if not event.is_rest and _resolve_pitch_midi(event) is not None]
+    if not pitched_events:
         return 999.0
-    measure_groups = _notes_by_measure(pitched_notes)
+    measure_groups = _events_by_measure(pitched_events)
     max_events = _max_voice_events_per_measure(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
     max_events_per_measure = max((len(group) for group in measure_groups.values()), default=0)
-    short_ratio = sum(1 for note in pitched_notes if note.duration_beats <= 0.25) / len(pitched_notes)
-    isolated_artifact_ratio = count_isolated_short_voice_artifacts(pitched_notes) / len(pitched_notes)
-    short_gap_ratio = count_short_voice_phrase_gaps(pitched_notes) / len(pitched_notes)
+    short_ratio = sum(1 for event in pitched_events if event.duration_beats <= 0.25) / len(pitched_events)
+    isolated_artifact_ratio = count_isolated_short_voice_artifacts(pitched_events) / len(pitched_events)
+    short_gap_ratio = count_short_voice_phrase_gaps(pitched_events) / len(pitched_events)
     measure_tail_ratio = count_measure_tail_gaps(
-        pitched_notes,
+        pitched_events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
-    ) / len(pitched_notes)
-    short_cluster_ratio = count_short_note_clusters(
-        pitched_notes,
+    ) / len(pitched_events)
+    short_cluster_ratio = count_short_event_clusters(
+        pitched_events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
-    ) / len(pitched_notes)
-    tie_ratio = sum(1 for note in pitched_notes if note.is_tied) / len(pitched_notes)
-    accidental_ratio = sum(1 for note in pitched_notes if note.accidental) / len(pitched_notes)
+    ) / len(pitched_events)
+    tie_ratio = sum(1 for event in pitched_events if event.is_tied) / len(pitched_events)
+    accidental_ratio = sum(1 for event in pitched_events if event.accidental) / len(pitched_events)
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
     out_of_range_ratio = sum(
-        1 for note in pitched_notes if not low <= (_resolve_pitch_midi(note) or 0) <= high
-    ) / len(pitched_notes)
+        1 for event in pitched_events if not low <= (_resolve_pitch_midi(event) or 0) <= high
+    ) / len(pitched_events)
     density_penalty = max(0, max_events_per_measure - max_events) * 1.25
     return (
         density_penalty
@@ -1178,19 +1178,19 @@ def _gap_between(left: TrackPitchEvent, right: TrackPitchEvent) -> float:
     return round(right.beat - (left.beat + left.duration_beats), 4)
 
 
-def _merge_note_span(
-    first_note: TrackPitchEvent,
-    last_note: TrackPitchEvent,
+def _merge_event_span(
+    first_event: TrackPitchEvent,
+    last_event: TrackPitchEvent,
     *,
     bpm: int,
     pitch_midi: int,
     warning: str,
     confidence: float,
 ) -> TrackPitchEvent:
-    start_beat = first_note.beat
-    end_beat = max(start_beat + MIN_EVENT_DURATION_BEATS, last_note.beat + last_note.duration_beats)
+    start_beat = first_event.beat
+    end_beat = max(start_beat + MIN_EVENT_DURATION_BEATS, last_event.beat + last_event.duration_beats)
     duration_beats = round(end_beat - start_beat, 4)
-    return first_note.model_copy(
+    return first_event.model_copy(
         update={
             "pitch_midi": pitch_midi,
             "label": midi_to_label(pitch_midi),
@@ -1201,25 +1201,25 @@ def _merge_note_span(
             "onset_seconds": round(max(0, (start_beat - 1) * seconds_per_beat(bpm)), 4),
             "duration_seconds": round(duration_beats * seconds_per_beat(bpm), 4),
             "confidence": round(min(1.0, max(0.0, confidence)), 4),
-            "is_tied": first_note.is_tied or last_note.is_tied,
-            "quality_warnings": _append_warning(first_note.quality_warnings, warning),
+            "is_tied": first_event.is_tied or last_event.is_tied,
+            "quality_warnings": _append_warning(first_event.quality_warnings, warning),
         }
     )
 
 
-def _extend_note_to_beat(note: TrackPitchEvent, *, end_beat: float, bpm: int, warning: str) -> TrackPitchEvent:
-    duration_beats = round(max(note.duration_beats, end_beat - note.beat), 4)
-    return note.model_copy(
+def _extend_event_to_beat(event: TrackPitchEvent, *, end_beat: float, bpm: int, warning: str) -> TrackPitchEvent:
+    duration_beats = round(max(event.duration_beats, end_beat - event.beat), 4)
+    return event.model_copy(
         update={
             "duration_beats": duration_beats,
             "duration_seconds": round(duration_beats * seconds_per_beat(bpm), 4),
-            "quality_warnings": _append_warning(note.quality_warnings, warning),
+            "quality_warnings": _append_warning(event.quality_warnings, warning),
         }
     )
 
 
 def _repair_symbolic_timing_metadata(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
@@ -1227,14 +1227,14 @@ def _repair_symbolic_timing_metadata(
 ) -> list[TrackPitchEvent]:
     beat_seconds = seconds_per_beat(max(1, bpm))
     repaired: list[TrackPitchEvent] = []
-    for note in notes:
-        beat = max(1.0, round(note.beat, 4))
-        duration_beats = max(0.0625, round(note.duration_beats, 4))
-        pitch_midi = note.pitch_midi
-        if pitch_midi is None and not note.is_rest:
-            pitch_midi = label_to_midi(note.label)
+    for event in events:
+        beat = max(1.0, round(event.beat, 4))
+        duration_beats = max(0.0625, round(event.duration_beats, 4))
+        pitch_midi = event.pitch_midi
+        if pitch_midi is None and not event.is_rest:
+            pitch_midi = label_to_midi(event.label)
         repaired.append(
-            note.model_copy(
+            event.model_copy(
                 update={
                     "pitch_midi": pitch_midi,
                     "beat": beat,
@@ -1261,7 +1261,7 @@ def _repair_symbolic_timing_metadata(
 
 
 def _enforce_registration_event_contract(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
@@ -1270,12 +1270,12 @@ def _enforce_registration_event_contract(
 ) -> tuple[list[TrackPitchEvent], list[str], dict[str, Any]]:
     """Force final pitch events onto the studio region-event clock.
 
-    Earlier stages may transcribe, import, simplify, align, or review notes.
+    Earlier stages may transcribe, import, simplify, align, or review events.
     Registration must end with one canonical event contract: the studio BPM and
     meter define seconds, measures, track voice identity, pitch register, and key spelling.
     """
 
-    if not notes:
+    if not events:
         return [], [], _event_contract_diagnostics(
             [],
             bpm=bpm,
@@ -1284,23 +1284,23 @@ def _enforce_registration_event_contract(
             time_signature_denominator=time_signature_denominator,
         )
 
-    contract_notes = notes
+    contract_events = events
     actions: list[str] = []
-    if _has_measure_crossing_notes(
-        contract_notes,
+    if _has_measure_crossing_events(
+        contract_events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     ):
         quantization_grid = min(
             (
-                note.quantization_grid
-                for note in contract_notes
-                if note.quantization_grid is not None and note.quantization_grid > 0
+                event.quantization_grid
+                for event in contract_events
+                if event.quantization_grid is not None and event.quantization_grid > 0
             ),
             default=VOICE_QUANTIZATION_GRID_BEATS,
         )
-        contract_notes = normalize_track_events(
-            contract_notes,
+        contract_events = normalize_track_events(
+            contract_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -1310,28 +1310,28 @@ def _enforce_registration_event_contract(
         )
         actions.append("event_contract_measure_split")
 
-    shared_key_signature = _shared_key_signature(contract_notes)
-    annotated_notes = annotate_track_events_for_slot(
-        contract_notes,
+    shared_key_signature = _shared_key_signature(contract_events)
+    annotated_events = annotate_track_events_for_slot(
+        contract_events,
         slot_id=slot_id,
         key_signature=shared_key_signature,
     )
     pitch_register = pitch_register_for_slot(slot_id)
     pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
-    key_signature = shared_key_signature or _shared_key_signature(annotated_notes) or "C"
+    key_signature = shared_key_signature or _shared_key_signature(annotated_events) or "C"
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
     beat_seconds = seconds_per_beat(max(1, bpm))
 
     enforced: list[TrackPitchEvent] = []
     changed_count = 0
-    for note in annotated_notes:
-        beat = max(1.0, round(note.beat, 4))
-        duration_beats = max(0.0625, round(note.duration_beats, 4))
-        pitch_midi = _resolve_pitch_midi(note)
-        spelled_label = note.spelled_label
-        accidental = note.accidental
-        label = note.label
-        if not note.is_rest and pitch_midi is not None:
+    for event in annotated_events:
+        beat = max(1.0, round(event.beat, 4))
+        duration_beats = max(0.0625, round(event.duration_beats, 4))
+        pitch_midi = _resolve_pitch_midi(event)
+        spelled_label = event.spelled_label
+        accidental = event.accidental
+        label = event.label
+        if not event.is_rest and pitch_midi is not None:
             spelled_label = spell_midi_label(pitch_midi, spelling_mode=spelling_mode)
             accidental = accidental_for_key(spelled_label, key_signature)
             label = spelled_label
@@ -1364,9 +1364,9 @@ def _enforce_registration_event_contract(
             ),
             "voice_index": slot_id,
         }
-        if any(getattr(note, key) != value for key, value in update.items()):
+        if any(getattr(event, key) != value for key, value in update.items()):
             changed_count += 1
-        enforced.append(note.model_copy(update=update))
+        enforced.append(event.model_copy(update=update))
 
     if changed_count:
         actions.append(f"event_contract_enforced_{changed_count}")
@@ -1379,22 +1379,22 @@ def _enforce_registration_event_contract(
     )
 
 
-def _shared_key_signature(notes: list[TrackPitchEvent]) -> str | None:
-    key_counts = Counter(note.key_signature for note in notes if note.key_signature in KEY_FIFTHS)
+def _shared_key_signature(events: list[TrackPitchEvent]) -> str | None:
+    key_counts = Counter(event.key_signature for event in events if event.key_signature in KEY_FIFTHS)
     if not key_counts:
         return None
     return key_counts.most_common(1)[0][0]
 
 
 def _event_contract_diagnostics(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> dict[str, Any]:
-    if not notes:
+    if not events:
         return {
             "version": "event_contract_v1",
             "event_count": 0,
@@ -1405,27 +1405,27 @@ def _event_contract_diagnostics(
             "pitch_register_policy_consistent": True,
         }
 
-    voice_indices = {note.voice_index for note in notes}
-    key_signatures = {note.key_signature for note in notes}
-    pitch_registers = {note.pitch_register for note in notes}
+    voice_indices = {event.voice_index for event in events}
+    key_signatures = {event.key_signature for event in events}
+    pitch_registers = {event.pitch_register for event in events}
     beat_seconds = seconds_per_beat(max(1, bpm))
     expected_pitch_register = pitch_register_for_slot(slot_id)
     seconds_follow_beat_grid = all(
-        abs(note.onset_seconds - round(max(0, (note.beat - 1) * beat_seconds), 4)) <= 0.0001
-        and abs(note.duration_seconds - round(note.duration_beats * beat_seconds, 4)) <= 0.0001
-        for note in notes
+        abs(event.onset_seconds - round(max(0, (event.beat - 1) * beat_seconds), 4)) <= 0.0001
+        and abs(event.duration_seconds - round(event.duration_beats * beat_seconds, 4)) <= 0.0001
+        for event in events
     )
     measure_metadata_consistent = all(
-        note.measure_index == measure_index_from_beat(
-            note.beat,
+        event.measure_index == measure_index_from_beat(
+            event.beat,
             time_signature_numerator,
             time_signature_denominator,
         )
         and abs(
-            (note.beat_in_measure or 0)
+            (event.beat_in_measure or 0)
             - round(
                 beat_in_measure_from_beat(
-                    note.beat,
+                    event.beat,
                     time_signature_numerator,
                     time_signature_denominator,
                 ),
@@ -1433,11 +1433,11 @@ def _event_contract_diagnostics(
             )
         )
         <= 0.0001
-        for note in notes
+        for event in events
     )
     return {
         "version": "event_contract_v1",
-        "event_count": len(notes),
+        "event_count": len(events),
         "single_voice_index": len(voice_indices) == 1 and slot_id in voice_indices,
         "single_key_signature": len(key_signatures) == 1 and None not in key_signatures,
         "seconds_follow_beat_grid": seconds_follow_beat_grid,
@@ -1450,7 +1450,7 @@ def _event_contract_diagnostics(
 
 
 def _align_to_reference_tracks(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     reference_tracks: list[list[TrackPitchEvent]],
     *,
     bpm: int,
@@ -1460,7 +1460,7 @@ def _align_to_reference_tracks(
     time_signature_denominator: int,
 ) -> dict[str, Any]:
     base_result: dict[str, Any] = {
-        "events": notes,
+        "events": events,
         "evaluated": False,
         "applied": False,
         "offset_beats": 0.0,
@@ -1468,27 +1468,27 @@ def _align_to_reference_tracks(
         "best_score": None,
         "matched_event_count": 0,
         "reference_event_count": 0,
-        "candidate_event_count": len([note for note in notes if not note.is_rest]),
+        "candidate_event_count": len([event for event in events if not event.is_rest]),
         "reason": "not_evaluated",
     }
-    if not _is_reference_alignable(source_kind, notes):
+    if not _is_reference_alignable(source_kind, events):
         return {**base_result, "reason": "source_not_reference_alignable"}
 
-    reference_notes = [
-        note
-        for track_notes in reference_tracks
-        for note in track_notes
-        if not note.is_rest
+    reference_events = [
+        event
+        for track_events in reference_tracks
+        for event in track_events
+        if not event.is_rest
     ]
-    candidate_events = [note for note in notes if not note.is_rest]
-    base_result["reference_event_count"] = len(reference_notes)
-    if len(candidate_events) < REFERENCE_ALIGNMENT_MIN_NOTES:
+    candidate_events = [event for event in events if not event.is_rest]
+    base_result["reference_event_count"] = len(reference_events)
+    if len(candidate_events) < REFERENCE_ALIGNMENT_MIN_EVENTS:
         return {**base_result, "reason": "too_few_candidate_events"}
-    if len(reference_notes) < REFERENCE_ALIGNMENT_MIN_NOTES:
-        return {**base_result, "reason": "too_few_reference_notes"}
+    if len(reference_events) < REFERENCE_ALIGNMENT_MIN_EVENTS:
+        return {**base_result, "reason": "too_few_reference_events"}
 
-    reference_beats = sorted({round(note.beat, 4) for note in reference_notes})
-    candidate_beats = [round(note.beat, 4) for note in candidate_events]
+    reference_beats = sorted({round(event.beat, 4) for event in reference_events})
+    candidate_beats = [round(event.beat, 4) for event in candidate_events]
     if not reference_beats or not candidate_beats:
         return {**base_result, "reason": "missing_reference_grid"}
 
@@ -1530,8 +1530,8 @@ def _align_to_reference_tracks(
     if min(candidate_beats) + best_offset < 1.0:
         return {**evaluation, "offset_beats": 0.0, "reason": "would_shift_before_score_start"}
 
-    shifted_notes = _shift_notes_to_reference_grid(
-        notes,
+    shifted_events = _shift_events_to_reference_grid(
+        events,
         offset_beats=best_offset,
         bpm=bpm,
         slot_id=slot_id,
@@ -1540,16 +1540,16 @@ def _align_to_reference_tracks(
     )
     return {
         **evaluation,
-        "events": shifted_notes,
+        "events": shifted_events,
         "applied": True,
         "reason": "applied_reference_grid_alignment",
     }
 
 
-def _is_reference_alignable(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
+def _is_reference_alignable(source_kind: SourceKind, events: list[TrackPitchEvent]) -> bool:
     if source_kind in VOICE_LIKE_SOURCE_KINDS:
         return True
-    return any(note.source in {"voice", "recording", "audio", "omr"} for note in notes)
+    return any(event.source in {"voice", "recording", "audio", "document"} for event in events)
 
 
 def _reference_alignment_offsets() -> list[float]:
@@ -1583,8 +1583,8 @@ def _reference_alignment_score(
     return mean_distance + offset_penalty, matches
 
 
-def _shift_notes_to_reference_grid(
-    notes: list[TrackPitchEvent],
+def _shift_events_to_reference_grid(
+    events: list[TrackPitchEvent],
     *,
     offset_beats: float,
     bpm: int,
@@ -1594,14 +1594,14 @@ def _shift_notes_to_reference_grid(
 ) -> list[TrackPitchEvent]:
     beat_seconds = seconds_per_beat(max(1, bpm))
     shifted: list[TrackPitchEvent] = []
-    for note in notes:
-        beat = round(max(1.0, note.beat + offset_beats), 4)
+    for event in events:
+        beat = round(max(1.0, event.beat + offset_beats), 4)
         shifted.append(
-            note.model_copy(
+            event.model_copy(
                 update={
                     "beat": beat,
                     "onset_seconds": round(max(0, (beat - 1) * beat_seconds), 4),
-                    "duration_seconds": round(note.duration_beats * beat_seconds, 4),
+                    "duration_seconds": round(event.duration_beats * beat_seconds, 4),
                     "measure_index": measure_index_from_beat(
                         beat,
                         time_signature_numerator,
@@ -1616,22 +1616,22 @@ def _shift_notes_to_reference_grid(
                         4,
                     ),
                     "quality_warnings": _append_warning(
-                        note.quality_warnings,
+                        event.quality_warnings,
                         "reference_grid_aligned",
                     ),
                 }
             )
         )
-    if _has_measure_crossing_notes(
+    if _has_measure_crossing_events(
         shifted,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     ):
         quantization_grid = min(
             (
-                note.quantization_grid
-                for note in shifted
-                if note.quantization_grid is not None and note.quantization_grid > 0
+                event.quantization_grid
+                for event in shifted
+                if event.quantization_grid is not None and event.quantization_grid > 0
             ),
             default=REFERENCE_ALIGNMENT_GRID_BEATS,
         )
@@ -1645,57 +1645,57 @@ def _shift_notes_to_reference_grid(
             merge_adjacent_same_pitch=False,
         )
         shifted = [
-            note.model_copy(
+            event.model_copy(
                 update={
                     "quality_warnings": _append_warning(
-                        note.quality_warnings,
+                        event.quality_warnings,
                         "reference_grid_aligned",
                     )
                 }
             )
-            for note in shifted
+            for event in shifted
         ]
     return _deduplicate_and_sort(shifted)
 
 
-def _has_measure_crossing_notes(
-    notes: list[TrackPitchEvent],
+def _has_measure_crossing_events(
+    events: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> bool:
     beats_per_measure = quarter_beats_per_measure(time_signature_numerator, time_signature_denominator)
-    for note in notes:
-        if note.duration_beats <= 0:
+    for event in events:
+        if event.duration_beats <= 0:
             return True
-        measure_index = note.measure_index or measure_index_from_beat(
-            note.beat,
+        measure_index = event.measure_index or measure_index_from_beat(
+            event.beat,
             time_signature_numerator,
             time_signature_denominator,
         )
         measure_end = 1 + measure_index * beats_per_measure
-        if note.beat + note.duration_beats > measure_end + 0.001:
+        if event.beat + event.duration_beats > measure_end + 0.001:
             return True
     return False
 
 
-def _deduplicate_and_sort(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
+def _deduplicate_and_sort(events: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     selected: dict[tuple[float, float, int | None, bool], TrackPitchEvent] = {}
-    for note in notes:
+    for event in events:
         key = (
-            round(note.beat, 4),
-            round(note.duration_beats, 4),
-            _resolve_pitch_midi(note),
-            note.is_rest,
+            round(event.beat, 4),
+            round(event.duration_beats, 4),
+            _resolve_pitch_midi(event),
+            event.is_rest,
         )
         current = selected.get(key)
-        if current is None or _note_weight(note) > _note_weight(current):
-            selected[key] = note
-    return sorted(selected.values(), key=lambda note: (note.beat, note.is_rest, note.pitch_midi or -1, note.id))
+        if current is None or _event_weight(event) > _event_weight(current):
+            selected[key] = event
+    return sorted(selected.values(), key=lambda event: (event.beat, event.is_rest, event.pitch_midi or -1, event.id))
 
 
 def _registration_diagnostics(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     *,
     slot_id: int,
     original_count: int,
@@ -1704,35 +1704,35 @@ def _registration_diagnostics(
     time_signature_denominator: int,
     actions: list[str],
 ) -> dict[str, Any]:
-    pitched_notes = [note for note in notes if not note.is_rest and _resolve_pitch_midi(note) is not None]
+    pitched_events = [event for event in events if not event.is_rest and _resolve_pitch_midi(event) is not None]
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
-    in_range_count = sum(1 for note in pitched_notes if low <= (_resolve_pitch_midi(note) or 0) <= high)
-    grid_notes = [
-        note
-        for note in notes
-        if _is_on_grid(note.beat, VOICE_QUANTIZATION_GRID_BEATS)
-        and _is_on_grid(note.duration_beats, VOICE_QUANTIZATION_GRID_BEATS)
+    in_range_count = sum(1 for event in pitched_events if low <= (_resolve_pitch_midi(event) or 0) <= high)
+    grid_events = [
+        event
+        for event in events
+        if _is_on_grid(event.beat, VOICE_QUANTIZATION_GRID_BEATS)
+        and _is_on_grid(event.duration_beats, VOICE_QUANTIZATION_GRID_BEATS)
     ]
-    measure_groups = _notes_by_measure(notes)
-    max_events_per_measure = max((sum(1 for note in group if not note.is_rest) for group in measure_groups.values()), default=0)
+    measure_groups = _events_by_measure(events)
+    max_events_per_measure = max((sum(1 for event in group if not event.is_rest) for group in measure_groups.values()), default=0)
     cross_measure_count = sum(
         1
-        for note in notes
-        if _has_measure_crossing_notes(
-            [note],
+        for event in events
+        if _has_measure_crossing_events(
+            [event],
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
     )
-    isolated_short_event_count = count_isolated_short_voice_artifacts(notes)
-    short_phrase_gap_count = count_short_voice_phrase_gaps(notes)
+    isolated_short_event_count = count_isolated_short_voice_artifacts(events)
+    short_phrase_gap_count = count_short_voice_phrase_gaps(events)
     measure_tail_gap_count = count_measure_tail_gaps(
-        notes,
+        events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    short_note_cluster_count = count_short_note_clusters(
-        notes,
+    short_event_cluster_count = count_short_event_clusters(
+        events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
@@ -1741,24 +1741,24 @@ def _registration_diagnostics(
         "source_kind": source_kind,
         "slot_id": slot_id,
         "original_event_count": original_count,
-        "registered_event_count": len(notes),
-        "pitched_event_count": len(pitched_notes),
+        "registered_event_count": len(events),
+        "pitched_event_count": len(pitched_events),
         "measure_count": len(measure_groups),
         "max_events_per_measure": max_events_per_measure,
-        "range_fit_ratio": round(in_range_count / len(pitched_notes), 4) if pitched_notes else 1.0,
-        "timing_grid_ratio": round(len(grid_notes) / len(notes), 4) if notes else 1.0,
+        "range_fit_ratio": round(in_range_count / len(pitched_events), 4) if pitched_events else 1.0,
+        "timing_grid_ratio": round(len(grid_events) / len(events), 4) if events else 1.0,
         "cross_measure_event_count": cross_measure_count,
         "isolated_short_event_count": isolated_short_event_count,
         "short_phrase_gap_count": short_phrase_gap_count,
         "measure_tail_gap_count": measure_tail_gap_count,
-        "short_note_cluster_count": short_note_cluster_count,
-        "has_pitch_register_policy": all(note.pitch_register for note in notes),
-        "has_key_policy": all(note.key_signature for note in notes),
+        "short_event_cluster_count": short_event_cluster_count,
+        "has_pitch_register_policy": all(event.pitch_register for event in events),
+        "has_key_policy": all(event.key_signature for event in events),
         "actions": actions,
     }
 
 
-def _attach_quality_warnings(notes: list[TrackPitchEvent], diagnostics: dict[str, Any]) -> list[TrackPitchEvent]:
+def _attach_quality_warnings(events: list[TrackPitchEvent], diagnostics: dict[str, Any]) -> list[TrackPitchEvent]:
     warnings: list[str] = []
     if diagnostics["range_fit_ratio"] < 0.8:
         warnings.append("registration_range_review")
@@ -1772,21 +1772,21 @@ def _attach_quality_warnings(notes: list[TrackPitchEvent], diagnostics: dict[str
         warnings.append("registration_phrase_gap_review")
     if diagnostics["measure_tail_gap_count"] > 0:
         warnings.append("registration_measure_tail_review")
-    if diagnostics["short_note_cluster_count"] > 0:
+    if diagnostics["short_event_cluster_count"] > 0:
         warnings.append("registration_short_cluster_review")
     if not warnings:
-        return notes
+        return events
     return [
-        note.model_copy(update={"quality_warnings": _append_warning(note.quality_warnings, *warnings)})
-        for note in notes
+        event.model_copy(update={"quality_warnings": _append_warning(event.quality_warnings, *warnings)})
+        for event in events
     ]
 
 
-def _notes_by_measure(notes: list[TrackPitchEvent]) -> dict[int, list[TrackPitchEvent]]:
+def _events_by_measure(events: list[TrackPitchEvent]) -> dict[int, list[TrackPitchEvent]]:
     groups: dict[int, list[TrackPitchEvent]] = defaultdict(list)
-    for note in notes:
-        measure_index = note.measure_index or 1
-        groups[measure_index].append(note)
+    for event in events:
+        measure_index = event.measure_index or 1
+        groups[measure_index].append(event)
     return groups
 
 
@@ -1809,16 +1809,16 @@ def _max_voice_events_per_measure(
     return max(4, ceil(beats_per_measure * MAX_VOICE_EVENTS_PER_MEASURE_FACTOR))
 
 
-def _note_weight(note: TrackPitchEvent) -> float:
-    return max(0.05, note.duration_beats) * max(0.1, note.confidence)
+def _event_weight(event: TrackPitchEvent) -> float:
+    return max(0.05, event.duration_beats) * max(0.1, event.confidence)
 
 
-def _resolve_pitch_midi(note: TrackPitchEvent) -> int | None:
-    if note.pitch_midi is not None:
-        return int(round(note.pitch_midi))
-    if note.is_rest:
+def _resolve_pitch_midi(event: TrackPitchEvent) -> int | None:
+    if event.pitch_midi is not None:
+        return int(round(event.pitch_midi))
+    if event.is_rest:
         return None
-    return label_to_midi(note.label)
+    return label_to_midi(event.label)
 
 
 def _is_on_grid(value: float, grid: float) -> bool:
@@ -1879,13 +1879,13 @@ def _has_review_directive(instruction: Mapping[str, Any]) -> bool:
             _instruction_grid(instruction) is not None,
             "merge_adjacent_same_pitch" in instruction,
             "simplify_dense_measures" in instruction,
-            "suppress_unstable_notes" in instruction,
-            "sustain_repeated_notes" in instruction,
+            "suppress_unstable_events" in instruction,
+            "sustain_repeated_events" in instruction,
             "collapse_pitch_blips" in instruction,
             "remove_isolated_artifacts" in instruction,
             "bridge_short_phrase_gaps" in instruction,
             "bridge_measure_tail_gaps" in instruction,
-            "collapse_short_note_clusters" in instruction,
+            "collapse_short_event_clusters" in instruction,
             _instruction_key_signature(instruction) is not None,
             bool(instruction.get("measure_noise_indices")),
         ]
@@ -1893,7 +1893,7 @@ def _has_review_directive(instruction: Mapping[str, Any]) -> bool:
 
 
 def _should_simplify_after_review(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     instruction: Mapping[str, Any],
     *,
     time_signature_numerator: int,
@@ -1904,26 +1904,26 @@ def _should_simplify_after_review(
     if instruction.get("measure_noise_indices"):
         return True
     return _has_dense_voice_measures(
-        notes,
+        events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
 
 
-def _force_key_signature(notes: list[TrackPitchEvent], *, slot_id: int, key_signature: str) -> list[TrackPitchEvent]:
+def _force_key_signature(events: list[TrackPitchEvent], *, slot_id: int, key_signature: str) -> list[TrackPitchEvent]:
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
     pitch_register = pitch_register_for_slot(slot_id)
     pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
     forced: list[TrackPitchEvent] = []
-    for note in notes:
-        pitch_midi = _resolve_pitch_midi(note)
-        spelled_label = note.spelled_label
-        accidental = note.accidental
-        if not note.is_rest and pitch_midi is not None:
+    for event in events:
+        pitch_midi = _resolve_pitch_midi(event)
+        spelled_label = event.spelled_label
+        accidental = event.accidental
+        if not event.is_rest and pitch_midi is not None:
             spelled_label = spell_midi_label(pitch_midi, spelling_mode=spelling_mode)
             accidental = accidental_for_key(spelled_label, key_signature)
         forced.append(
-            note.model_copy(
+            event.model_copy(
                 update={
                     "pitch_midi": pitch_midi,
                     "spelled_label": spelled_label,
@@ -1965,13 +1965,13 @@ def _public_review_instruction(instruction: Mapping[str, Any]) -> dict[str, Any]
         "quantization_grid",
         "merge_adjacent_same_pitch",
         "simplify_dense_measures",
-        "suppress_unstable_notes",
-        "sustain_repeated_notes",
+        "suppress_unstable_events",
+        "sustain_repeated_events",
         "collapse_pitch_blips",
         "remove_isolated_artifacts",
         "bridge_short_phrase_gaps",
         "bridge_measure_tail_gaps",
-        "collapse_short_note_clusters",
+        "collapse_short_event_clusters",
         "prefer_key_signature",
         "measure_noise_indices",
         "reasons",

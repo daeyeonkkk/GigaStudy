@@ -5,7 +5,7 @@ from gigastudy_api.services.engine.symbolic import (
     parse_musicxml_file,
     parse_symbolic_file_with_metadata,
 )
-from gigastudy_api.services.engine.music_theory import infer_slot_id, note_from_pitch
+from gigastudy_api.services.engine.music_theory import infer_slot_id, event_from_pitch
 
 
 MUSICXML_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
@@ -259,9 +259,9 @@ def test_symbolic_mapping_uses_pitch_range_when_part_names_are_generic(tmp_path:
 
 def test_slot_inference_respects_bass_range_over_generic_order() -> None:
     notes = [
-        note_from_pitch(beat=1, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=40),
-        note_from_pitch(beat=2, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=43),
-        note_from_pitch(beat=3, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=47),
+        event_from_pitch(beat=1, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=40),
+        event_from_pitch(beat=2, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=43),
+        event_from_pitch(beat=3, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=47),
     ]
 
     assert infer_slot_id("Track 1", notes, fallback=1) == 5

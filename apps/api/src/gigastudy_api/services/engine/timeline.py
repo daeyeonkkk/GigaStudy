@@ -6,7 +6,7 @@ from gigastudy_api.services.engine.music_theory import seconds_per_beat
 
 
 def events_with_sync_offset(
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     sync_offset_seconds: float,
     bpm: int,
     *,
@@ -14,14 +14,14 @@ def events_with_sync_offset(
 ) -> list[TrackPitchEvent]:
     beat_offset = sync_offset_seconds / seconds_per_beat(bpm)
     return [
-        note.model_copy(
+        event.model_copy(
             update={
-                "onset_seconds": round(note.onset_seconds + sync_offset_seconds, 4),
-                "beat": round(note.beat + beat_offset, 4),
-                "voice_index": voice_index if note.voice_index is None else note.voice_index,
+                "onset_seconds": round(event.onset_seconds + sync_offset_seconds, 4),
+                "beat": round(event.beat + beat_offset, 4),
+                "voice_index": voice_index if event.voice_index is None else event.voice_index,
             }
         )
-        for note in notes
+        for event in events
     ]
 
 

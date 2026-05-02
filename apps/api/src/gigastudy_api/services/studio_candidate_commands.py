@@ -34,7 +34,7 @@ from gigastudy_api.services.studio_candidates import (
 )
 from gigastudy_api.services.studio_documents import register_track_material, track_has_content
 from gigastudy_api.services.studio_generation import generation_candidate_review_metadata
-from gigastudy_api.services.studio_jobs import clear_unmapped_omr_placeholders
+from gigastudy_api.services.studio_jobs import clear_unmapped_document_placeholders
 
 SUPERSEDED_AI_CANDIDATE_MESSAGE = "Superseded by newer AI generation candidates."
 
@@ -73,15 +73,15 @@ class StudioCandidateCommands:
                     status_code=409,
                     detail="Approving this candidate would overwrite an existing registered track.",
                 )
-            registration = self._repository._prepare_registration_notes(
+            registration = self._repository._prepare_registration_events(
                 studio,
                 target_slot_id,
                 source_kind=candidate.source_kind,
-                notes=candidate.events,
+                events=candidate.events,
             )
             mark_candidate_approved(
                 candidate,
-                notes=registration.events,
+                events=registration.events,
                 registration_diagnostics=registration.diagnostics,
                 timestamp=timestamp,
             )
@@ -90,7 +90,7 @@ class StudioCandidateCommands:
                 timestamp=timestamp,
                 source_kind=candidate.source_kind,
                 source_label=candidate.source_label,
-                notes=registration.events,
+                events=registration.events,
                 duration_seconds=track_duration_seconds(registration.events),
                 registration_diagnostics=registration.diagnostics,
                 audio_source_path=candidate.audio_source_path,
@@ -174,7 +174,7 @@ class StudioCandidateCommands:
             if occupied_slots and not request.allow_overwrite:
                 raise HTTPException(
                     status_code=409,
-                    detail="Approving this OMR job would overwrite existing registered tracks.",
+                    detail="Approving this document extraction job would overwrite existing registered tracks.",
                 )
 
             timestamp = self._now()
@@ -191,11 +191,11 @@ class StudioCandidateCommands:
                 )
             else:
                 registrations = {
-                    slot_id: self._repository._prepare_registration_notes(
+                    slot_id: self._repository._prepare_registration_events(
                         studio,
                         slot_id,
                         source_kind=candidate.source_kind,
-                        notes=candidate.events,
+                        events=candidate.events,
                     )
                     for slot_id, candidate in unique_candidates_by_slot.items()
                 }
@@ -204,7 +204,7 @@ class StudioCandidateCommands:
                 registration = registrations[slot_id]
                 mark_candidate_approved(
                     candidate,
-                    notes=registration.events,
+                    events=registration.events,
                     registration_diagnostics=registration.diagnostics,
                     timestamp=timestamp,
                 )
@@ -213,7 +213,7 @@ class StudioCandidateCommands:
                     timestamp=timestamp,
                     source_kind=candidate.source_kind,
                     source_label=candidate.source_label,
-                    notes=registration.events,
+                    events=registration.events,
                     duration_seconds=track_duration_seconds(registration.events),
                     registration_diagnostics=registration.diagnostics,
                     audio_source_path=candidate.audio_source_path,
@@ -225,7 +225,7 @@ class StudioCandidateCommands:
                 mark_candidate_rejected(candidate, timestamp=timestamp)
 
             job.status = "completed"
-            job.message = "OMR candidates registered into their suggested tracks."
+            job.message = "Document extraction candidates registered into their suggested tracks."
             job.updated_at = timestamp
             studio.updated_at = timestamp
             self._repository._save_studio(studio)
@@ -240,7 +240,7 @@ class StudioCandidateCommands:
         source_label: str,
         method: str,
         confidence: float,
-        notes: list[TrackPitchEvent],
+        events: list[TrackPitchEvent],
         message: str,
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
@@ -248,16 +248,16 @@ class StudioCandidateCommands:
         source_diagnostics: dict[str, Any] | None = None,
     ) -> None:
         timestamp = self._now()
-        registration = self._repository._prepare_registration_notes(
+        registration = self._repository._prepare_registration_events(
             studio,
             suggested_slot_id,
             source_kind=source_kind,
-            notes=notes,
+            events=events,
         )
-        notes = registration.events
+        prepared_events = registration.events
         diagnostics = candidate_diagnostics(
             suggested_slot_id,
-            notes,
+            prepared_events,
             method=method,
             confidence=confidence,
             source_diagnostics=source_diagnostics,
@@ -274,7 +274,7 @@ class StudioCandidateCommands:
             ),
             message=message,
             method=method,
-            notes=notes,
+            events=prepared_events,
             source_kind=source_kind,
             source_label=source_label,
             suggested_slot_id=suggested_slot_id,
@@ -315,21 +315,21 @@ class StudioCandidateCommands:
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = self._now()
-            for slot_id, notes in mapped_events.items():
-                registration = self._repository._prepare_registration_notes(
+            for slot_id, source_events in mapped_events.items():
+                registration = self._repository._prepare_registration_events(
                     studio,
                     slot_id,
                     source_kind=source_kind,
-                    notes=notes,
+                    events=source_events,
                 )
-                notes = registration.events
+                prepared_events = registration.events
                 source_diagnostics = (diagnostics_by_slot or {}).get(slot_id)
                 slot_confidence = (
                     confidence_by_slot.get(slot_id)
                     if confidence_by_slot and slot_id in confidence_by_slot
                     else estimate_candidate_confidence(
                         slot_id,
-                        notes,
+                        prepared_events,
                         method=method,
                         fallback_confidence=confidence,
                         diagnostics=source_diagnostics,
@@ -337,7 +337,7 @@ class StudioCandidateCommands:
                 )
                 slot_diagnostics = candidate_diagnostics(
                     slot_id,
-                    notes,
+                    prepared_events,
                     method=method,
                     confidence=slot_confidence,
                     source_diagnostics=source_diagnostics,
@@ -355,14 +355,14 @@ class StudioCandidateCommands:
                         slot_id,
                         candidate_review_message(
                             slot_id,
-                            notes,
+                            prepared_events,
                             method=method,
                             diagnostics=slot_diagnostics,
                             default_message=message,
                         ),
                     ),
                     method=method,
-                    notes=notes,
+                    events=prepared_events,
                     source_kind=source_kind,
                     source_label=source_label,
                     suggested_slot_id=slot_id,
@@ -386,7 +386,7 @@ class StudioCandidateCommands:
                     job.message = message
                     job.updated_at = timestamp
                     if job.parse_all_parts:
-                        clear_unmapped_omr_placeholders(
+                        clear_unmapped_document_placeholders(
                             studio,
                             job,
                             mapped_slot_ids=set(mapped_events),
@@ -418,18 +418,18 @@ class StudioCandidateCommands:
                 slot_id,
             )
             candidate_group_id = uuid4().hex
-            for index, notes in enumerate(candidate_events, start=1):
-                registration = self._repository._prepare_registration_notes(
+            for index, candidate_track_events in enumerate(candidate_events, start=1):
+                registration = self._repository._prepare_registration_events(
                     studio,
                     slot_id,
                     source_kind="ai",
-                    notes=notes,
+                    events=candidate_track_events,
                 )
-                notes = registration.events
-                confidence = min((note.confidence for note in notes), default=0.65)
+                prepared_events = registration.events
+                confidence = min((event.confidence for event in prepared_events), default=0.65)
                 diagnostics, variant_label = generation_candidate_review_metadata(
                     slot_id=slot_id,
-                    notes=notes,
+                    events=prepared_events,
                     method=method,
                     confidence=confidence,
                     candidate_index=index,
@@ -445,7 +445,7 @@ class StudioCandidateCommands:
                     ),
                     message=message,
                     method=method,
-                    notes=notes,
+                    events=prepared_events,
                     source_kind="ai",
                     source_label=source_label,
                     suggested_slot_id=slot_id,

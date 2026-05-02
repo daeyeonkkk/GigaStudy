@@ -26,7 +26,7 @@ from gigastudy_api.services.studio_documents import register_track_material, tra
 from gigastudy_api.services.studio_home_audio_import import extract_home_audio_candidate
 from gigastudy_api.services.upload_policy import (
     AUDIO_SOURCE_SUFFIXES,
-    OMR_SOURCE_SUFFIXES,
+    DOCUMENT_IMAGE_SOURCE_SUFFIXES,
     SYMBOLIC_SOURCE_SUFFIXES,
     guess_audio_mime_type,
     validate_studio_seed_upload_filename,
@@ -177,8 +177,8 @@ class StudioUploadCommands:
                     allow_overwrite=request.allow_overwrite,
                 )
 
-            if request.source_kind == "document" and suffix in OMR_SOURCE_SUFFIXES:
-                return self._repository._enqueue_omr_job(
+            if request.source_kind == "document" and suffix in DOCUMENT_IMAGE_SOURCE_SUFFIXES:
+                return self._repository._enqueue_document_job(
                     studio_id,
                     slot_id,
                     source_kind="document",
@@ -233,7 +233,7 @@ class StudioUploadCommands:
                     timestamp=timestamp,
                     source_kind=registered_source_kind,
                     source_label=source_filename,
-                    notes=registration.events,
+                    events=registration.events,
                     duration_seconds=track_duration_seconds(registration.events),
                     registration_diagnostics=registration.diagnostics,
                 )
@@ -269,7 +269,7 @@ class StudioUploadCommands:
                 source_label=source_filename,
                 method="home_voice_transcription_review",
                 confidence=confidence,
-                notes=transcription.events,
+                events=transcription.events,
                 message="Audio upload produced a reviewable track candidate.",
                 audio_source_path=audio_source_path,
                 audio_source_label=source_filename,

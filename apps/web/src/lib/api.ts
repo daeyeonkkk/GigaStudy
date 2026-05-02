@@ -37,10 +37,10 @@ export function readFileAsDataUrl(file: File): Promise<string> {
       if (typeof reader.result === 'string') {
         resolve(reader.result)
       } else {
-        reject(new Error('파일을 읽지 못했습니다.'))
+        reject(new Error('Could not read the file.'))
       }
     })
-    reader.addEventListener('error', () => reject(new Error('파일을 읽지 못했습니다.')))
+    reader.addEventListener('error', () => reject(new Error('Could not read the file.')))
     reader.readAsDataURL(file)
   })
 }
@@ -84,7 +84,7 @@ async function requestJson<T>(
     return await readJson<T>(response, fallbackMessage)
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error('API 서버에 연결할 수 없습니다.')
+      throw new Error('Could not connect to the API server.')
     }
     throw error
   }
@@ -98,7 +98,7 @@ export function listStudios(limit = 12, offset = 0): Promise<StudioListItem[]> {
   return requestJson<StudioListItem[]>(
     `/api/studios?${params.toString()}`,
     {},
-    '스튜디오 목록을 불러오지 못했습니다.',
+    'Could not load the studio list.',
   )
 }
 
@@ -109,7 +109,7 @@ export function createStudio(payload: CreateStudioRequest): Promise<Studio> {
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    '스튜디오를 만들지 못했습니다.',
+    'Could not create the studio.',
   )
 }
 
@@ -130,7 +130,7 @@ export function createStudioUploadTarget(payload: {
 }
 
 export function getStudio(studioId: string): Promise<Studio> {
-  return requestJson<Studio>(`/api/studios/${studioId}`, {}, '스튜디오를 불러오지 못했습니다.')
+  return requestJson<Studio>(`/api/studios/${studioId}`, {}, 'Could not load the studio.')
 }
 
 export function getTrackAudioUrl(studioId: string, slotId: number): string {
@@ -195,7 +195,7 @@ export function uploadTrack(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    '트랙 업로드를 등록하지 못했습니다.',
+    'Could not register the track upload.',
   )
 }
 
@@ -214,7 +214,7 @@ export function approveCandidate(
         allow_overwrite: allowOverwrite,
       }),
     },
-    '추출 후보를 승인하지 못했습니다.',
+    'Could not approve the extraction candidate.',
   )
 }
 
@@ -222,7 +222,7 @@ export function rejectCandidate(studioId: string, candidateId: string): Promise<
   return requestJson<Studio>(
     `/api/studios/${studioId}/candidates/${candidateId}/reject`,
     { method: 'POST' },
-    '추출 후보를 거절하지 못했습니다.',
+    'Could not reject the extraction candidate.',
   )
 }
 
@@ -239,7 +239,7 @@ export function approveJobCandidates(
         allow_overwrite: allowOverwrite,
       }),
     },
-    '문서 분석 결과를 트랙에 등록하지 못했습니다.',
+    'Could not register the document analysis result to tracks.',
   )
 }
 
@@ -247,7 +247,7 @@ export function retryExtractionJob(studioId: string, jobId: string): Promise<Stu
   return requestJson<Studio>(
     `/api/studios/${studioId}/jobs/${jobId}/retry`,
     { method: 'POST' },
-    '추출 작업을 다시 시작하지 못했습니다.',
+    'Could not restart the extraction job.',
   )
 }
 
@@ -269,7 +269,7 @@ export function generateTrack(
         candidate_count: candidateCount,
       }),
     },
-    'AI 생성에 실패했습니다.',
+    'AI generation failed.',
   )
 }
 
@@ -284,7 +284,7 @@ export function updateTrackSync(
       method: 'PATCH',
       body: JSON.stringify({ sync_offset_seconds: syncOffsetSeconds }),
     },
-    '싱크를 저장하지 못했습니다.',
+    'Could not save sync.',
   )
 }
 
@@ -298,7 +298,7 @@ export function shiftRegisteredTrackSyncs(
       method: 'PATCH',
       body: JSON.stringify({ delta_seconds: deltaSeconds }),
     },
-    '전체 트랙 싱크를 저장하지 못했습니다.',
+    'Could not save all track sync offsets.',
   )
 }
 
@@ -313,7 +313,7 @@ export function updateTrackVolume(
       method: 'PATCH',
       body: JSON.stringify({ volume_percent: volumePercent }),
     },
-    '트랙 음량을 저장하지 못했습니다.',
+    'Could not save track volume.',
   )
 }
 
@@ -335,7 +335,7 @@ export function scoreTrack(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    '채점 리포트를 만들지 못했습니다.',
+    'Could not create the scoring report.',
   )
 }
 

@@ -31,7 +31,7 @@ AllowedExtractionPolicy = Literal["loose", "normal", "strict"]
 class VoiceExtractionPlanInstruction(BaseModel):
     """Bounded LLM instruction for pre-transcription voice extraction.
 
-    The LLM can choose extraction rules, never final notes. Deterministic DSP and
+    The LLM can choose extraction rules, never final events. Deterministic DSP and
     event extraction code remains responsible for pitch frames, quantization, and
     pitch-event output.
     """
@@ -44,7 +44,7 @@ class VoiceExtractionPlanInstruction(BaseModel):
     confidence_policy: AllowedExtractionPolicy | None = None
     widen_range_semitones: int = Field(default=0, ge=0, le=2)
     merge_adjacent_same_pitch: bool | None = None
-    suppress_unstable_notes: bool | None = None
+    suppress_unstable_events: bool | None = None
     reasons: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     provider: str | None = None
@@ -93,7 +93,7 @@ class VoiceExtractionPlanInstruction(BaseModel):
             confidence_policy=self.confidence_policy,
             widen_range_semitones=self.widen_range_semitones,
             merge_adjacent_same_pitch=self.merge_adjacent_same_pitch,
-            suppress_unstable_notes=self.suppress_unstable_notes,
+            suppress_unstable_events=self.suppress_unstable_events,
             reasons=self.reasons,
             warnings=self.warnings,
         )
@@ -233,9 +233,9 @@ def _build_extraction_plan_payload(
             else None
         ),
         "existing_tracks": [
-            _summarize_track(slot_id, notes)
-            for slot_id, notes in sorted(context_tracks_by_slot.items())
-            if notes and slot_id != base_plan.slot_id
+            _summarize_track(slot_id, events)
+            for slot_id, events in sorted(context_tracks_by_slot.items())
+            if events and slot_id != base_plan.slot_id
         ],
         "allowed_outputs": {
             "confidence": "0.0..1.0, use at least 0.45 only when the instruction is worth applying",
@@ -244,16 +244,16 @@ def _build_extraction_plan_payload(
             "confidence_policy": ["loose", "normal", "strict"],
             "widen_range_semitones": [0, 1, 2],
             "merge_adjacent_same_pitch": True,
-            "suppress_unstable_notes": True,
+            "suppress_unstable_events": True,
             "reasons": ["short Korean or English reason"],
             "warnings": ["short warning"],
         },
         "decision_rules": [
             "Use a coarser grid when the performance is likely slow, noisy, or should read like sustained singing.",
             "Use stricter confidence when source is likely room noise or non-singing; use loose only for quiet but stable singing.",
-            "Widen range only slightly for real tenor/bass/soprano edge notes; do not change the assigned track.",
+            "Widen range only slightly for real tenor/bass/soprano edge events; do not change the assigned track.",
             "Respect existing tracks as one a cappella score; extraction should stay on the shared beat grid.",
-            "When an expected target track is present, use it as answer-sheet context for extraction policy only; do not emit its notes.",
+            "When an expected target track is present, use it as answer-sheet context for extraction policy only; do not emit its events.",
         ],
     }
     messages = [
@@ -262,7 +262,7 @@ def _build_extraction_plan_payload(
             "content": (
                 "You are GigaStudy's pre-transcription planning layer. Return JSON only. "
                 "You choose bounded extraction parameters before DSP/ML pitch extraction. "
-                "Never invent notes. Never estimate a new tempo. "
+                "Never invent events. Never estimate a new tempo. "
                 "Prefer practical, readable a cappella region events."
             ),
         },
@@ -274,9 +274,9 @@ def _build_extraction_plan_payload(
     return _build_json_chat_payload(settings=settings, messages=messages)
 
 
-def _summarize_track(slot_id: int, notes: list[TrackPitchEvent]) -> dict[str, Any]:
-    pitched = [note for note in notes if note.pitch_midi is not None and not note.is_rest]
-    pitches = [note.pitch_midi for note in pitched if note.pitch_midi is not None]
+def _summarize_track(slot_id: int, events: list[TrackPitchEvent]) -> dict[str, Any]:
+    pitched = [event for event in events if event.pitch_midi is not None and not event.is_rest]
+    pitches = [event.pitch_midi for event in pitched if event.pitch_midi is not None]
     return {
         "slot_id": slot_id,
         "name": track_name(slot_id),
@@ -284,12 +284,12 @@ def _summarize_track(slot_id: int, notes: list[TrackPitchEvent]) -> dict[str, An
         "range": _range_label(pitches),
         "first_events": [
             {
-                "beat": note.beat,
-                "duration_beats": note.duration_beats,
-                "label": note.spelled_label or note.label,
-                "measure": note.measure_index,
+                "beat": event.beat,
+                "duration_beats": event.duration_beats,
+                "label": event.spelled_label or event.label,
+                "measure": event.measure_index,
             }
-            for note in pitched[:24]
+            for event in pitched[:24]
         ],
     }
 

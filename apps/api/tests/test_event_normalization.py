@@ -1,4 +1,4 @@
-from gigastudy_api.services.engine.music_theory import note_from_pitch
+from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.engine.event_normalization import (
     accidental_for_key,
     estimate_key_signature,
@@ -9,7 +9,7 @@ from gigastudy_api.services.engine.event_quality import prepare_events_for_track
 
 
 def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:
-    note = note_from_pitch(
+    note = event_from_pitch(
         beat=2.24,
         duration_beats=0.62,
         bpm=60,
@@ -31,7 +31,7 @@ def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:
 
 
 def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
-    note = note_from_pitch(
+    note = event_from_pitch(
         beat=4.5,
         duration_beats=1,
         bpm=120,
@@ -51,8 +51,8 @@ def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
 
 
 def test_event_normalization_applies_track_pitch_register_policy() -> None:
-    tenor = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55)
-    baritone = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=50)
+    tenor = event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55)
+    baritone = event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=50)
 
     tenor_note = normalize_track_events([tenor], bpm=120, slot_id=3)[0]
     baritone_note = normalize_track_events([baritone], bpm=120, slot_id=4)[0]
@@ -69,7 +69,7 @@ def test_event_spelling_uses_key_signature_for_accidentals() -> None:
     assert accidental_for_key("B4", "F") == "n"
 
     f_major_material = [
-        note_from_pitch(beat=index + 1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=midi)
+        event_from_pitch(beat=index + 1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=midi)
         for index, midi in enumerate([65, 67, 69, 70, 72, 74, 76, 77])
     ]
     assert estimate_key_signature(f_major_material) in {"F", "Bb"}
@@ -77,7 +77,7 @@ def test_event_spelling_uses_key_signature_for_accidentals() -> None:
 
 def test_registration_quality_simplifies_dense_voice_noise_to_event_grid() -> None:
     noisy_notes = [
-        note_from_pitch(
+        event_from_pitch(
             beat=1 + index * 0.13,
             duration_beats=0.11,
             bpm=80,
@@ -108,7 +108,7 @@ def test_registration_quality_simplifies_dense_voice_noise_to_event_grid() -> No
 
 
 def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated() -> None:
-    note = note_from_pitch(
+    note = event_from_pitch(
         beat=4.5,
         duration_beats=1,
         bpm=120,
@@ -137,11 +137,11 @@ def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated()
 
 def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() -> None:
     reference = [
-        note_from_pitch(beat=beat, duration_beats=1, bpm=92, source="musicxml", extraction_method="reference", pitch_midi=72)
+        event_from_pitch(beat=beat, duration_beats=1, bpm=92, source="musicxml", extraction_method="reference", pitch_midi=72)
         for beat in [1.25, 2.25, 3.25, 4.25]
     ]
     slightly_late_audio = [
-        note_from_pitch(
+        event_from_pitch(
             beat=beat,
             duration_beats=0.5,
             bpm=92,
@@ -170,11 +170,11 @@ def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() ->
 
 def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> None:
     reference = [
-        note_from_pitch(beat=beat, duration_beats=1, bpm=92, source="musicxml", extraction_method="reference", pitch_midi=72)
+        event_from_pitch(beat=beat, duration_beats=1, bpm=92, source="musicxml", extraction_method="reference", pitch_midi=72)
         for beat in [1.25, 2.25, 3.25, 4.25]
     ]
     syncopated_symbolic = [
-        note_from_pitch(beat=beat, duration_beats=0.5, bpm=92, source="musicxml", extraction_method="symbolic", pitch_midi=67)
+        event_from_pitch(beat=beat, duration_beats=0.5, bpm=92, source="musicxml", extraction_method="symbolic", pitch_midi=67)
         for beat in [1.5, 2.5, 3.5, 4.5]
     ]
 
@@ -194,7 +194,7 @@ def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> 
 
 
 def test_registration_quality_enforces_final_event_contract() -> None:
-    note = note_from_pitch(
+    note = event_from_pitch(
         beat=2.24,
         duration_beats=0.62,
         bpm=60,

@@ -12,11 +12,11 @@ except ImportError:  # pragma: no cover - PyMuPDF is a declared API dependency.
     fitz = None
 
 
-class OmrUnavailableError(RuntimeError):
+class AudiverisDocumentError(RuntimeError):
     pass
 
 
-def run_audiveris_omr(
+def run_audiveris_document_extraction(
     *,
     input_path: Path,
     output_dir: Path,
@@ -25,7 +25,7 @@ def run_audiveris_omr(
 ) -> Path:
     binary = audiveris_bin or shutil.which("audiveris") or shutil.which("Audiveris")
     if not binary:
-        raise OmrUnavailableError("Audiveris CLI is not configured on this machine.")
+        raise AudiverisDocumentError("Audiveris CLI is not configured on this machine.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     settings = get_settings()
@@ -36,8 +36,8 @@ def run_audiveris_omr(
             output_dir=output_dir,
             timeout_seconds=timeout_seconds,
         )
-    except OmrUnavailableError as primary_error:
-        if settings.omr_preprocess_mode.strip().lower() in {"off", "false", "0"}:
+    except AudiverisDocumentError as primary_error:
+        if settings.document_preprocess_mode.strip().lower() in {"off", "false", "0"}:
             raise
         if input_path.suffix.lower() not in {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}:
             raise
@@ -46,7 +46,7 @@ def run_audiveris_omr(
             preprocessed_input = _prepare_preprocessed_pdf(
                 input_path,
                 output_dir=output_dir / "preprocessed",
-                dpi=settings.omr_preprocess_dpi,
+                dpi=settings.document_preprocess_dpi,
             )
             return _run_audiveris_command(
                 binary=binary,
@@ -54,8 +54,10 @@ def run_audiveris_omr(
                 output_dir=output_dir,
                 timeout_seconds=timeout_seconds,
             )
-        except OmrUnavailableError as retry_error:
-            raise OmrUnavailableError(f"{primary_error}; preprocessed OMR retry failed: {retry_error}") from retry_error
+        except AudiverisDocumentError as retry_error:
+            raise AudiverisDocumentError(
+                f"{primary_error}; preprocessed document extraction retry failed: {retry_error}"
+            ) from retry_error
 
 
 def _run_audiveris_command(
@@ -84,23 +86,23 @@ def _run_audiveris_command(
             timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired as error:
-        raise OmrUnavailableError(f"Audiveris timed out after {timeout_seconds} seconds.") from error
+        raise AudiverisDocumentError(f"Audiveris timed out after {timeout_seconds} seconds.") from error
     if completed.returncode != 0:
         message = completed.stderr.strip() or completed.stdout.strip() or "Audiveris failed."
-        raise OmrUnavailableError(message)
+        raise AudiverisDocumentError(message)
 
     mxl_files = sorted(output_dir.rglob("*.mxl"))
     musicxml_files = sorted(output_dir.rglob("*.musicxml"))
     xml_files = sorted(output_dir.rglob("*.xml"))
     outputs = mxl_files or musicxml_files or xml_files
     if not outputs:
-        raise OmrUnavailableError("Audiveris did not produce a MusicXML output.")
+        raise AudiverisDocumentError("Audiveris did not produce a MusicXML output.")
     return outputs[0]
 
 
 def _prepare_preprocessed_pdf(input_path: Path, *, output_dir: Path, dpi: int) -> Path:
     if fitz is None:
-        raise OmrUnavailableError("PyMuPDF is not installed, so OMR preprocessing is unavailable.")
+        raise AudiverisDocumentError("PyMuPDF is not installed, so document preprocessing is unavailable.")
     output_dir.mkdir(parents=True, exist_ok=True)
     safe_dpi = max(180, min(450, dpi))
     scale = safe_dpi / 72
@@ -109,10 +111,10 @@ def _prepare_preprocessed_pdf(input_path: Path, *, output_dir: Path, dpi: int) -
     try:
         source = fitz.open(input_path)
     except Exception as error:  # pragma: no cover - PyMuPDF exception type varies.
-        raise OmrUnavailableError(f"Could not open input for OMR preprocessing: {error}") from error
+        raise AudiverisDocumentError(f"Could not open input for document preprocessing: {error}") from error
 
     if source.page_count <= 0:
-        raise OmrUnavailableError("Input has no pages for OMR preprocessing.")
+        raise AudiverisDocumentError("Input has no pages for document preprocessing.")
 
     preprocessed = fitz.open()
     try:
@@ -123,7 +125,7 @@ def _prepare_preprocessed_pdf(input_path: Path, *, output_dir: Path, dpi: int) -
             target_page.insert_image(target_page.rect, pixmap=pixmap)
         preprocessed.save(output_path)
     except Exception as error:  # pragma: no cover - PyMuPDF exception type varies.
-        raise OmrUnavailableError(f"Could not preprocess OMR input: {error}") from error
+        raise AudiverisDocumentError(f"Could not preprocess document input: {error}") from error
     finally:
         preprocessed.close()
         source.close()

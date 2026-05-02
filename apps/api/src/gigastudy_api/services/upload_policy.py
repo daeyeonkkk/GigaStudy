@@ -9,16 +9,16 @@ from gigastudy_api.config import get_settings
 
 
 DEFAULT_UPLOAD_BPM = 92
-OMR_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+DOCUMENT_IMAGE_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
 AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
 TRACK_UPLOAD_SUFFIXES = {
     "audio": tuple(AUDIO_SOURCE_SUFFIXES),
     "midi": (".mid", ".midi"),
-    "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
+    "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | DOCUMENT_IMAGE_SOURCE_SUFFIXES),
 }
 STUDIO_SEED_UPLOAD_SUFFIXES = {
-    "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
+    "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | DOCUMENT_IMAGE_SOURCE_SUFFIXES),
     "music": tuple(AUDIO_SOURCE_SUFFIXES),
 }
 AUDIO_MIME_TYPES = {
@@ -67,10 +67,10 @@ def guess_audio_mime_type(filename: str) -> str:
     return AUDIO_MIME_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
 
 
-def should_route_seed_upload_to_omr(source_kind: str, filename: str | None) -> bool:
+def should_route_seed_upload_to_document_extraction(source_kind: str, filename: str | None) -> bool:
     if source_kind != "document" or filename is None:
         return False
-    return Path(filename).suffix.lower() in OMR_SOURCE_SUFFIXES
+    return Path(filename).suffix.lower() in DOCUMENT_IMAGE_SOURCE_SUFFIXES
 
 
 def guess_content_type(filename: str) -> str | None:

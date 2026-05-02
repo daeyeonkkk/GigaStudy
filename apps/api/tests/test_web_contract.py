@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import json
 import re
 from pathlib import Path
 from typing import Type
@@ -110,7 +108,6 @@ def test_studio_response_includes_arrangement_regions() -> None:
 
     payload = build_studio_response(studio).model_dump(mode="json")
 
-    assert "notes" not in payload["tracks"][0]
     assert "events" not in payload["tracks"][0]
     assert payload["regions"][0]["region_id"] == "track-1-region-1"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
@@ -158,7 +155,7 @@ def test_studio_payload_persists_explicit_regions_from_internal_events() -> None
     assert studio.regions[0].pitch_events[0].label == "C4"
 
 
-def test_track_slot_rejects_obsolete_notes_field() -> None:
+def test_track_slot_rejects_unmodelled_payload_field() -> None:
     with pytest.raises(ValidationError):
         TrackSlot.model_validate(
             {
@@ -168,15 +165,7 @@ def test_track_slot_rejects_obsolete_notes_field() -> None:
                 "source_kind": "midi",
                 "source_label": "old.mid",
                 "duration_seconds": 1,
-                "notes": [
-                    {
-                        "label": "C4",
-                        "pitch_midi": 60,
-                        "beat": 1,
-                        "duration_beats": 1,
-                        "source": "midi",
-                    }
-                ],
+                "unexpected_payload_field": "C4",
                 "updated_at": "2026-01-01T00:00:00Z",
             }
         )
@@ -207,10 +196,9 @@ def test_track_slot_stores_events_only() -> None:
 
     assert track.events[0].label == "C4"
     assert payload["events"][0]["label"] == "C4"
-    assert "notes" not in payload
 
 
-def test_engine_context_reads_persisted_regions_without_track_notes() -> None:
+def test_engine_context_reads_persisted_regions_without_track_events() -> None:
     track = TrackSlot(
         slot_id=1,
         name="Soprano",
@@ -411,7 +399,6 @@ def test_candidate_response_includes_region_candidate() -> None:
 
     payload = build_studio_response(studio).model_dump(mode="json")["candidates"][0]
 
-    assert "notes" not in payload
     assert "events" not in payload
     assert payload["region"]["region_id"] == "candidate-candidate-region-contract-region-1"
     assert payload["region"]["suggested_slot_id"] == 2
@@ -462,7 +449,7 @@ def test_studio_payload_persists_candidate_region_from_internal_events() -> None
     assert studio.candidates[0].region.pitch_events[0].label == "A3"
 
 
-def test_extraction_candidate_rejects_obsolete_notes_field() -> None:
+def test_extraction_candidate_rejects_unmodelled_payload_field() -> None:
     with pytest.raises(ValidationError):
         ExtractionCandidate.model_validate(
             {
@@ -471,15 +458,7 @@ def test_extraction_candidate_rejects_obsolete_notes_field() -> None:
                 "source_kind": "ai",
                 "source_label": "AI harmony",
                 "method": "rule_based",
-                "notes": [
-                    {
-                        "label": "E4",
-                        "pitch_midi": 64,
-                        "beat": 1,
-                        "duration_beats": 1,
-                        "source": "ai",
-                    }
-                ],
+                "unexpected_payload_field": "E4",
                 "created_at": "2026-01-01T00:00:00Z",
                 "updated_at": "2026-01-01T00:00:00Z",
             }
@@ -511,10 +490,9 @@ def test_extraction_candidate_stores_events_only() -> None:
 
     assert candidate.events[0].label == "E4"
     assert payload["events"][0]["label"] == "E4"
-    assert "notes" not in payload
 
 
-def test_scoring_report_rejects_obsolete_note_count_fields() -> None:
+def test_scoring_report_rejects_unmodelled_count_field() -> None:
     with pytest.raises(ValidationError):
         ScoringReport.model_validate(
             {
@@ -524,19 +502,19 @@ def test_scoring_report_rejects_obsolete_note_count_fields() -> None:
                 "reference_slot_ids": [2],
                 "include_metronome": True,
                 "created_at": "2026-01-01T00:00:00Z",
-                "answer_note_count": 4,
+                "unexpected_event_count": 4,
                 "issues": [],
             }
         )
 
 
-def test_report_issue_rejects_obsolete_note_id_fields() -> None:
+def test_report_issue_rejects_unmodelled_event_id_field() -> None:
     with pytest.raises(ValidationError):
         ReportIssue.model_validate(
             {
                 "at_seconds": 0,
                 "issue_type": "pitch",
-                "answer_note_id": "answer-source",
+                "unexpected_event_id": "answer-source",
             }
         )
 
@@ -591,41 +569,39 @@ def test_studio_payload_preserves_explicit_candidate_region_without_internal_eve
     assert payload["candidates"][0]["region"]["pitch_events"][0]["label"] == "F3"
 
 
-def test_score_track_request_uses_performance_events_not_notes() -> None:
+def test_score_track_request_uses_performance_events() -> None:
     assert "performance_events" in ScoreTrackRequest.model_fields
-    assert "performance_notes" not in ScoreTrackRequest.model_fields
 
 
-def test_public_openapi_does_not_expose_obsolete_note_contracts() -> None:
+def test_public_openapi_exposes_region_event_contracts() -> None:
     openapi = create_app().openapi()
     schemas = openapi["components"]["schemas"]
-    serialized = json.dumps(openapi)
+    scoring_properties = schemas["ScoringReport"]["properties"]
+    issue_properties = schemas["ReportIssue"]["properties"]
 
-    assert not hasattr(studio_schemas, "NoteSource")
-    assert not hasattr(studio_schemas, "PitchEventSource")
-    assert not hasattr(studio_schemas, "TrackNote")
-    assert not hasattr(studio_schemas, "TrackPitchEvent")
-    assert "TrackNote" not in schemas
-    assert "TrackPitchEvent" not in schemas
-    assert "performance_notes" not in serialized
-    assert "answer_note_id" not in serialized
-    assert "performance_note_id" not in serialized
-    assert "answer_note_count" not in serialized
-    assert "performance_note_count" not in serialized
-    assert "matched_note_count" not in serialized
-    assert "missing_note_count" not in serialized
-    assert "extra_note_count" not in serialized
+    assert hasattr(studio_schemas, "PitchEvent")
+    assert "PitchEvent" in schemas
+    assert "ArrangementRegion" in schemas
+    assert "CandidateRegion" in schemas
+    assert "TrackSlotResponse" in schemas
+    assert "performance_events" in schemas["ScoreTrackRequest"]["properties"]
+    assert {
+        "answer_event_count",
+        "performance_event_count",
+        "matched_event_count",
+        "missing_event_count",
+        "extra_event_count",
+    } <= set(scoring_properties)
+    assert {"answer_event_id", "performance_event_id"} <= set(issue_properties)
 
 
-def test_track_pitch_event_rejects_staff_notation_aliases() -> None:
-    old_fields = [
-        {"notation_warnings": ["old"]},
-        {"source_staff_index": 2},
-        {"staff_index": 2},
-        {"clef": "treble_8vb"},
-        {"display_octave_shift": 12},
+def test_track_pitch_event_rejects_unmodelled_layout_fields() -> None:
+    extra_field_sets = [
+        {"document_row_index": 2},
+        {"document_lane": "upper"},
+        {"display_offset": 12},
     ]
-    for extra_fields in old_fields:
+    for extra_fields in extra_field_sets:
         with pytest.raises(ValidationError):
             TrackPitchEvent.model_validate(
                 {

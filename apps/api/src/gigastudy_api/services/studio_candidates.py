@@ -19,7 +19,7 @@ def build_pending_candidate(
     job_id: str | None = None,
     message: str | None = None,
     method: str,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     source_kind: SourceKind,
     source_label: str,
     suggested_slot_id: int,
@@ -35,7 +35,7 @@ def build_pending_candidate(
         method=method,
         variant_label=variant_label,
         confidence=confidence,
-        events=notes,
+        events=events,
         audio_source_path=audio_source_path,
         audio_source_label=audio_source_label,
         audio_mime_type=audio_mime_type,
@@ -60,12 +60,12 @@ def diagnostics_with_registration_quality(
 def mark_candidate_approved(
     candidate: ExtractionCandidate,
     *,
-    notes: list[TrackPitchEvent],
+    events: list[TrackPitchEvent],
     registration_diagnostics: dict[str, Any],
     timestamp: str,
 ) -> None:
     candidate.status = "approved"
-    candidate.events = notes
+    candidate.events = events
     candidate.diagnostics = diagnostics_with_registration_quality(
         candidate.diagnostics,
         registration_diagnostics,

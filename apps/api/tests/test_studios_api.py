@@ -7,9 +7,9 @@ from fastapi.testclient import TestClient
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.main import create_app
-from gigastudy_api.services.engine.omr import OmrUnavailableError
-from gigastudy_api.services.engine.music_theory import note_from_pitch
-from gigastudy_api.services.engine.pdf_vector_omr import PdfVectorOmrError
+from gigastudy_api.services.engine.audiveris_document import AudiverisDocumentError
+from gigastudy_api.services.engine.music_theory import event_from_pitch
+from gigastudy_api.services.engine.pdf_vector_document import PdfVectorDocumentError
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, ParsedTrack
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services import studio_repository
@@ -107,7 +107,7 @@ def build_preview_pdf_bytes() -> bytes:
     return document.tobytes()
 
 
-def fake_audiveris_omr(
+def fake_audiveris_document_extraction(
     *,
     input_path: Path,
     output_dir: Path,
@@ -122,7 +122,7 @@ def fake_audiveris_omr(
     return output_path
 
 
-def fake_multi_track_audiveris_omr(
+def fake_multi_track_audiveris_document_extraction(
     *,
     input_path: Path,
     output_dir: Path,
@@ -136,7 +136,7 @@ def fake_multi_track_audiveris_omr(
     return output_path
 
 
-def fake_pdf_vector_omr(
+def fake_pdf_vector_document(
     path: Path,
     *,
     bpm: int,
@@ -164,8 +164,8 @@ def fake_pdf_vector_omr(
                 measure_index=1,
                 beat_in_measure=1,
                 confidence=0.62,
-                source="omr",
-                extraction_method="pdf_vector_omr_v0",
+                source="document",
+                extraction_method="pdf_vector_document_v1",
             )
         ]
         mapped_events[slot_id] = notes
@@ -179,7 +179,7 @@ def fake_pdf_vector_omr(
     )
 
 
-def fake_four_part_pdf_vector_omr(
+def fake_four_part_pdf_vector_document(
     path: Path,
     *,
     bpm: int,
@@ -187,7 +187,7 @@ def fake_four_part_pdf_vector_omr(
     time_signature_denominator: int = 4,
     max_slot_id: int = 5,
 ) -> ParsedSymbolicFile:
-    parsed = fake_pdf_vector_omr(
+    parsed = fake_pdf_vector_document(
         path,
         bpm=bpm,
         time_signature_numerator=time_signature_numerator,
@@ -197,8 +197,8 @@ def fake_four_part_pdf_vector_omr(
     return parsed
 
 
-def fail_pdf_vector_omr(*args, **kwargs) -> ParsedSymbolicFile:
-    raise PdfVectorOmrError("Vector fallback cannot read PDF")
+def fail_pdf_vector_document(*args, **kwargs) -> ParsedSymbolicFile:
+    raise PdfVectorDocumentError("Vector fallback cannot read PDF")
 
 
 def build_client(tmp_path: Path, monkeypatch, *, studio_access_policy: str = "public") -> TestClient:
@@ -232,8 +232,8 @@ def upload_musicxml_track(
     return response
 
 
-def _track_notes(payload: dict, slot_id: int) -> list[dict]:
-    return [_note_from_pitch_event(event) for event in _track_events(payload, slot_id)]
+def _track_region_events(payload: dict, slot_id: int) -> list[dict]:
+    return [_event_from_pitch_event(event) for event in _track_events(payload, slot_id)]
 
 
 def _track_events(payload: dict, slot_id: int) -> list[dict]:
@@ -244,10 +244,10 @@ def _track_events(payload: dict, slot_id: int) -> list[dict]:
 
 
 def _candidate_events(candidate: dict) -> list[dict]:
-    return [_note_from_pitch_event(event) for event in candidate["region"]["pitch_events"]]
+    return [_event_from_pitch_event(event) for event in candidate["region"]["pitch_events"]]
 
 
-def _note_from_pitch_event(event: dict) -> dict:
+def _event_from_pitch_event(event: dict) -> dict:
     return {
         "label": event["label"],
         "pitch_midi": event["pitch_midi"],
@@ -266,8 +266,8 @@ def _note_from_pitch_event(event: dict) -> dict:
     }
 
 
-def _performance_event_from_note(note: TrackPitchEvent | dict) -> dict:
-    payload = note.model_dump(mode="json") if isinstance(note, TrackPitchEvent) else dict(note)
+def _performance_event_from_track_event(event: TrackPitchEvent | dict) -> dict:
+    payload = event.model_dump(mode="json") if isinstance(event, TrackPitchEvent) else dict(event)
     return {
         "event_id": payload.get("id"),
         "track_slot_id": payload.get("voice_index"),
@@ -441,7 +441,7 @@ def test_upload_start_does_not_require_bpm_and_maps_symbolic_tracks(tmp_path: Pa
     assert payload["bpm"] == 92
     assert payload["tracks"][0]["status"] == "registered"
     assert "notes" not in payload["tracks"][0]
-    assert [note["label"] for note in _track_notes(payload, 1)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(payload, 1)] == ["C5", "G5"]
 
 
 def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> None:
@@ -477,12 +477,12 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     assert approve_response.status_code == 200
     approve_payload = approve_response.json()
     percussion = approve_payload["tracks"][5]
-    percussion_notes = _track_notes(approve_payload, 6)
+    percussion_events = _track_region_events(approve_payload, 6)
     assert percussion["status"] == "registered"
     assert percussion["source_kind"] == "ai"
-    assert [note["label"] for note in percussion_notes[:4]] == ["Kick", "Hat", "Snare", "Hat"]
+    assert [note["label"] for note in percussion_events[:4]] == ["Kick", "Hat", "Snare", "Hat"]
 
-    assert [note["beat"] for note in percussion_notes[:4]] == [1, 2, 3, 4]
+    assert [note["beat"] for note in percussion_events[:4]] == [1, 2, 3, 4]
 
     sync_response = client.patch(
         f"/api/studios/{studio_id}/tracks/6/sync",
@@ -541,8 +541,8 @@ def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path:
     upload_musicxml_track(client, studio_id, slot_id=1)
 
     performance_events = [
-        _performance_event_from_note(
-            note_from_pitch(
+        _performance_event_from_track_event(
+            event_from_pitch(
                 beat=1,
                 duration_beats=1,
                 bpm=120,
@@ -551,8 +551,8 @@ def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path:
                 pitch_midi=76,
             )
         ),
-        _performance_event_from_note(
-            note_from_pitch(
+        _performance_event_from_track_event(
+            event_from_pitch(
                 beat=2,
                 duration_beats=1,
                 bpm=120,
@@ -680,8 +680,8 @@ def test_harmony_score_requires_registered_reference_track(tmp_path: Path, monke
             "reference_slot_ids": [],
             "include_metronome": True,
             "performance_events": [
-                _performance_event_from_note(
-                    note_from_pitch(
+                _performance_event_from_track_event(
+                    event_from_pitch(
                         beat=1,
                         duration_beats=1,
                         bpm=120,
@@ -720,7 +720,7 @@ def test_score_track_rejects_empty_performance_input(tmp_path: Path, monkeypatch
     )
 
     assert score_response.status_code == 422
-    assert "detectable notes" in score_response.json()["detail"]
+    assert "detectable pitch events" in score_response.json()["detail"]
     studio_response = client.get(f"/api/studios/{studio_id}")
     assert studio_response.json()["reports"] == []
 
@@ -814,9 +814,9 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
         json={},
     )
     assert approve_response.status_code == 200
-    percussion_notes = _track_notes(approve_response.json(), 6)
-    assert [note["beat"] for note in percussion_notes[:6]] == [1, 2, 3, 4, 5, 6]
-    assert [note["label"] for note in percussion_notes[:6]] == [
+    percussion_events = _track_region_events(approve_response.json(), 6)
+    assert [note["beat"] for note in percussion_events[:6]] == [1, 2, 3, 4, 5, 6]
+    assert [note["label"] for note in percussion_events[:6]] == [
         "Kick",
         "Snare",
         "Hat",
@@ -824,11 +824,11 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
         "Snare",
         "Hat",
     ]
-    assert percussion_notes[3]["measure_index"] == 2
-    assert percussion_notes[3]["beat_in_measure"] == 1
+    assert percussion_events[3]["measure_index"] == 2
+    assert percussion_events[3]["beat_in_measure"] == 1
 
 
-def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatch) -> None:
+def test_upload_musicxml_registers_parsed_track_region_events(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
@@ -853,15 +853,15 @@ def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatc
     assert upload_response.status_code == 200
     payload = upload_response.json()
     soprano = payload["tracks"][0]
-    soprano_notes = _track_notes(payload, 1)
+    soprano_events = _track_region_events(payload, 1)
     assert soprano["status"] == "registered"
     assert soprano["source_kind"] == "document"
-    assert [note["label"] for note in soprano_notes] == ["C5", "G5"]
-    assert soprano_notes[0]["source"] == "musicxml"
-    assert soprano_notes[0]["pitch_midi"] == 72
+    assert [note["label"] for note in soprano_events] == ["C5", "G5"]
+    assert soprano_events[0]["source"] == "musicxml"
+    assert soprano_events[0]["pitch_midi"] == 72
 
 
-def test_score_source_kind_is_rejected(tmp_path: Path, monkeypatch) -> None:
+def test_unsupported_source_kind_is_rejected(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     studio_id = client.post(
         "/api/studios",
@@ -876,7 +876,7 @@ def test_score_source_kind_is_rejected(tmp_path: Path, monkeypatch) -> None:
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "unsupported",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
         },
@@ -905,7 +905,7 @@ def test_track_registration_stores_ensemble_arrangement_diagnostics(tmp_path: Pa
     ensemble = alto["diagnostics"]["registration_quality"]["ensemble_arrangement"]
     assert ensemble["evaluated"] is True
     assert ensemble["issue_code_counts"]["voice_crossing"] >= 1
-    assert any("ensemble_voice_crossing" in note["quality_warnings"] for note in _track_notes(alto_payload, 2))
+    assert any("ensemble_voice_crossing" in note["quality_warnings"] for note in _track_region_events(alto_payload, 2))
 
 
 def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeypatch) -> None:
@@ -953,7 +953,7 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
     upload_payload = upload_response.json()
     soprano = upload_payload["tracks"][0]
     assert soprano["status"] == "registered"
-    assert [note["label"] for note in _track_notes(upload_payload, 1)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(upload_payload, 1)] == ["C5", "G5"]
 
 
 def test_owner_scoped_direct_upload_put_requires_matching_owner_token(tmp_path: Path, monkeypatch) -> None:
@@ -1027,15 +1027,15 @@ def test_upload_start_can_use_staged_direct_uploaded_symbolic_asset(tmp_path: Pa
     payload = create_response.json()
     soprano = payload["tracks"][0]
     assert soprano["status"] == "registered"
-    assert [note["label"] for note in _track_notes(payload, 1)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(payload, 1)] == ["C5", "G5"]
     assert not (tmp_path / "staged").exists()
 
 
-def test_upload_start_can_use_staged_direct_uploaded_pdf_for_omr(
+def test_upload_start_can_use_staged_direct_uploaded_pdf_for_document_extraction(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fake_audiveris_document_extraction)
     client = build_client(tmp_path, monkeypatch)
 
     target_response = client.post(
@@ -1073,7 +1073,7 @@ def test_upload_start_can_use_staged_direct_uploaded_pdf_for_omr(
     assert payload["jobs"][0]["status"] == "needs_review"
     assert payload["tracks"][0]["status"] == "needs_review"
     assert len(payload["candidates"]) == 1
-    assert _candidate_events(payload["candidates"][0])[0]["source"] == "omr"
+    assert _candidate_events(payload["candidates"][0])[0]["source"] == "document"
     assert not (tmp_path / "staged").exists()
 
 
@@ -1165,11 +1165,11 @@ def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypat
     payload = upload_response.json()
     assert payload["time_signature_numerator"] == 3
     assert payload["time_signature_denominator"] == 4
-    soprano_notes = _track_notes(payload, 1)
-    assert soprano_notes[3]["label"] == "F5"
-    assert soprano_notes[3]["measure_index"] == 2
-    assert soprano_notes[3]["beat"] == 4
-    assert soprano_notes[3]["beat_in_measure"] == 1
+    soprano_events = _track_region_events(payload, 1)
+    assert soprano_events[3]["label"] == "F5"
+    assert soprano_events[3]["measure_index"] == 2
+    assert soprano_events[3]["beat"] == 4
+    assert soprano_events[3]["beat_in_measure"] == 1
 
 
 def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypatch) -> None:
@@ -1206,7 +1206,7 @@ def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypat
         },
     )
     assert overwrite_response.status_code == 200
-    assert [note["label"] for note in _track_notes(overwrite_response.json(), 1)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(overwrite_response.json(), 1)] == ["C5", "G5"]
 
 
 def test_upload_requires_file_content_instead_of_fixture_fallback(tmp_path: Path, monkeypatch) -> None:
@@ -1258,7 +1258,7 @@ def test_upload_musicxml_can_wait_for_candidate_approval(tmp_path: Path, monkeyp
     assert upload_response.status_code == 200
     payload = upload_response.json()
     assert payload["tracks"][0]["status"] == "needs_review"
-    assert _track_notes(payload, 1) == []
+    assert _track_region_events(payload, 1) == []
     assert len(payload["candidates"]) == 1
     candidate = payload["candidates"][0]
     assert candidate["status"] == "pending"
@@ -1273,17 +1273,17 @@ def test_upload_musicxml_can_wait_for_candidate_approval(tmp_path: Path, monkeyp
     assert approve_response.status_code == 200
     approved_payload = approve_response.json()
     assert approved_payload["tracks"][0]["status"] == "registered"
-    assert [note["label"] for note in _track_notes(approved_payload, 1)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(approved_payload, 1)] == ["C5", "G5"]
     assert approved_payload["candidates"][0]["status"] == "approved"
 
 
-def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+def test_upload_pdf_queues_document_extraction_job_and_creates_document_extraction_candidate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fake_audiveris_document_extraction)
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "PDF OMR upload",
+            "title": "PDF document extraction upload",
             "bpm": 120,
             "start_mode": "blank",
         },
@@ -1311,16 +1311,16 @@ def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, mon
     assert len(payload["candidates"]) == 1
     candidate = payload["candidates"][0]
     assert candidate["job_id"] == payload["jobs"][0]["job_id"]
-    assert candidate["method"] == "audiveris_omr_review"
-    assert candidate["diagnostics"]["candidate_method"] == "audiveris_omr_review"
+    assert candidate["method"] == "audiveris_document_review"
+    assert candidate["diagnostics"]["candidate_method"] == "audiveris_document_review"
     assert candidate["diagnostics"]["track"] == "Soprano"
     assert candidate["diagnostics"]["event_count"] == 2
     assert "note_count" not in candidate["diagnostics"]
     assert candidate["diagnostics"]["measure_count"] == 1
     assert candidate["diagnostics"]["review_hint"] == "few_events"
     candidate_events = _candidate_events(candidate)
-    assert candidate_events[0]["source"] == "omr"
-    assert candidate_events[0]["extraction_method"] == "audiveris_omr_v0"
+    assert candidate_events[0]["source"] == "document"
+    assert candidate_events[0]["extraction_method"] == "audiveris_document_v1"
 
     preview_response = client.get(
         f"/api/studios/{studio_id}/jobs/{payload['jobs'][0]['job_id']}/source-preview"
@@ -1338,22 +1338,22 @@ def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, mon
     approve_payload = approve_response.json()
     soprano = approve_payload["tracks"][0]
     assert soprano["status"] == "registered"
-    assert [note["label"] for note in _track_notes(approve_payload, 1)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(approve_payload, 1)] == ["C5", "G5"]
 
 
-def test_upload_pdf_can_register_omr_candidates_into_each_suggested_track(
+def test_upload_pdf_can_register_document_extraction_candidates_into_each_suggested_track(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_repository.run_audiveris_omr",
-        fake_multi_track_audiveris_omr,
+        "gigastudy_api.services.studio_repository.run_audiveris_document_extraction",
+        fake_multi_track_audiveris_document_extraction,
     )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "Full score OMR",
+            "title": "Full document extraction",
             "bpm": 120,
             "start_mode": "blank",
         },
@@ -1395,29 +1395,29 @@ def test_upload_pdf_can_register_omr_candidates_into_each_suggested_track(
     assert approved_payload["tracks"][0]["status"] == "registered"
     assert approved_payload["tracks"][1]["status"] == "registered"
     assert approved_payload["tracks"][4]["status"] == "registered"
-    assert _track_notes(approved_payload, 1)[0]["source"] == "omr"
-    assert _track_notes(approved_payload, 2)[0]["label"] == "A4"
-    assert _track_notes(approved_payload, 5)[0]["label"] == "C3"
+    assert _track_region_events(approved_payload, 1)[0]["source"] == "document"
+    assert _track_region_events(approved_payload, 2)[0]["label"] == "A4"
+    assert _track_region_events(approved_payload, 5)[0]["label"] == "C3"
     assert all(candidate["status"] == "approved" for candidate in approved_payload["candidates"])
 
 
-def test_upload_pdf_falls_back_to_vector_omr_and_attempts_all_vocal_tracks(
+def test_upload_pdf_falls_back_to_vector_document_extraction_and_attempts_all_vocal_tracks(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    def fail_omr(
+    def fail_document_extraction(
         *,
         input_path: Path,
         output_dir: Path,
         audiveris_bin: str | None,
         timeout_seconds: int,
     ) -> Path:
-        raise OmrUnavailableError("Audiveris missing")
+        raise AudiverisDocumentError("Audiveris missing")
 
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fail_document_extraction)
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
-        fake_pdf_vector_omr,
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_document",
+        fake_pdf_vector_document,
     )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
@@ -1443,15 +1443,15 @@ def test_upload_pdf_falls_back_to_vector_omr_and_attempts_all_vocal_tracks(
     assert upload_response.status_code == 200
     payload = client.get(f"/api/studios/{studio_id}").json()
     assert payload["jobs"][0]["status"] == "needs_review"
-    assert payload["jobs"][0]["output_path"].endswith("pdf-vector-omr-summary.json")
+    assert payload["jobs"][0]["output_path"].endswith("pdf-vector-document-summary.json")
     assert [candidate["suggested_slot_id"] for candidate in payload["candidates"]] == [1, 2, 3, 4, 5]
-    assert all(candidate["method"] == "pdf_vector_omr_review" for candidate in payload["candidates"])
+    assert all(candidate["method"] == "pdf_vector_document_review" for candidate in payload["candidates"])
     assert all(
-        _candidate_events(candidate)[0]["extraction_method"] == "pdf_vector_omr_v0"
+        _candidate_events(candidate)[0]["extraction_method"] == "pdf_vector_document_v1"
         for candidate in payload["candidates"]
     )
     first_candidate = payload["candidates"][0]
-    assert first_candidate["diagnostics"]["candidate_method"] == "pdf_vector_omr_review"
+    assert first_candidate["diagnostics"]["candidate_method"] == "pdf_vector_document_review"
     assert first_candidate["diagnostics"]["track"] == "Soprano"
     assert first_candidate["diagnostics"]["event_count"] == 1
     assert "note_count" not in first_candidate["diagnostics"]
@@ -1463,23 +1463,23 @@ def test_upload_pdf_falls_back_to_vector_omr_and_attempts_all_vocal_tracks(
     assert payload["tracks"][5]["status"] == "empty"
 
 
-def test_vector_omr_four_part_score_clears_unmapped_bass_placeholder(
+def test_vector_document_extraction_four_part_score_clears_unmapped_bass_placeholder(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    def fail_omr(
+    def fail_document_extraction(
         *,
         input_path: Path,
         output_dir: Path,
         audiveris_bin: str | None,
         timeout_seconds: int,
     ) -> Path:
-        raise OmrUnavailableError("Audiveris missing")
+        raise AudiverisDocumentError("Audiveris missing")
 
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fail_document_extraction)
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
-        fake_four_part_pdf_vector_omr,
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_document",
+        fake_four_part_pdf_vector_document,
     )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
@@ -1509,19 +1509,19 @@ def test_vector_omr_four_part_score_clears_unmapped_bass_placeholder(
     assert payload["tracks"][4]["status"] == "empty"
 
 
-def test_omr_job_bulk_approval_requires_overwrite_confirmation(
+def test_document_extraction_job_bulk_approval_requires_overwrite_confirmation(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_repository.run_audiveris_omr",
-        fake_multi_track_audiveris_omr,
+        "gigastudy_api.services.studio_repository.run_audiveris_document_extraction",
+        fake_multi_track_audiveris_document_extraction,
     )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "Full score OMR overwrite",
+            "title": "Full document extraction overwrite",
             "bpm": 120,
             "start_mode": "blank",
         },
@@ -1554,14 +1554,14 @@ def test_omr_job_bulk_approval_requires_overwrite_confirmation(
         json={"allow_overwrite": True},
     )
     assert overwrite_response.status_code == 200
-    assert _track_notes(overwrite_response.json(), 1)[0]["label"] == "C5"
+    assert _track_region_events(overwrite_response.json(), 1)[0]["label"] == "C5"
 
 
-def test_create_studio_with_pdf_starts_omr_without_fixture_registration(
+def test_create_studio_with_pdf_starts_document_extraction_without_fixture_registration(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fake_audiveris_document_extraction)
     client = build_client(tmp_path, monkeypatch)
     encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
@@ -1584,32 +1584,32 @@ def test_create_studio_with_pdf_starts_omr_without_fixture_registration(
     assert payload["tracks"][0]["status"] == "needs_review"
     assert all(track["status"] != "registered" for track in payload["tracks"])
     assert len(payload["candidates"]) == 1
-    assert _candidate_events(payload["candidates"][0])[0]["source"] == "omr"
+    assert _candidate_events(payload["candidates"][0])[0]["source"] == "document"
 
 
-def test_upload_pdf_marks_omr_job_failed_when_audiveris_unavailable(
+def test_upload_pdf_marks_document_extraction_job_failed_when_audiveris_unavailable(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    def fail_omr(
+    def fail_document_extraction(
         *,
         input_path: Path,
         output_dir: Path,
         audiveris_bin: str | None,
         timeout_seconds: int,
     ) -> Path:
-        raise OmrUnavailableError("Audiveris missing")
+        raise AudiverisDocumentError("Audiveris missing")
 
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fail_document_extraction)
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
-        fail_pdf_vector_omr,
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_document",
+        fail_pdf_vector_document,
     )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "PDF OMR failure",
+            "title": "PDF document extraction failure",
             "bpm": 120,
             "start_mode": "blank",
         },
@@ -1636,29 +1636,29 @@ def test_upload_pdf_marks_omr_job_failed_when_audiveris_unavailable(
     assert payload["candidates"] == []
 
 
-def test_failed_omr_job_can_be_retried_from_durable_queue(
+def test_failed_document_extraction_job_can_be_retried_from_durable_queue(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    def fail_omr(
+    def fail_document_extraction(
         *,
         input_path: Path,
         output_dir: Path,
         audiveris_bin: str | None,
         timeout_seconds: int,
     ) -> Path:
-        raise OmrUnavailableError("Audiveris missing")
+        raise AudiverisDocumentError("Audiveris missing")
 
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fail_omr)
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fail_document_extraction)
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_score",
-        fail_pdf_vector_omr,
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_document",
+        fail_pdf_vector_document,
     )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "Retryable PDF OMR",
+            "title": "Retryable PDF document extraction",
             "bpm": 120,
             "start_mode": "blank",
         },
@@ -1678,18 +1678,18 @@ def test_failed_omr_job_can_be_retried_from_durable_queue(
     assert upload_response.status_code == 200
     failed_payload = client.get(f"/api/studios/{studio_id}").json()
     job = failed_payload["jobs"][0]
-    assert job["job_type"] == "omr"
+    assert job["job_type"] == "document"
     assert job["status"] == "failed"
     assert job["attempt_count"] == 1
 
-    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_omr", fake_audiveris_omr)
+    monkeypatch.setattr("gigastudy_api.services.studio_repository.run_audiveris_document_extraction", fake_audiveris_document_extraction)
     retry_response = client.post(f"/api/studios/{studio_id}/jobs/{job['job_id']}/retry")
 
     assert retry_response.status_code == 200
     retry_payload = client.get(f"/api/studios/{studio_id}").json()
     assert retry_payload["jobs"][0]["status"] == "needs_review"
     assert retry_payload["jobs"][0]["attempt_count"] == 1
-    assert _candidate_events(retry_payload["candidates"][0])[0]["source"] == "omr"
+    assert _candidate_events(retry_payload["candidates"][0])[0]["source"] == "document"
     assert retry_payload["tracks"][0]["status"] == "needs_review"
     assert [track["status"] for track in retry_payload["tracks"][1:5]] == ["empty"] * 4
 
@@ -1764,7 +1764,7 @@ def test_voice_retry_rehydrates_direct_register_mode_without_queue_record(
     retry_payload = client.get(f"/api/studios/{studio_id}").json()
     assert retry_payload["jobs"][0]["status"] == "completed"
     assert retry_payload["tracks"][0]["status"] == "registered"
-    assert _track_notes(retry_payload, 1)[0]["label"] == "C5"
+    assert _track_region_events(retry_payload, 1)[0]["label"] == "C5"
     assert retry_payload["candidates"] == []
 
 
@@ -1901,7 +1901,7 @@ def test_engine_queue_rehydrates_studio_job_lost_to_concurrent_save(
     assert payload["jobs"][0]["job_id"] == job_id
     assert payload["jobs"][0]["status"] == "completed"
     assert payload["tracks"][4]["status"] == "registered"
-    assert _track_notes(payload, 5)[0]["label"] == "G2"
+    assert _track_region_events(payload, 5)[0]["label"] == "G2"
 
 
 def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, monkeypatch) -> None:
@@ -1937,7 +1937,7 @@ def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, mo
     payload = approve_response.json()
     assert payload["tracks"][0]["status"] == "empty"
     assert payload["tracks"][1]["status"] == "registered"
-    assert [note["label"] for note in _track_notes(payload, 2)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(payload, 2)] == ["C5", "G5"]
 
 
 def test_candidate_approval_requires_overwrite_confirmation(tmp_path: Path, monkeypatch) -> None:
@@ -1980,7 +1980,7 @@ def test_candidate_approval_requires_overwrite_confirmation(tmp_path: Path, monk
     payload = approve_response.json()
     assert payload["tracks"][0]["status"] == "empty"
     assert payload["tracks"][1]["status"] == "registered"
-    assert [note["label"] for note in _track_notes(payload, 2)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(payload, 2)] == ["C5", "G5"]
     assert payload["candidates"][0]["status"] == "approved"
 
 
@@ -2013,7 +2013,7 @@ def test_reject_candidate_keeps_track_empty(tmp_path: Path, monkeypatch) -> None
     assert reject_response.status_code == 200
     payload = reject_response.json()
     assert payload["tracks"][0]["status"] == "empty"
-    assert _track_notes(payload, 1) == []
+    assert _track_region_events(payload, 1) == []
     assert payload["candidates"][0]["status"] == "rejected"
 
 
@@ -2115,9 +2115,9 @@ def test_ai_generation_uses_sync_adjusted_context_timing(tmp_path: Path, monkeyp
         if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
     ]
     assert len(alto_candidates) == 3
-    alto_notes = _candidate_events(alto_candidates[0])
-    assert [note["beat"] for note in alto_notes[:2]] == [2, 3]
-    assert [note["onset_seconds"] for note in alto_notes[:2]] == [1, 2]
+    alto_events = _candidate_events(alto_candidates[0])
+    assert [note["beat"] for note in alto_events[:2]] == [2, 3]
+    assert [note["onset_seconds"] for note in alto_events[:2]] == [1, 2]
 
 
 def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, monkeypatch) -> None:

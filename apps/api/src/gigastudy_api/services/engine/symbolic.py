@@ -13,7 +13,7 @@ from gigastudy_api.services.engine.music_theory import (
     DEFAULT_TIME_SIGNATURE,
     infer_slot_id,
     midi_to_label,
-    note_from_pitch,
+    event_from_pitch,
     quarter_beats_per_measure,
     rank_slot_candidates,
     slot_assignment_diagnostics,
@@ -54,19 +54,19 @@ def parse_symbolic_file_with_metadata(
 ) -> ParsedSymbolicFile:
     suffix = path.suffix.lower()
     if suffix in {".musicxml", ".xml", ".mxl"}:
-        parsed_score = parse_musicxml_score(path, bpm=bpm)
+        parsed_document = parse_musicxml_document(path, bpm=bpm)
     elif suffix in {".mid", ".midi"}:
-        parsed_score = parse_midi_score(path, bpm=bpm)
+        parsed_document = parse_midi_document(path, bpm=bpm)
     else:
         msg = f"Unsupported symbolic file type: {suffix}"
         raise SymbolicParseError(msg)
 
     return ParsedSymbolicFile(
-        tracks=parsed_score.tracks,
-        mapped_events=map_tracks_to_slots(parsed_score.tracks, target_slot_id=target_slot_id),
-        time_signature_numerator=parsed_score.time_signature_numerator,
-        time_signature_denominator=parsed_score.time_signature_denominator,
-        has_time_signature=parsed_score.has_time_signature,
+        tracks=parsed_document.tracks,
+        mapped_events=map_tracks_to_slots(parsed_document.tracks, target_slot_id=target_slot_id),
+        time_signature_numerator=parsed_document.time_signature_numerator,
+        time_signature_denominator=parsed_document.time_signature_denominator,
+        has_time_signature=parsed_document.has_time_signature,
     )
 
 
@@ -77,7 +77,7 @@ def map_tracks_to_slots(
 ) -> dict[int, list[TrackPitchEvent]]:
     non_empty_tracks = [track for track in parsed_tracks if track.events]
     if not non_empty_tracks:
-        raise SymbolicParseError("No notes were found in the symbolic file.")
+        raise SymbolicParseError("No pitch events were found in the symbolic file.")
 
     if target_slot_id is not None:
         exact = [track for track in non_empty_tracks if track.slot_id == target_slot_id]
@@ -146,22 +146,22 @@ def _assign_tracks_by_name_and_range(parsed_tracks: list[ParsedTrack]) -> list[t
 
 
 def parse_musicxml_file(path: Path, *, bpm: int) -> list[ParsedTrack]:
-    return parse_musicxml_score(path, bpm=bpm).tracks
+    return parse_musicxml_document(path, bpm=bpm).tracks
 
 
-def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
+def parse_musicxml_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
     root = _read_musicxml_root(path)
     part_names = _musicxml_part_names(root)
     parsed_tracks: list[ParsedTrack] = []
-    score_time_signature = DEFAULT_TIME_SIGNATURE
+    document_time_signature = DEFAULT_TIME_SIGNATURE
     has_time_signature = False
 
     for part in _children(root, "part"):
         part_id = part.attrib.get("id", "")
         part_name = part_names.get(part_id, part_id or "MusicXML part")
-        notes: list[TrackPitchEvent] = []
+        events: list[TrackPitchEvent] = []
         divisions = 1
-        current_time_signature = score_time_signature
+        current_time_signature = document_time_signature
         quarter_cursor = 0.0
         previous_onset_quarter = 0.0
 
@@ -178,7 +178,7 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                     if next_time_signature is not None:
                         current_time_signature = next_time_signature
                         if not has_time_signature:
-                            score_time_signature = next_time_signature
+                            document_time_signature = next_time_signature
                             has_time_signature = True
                 elif tag == "backup":
                     duration = _duration_quarters(item, divisions)
@@ -202,8 +202,8 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
 
                     voice_index = _safe_int(_child_text(item, "voice"), default=None)
                     is_tied = any(_local_name(tie.tag) == "tie" for tie in item.iter())
-                    notes.append(
-                        note_from_pitch(
+                    events.append(
+                        event_from_pitch(
                             beat=onset_quarter + 1,
                             duration_beats=max(0.0001, duration_quarters),
                             bpm=bpm,
@@ -231,25 +231,25 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         parsed_tracks.append(
             ParsedTrack(
                 name=part_name,
-                events=notes,
-                slot_id=infer_slot_id(part_name, notes),
+                events=events,
+                slot_id=infer_slot_id(part_name, events),
             )
         )
 
     return ParsedSymbolicFile(
         tracks=parsed_tracks,
         mapped_events={},
-        time_signature_numerator=score_time_signature[0],
-        time_signature_denominator=score_time_signature[1],
+        time_signature_numerator=document_time_signature[0],
+        time_signature_denominator=document_time_signature[1],
         has_time_signature=has_time_signature,
     )
 
 
 def parse_midi_file(path: Path, *, bpm: int) -> list[ParsedTrack]:
-    return parse_midi_score(path, bpm=bpm).tracks
+    return parse_midi_document(path, bpm=bpm).tracks
 
 
-def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
+def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
     data = path.read_bytes()
     if data[:4] != b"MThd":
         raise SymbolicParseError("Invalid MIDI header.")
@@ -265,7 +265,7 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
 
     offset = 8 + header_length
     tracks: list[ParsedTrack] = []
-    score_time_signature = DEFAULT_TIME_SIGNATURE
+    document_time_signature = DEFAULT_TIME_SIGNATURE
     has_time_signature = False
 
     for track_index in range(track_count):
@@ -279,10 +279,10 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         running_status: int | None = None
         position = 0
         absolute_tick = 0
-        active_notes: dict[tuple[int, int], int] = {}
-        notes: list[TrackPitchEvent] = []
+        active_midi_pitches: dict[tuple[int, int], int] = {}
+        events: list[TrackPitchEvent] = []
         channels_seen: set[int] = set()
-        current_time_signature = score_time_signature
+        current_time_signature = document_time_signature
 
         while position < len(chunk):
             delta, position = _read_vlq(chunk, position)
@@ -313,7 +313,7 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                 elif meta_type == 0x58 and len(payload) >= 2:
                     current_time_signature = _normalize_time_signature(payload[0], 2 ** payload[1])
                     if not has_time_signature:
-                        score_time_signature = current_time_signature
+                        document_time_signature = current_time_signature
                         has_time_signature = True
                 elif meta_type == 0x2F:
                     break
@@ -334,16 +334,16 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
 
             channels_seen.add(channel)
             if event_type == 0x90:
-                note_number = event_data[0]
+                pitch_number = event_data[0]
                 velocity = event_data[1]
-                key = (channel, note_number)
+                key = (channel, pitch_number)
                 if velocity > 0:
-                    active_notes[key] = absolute_tick
+                    active_midi_pitches[key] = absolute_tick
                 else:
-                    _append_midi_note(
-                        notes,
+                    _append_midi_event(
+                        events,
                         key=key,
-                        start_tick=active_notes.pop(key, absolute_tick),
+                        start_tick=active_midi_pitches.pop(key, absolute_tick),
                         end_tick=absolute_tick,
                         ticks_per_quarter=ticks_per_quarter,
                         bpm=bpm,
@@ -351,12 +351,12 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                         time_signature_denominator=current_time_signature[1],
                     )
             elif event_type == 0x80:
-                note_number = event_data[0]
-                key = (channel, note_number)
-                _append_midi_note(
-                    notes,
+                pitch_number = event_data[0]
+                key = (channel, pitch_number)
+                _append_midi_event(
+                    events,
                     key=key,
-                    start_tick=active_notes.pop(key, absolute_tick),
+                    start_tick=active_midi_pitches.pop(key, absolute_tick),
                     end_tick=absolute_tick,
                     ticks_per_quarter=ticks_per_quarter,
                     bpm=bpm,
@@ -364,20 +364,20 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                     time_signature_denominator=current_time_signature[1],
                 )
 
-        slot_id = 6 if 9 in channels_seen else infer_slot_id(track_name, notes, fallback=track_index + 1)
-        tracks.append(ParsedTrack(name=track_name, events=notes, slot_id=slot_id))
+        slot_id = 6 if 9 in channels_seen else infer_slot_id(track_name, events, fallback=track_index + 1)
+        tracks.append(ParsedTrack(name=track_name, events=events, slot_id=slot_id))
 
     return ParsedSymbolicFile(
         tracks=tracks,
         mapped_events={},
-        time_signature_numerator=score_time_signature[0],
-        time_signature_denominator=score_time_signature[1],
+        time_signature_numerator=document_time_signature[0],
+        time_signature_denominator=document_time_signature[1],
         has_time_signature=has_time_signature,
     )
 
 
-def _append_midi_note(
-    notes: list[TrackPitchEvent],
+def _append_midi_event(
+    events: list[TrackPitchEvent],
     *,
     key: tuple[int, int],
     start_tick: int,
@@ -390,11 +390,11 @@ def _append_midi_note(
     if end_tick <= start_tick:
         return
 
-    _, note_number = key
+    _, pitch_number = key
     onset_beats = start_tick / ticks_per_quarter
     duration_beats = (end_tick - start_tick) / ticks_per_quarter
-    notes.append(
-        note_from_pitch(
+    events.append(
+        event_from_pitch(
             beat=onset_beats + 1,
             duration_beats=duration_beats,
             bpm=bpm,
@@ -402,7 +402,7 @@ def _append_midi_note(
             extraction_method="midi_parser_v0",
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            pitch_midi=note_number,
+            pitch_midi=pitch_number,
             confidence=1,
         )
     )
@@ -450,8 +450,8 @@ def _musicxml_part_names(root: ElementTree.Element) -> dict[str, str]:
     return part_names
 
 
-def _musicxml_pitch_to_midi(note_element: ElementTree.Element) -> int | None:
-    pitch = _first_child(note_element, "pitch")
+def _musicxml_pitch_to_midi(event_element: ElementTree.Element) -> int | None:
+    pitch = _first_child(event_element, "pitch")
     if pitch is None:
         return None
     step = _child_text(pitch, "step")

@@ -37,7 +37,7 @@ export function detectUploadKind(file: File): UploadKind | null {
   return null
 }
 
-export function isOmrUpload(file: File): boolean {
+export function isDocumentImageUpload(file: File): boolean {
   const name = file.name.toLowerCase()
   return (
     name.endsWith('.pdf') ||

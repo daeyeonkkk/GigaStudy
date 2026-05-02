@@ -11,10 +11,10 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     estimate_candidate_confidence,
     parsed_track_diagnostics_by_slot,
 )
-from gigastudy_api.services.engine.omr_results import mark_events_as_omr
+from gigastudy_api.services.engine.document_results import mark_events_as_document
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 from gigastudy_api.services.engine_queue import EngineQueueJob
-from gigastudy_api.services.omr_pipeline import OmrPipelineError, run_omr_pipeline
+from gigastudy_api.services.document_extraction_pipeline import DocumentExtractionPipelineError, run_document_extraction_pipeline
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_documents import track_has_content
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
@@ -36,24 +36,24 @@ class StudioEngineJobHandlers:
         self._vector_parser = vector_parser
 
     def process(self, record: EngineQueueJob) -> None:
-        if record.job_type == "omr":
-            self.process_omr(record)
+        if record.job_type == "document":
+            self.process_document_extraction(record)
             return
         if record.job_type == "voice":
             self.process_voice(record)
             return
         raise RuntimeError(f"Unsupported engine job type: {record.job_type}")
 
-    def process_omr(self, record: EngineQueueJob) -> None:
+    def process_document_extraction(self, record: EngineQueueJob) -> None:
         settings = get_settings()
         studio = self._repository.get_studio(record.studio_id)
         input_path = self._assets.resolve_data_asset_path(str(record.payload.get("input_path") or ""))
         source_label = str(record.payload.get("source_label") or "uploaded-document")
         try:
-            result = run_omr_pipeline(
+            result = run_document_extraction_pipeline(
                 audiveris_bin=settings.audiveris_bin,
-                audiveris_runner=self._repository._run_audiveris_omr,
-                backend=settings.omr_backend,
+                audiveris_runner=self._repository._run_audiveris_document_extraction,
+                backend=settings.document_extraction_backend,
                 input_path=input_path,
                 job_output_dir=self._job_output_dir(record.studio_id, record.job_id),
                 job_slot_id=record.slot_id,
@@ -64,12 +64,12 @@ class StudioEngineJobHandlers:
                 timeout_seconds=settings.engine_processing_timeout_seconds,
                 vector_parser=self._vector_parser,
             )
-        except OmrPipelineError as error:
+        except DocumentExtractionPipelineError as error:
             self._repository._mark_job_failed(record.studio_id, record.job_id, message=str(error))
             return
 
         parsed_symbolic = result.parsed_symbolic
-        mapped_events = mark_events_as_omr(
+        mapped_events = mark_events_as_document(
             parsed_symbolic.mapped_events,
             extraction_method=result.extraction_method,
         )
@@ -77,7 +77,7 @@ class StudioEngineJobHandlers:
             self._repository._mark_job_failed(
                 record.studio_id,
                 record.job_id,
-                message="OMR did not produce any track notes.",
+                message="Document extraction did not produce any track events.",
             )
             return
 
@@ -101,28 +101,28 @@ class StudioEngineJobHandlers:
         confidence_by_slot = {
             slot_id: estimate_candidate_confidence(
                 slot_id,
-                notes,
+                events,
                 method=result.candidate_method,
                 fallback_confidence=result.confidence,
                 diagnostics=diagnostics_by_slot.get(slot_id),
             )
-            for slot_id, notes in mapped_events.items()
+            for slot_id, events in mapped_events.items()
         }
         message_by_slot = {
             slot_id: candidate_review_message(
                 slot_id,
-                notes,
+                events,
                 method=result.candidate_method,
                 diagnostics=candidate_diagnostics(
                     slot_id,
-                    notes,
+                    events,
                     method=result.candidate_method,
                     confidence=confidence_by_slot[slot_id],
                     source_diagnostics=diagnostics_by_slot.get(slot_id),
                 ),
                 default_message=result.message,
             )
-            for slot_id, notes in mapped_events.items()
+            for slot_id, events in mapped_events.items()
         }
         self._repository._add_extraction_candidates(
             record.studio_id,
@@ -161,7 +161,7 @@ class StudioEngineJobHandlers:
                 source_kind="audio",
                 source_label=result.source_label,
                 method="voice_transcription_review",
-                confidence=min((note.confidence for note in result.events), default=0.45),
+                confidence=min((event.confidence for event in result.events), default=0.45),
                 diagnostics_by_slot={record.slot_id: result.diagnostics},
                 message="Voice transcription is waiting for user approval.",
                 job_id=record.job_id,
@@ -184,7 +184,7 @@ class StudioEngineJobHandlers:
             record.slot_id,
             source_kind="audio",
             source_label=result.source_label,
-            notes=result.events,
+            events=result.events,
             audio_source_path=result.relative_audio_path,
             audio_source_label=result.source_label,
             audio_mime_type=result.audio_mime_type,

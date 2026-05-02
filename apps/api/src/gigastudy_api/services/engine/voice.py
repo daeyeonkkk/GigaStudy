@@ -12,7 +12,7 @@ from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.music_theory import (
     frequency_to_midi,
-    note_from_pitch,
+    event_from_pitch,
     quantize,
 )
 from gigastudy_api.services.engine.extraction_plan import VoiceExtractionPlan, default_voice_extraction_plan
@@ -195,8 +195,8 @@ def _transcribe_with_local_autocorrelation(
         if confidence < plan.min_frame_confidence:
             continue
         midi_float = 69 + 12 * math.log2(frequency / 440)
-        midi_note = frequency_to_midi(frequency)
-        if midi_note is None or midi_note < low_midi - 1 or midi_note > high_midi + 1:
+        midi_pitch = frequency_to_midi(frequency)
+        if midi_pitch is None or midi_pitch < low_midi - 1 or midi_pitch > high_midi + 1:
             continue
         amplitude_confidence = min(1, rms / max(voice_threshold * 2.8, 0.0001))
         frame_pitches.append(
@@ -209,7 +209,7 @@ def _transcribe_with_local_autocorrelation(
 
     stable_frame_pitches = _stabilize_pitch_frames(frame_pitches, low_midi=low_midi, high_midi=high_midi)
 
-    return _frames_to_notes(
+    return _frames_to_events(
         stable_frame_pitches,
         bpm=bpm,
         slot_id=slot_id,
@@ -244,36 +244,36 @@ def _transcribe_with_basic_pitch(
     except Exception as error:  # pragma: no cover - optional dependency.
         raise VoiceTranscriptionError(f"Basic Pitch could not analyze the audio: {error}") from error
 
-    note_events = _extract_basic_pitch_note_events(prediction)
-    if not note_events:
-        raise VoiceTranscriptionError("Basic Pitch did not produce any note events.")
+    pitch_events = _extract_basic_pitch_events(prediction)
+    if not pitch_events:
+        raise VoiceTranscriptionError("Basic Pitch did not produce any event events.")
 
     low_midi, high_midi = plan.low_midi, plan.high_midi
     beat_seconds = 60 / max(1, bpm)
     parsed_events: list[tuple[float, float, int, float]] = []
-    for event in note_events:
+    for event in pitch_events:
         parsed = _parse_basic_pitch_event(event)
         if parsed is None:
             continue
-        onset_seconds, end_seconds, midi_note, amplitude = parsed
-        if midi_note < low_midi - 1 or midi_note > high_midi + 1:
+        onset_seconds, end_seconds, midi_pitch, amplitude = parsed
+        if midi_pitch < low_midi - 1 or midi_pitch > high_midi + 1:
             continue
         duration_seconds = max(0.05, end_seconds - onset_seconds)
-        parsed_events.append((onset_seconds, duration_seconds, midi_note, amplitude))
+        parsed_events.append((onset_seconds, duration_seconds, midi_pitch, amplitude))
 
     if not parsed_events:
-        raise VoiceTranscriptionError("Basic Pitch did not produce notes in the target track range.")
+        raise VoiceTranscriptionError("Basic Pitch did not produce events in the target track range.")
 
     alignment = _estimate_metronome_phase_alignment(
         [(onset, duration, confidence) for onset, duration, _midi, confidence in parsed_events],
         bpm=bpm,
     )
-    notes: list[TrackPitchEvent] = []
-    for onset_seconds, duration_seconds, midi_note, amplitude in parsed_events:
+    events: list[TrackPitchEvent] = []
+    for onset_seconds, duration_seconds, midi_pitch, amplitude in parsed_events:
         aligned_onset_seconds = max(0, onset_seconds + alignment.offset_seconds) if alignment.applied else onset_seconds
         warnings = ["metronome_phase_aligned"] if alignment.applied else []
-        notes.append(
-            note_from_pitch(
+        events.append(
+            event_from_pitch(
                 beat=quantize(aligned_onset_seconds / beat_seconds + 1, plan.quantization_grid),
                 duration_beats=max(
                     plan.quantization_grid,
@@ -284,7 +284,7 @@ def _transcribe_with_basic_pitch(
                 extraction_method="basic_pitch_amt_v1",
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
-                pitch_midi=midi_note,
+                pitch_midi=midi_pitch,
                 onset_seconds=aligned_onset_seconds,
                 duration_seconds=duration_seconds,
                 confidence=max(0.25, min(0.98, amplitude)),
@@ -294,7 +294,7 @@ def _transcribe_with_basic_pitch(
 
     return VoiceTranscriptionResult(
         events=normalize_track_events(
-            notes,
+            events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -308,12 +308,12 @@ def _transcribe_with_basic_pitch(
             extraction_method="basic_pitch_amt_v1",
             frame_count=0,
             segment_count=len(parsed_events),
-            event_count=len(notes),
+            event_count=len(events),
         ),
     )
 
 
-def _extract_basic_pitch_note_events(prediction: object) -> list[object]:
+def _extract_basic_pitch_events(prediction: object) -> list[object]:
     if isinstance(prediction, tuple) and len(prediction) >= 3:
         candidate = prediction[2]
         return list(candidate) if isinstance(candidate, list | tuple) else []
@@ -339,7 +339,7 @@ def _parse_basic_pitch_event(event: object) -> tuple[float, float, int, float] |
     try:
         onset_seconds = float(onset)
         end_seconds = float(end)
-        midi_note = round(float(midi))
+        midi_pitch = round(float(midi))
         confidence = float(amplitude)
     except (TypeError, ValueError):
         return None
@@ -348,7 +348,7 @@ def _parse_basic_pitch_event(event: object) -> tuple[float, float, int, float] |
         return None
     if confidence > 1:
         confidence = min(1.0, confidence / 127)
-    return onset_seconds, end_seconds, midi_note, confidence
+    return onset_seconds, end_seconds, midi_pitch, confidence
 
 
 def _transcribe_with_librosa_pyin(
@@ -423,8 +423,8 @@ def _transcribe_with_librosa_pyin(
             continue
 
         midi_float = 69 + 12 * math.log2(frequency / 440)
-        midi_note = round(midi_float)
-        if midi_note < low_midi - 1 or midi_note > high_midi + 1:
+        midi_pitch = round(midi_float)
+        if midi_pitch < low_midi - 1 or midi_pitch > high_midi + 1:
             continue
         amplitude_confidence = min(1, rms / max(voice_threshold * 2.5, 0.0001))
         frame_pitches.append(
@@ -436,7 +436,7 @@ def _transcribe_with_librosa_pyin(
         )
 
     stable_frame_pitches = _stabilize_pitch_frames(frame_pitches, low_midi=low_midi, high_midi=high_midi)
-    return _frames_to_notes(
+    return _frames_to_events(
         stable_frame_pitches,
         bpm=bpm,
         slot_id=slot_id,
@@ -672,7 +672,7 @@ def _parabolic_lag(best_lag: int, scores: dict[int, float]) -> float:
     return max(1.0, best_lag + max(-0.5, min(0.5, offset)))
 
 
-def _frames_to_notes(
+def _frames_to_events(
     frame_pitches: list[PitchFrame],
     *,
     bpm: int,
@@ -716,10 +716,10 @@ def _frames_to_notes(
         min_segment_seconds=max(plan.min_segment_seconds, hop_seconds * 3.5),
         min_segment_confidence=plan.min_segment_confidence,
         max_pitch_std=plan.max_pitch_std,
-        suppress_unstable_notes=plan.suppress_unstable_notes,
+        suppress_unstable_events=plan.suppress_unstable_events,
     )
     if not segments:
-        raise VoiceTranscriptionError("No stable voiced note was detected.")
+        raise VoiceTranscriptionError("No stable voiced event was detected.")
 
     beat_seconds = 60 / bpm
     alignment = _estimate_metronome_phase_alignment(
@@ -729,9 +729,9 @@ def _frames_to_notes(
         ],
         bpm=bpm,
     )
-    notes: list[TrackPitchEvent] = []
+    events: list[TrackPitchEvent] = []
     for segment in segments:
-        midi_note = round(segment.midi_float)
+        midi_pitch = round(segment.midi_float)
         aligned_onset_seconds = max(0, segment.onset_seconds + alignment.offset_seconds) if alignment.applied else segment.onset_seconds
         beat = quantize(aligned_onset_seconds / beat_seconds + 1, plan.quantization_grid)
         duration_beats = max(
@@ -739,8 +739,8 @@ def _frames_to_notes(
             quantize(segment.duration_seconds / beat_seconds, plan.quantization_grid),
         )
         warnings = ["metronome_phase_aligned"] if alignment.applied else []
-        notes.append(
-            note_from_pitch(
+        events.append(
+            event_from_pitch(
                 beat=beat,
                 duration_beats=duration_beats,
                 bpm=bpm,
@@ -748,7 +748,7 @@ def _frames_to_notes(
                 extraction_method=extraction_method,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
-                pitch_midi=midi_note,
+                pitch_midi=midi_pitch,
                 onset_seconds=aligned_onset_seconds,
                 duration_seconds=segment.duration_seconds,
                 confidence=segment.confidence,
@@ -757,7 +757,7 @@ def _frames_to_notes(
         )
     return VoiceTranscriptionResult(
         events=normalize_track_events(
-            notes,
+            events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -771,7 +771,7 @@ def _frames_to_notes(
             extraction_method=extraction_method,
             frame_count=frame_count if frame_count is not None else len(frame_pitches),
             segment_count=len(segments),
-            event_count=len(notes),
+            event_count=len(events),
         ),
     )
 
@@ -799,7 +799,7 @@ def _clean_segments(
     min_segment_seconds: float,
     min_segment_confidence: float,
     max_pitch_std: float,
-    suppress_unstable_notes: bool,
+    suppress_unstable_events: bool,
 ) -> list[VoiceSegment]:
     cleaned: list[VoiceSegment] = []
     for segment in segments:
@@ -809,7 +809,7 @@ def _clean_segments(
             continue
         if segment.confidence < min_segment_confidence:
             continue
-        if suppress_unstable_notes and segment.pitch_std > max_pitch_std:
+        if suppress_unstable_events and segment.pitch_std > max_pitch_std:
             continue
         if cleaned:
             previous = cleaned[-1]

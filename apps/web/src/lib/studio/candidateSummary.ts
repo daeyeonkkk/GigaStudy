@@ -34,45 +34,45 @@ const TRACK_CENTER_MIDI: Record<number, number> = {
 }
 
 const sourceDecisionLabels: Record<SourceKind, string> = {
-  recording: '녹음 추출',
-  audio: '오디오 추출',
-  midi: 'MIDI 파트',
-  document: '문서 파트',
-  music: '음원 추출',
-  ai: 'AI 화음',
+  recording: 'Recording extraction',
+  audio: 'Audio extraction',
+  midi: 'MIDI import',
+  document: 'Document extraction',
+  music: 'Music import',
+  ai: 'AI harmony',
 }
 
 const VOICE_LEADING_PROFILE_LABELS: Record<string, string> = {
-  balanced: '균형형',
-  lower_support: '낮은 받침',
-  moving_counterline: '대선율',
-  upper_blend: '위성부 블렌드',
-  open_voicing: '넓은 간격',
+  balanced: 'Balanced',
+  lower_support: 'Lower support',
+  moving_counterline: 'Moving counterline',
+  upper_blend: 'Upper blend',
+  open_voicing: 'Open voicing',
 }
 
 const RISK_TAG_LABELS: Record<string, string> = {
-  range: '음역 확인',
-  motion: '진행 확인',
-  rhythm: '리듬 확인',
-  spacing: '간격 확인',
-  tension: '긴장도 확인',
-  overlap: '성부 겹침 확인',
-  leap: '도약 확인',
+  range: 'Range review',
+  motion: 'Motion review',
+  rhythm: 'Rhythm review',
+  spacing: 'Spacing review',
+  tension: 'Tension review',
+  overlap: 'Overlap review',
+  leap: 'Leap review',
 }
 
 const HARMONY_GOAL_LABELS: Record<string, string> = {
-  rehearsal_safe: '연습 안정형',
-  counterline: '대선율형',
-  open_support: '넓은 받침',
-  upper_blend: '위성부 블렌드',
-  active_motion: '움직임 강조',
+  rehearsal_safe: 'Rehearsal safe',
+  counterline: 'Counterline',
+  open_support: 'Open support',
+  upper_blend: 'Upper blend',
+  active_motion: 'Active motion',
 }
 
 const RHYTHM_POLICY_LABELS: Record<string, string> = {
-  follow_context: '기존 리듬 추종',
-  simplify: '읽기 쉽게 단순화',
-  answer_melody: '멜로디 응답',
-  sustain_support: '길게 받치기',
+  follow_context: 'Follow context',
+  simplify: 'Simplify rhythm',
+  answer_melody: 'Answer melody',
+  sustain_support: 'Sustain support',
 }
 
 function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
@@ -129,14 +129,14 @@ export function getCandidateDecisionSummary(
 
   if (events.length === 0) {
     return {
-      title: '비어 있는 후보',
-      headline: '등록할 피치 이벤트가 없습니다.',
-      support: '다른 후보를 선택하거나 입력 소스를 다시 확인하세요.',
-      tags: ['이벤트 없음'],
+      title: 'Empty candidate',
+      headline: 'No pitch events are available for registration.',
+      support: 'Choose another candidate or check the imported source again.',
+      tags: ['No events'],
       phrasePreview: '-',
       metrics: [
-        { label: '이벤트', value: '0' },
-        { label: '신뢰도', value: confidence },
+        { label: 'Events', value: '0' },
+        { label: 'Confidence', value: confidence },
       ],
       diagnostics,
       technical: [
@@ -150,18 +150,18 @@ export function getCandidateDecisionSummary(
   const sourceLabel = sourceDecisionLabels[candidate.source_kind]
   const title =
     candidate.source_kind === 'ai'
-      ? (llmInsight?.title ?? `${register.shortLabel} · ${movement.shortLabel}`)
-      : `${sourceLabel} · ${range}`
+      ? (llmInsight?.title ?? `${register.shortLabel} - ${movement.shortLabel}`)
+      : `${sourceLabel} - ${range}`
   const headline =
     candidate.source_kind === 'ai'
-      ? (llmInsight?.headline ?? `${targetTrack?.name ?? '선택 트랙'}에 ${register.headline} 후보입니다.`)
-      : `${sourceLabel} 결과를 ${targetTrack?.name ?? '선택 트랙'}에 등록할 수 있습니다.`
+      ? (llmInsight?.headline ?? `${targetTrack?.name ?? 'Selected track'} receives a ${register.headline} candidate.`)
+      : `${sourceLabel} can be registered to ${targetTrack?.name ?? 'the selected track'}.`
   const support = [
-    candidate.source_kind === 'ai' && llmInsight?.role ? `역할: ${llmInsight.role}.` : '',
-    `${range} 범위, ${startEnd}.`,
+    candidate.source_kind === 'ai' && llmInsight?.role ? `Role: ${llmInsight.role}.` : '',
+    `${range} range, ${startEnd}.`,
     `${movement.detail}.`,
     `${rhythm.detail}.`,
-    candidate.source_kind === 'ai' && llmInsight?.selectionHint ? `선택 기준: ${llmInsight.selectionHint}` : '',
+    candidate.source_kind === 'ai' && llmInsight?.selectionHint ? `Selection: ${llmInsight.selectionHint}` : '',
     reviewHint?.sentence ?? '',
   ]
     .filter((sentence) => sentence.length > 0)
@@ -183,12 +183,12 @@ export function getCandidateDecisionSummary(
     ].filter((tag) => tag.length > 0),
     phrasePreview: getCandidatePhrasePreview(candidate),
     metrics: [
-      { label: '음역', value: `${range}${register.averageLabel ? ` · 중심 ${register.averageLabel}` : ''}` },
-      { label: '움직임', value: `${movement.label} · 도약 ${movement.leapCount}회` },
-      { label: '리듬', value: rhythm.label },
-      { label: '시작/끝', value: startEnd },
-      { label: '신뢰도', value: confidence },
-      { label: '길이', value: `${durationSeconds.toFixed(2)}s · ${events.length} events` },
+      { label: 'Range', value: `${range}${register.averageLabel ? ` - center ${register.averageLabel}` : ''}` },
+      { label: 'Motion', value: `${movement.label} - ${movement.leapCount} leaps` },
+      { label: 'Rhythm', value: rhythm.label },
+      { label: 'Start/end', value: startEnd },
+      { label: 'Confidence', value: confidence },
+      { label: 'Length', value: `${durationSeconds.toFixed(2)}s - ${events.length} events` },
     ],
     diagnostics,
     technical: [
@@ -241,10 +241,10 @@ function getAverageMidiLabel(midiEvents: PitchedCandidateEvent[]): string {
   if (midiEvents.length === 0) {
     return ''
   }
-  return getNearestNoteLabel(midiEvents.reduce((sum, event) => sum + event.pitch_midi, 0) / midiEvents.length)
+  return getNearestPitchLabel(midiEvents.reduce((sum, event) => sum + event.pitch_midi, 0) / midiEvents.length)
 }
 
-function getNearestNoteLabel(midi: number): string {
+function getNearestPitchLabel(midi: number): string {
   const rounded = Math.round(midi)
   const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
   const pitchClass = ((rounded % 12) + 12) % 12
@@ -253,27 +253,27 @@ function getNearestNoteLabel(midi: number): string {
 }
 
 function getRegisterSummary(
-  midiNotes: PitchedCandidateEvent[],
+  midiEvents: PitchedCandidateEvent[],
   targetTrack: TrackSlot | null,
 ): { averageLabel: string; headline: string; shortLabel: string; tag: string } {
-  if (midiNotes.length === 0) {
+  if (midiEvents.length === 0) {
     return {
       averageLabel: '',
-      headline: '리듬 중심의',
-      shortLabel: '리듬형',
-      tag: '리듬 후보',
+      headline: 'rhythm-only',
+      shortLabel: 'Rhythm only',
+      tag: 'Rhythm candidate',
     }
   }
 
-  const averageMidi = midiNotes.reduce((sum, note) => sum + note.pitch_midi, 0) / midiNotes.length
-  const averageLabel = getAverageMidiLabel(midiNotes)
+  const averageMidi = midiEvents.reduce((sum, event) => sum + event.pitch_midi, 0) / midiEvents.length
+  const averageLabel = getAverageMidiLabel(midiEvents)
   const targetCenter = TRACK_CENTER_MIDI[targetTrack?.slot_id ?? 0]
   if (!targetCenter) {
     return {
       averageLabel,
-      headline: '중심 음역이 뚜렷한',
-      shortLabel: '중심 음역',
-      tag: `중심 ${averageLabel}`,
+      headline: 'center-range',
+      shortLabel: 'Center range',
+      tag: `Center ${averageLabel}`,
     }
   }
 
@@ -281,45 +281,45 @@ function getRegisterSummary(
   if (delta <= -5) {
     return {
       averageLabel,
-      headline: '아래에서 안정적으로 받치는',
-      shortLabel: '낮은 받침',
-      tag: `낮은 중심 ${averageLabel}`,
+      headline: 'lower-register support',
+      shortLabel: 'Lower support',
+      tag: `Lower center ${averageLabel}`,
     }
   }
   if (delta >= 5) {
     return {
       averageLabel,
-      headline: '위쪽으로 밝게 여는',
-      shortLabel: '높은 선율',
-      tag: `높은 중심 ${averageLabel}`,
+      headline: 'upper-register blend',
+      shortLabel: 'Upper blend',
+      tag: `Upper center ${averageLabel}`,
     }
   }
   return {
     averageLabel,
-    headline: '파트 중심 음역에 가까운',
-    shortLabel: '균형 음역',
-    tag: `중심 ${averageLabel}`,
+    headline: 'balanced-register',
+    shortLabel: 'Balanced range',
+    tag: `Center ${averageLabel}`,
   }
 }
 
-function getMovementSummary(midiNotes: PitchedCandidateEvent[]): {
+function getMovementSummary(midiEvents: PitchedCandidateEvent[]): {
   detail: string
   label: string
   leapCount: number
   shortLabel: string
   tag: string
 } {
-  if (midiNotes.length < 2) {
+  if (midiEvents.length < 2) {
     return {
-      detail: '한 음 중심이라 움직임이 거의 없습니다',
-      label: '고정형',
+      detail: 'Single pitched event, almost no melodic motion',
+      label: 'Static',
       leapCount: 0,
-      shortLabel: '고정형',
-      tag: '움직임 적음',
+      shortLabel: 'Static',
+      tag: 'Low motion',
     }
   }
 
-  const intervals = midiNotes.slice(1).map((note, index) => note.pitch_midi - midiNotes[index].pitch_midi)
+  const intervals = midiEvents.slice(1).map((event, index) => event.pitch_midi - midiEvents[index].pitch_midi)
   const absoluteIntervals = intervals.map((interval) => Math.abs(interval))
   const averageStep = absoluteIntervals.reduce((sum, interval) => sum + interval, 0) / absoluteIntervals.length
   const leapCount = absoluteIntervals.filter((interval) => interval >= 5).length
@@ -329,28 +329,28 @@ function getMovementSummary(midiNotes: PitchedCandidateEvent[]): {
 
   if (averageStep <= 1.25) {
     return {
-      detail: `대부분 가까운 음으로 이어집니다(순차 ${stepwisePercent}%)`,
-      label: '매우 부드러운 진행',
+      detail: `Mostly stepwise motion (${stepwisePercent}% stepwise)`,
+      label: 'Very smooth motion',
       leapCount,
-      shortLabel: '부드러운 진행',
-      tag: '순차 진행',
+      shortLabel: 'Smooth',
+      tag: 'Stepwise',
     }
   }
   if (averageStep <= 2.8) {
     return {
-      detail: `순차 진행과 작은 도약이 섞여 있습니다(순차 ${stepwisePercent}%)`,
-      label: '균형 잡힌 진행',
+      detail: `Balanced motion with stepwise anchors (${stepwisePercent}% stepwise)`,
+      label: 'Balanced motion',
       leapCount,
-      shortLabel: '균형 진행',
-      tag: '균형 진행',
+      shortLabel: 'Balanced',
+      tag: 'Balanced motion',
     }
   }
   return {
-    detail: `선율 변화가 크고 도약이 ${leapCount}회 있습니다`,
-    label: '활동적인 진행',
+    detail: `Active contour with ${leapCount} larger leaps`,
+    label: 'Active motion',
     leapCount,
-    shortLabel: '활동형',
-    tag: '활동형',
+    shortLabel: 'Active',
+    tag: 'Active motion',
   }
 }
 
@@ -361,9 +361,9 @@ function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
 } {
   if (events.length === 0) {
     return {
-      detail: '리듬 정보가 없습니다',
+      detail: 'No rhythm data',
       label: '-',
-      tag: '리듬 없음',
+      tag: 'No rhythm',
     }
   }
 
@@ -371,31 +371,31 @@ function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
   const startBeat = Math.min(...events.map((event) => event.start_beat))
   const endBeat = Math.max(...events.map((event) => event.start_beat + Math.max(0.25, event.duration_beats)))
   const measureSpan = Math.max(1, Math.ceil((endBeat - startBeat) / safeBeatsPerMeasure))
-  const notesPerMeasure = events.length / measureSpan
+  const eventsPerMeasure = events.length / measureSpan
   const shortestDuration = Math.min(...events.map((event) => Math.max(0.25, event.duration_beats)))
 
   const densityLabel =
-    notesPerMeasure >= 7 ? '촘촘한 리듬' : notesPerMeasure >= 4 ? '보통 밀도' : '여유 있는 리듬'
+    eventsPerMeasure >= 7 ? 'Dense rhythm' : eventsPerMeasure >= 4 ? 'Moderate rhythm' : 'Open rhythm'
   return {
-    detail: `마디당 약 ${notesPerMeasure.toFixed(1)}개 이벤트, 최단 ${shortestDuration.toFixed(2)}박입니다`,
-    label: `${densityLabel} · ${notesPerMeasure.toFixed(1)} events/measure`,
+    detail: `${eventsPerMeasure.toFixed(1)} events per measure, shortest duration ${shortestDuration.toFixed(2)} beats`,
+    label: `${densityLabel} - ${eventsPerMeasure.toFixed(1)} events/measure`,
     tag: densityLabel,
   }
 }
 
-function getContourSummary(midiNotes: PitchedCandidateEvent[]): { tag: string } {
-  if (midiNotes.length < 2) {
-    return { tag: '수평 흐름' }
+function getContourSummary(midiEvents: PitchedCandidateEvent[]): { tag: string } {
+  if (midiEvents.length < 2) {
+    return { tag: 'Flat contour' }
   }
-  const first = midiNotes[0].pitch_midi
-  const last = midiNotes[midiNotes.length - 1].pitch_midi
+  const first = midiEvents[0].pitch_midi
+  const last = midiEvents[midiEvents.length - 1].pitch_midi
   if (last - first >= 3) {
-    return { tag: '상행 종지' }
+    return { tag: 'Rising contour' }
   }
   if (first - last >= 3) {
-    return { tag: '하행 종지' }
+    return { tag: 'Falling contour' }
   }
-  return { tag: '수평 종지' }
+  return { tag: 'Level contour' }
 }
 
 function getStartEndSummary(events: PitchEvent[]): string {
@@ -435,11 +435,11 @@ function getDeepSeekDecisionInsight(candidate: ExtractionCandidate): {
   const role = getDiagnosticString(diagnostics, 'candidate_role')
   const selectionHint = getDiagnosticString(diagnostics, 'selection_hint')
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
-  const title = candidate.variant_label || (profileLabel ? `${profileLabel} 후보` : null)
+  const title = candidate.variant_label || (profileLabel ? `${profileLabel} candidate` : null)
   const headline =
     role && selectionHint
       ? `${role} ${selectionHint}`
-      : role || selectionHint || (profileLabel ? `${profileLabel} 방향으로 만든 화음 후보입니다.` : null)
+      : role || selectionHint || (profileLabel ? `${profileLabel} direction for the generated harmony candidate.` : null)
 
   if (!profileLabel && !role && !selectionHint && riskTags.length === 0 && !title) {
     return null
@@ -461,38 +461,38 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
 
   if (llmProfile) {
-    metrics.push({ label: '생성 방향', value: formatVoiceLeadingProfile(llmProfile) })
+    metrics.push({ label: 'Generation direction', value: formatVoiceLeadingProfile(llmProfile) })
   }
   if (llmGoal) {
-    metrics.push({ label: '후보 목표', value: formatHarmonyGoal(llmGoal) })
+    metrics.push({ label: 'Candidate goal', value: formatHarmonyGoal(llmGoal) })
   }
   if (llmRhythmPolicy) {
-    metrics.push({ label: '리듬 정책', value: formatRhythmPolicy(llmRhythmPolicy) })
+    metrics.push({ label: 'Rhythm policy', value: formatRhythmPolicy(llmRhythmPolicy) })
   }
   if (llmRole) {
-    metrics.push({ label: '화음 역할', value: llmRole })
+    metrics.push({ label: 'Harmony role', value: llmRole })
   }
   if (llmSelectionHint) {
-    metrics.push({ label: '선택 이유', value: llmSelectionHint })
+    metrics.push({ label: 'Selection reason', value: llmSelectionHint })
   }
   if (llmPhraseSummary) {
-    metrics.push({ label: '곡 흐름', value: llmPhraseSummary })
+    metrics.push({ label: 'Phrase flow', value: llmPhraseSummary })
   }
   if (llmPlanConfidence !== null) {
-    metrics.push({ label: '계획 신뢰도', value: formatRatio(llmPlanConfidence) })
+    metrics.push({ label: 'Plan confidence', value: formatRatio(llmPlanConfidence) })
   }
   if (llmRevisionCycles !== null && llmRevisionCycles > 0) {
-    metrics.push({ label: '내부 수정', value: `${llmRevisionCycles}회` })
+    metrics.push({ label: 'Internal revisions', value: `${llmRevisionCycles}` })
   }
   if (riskTags.length > 0) {
-    metrics.push({ label: '확인 포인트', value: riskTags.join(', ') })
+    metrics.push({ label: 'Review signs', value: riskTags.join(', ') })
   }
 
   const documentPageCount = getDiagnosticNumber(diagnostics, 'document_page_count')
   const candidatePageCount = getDiagnosticNumber(diagnostics, 'candidate_page_count')
   if (documentPageCount !== null || candidatePageCount !== null) {
     metrics.push({
-      label: '페이지',
+      label: 'Pages',
       value:
         documentPageCount !== null && candidatePageCount !== null
           ? `${candidatePageCount}/${documentPageCount}`
@@ -505,23 +505,23 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
     getDiagnosticNumber(diagnostics, 'event_count') ??
     candidate.region.pitch_events.length
   metrics.push({
-    label: '감지량',
-    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인'} · ${eventCount} events`,
+    label: 'Detected',
+    value: `${measureCount !== null ? `${measureCount} measures` : 'measure review'} - ${eventCount} events`,
   })
 
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
   if (rangeFitRatio !== null) {
-    metrics.push({ label: '음역 적합', value: formatRatio(rangeFitRatio) })
+    metrics.push({ label: 'Range fit', value: formatRatio(rangeFitRatio) })
   }
 
   const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
   if (timingGridRatio !== null) {
-    metrics.push({ label: '리듬 격자', value: formatRatio(timingGridRatio) })
+    metrics.push({ label: 'Rhythm grid', value: formatRatio(timingGridRatio) })
   }
 
   const density = getDiagnosticNumber(diagnostics, 'density_events_per_measure')
   if (density !== null) {
-    metrics.push({ label: '밀도', value: `${density.toFixed(1)} events/measure` })
+    metrics.push({ label: 'Density', value: `${density.toFixed(1)} events/measure` })
   }
 
   return metrics
@@ -535,32 +535,32 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
   return (
     {
       few_events: {
-        tag: '이벤트 수 적음',
-        sentence: '이벤트 수가 적어 파트 누락 여부를 확인하세요.',
+        tag: 'Few events',
+        sentence: 'Only a small number of events were detected; check whether the source was incomplete.',
       },
       low_event_confidence: {
-        tag: '원본 대조 필요',
-        sentence: '이벤트별 신뢰도가 낮아 원본 대조가 필요합니다.',
+        tag: 'Source review',
+        sentence: 'Event-level confidence is low, so compare this candidate with the source.',
       },
       range_outliers: {
-        tag: '음역 확인',
-        sentence: '파트 음역 밖 음이 있어 트랙 배정을 확인하세요.',
+        tag: 'Range review',
+        sentence: 'Some pitches sit outside the expected track range; confirm the track assignment.',
       },
       rhythm_grid_review: {
-        tag: '박자 확인',
-        sentence: '리듬 격자가 불안정해 박자 판독을 확인하세요.',
+        tag: 'Rhythm review',
+        sentence: 'The rhythm grid looks unstable; check the timing before approval.',
       },
       partial_document_review: {
-        tag: '파트 누락 확인',
-        sentence: '일부 파트만 감지되어 누락 파트를 확인하세요.',
+        tag: 'Partial document',
+        sentence: 'Only part of the document was detected; confirm missing tracks before approval.',
       },
       review_accidentals_and_rhythm: {
-        tag: '조표/리듬 확인',
-        sentence: '조표, 임시표, 리듬을 원본과 대조하세요.',
+        tag: 'Pitch/rhythm review',
+        sentence: 'Compare accidentals, ties, and rhythm against the source.',
       },
       review_against_source: {
-        tag: '원본 대조',
-        sentence: '원본과 대조한 뒤 승인하세요.',
+        tag: 'Source review',
+        sentence: 'Compare the candidate with the source before approval.',
       },
     } satisfies Record<string, { tag: string; sentence: string }>
   )[hint] ?? null

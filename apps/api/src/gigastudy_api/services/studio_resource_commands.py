@@ -55,7 +55,7 @@ class StudioResourceCommands:
         job = next((item for item in studio.jobs if item.job_id == job_id), None)
         if job is None:
             raise HTTPException(status_code=404, detail="Extraction job not found.")
-        if job.job_type != "omr":
+        if job.job_type != "document":
             raise HTTPException(status_code=409, detail="Only document jobs have source previews.")
         if job.input_path is None:
             raise HTTPException(status_code=404, detail="Document source file is missing.")

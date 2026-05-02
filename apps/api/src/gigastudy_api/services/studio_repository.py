@@ -57,9 +57,9 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
 from gigastudy_api.services.engine.music_theory import (
     track_name,
 )
-from gigastudy_api.services.engine.omr import run_audiveris_omr
+from gigastudy_api.services.engine.audiveris_document import run_audiveris_document_extraction
 from gigastudy_api.services.engine.event_quality import RegistrationQualityResult
-from gigastudy_api.services.engine.pdf_vector_omr import parse_born_digital_pdf_score
+from gigastudy_api.services.engine.pdf_vector_document import parse_born_digital_pdf_document
 from gigastudy_api.services.engine.voice import (
     NO_METRONOME_ALIGNMENT,
     VoiceTranscriptionResult,
@@ -101,7 +101,7 @@ from gigastudy_api.services.studio_access import (
 )
 from gigastudy_api.services.upload_policy import (
     DEFAULT_UPLOAD_BPM,
-    should_route_seed_upload_to_omr,
+    should_route_seed_upload_to_document_extraction,
 )
 
 
@@ -150,7 +150,7 @@ class StudioRepository:
             assets=self._assets,
             repository=self,
             root=self._root,
-            vector_parser=parse_born_digital_pdf_score,
+            vector_parser=parse_born_digital_pdf_document,
         )
         self._engine_commands = StudioEngineQueueCommands(
             engine_queue=self._engine_queue,
@@ -251,7 +251,7 @@ class StudioRepository:
             if source_kind is None:
                 raise HTTPException(status_code=422, detail="Upload start requires a source kind.")
             source_label = source_filename or f"uploaded-{source_kind}"
-            if should_route_seed_upload_to_omr(source_kind, source_label):
+            if should_route_seed_upload_to_document_extraction(source_kind, source_label):
                 source_path = self._prepare_studio_seed_upload(
                     studio,
                     source_kind=source_kind,
@@ -261,7 +261,7 @@ class StudioRepository:
                 )
                 with self._lock:
                     self._save_studio(studio)
-                return self._enqueue_omr_job(
+                return self._enqueue_document_job(
                     studio.studio_id,
                     1,
                     source_kind="document",
@@ -664,7 +664,7 @@ class StudioRepository:
         *,
         source_kind: SourceKind,
         source_label: str,
-        notes: list[TrackPitchEvent],
+        events: list[TrackPitchEvent],
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
@@ -676,11 +676,11 @@ class StudioRepository:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
             track = self._find_track(studio, slot_id)
-            registration = self._prepare_registration_notes(
+            registration = self._prepare_registration_events(
                 studio,
                 slot_id,
                 source_kind=source_kind,
-                notes=notes,
+                events=events,
             )
             registration_diagnostics = dict(registration.diagnostics)
             if source_diagnostics:
@@ -690,7 +690,7 @@ class StudioRepository:
                 timestamp=timestamp,
                 source_kind=source_kind,
                 source_label=source_label,
-                notes=registration.events,
+                events=registration.events,
                 duration_seconds=_track_duration_seconds(registration.events),
                 registration_diagnostics=registration_diagnostics,
                 audio_source_path=audio_source_path,
@@ -727,7 +727,7 @@ class StudioRepository:
                     timestamp=timestamp,
                     source_kind=source_kind,
                     source_label=source_label,
-                    notes=registration.events,
+                    events=registration.events,
                     duration_seconds=_track_duration_seconds(registration.events),
                     registration_diagnostics=registration.diagnostics,
                 )
@@ -735,19 +735,19 @@ class StudioRepository:
             self._save_studio(studio)
         return studio
 
-    def _prepare_registration_notes(
+    def _prepare_registration_events(
         self,
         studio: Studio,
         slot_id: int,
         *,
         source_kind: SourceKind,
-        notes: list[TrackPitchEvent],
+        events: list[TrackPitchEvent],
     ) -> RegistrationQualityResult:
-        return self._registration_preparer.prepare_notes(
+        return self._registration_preparer.prepare_events(
             studio,
             slot_id,
             source_kind=source_kind,
-            notes=notes,
+            events=events,
         )
 
     def _prepare_registration_batch(
@@ -806,7 +806,7 @@ class StudioRepository:
         source_label: str,
         method: str,
         confidence: float,
-        notes: list[TrackPitchEvent],
+        events: list[TrackPitchEvent],
         message: str,
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
@@ -820,7 +820,7 @@ class StudioRepository:
             source_label=source_label,
             method=method,
             confidence=confidence,
-            notes=notes,
+            events=events,
             message=message,
             audio_source_path=audio_source_path,
             audio_source_label=audio_source_label,
@@ -828,7 +828,7 @@ class StudioRepository:
             source_diagnostics=source_diagnostics,
         )
 
-    def _enqueue_omr_job(
+    def _enqueue_document_job(
         self,
         studio_id: str,
         slot_id: int,
@@ -839,7 +839,7 @@ class StudioRepository:
         background_tasks: BackgroundTasks | None = None,
         parse_all_parts: bool = False,
     ) -> Studio:
-        return self._extraction_jobs.enqueue_omr(
+        return self._extraction_jobs.enqueue_document(
             studio_id,
             slot_id,
             source_kind=source_kind,
@@ -1124,7 +1124,7 @@ class StudioRepository:
                 extraction_plan=extraction_plan,
             )
 
-    def _run_audiveris_omr(
+    def _run_audiveris_document_extraction(
         self,
         *,
         input_path: Path,
@@ -1133,7 +1133,7 @@ class StudioRepository:
         timeout_seconds: int,
     ) -> Path:
         with _engine_execution_lock:
-            return run_audiveris_omr(
+            return run_audiveris_document_extraction(
                 input_path=input_path,
                 output_dir=output_dir,
                 audiveris_bin=audiveris_bin,

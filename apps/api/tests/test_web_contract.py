@@ -219,6 +219,59 @@ def test_engine_context_reads_persisted_regions_without_track_notes() -> None:
     assert context[1][0].label == "C4"
 
 
+def test_studio_payload_preserves_explicit_region_without_track_notes() -> None:
+    studio = Studio(
+        studio_id="studio-preserve-explicit-region",
+        title="Preserve explicit region",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="registered",
+                source_kind="midi",
+                source_label="region-only.mid",
+                duration_seconds=1,
+                notes=[],
+                updated_at="2026-01-01T00:00:00Z",
+            )
+        ],
+        regions=[
+            ArrangementRegion(
+                region_id="explicit-track-1-region",
+                track_slot_id=1,
+                track_name="Soprano",
+                source_kind="midi",
+                source_label="region-only.mid",
+                start_seconds=0,
+                duration_seconds=1,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="explicit-track-1-event",
+                        track_slot_id=1,
+                        region_id="explicit-track-1-region",
+                        label="D4",
+                        pitch_midi=62,
+                        start_seconds=0,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+            )
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = encode_studio_payload(studio)
+
+    assert payload["regions"][0]["region_id"] == "explicit-track-1-region"
+    assert payload["regions"][0]["pitch_events"][0]["label"] == "D4"
+
+
 def test_candidate_response_includes_region_candidate() -> None:
     candidate = ExtractionCandidate(
         candidate_id="candidate-region-contract",
@@ -304,6 +357,56 @@ def test_studio_payload_persists_candidate_region_from_internal_events() -> None
     assert payload["candidates"][0]["region"]["pitch_events"][0]["label"] == "A3"
     assert studio.candidates[0].region is not None
     assert studio.candidates[0].region.pitch_events[0].label == "A3"
+
+
+def test_studio_payload_preserves_explicit_candidate_region_without_internal_events() -> None:
+    candidate = ExtractionCandidate(
+        candidate_id="candidate-region-only",
+        suggested_slot_id=4,
+        source_kind="ai",
+        source_label="AI tenor",
+        method="rule_based",
+        notes=[],
+        region=CandidateRegion(
+            region_id="explicit-candidate-region",
+            suggested_slot_id=4,
+            source_kind="ai",
+            source_label="AI tenor",
+            start_seconds=0,
+            duration_seconds=1,
+            pitch_events=[
+                PitchEvent(
+                    event_id="explicit-candidate-event",
+                    track_slot_id=4,
+                    region_id="explicit-candidate-region",
+                    label="F3",
+                    pitch_midi=53,
+                    start_seconds=0,
+                    duration_seconds=0.5,
+                    start_beat=1,
+                    duration_beats=1,
+                    source="ai",
+                )
+            ],
+        ),
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    studio = Studio(
+        studio_id="candidate-region-only-studio",
+        title="Candidate region-only",
+        bpm=120,
+        tracks=[],
+        reports=[],
+        candidates=[candidate],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = encode_studio_payload(studio)
+
+    assert payload["candidates"][0]["region"]["region_id"] == "explicit-candidate-region"
+    assert payload["candidates"][0]["region"]["pitch_events"][0]["label"] == "F3"
 
 
 def test_score_track_request_uses_performance_events_not_notes() -> None:

@@ -259,6 +259,8 @@ def extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegi
 
 
 def sync_extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
+    if candidate.region is not None and not candidate.notes:
+        return candidate.region
     candidate.region = build_candidate_region(candidate)
     return candidate.region
 
@@ -432,8 +434,26 @@ def studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
 
 
 def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
-    studio.regions = build_arrangement_regions(studio.tracks, studio.bpm)
+    derived_regions = build_arrangement_regions(studio.tracks, studio.bpm)
+    derived_slot_ids = {region.track_slot_id for region in derived_regions}
+    tracks_by_slot = {track.slot_id: track for track in studio.tracks}
+    preserved_regions = [
+        region
+        for region in studio.regions
+        if region.track_slot_id not in derived_slot_ids
+        and _should_preserve_explicit_region(region, tracks_by_slot.get(region.track_slot_id))
+    ]
+    studio.regions = sorted(
+        [*preserved_regions, *derived_regions],
+        key=lambda region: (region.track_slot_id, region.start_seconds, region.region_id),
+    )
     return studio.regions
+
+
+def _should_preserve_explicit_region(region: ArrangementRegion, track: TrackSlot | None) -> bool:
+    if track is not None and track.status == "empty":
+        return False
+    return bool(region.pitch_events or region.audio_source_path)
 
 
 def sync_studio_candidate_regions(studio: Studio) -> list[CandidateRegion]:

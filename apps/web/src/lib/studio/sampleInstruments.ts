@@ -2,6 +2,7 @@ import {
   GUIDE_SUSTAIN_INSTRUMENT,
   type DecodedInstrumentSample,
   type SampledPlaybackInstrument,
+  type SampledInstrumentTone,
 } from './instruments'
 
 type SynthPadChoirRegion = {
@@ -17,7 +18,18 @@ type LoadedSynthPadChoirRegion = SynthPadChoirRegion & DecodedInstrumentSample
 
 const SYNTH_PAD_CHOIR_BASE_PATH = '/instruments/freepats-synth-pad-choir'
 const SYNTH_PAD_CHOIR_SAMPLE_RATE = 44100
-const SYNTH_PAD_CHOIR_RELEASE_SECONDS = 0.28
+const SYNTH_PAD_CHOIR_GAIN = 1.12
+const SYNTH_PAD_CHOIR_RELEASE_SECONDS = 0.16
+const SYNTH_PAD_CHOIR_TONE: SampledInstrumentTone = {
+  highpassFrequency: 140,
+  highShelfFrequency: 2800,
+  highShelfGainDb: 7,
+  lowShelfFrequency: 300,
+  lowShelfGainDb: -5.5,
+  peakingFrequency: 1550,
+  peakingGainDb: 2.5,
+  peakingQ: 0.9,
+}
 
 const SYNTH_PAD_CHOIR_REGIONS: SynthPadChoirRegion[] = [
   {
@@ -166,11 +178,12 @@ async function loadSynthPadChoirRegion(
   return {
     ...region,
     buffer,
-    gain: 1,
+    gain: SYNTH_PAD_CHOIR_GAIN,
     loopEndSeconds: Math.min(buffer.duration, loopEndSeconds),
     loopStartSeconds: Math.min(buffer.duration, loopStartSeconds),
     releaseSeconds: SYNTH_PAD_CHOIR_RELEASE_SECONDS,
     rootFrequency: midiToFrequency(region.rootMidi),
+    tone: SYNTH_PAD_CHOIR_TONE,
   }
 }
 

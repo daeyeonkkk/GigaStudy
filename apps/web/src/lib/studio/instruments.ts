@@ -15,6 +15,18 @@ export type DecodedInstrumentSample = {
   loopStartSeconds?: number
   releaseSeconds?: number
   rootFrequency: number
+  tone?: SampledInstrumentTone
+}
+
+export type SampledInstrumentTone = {
+  highpassFrequency?: number
+  highShelfFrequency?: number
+  highShelfGainDb?: number
+  lowShelfFrequency?: number
+  lowShelfGainDb?: number
+  peakingFrequency?: number
+  peakingGainDb?: number
+  peakingQ?: number
 }
 
 export type SynthVoiceId = 'guide-sustain' | 'plucked-reference' | 'percussion-click'
@@ -109,6 +121,7 @@ function createSampledInstrumentPlayback(
 ): PlaybackNode {
   const destination = request.destination ?? context.destination
   const source = context.createBufferSource()
+  const filters: BiquadFilterNode[] = []
   const gain = context.createGain()
   const duration = Math.max(0.03, request.duration)
   const releaseTime = Math.max(
@@ -136,12 +149,53 @@ function createSampledInstrumentPlayback(
   gain.gain.setValueAtTime(request.volume * sampleGain, request.startTime + duration)
   gain.gain.exponentialRampToValueAtTime(0.0001, request.startTime + duration + releaseTime)
 
-  source.connect(gain)
+  const finalToneNode = connectSampleToneChain(context, source, sample.tone, request.startTime, filters)
+  finalToneNode.connect(gain)
   gain.connect(destination)
   source.start(request.startTime)
   source.stop(request.startTime + duration + releaseTime + 0.04)
 
-  return { gain, source }
+  return { filters, gain, source }
+}
+
+function connectSampleToneChain(
+  context: AudioContext,
+  source: AudioBufferSourceNode,
+  tone: SampledInstrumentTone | undefined,
+  startTime: number,
+  filters: BiquadFilterNode[],
+): AudioNode {
+  let tail: AudioNode = source
+
+  const appendFilter = (
+    type: BiquadFilterType,
+    frequency: number | undefined,
+    gainDb?: number,
+    q?: number,
+  ) => {
+    if (!frequency || frequency <= 0) {
+      return
+    }
+    const filter = context.createBiquadFilter()
+    filter.type = type
+    filter.frequency.setValueAtTime(frequency, startTime)
+    if (gainDb !== undefined) {
+      filter.gain.setValueAtTime(gainDb, startTime)
+    }
+    if (q !== undefined) {
+      filter.Q.setValueAtTime(q, startTime)
+    }
+    tail.connect(filter)
+    tail = filter
+    filters.push(filter)
+  }
+
+  appendFilter('highpass', tone?.highpassFrequency, undefined, 0.65)
+  appendFilter('lowshelf', tone?.lowShelfFrequency, tone?.lowShelfGainDb)
+  appendFilter('peaking', tone?.peakingFrequency, tone?.peakingGainDb, tone?.peakingQ)
+  appendFilter('highshelf', tone?.highShelfFrequency, tone?.highShelfGainDb)
+
+  return tail
 }
 
 function createGuideSustainTone(

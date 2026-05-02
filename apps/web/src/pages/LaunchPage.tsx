@@ -48,6 +48,7 @@ const SUPPORTED_SOURCE_ACCEPT = [
   ...DOCUMENT_SOURCE_EXTENSIONS,
   ...AUDIO_UPLOAD_EXTENSIONS,
 ].join(',')
+const VALID_DENOMINATORS = new Set([1, 2, 4, 8, 16, 32])
 
 function isSupportedSourceFile(file: File): boolean {
   const extension = getFileExtension(file.name)
@@ -60,6 +61,15 @@ function detectSourceKind(file: File): 'document' | 'music' {
     return 'document'
   }
   return 'music'
+}
+
+function parseInteger(value: string): number | null {
+  const normalized = value.trim()
+  if (!/^\d+$/.test(normalized)) {
+    return null
+  }
+  const parsed = Number.parseInt(normalized, 10)
+  return Number.isSafeInteger(parsed) ? parsed : null
 }
 
 export function LaunchPage() {
@@ -96,20 +106,25 @@ export function LaunchPage() {
     }
   }, [])
 
-  const hasProjectTitle = title.trim().length > 0
-  const canStartBlank = useMemo(
-    () =>
-      sourceFile === null &&
-      hasProjectTitle &&
-      Number.isFinite(Number(bpm)) &&
-      Number.isFinite(Number(timeSignatureNumerator)) &&
-      Number.isFinite(Number(timeSignatureDenominator)),
-    [bpm, hasProjectTitle, sourceFile, timeSignatureDenominator, timeSignatureNumerator],
+  const normalizedTitle = title.trim()
+  const parsedBpm = useMemo(() => parseInteger(bpm), [bpm])
+  const parsedNumerator = useMemo(() => parseInteger(timeSignatureNumerator), [timeSignatureNumerator])
+  const parsedDenominator = useMemo(
+    () => parseInteger(timeSignatureDenominator),
+    [timeSignatureDenominator],
   )
-  const canUploadStart = useMemo(
-    () => sourceFile !== null && hasProjectTitle,
-    [hasProjectTitle, sourceFile],
-  )
+  const hasProjectTitle = normalizedTitle.length > 0
+  const hasValidBlankSetup =
+    parsedBpm !== null &&
+    parsedBpm >= 40 &&
+    parsedBpm <= 240 &&
+    parsedNumerator !== null &&
+    parsedNumerator >= 1 &&
+    parsedNumerator <= 32 &&
+    parsedDenominator !== null &&
+    VALID_DENOMINATORS.has(parsedDenominator)
+  const canStartBlank = sourceFile === null && hasProjectTitle && hasValidBlankSetup
+  const canUploadStart = sourceFile !== null && hasProjectTitle
 
   function clearSourceFile() {
     setSourceFile(null)
@@ -119,22 +134,32 @@ export function LaunchPage() {
   }
 
   async function startBlank() {
-    if (sourceFile) {
-      setSubmitState({ phase: 'error', message: '파일 선택을 해제한 뒤 새로 시작할 수 있습니다.' })
+    if (submitState.phase === 'submitting') {
       return
     }
-    if (!canStartBlank) {
-      setSubmitState({ phase: 'error', message: '프로젝트명과 BPM을 먼저 입력하세요.' })
+    if (sourceFile) {
+      setSubmitState({ phase: 'error', message: '파일 선택을 해제한 뒤 새 스튜디오를 시작할 수 있습니다.' })
+      return
+    }
+    if (!hasProjectTitle) {
+      setSubmitState({ phase: 'error', message: '프로젝트명을 먼저 입력하세요.' })
+      return
+    }
+    if (!hasValidBlankSetup || parsedBpm === null || parsedNumerator === null || parsedDenominator === null) {
+      setSubmitState({
+        phase: 'error',
+        message: 'BPM은 40-240, 박자는 1-32 / 1,2,4,8,16,32 중 하나로 입력하세요.',
+      })
       return
     }
 
     setSubmitState({ phase: 'submitting', label: '새 스튜디오 생성 중' })
     try {
       const studio = await createStudio({
-        title: title.trim(),
-        bpm: Number(bpm),
-        time_signature_numerator: Number(timeSignatureNumerator),
-        time_signature_denominator: Number(timeSignatureDenominator),
+        title: normalizedTitle,
+        bpm: parsedBpm,
+        time_signature_numerator: parsedNumerator,
+        time_signature_denominator: parsedDenominator,
         start_mode: 'blank',
       })
       navigate(`/studios/${studio.studio_id}`)
@@ -147,17 +172,20 @@ export function LaunchPage() {
   }
 
   async function uploadAndStart() {
-    if (!sourceFile) {
-      setSubmitState({ phase: 'error', message: '프로젝트명과 BPM을 먼저 입력하세요.' })
+    if (submitState.phase === 'submitting') {
       return
     }
-    if (!canUploadStart) {
-      setSubmitState({ phase: 'error', message: '문서나 음악 파일을 선택하세요.' })
+    if (!sourceFile) {
+      setSubmitState({ phase: 'error', message: '문서 또는 음악 파일을 선택하세요.' })
+      return
+    }
+    if (!hasProjectTitle) {
+      setSubmitState({ phase: 'error', message: '프로젝트명을 먼저 입력하세요.' })
       return
     }
 
     const sourceKind = sourceKindOverride === 'auto' ? detectSourceKind(sourceFile) : sourceKindOverride
-    setSubmitState({ phase: 'submitting', label: '파일을 업로드하고 분석 대기열을 준비하는 중' })
+    setSubmitState({ phase: 'submitting', label: '파일 업로드와 분석 대기열 준비 중' })
     try {
       const preparedSource: PreparedLaunchSource =
         sourceKind === 'music' && isAudioUploadFile(sourceFile)
@@ -182,7 +210,7 @@ export function LaunchPage() {
         setSubmitState({ phase: 'submitting', label: '직접 업로드가 어려워 안전 업로드 경로로 다시 보내는 중' })
         const contentBase64 = preparedSource.contentBase64 ?? (await readFileAsDataUrl(sourceFile))
         studio = await createStudio({
-          title: title.trim(),
+          title: normalizedTitle,
           start_mode: 'upload',
           source_kind: sourceKind,
           source_filename: preparedSource.filename,
@@ -191,7 +219,7 @@ export function LaunchPage() {
       }
       if (uploadedAssetPath) {
         studio = await createStudio({
-          title: title.trim(),
+          title: normalizedTitle,
           start_mode: 'upload',
           source_kind: sourceKind,
           source_filename: preparedSource.filename,
@@ -199,13 +227,13 @@ export function LaunchPage() {
         })
       }
       if (!studio) {
-        throw new Error('업로드 후 시작할 수 없습니다.')
+        throw new Error('업로드 후 스튜디오를 시작하지 못했습니다.')
       }
       navigate(`/studios/${studio.studio_id}`)
     } catch (error) {
       setSubmitState({
         phase: 'error',
-        message: error instanceof Error ? error.message : '업로드 후 시작하지 못했습니다.',
+        message: error instanceof Error ? error.message : '업로드로 시작하지 못했습니다.',
       })
     }
   }
@@ -218,7 +246,7 @@ export function LaunchPage() {
           <span>GigaStudy - New Studio</span>
         </header>
 
-        <nav className="launch-menubar" aria-label="홈 메뉴">
+        <nav className="launch-menubar" aria-label="상단 메뉴">
           <span>File</span>
           <span>View</span>
           <span>Play</span>
@@ -228,8 +256,7 @@ export function LaunchPage() {
 
         <div className="launch-toolbar" aria-label="스튜디오 생성 도구">
           <button className="launch-tool" type="button" onClick={() => sourceInputRef.current?.click()}>
-            <span aria-hidden="true">↥</span>
-            Upload
+            <span aria-hidden="true">Upload</span>
           </button>
           <button
             className="launch-tool"
@@ -237,10 +264,9 @@ export function LaunchPage() {
             disabled={Boolean(sourceFile) || submitState.phase === 'submitting'}
             onClick={() => void startBlank()}
           >
-            <span aria-hidden="true">＋</span>
-            New
+            <span aria-hidden="true">New</span>
           </button>
-          <span className="launch-tool launch-tool--status">6 tracks · 0.01s sync</span>
+          <span className="launch-tool launch-tool--status">6 tracks | 0.01s sync</span>
         </div>
 
         <div className="launch-document">
@@ -262,7 +288,7 @@ export function LaunchPage() {
             ))}
           </section>
 
-          <section className="launch-create" aria-label="새 스튜디오 만들기">
+          <section className="launch-create" aria-label="새 스튜디오 만들기" aria-busy={submitState.phase === 'submitting'}>
             <div className="launch-create__header">
               <p className="eyebrow">Document setup</p>
               <h1>새 스튜디오</h1>
@@ -274,8 +300,13 @@ export function LaunchPage() {
                 <input
                   data-testid="studio-title-input"
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="예: 봄 공연 SATB 연습"
+                  onChange={(event) => {
+                    setTitle(event.target.value)
+                    if (submitState.phase === 'error') {
+                      setSubmitState({ phase: 'idle' })
+                    }
+                  }}
+                  placeholder="봄 공연 SATB 연습"
                 />
               </label>
 
@@ -287,7 +318,12 @@ export function LaunchPage() {
                       data-testid="studio-bpm-input"
                       inputMode="numeric"
                       value={bpm}
-                      onChange={(event) => setBpm(event.target.value)}
+                      onChange={(event) => {
+                        setBpm(event.target.value)
+                        if (submitState.phase === 'error') {
+                          setSubmitState({ phase: 'idle' })
+                        }
+                      }}
                     />
                   </label>
 
@@ -298,13 +334,23 @@ export function LaunchPage() {
                       data-testid="studio-time-signature-numerator"
                       inputMode="numeric"
                       value={timeSignatureNumerator}
-                      onChange={(event) => setTimeSignatureNumerator(event.target.value)}
+                      onChange={(event) => {
+                        setTimeSignatureNumerator(event.target.value)
+                        if (submitState.phase === 'error') {
+                          setSubmitState({ phase: 'idle' })
+                        }
+                      }}
                     />
                     <select
                       aria-label="time signature denominator"
                       data-testid="studio-time-signature-denominator"
                       value={timeSignatureDenominator}
-                      onChange={(event) => setTimeSignatureDenominator(event.target.value)}
+                      onChange={(event) => {
+                        setTimeSignatureDenominator(event.target.value)
+                        if (submitState.phase === 'error') {
+                          setSubmitState({ phase: 'idle' })
+                        }
+                      }}
                     >
                       <option value="1">1</option>
                       <option value="2">2</option>
@@ -325,6 +371,7 @@ export function LaunchPage() {
                   data-testid="studio-source-input"
                   type="file"
                   accept={SUPPORTED_SOURCE_ACCEPT}
+                  disabled={submitState.phase === 'submitting'}
                   onChange={(event) => {
                     const nextFile = event.target.files?.[0] ?? null
                     if (nextFile !== null && !isSupportedSourceFile(nextFile)) {
@@ -340,7 +387,7 @@ export function LaunchPage() {
               {sourceFile ? (
                 <div className="launch-source-summary">
                   <span>{sourceFile.name}</span>
-                  <button type="button" onClick={clearSourceFile}>
+                  <button type="button" disabled={submitState.phase === 'submitting'} onClick={clearSourceFile}>
                     선택 해제
                   </button>
                 </div>
@@ -350,6 +397,7 @@ export function LaunchPage() {
                 <span>업로드 해석</span>
                 <select
                   value={sourceKindOverride}
+                  disabled={submitState.phase === 'submitting'}
                   onChange={(event) =>
                     setSourceKindOverride(event.target.value as 'auto' | 'document' | 'music')
                   }
@@ -370,7 +418,7 @@ export function LaunchPage() {
                 disabled={submitState.phase === 'submitting' || !canUploadStart}
                 onClick={() => void uploadAndStart()}
               >
-                업로드 후 시작
+                업로드로 시작
               </button>
               <button
                 data-testid="start-blank-button"
@@ -419,8 +467,8 @@ export function LaunchPage() {
             >
               <strong>{studio.title}</strong>
               <span>
-                {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}
-                {studio.registered_track_count}/6 · 리포트 {studio.report_count}
+                {studio.bpm} BPM | {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} |
+                등록 {studio.registered_track_count}/6 | 리포트 {studio.report_count}
               </span>
             </button>
           ))}

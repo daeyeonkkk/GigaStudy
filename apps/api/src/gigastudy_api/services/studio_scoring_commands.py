@@ -25,6 +25,7 @@ from gigastudy_api.services.studio_scoring import (
     selected_scoring_reference_slot_ids,
     validate_score_track_request,
 )
+from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 
 
 class StudioScoringCommands:
@@ -53,6 +54,11 @@ class StudioScoringCommands:
             studio,
             target_slot_id=slot_id,
             requested_reference_slot_ids=request.reference_slot_ids,
+        )
+        ensure_no_active_extraction_jobs(
+            studio,
+            {slot_id, *reference_slot_ids},
+            action_label="Scoring",
         )
         target_events = registered_region_events_for_slot(studio, slot_id)
         try:

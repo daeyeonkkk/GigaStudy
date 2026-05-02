@@ -298,6 +298,11 @@
   overflow: hidden;
 }
 
+.track-upload.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .track-upload input {
   position: absolute;
   inset: 0;
@@ -332,6 +337,11 @@
   border-radius: 3px;
   color: #111111;
   font: inherit;
+}
+
+.track-volume-control input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .track-card__recording-meter,
@@ -400,6 +410,14 @@
   background: #f8fafb;
 }
 
+.region-tools__hint {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #6b3a12;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .region-tools button {
   min-height: 28px;
   padding: 0 8px;
@@ -451,6 +469,14 @@
   flex-wrap: wrap;
   gap: 4px;
   justify-content: flex-end;
+}
+
+.piano-roll-panel__lock {
+  flex: 1 0 100%;
+  color: #6b3a12;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-align: right;
 }
 
 .piano-roll-panel__tools button {

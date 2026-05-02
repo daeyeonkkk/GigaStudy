@@ -14,8 +14,10 @@ import './CandidateReviewPanel.css'
 
 type CandidateReviewPanelProps = {
   beatsPerMeasure: number
+  busy: boolean
   candidateOverwriteApprovals: Record<string, boolean>
   candidates: ExtractionCandidate[]
+  lockedSlotIds: Set<number>
   tracks: TrackSlot[]
   candidateWouldOverwrite: (candidate: ExtractionCandidate) => boolean
   getJobSourcePreviewUrl?: (jobId: string) => string
@@ -71,14 +73,14 @@ function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate 
 
   return (
     <div className="candidate-review__region" data-testid={`candidate-region-${candidate.candidate_id}`}>
-      <span>Region candidate</span>
+      <span>리전 후보</span>
       <div className="candidate-review__region-grid">
         {events.length === 0 ? (
-          <p>No pitch events</p>
+          <p>음정 이벤트 없음</p>
         ) : (
           events.slice(0, 32).map((event) => (
             <i
-              aria-label={`${event.label} at beat ${event.start_beat}`}
+              aria-label={`${event.label} beat ${event.start_beat}`}
               key={event.event_id}
               style={getCandidateEventStyle(candidate, event, events)}
               title={`${event.label}@${event.start_beat}`}
@@ -94,8 +96,10 @@ function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate 
 
 export function CandidateReviewPanel({
   beatsPerMeasure,
+  busy,
   candidateOverwriteApprovals,
   candidates,
+  lockedSlotIds,
   tracks,
   candidateWouldOverwrite,
   getJobSourcePreviewUrl,
@@ -124,6 +128,7 @@ export function CandidateReviewPanel({
           const suggestedTrack = tracks.find((track) => track.slot_id === candidate.suggested_slot_id)
           const selectedSlotId = getSelectedCandidateSlotId(candidate)
           const targetTrack = tracks.find((track) => track.slot_id === selectedSlotId) ?? suggestedTrack
+          const targetLocked = lockedSlotIds.has(selectedSlotId)
           const wouldOverwrite = candidateWouldOverwrite(candidate)
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
           const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
@@ -134,6 +139,7 @@ export function CandidateReviewPanel({
             candidate.job_id && shouldShowSourcePreview(candidate) && getJobSourcePreviewUrl
               ? getJobSourcePreviewUrl(candidate.job_id)
               : null
+          const approveDisabled = busy || targetLocked || (wouldOverwrite && !allowOverwrite)
 
           return (
             <article className="candidate-review__item" key={candidate.candidate_id}>
@@ -148,6 +154,12 @@ export function CandidateReviewPanel({
                   <strong>{verdict.label}</strong>
                   <span>{verdict.reason}</span>
                 </div>
+                {targetLocked ? (
+                  <div className="candidate-review__verdict candidate-review__verdict--review">
+                    <strong>작업 중</strong>
+                    <span>대상 트랙의 추출 작업이 끝난 뒤 등록할 수 있습니다.</span>
+                  </div>
+                ) : null}
                 <strong>{decisionSummary.title}</strong>
                 <p>{decisionSummary.headline}</p>
                 <ul aria-label="후보 특징">
@@ -179,7 +191,7 @@ export function CandidateReviewPanel({
               </div>
 
               {decisionSummary.diagnostics.length > 0 ? (
-                <dl className="candidate-review__diagnostics" aria-label="판독 근거">
+                <dl className="candidate-review__diagnostics" aria-label="판단 근거">
                   {decisionSummary.diagnostics.map((metric) => (
                     <div key={`${candidate.candidate_id}-diagnostic-${metric.label}`}>
                       <dt>{metric.label}</dt>
@@ -203,6 +215,7 @@ export function CandidateReviewPanel({
                   <span>대상 트랙</span>
                   <select
                     data-testid={`candidate-target-${candidate.candidate_id}`}
+                    disabled={busy}
                     value={selectedSlotId}
                     onChange={(event) => onUpdateCandidateTargetSlot(candidate, Number(event.target.value))}
                   >
@@ -218,6 +231,7 @@ export function CandidateReviewPanel({
                     <input
                       checked={allowOverwrite}
                       data-testid={`candidate-overwrite-${candidate.candidate_id}`}
+                      disabled={busy}
                       type="checkbox"
                       onChange={(event) => onUpdateCandidateOverwriteApproval(candidate, event.target.checked)}
                     />
@@ -241,7 +255,7 @@ export function CandidateReviewPanel({
                       loading="lazy"
                       src={sourcePreviewUrl}
                     />
-                    <span>원본 첫 페이지와 후보 음역, 리듬, 파트 위치를 비교한 뒤 승인하세요.</span>
+                    <span>원본 첫 페이지와 후보 리전, 리듬, 파트 위치를 비교해 확인하세요.</span>
                   </div>
                 </details>
               ) : null}
@@ -263,7 +277,7 @@ export function CandidateReviewPanel({
                 <button
                   className="app-button"
                   data-testid={`candidate-approve-${candidate.candidate_id}`}
-                  disabled={wouldOverwrite && !allowOverwrite}
+                  disabled={approveDisabled}
                   type="button"
                   onClick={() => onApproveCandidate(candidate)}
                 >
@@ -272,6 +286,7 @@ export function CandidateReviewPanel({
                 <button
                   className="app-button app-button--secondary"
                   data-testid={`candidate-reject-${candidate.candidate_id}`}
+                  disabled={busy}
                   type="button"
                   onClick={() => onRejectCandidate(candidate)}
                 >
@@ -290,7 +305,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   if (candidate.region.pitch_events.length === 0) {
     return {
       label: '재시도 권장',
-      reason: '등록할 피치 이벤트가 감지되지 않았습니다.',
+      reason: '등록할 수 있는 음정 이벤트가 감지되지 않았습니다.',
       tone: 'retry',
     }
   }
@@ -306,7 +321,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   if (confidence < 0.5 || reviewHint === 'few_events') {
     return {
       label: '재시도 권장',
-      reason: '판독 신뢰도가 낮거나 파트 누락 가능성이 큽니다.',
+      reason: '자동 추출 신뢰도가 낮거나 파트 누락 가능성이 큽니다.',
       tone: 'retry',
     }
   }
@@ -324,7 +339,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
       label: '검토 필요',
       reason: wouldOverwrite
         ? '기존 트랙을 덮어씁니다. 대상 트랙과 후보 흐름을 확인하세요.'
-        : '음역, 박자, 밀도 중 확인할 지점이 있습니다.',
+        : '음역, 박자, 반복 중 확인할 지점이 있습니다.',
       tone: 'review',
     }
   }

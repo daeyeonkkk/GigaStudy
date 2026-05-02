@@ -8,7 +8,9 @@ type JobFilter = 'attention' | 'failed' | 'all'
 
 type ExtractionJobsPanelProps = {
   activeJobCount: number
+  busy: boolean
   jobOverwriteApprovals: Record<string, boolean>
+  lockedSlotIds: Set<number>
   tracks: TrackSlot[]
   visibleJobs: TrackExtractionJob[]
   getPendingJobCandidates: (jobId: string) => ExtractionCandidate[]
@@ -20,7 +22,9 @@ type ExtractionJobsPanelProps = {
 
 export function ExtractionJobsPanel({
   activeJobCount,
+  busy,
   jobOverwriteApprovals,
+  lockedSlotIds,
   tracks,
   visibleJobs,
   getPendingJobCandidates,
@@ -58,7 +62,7 @@ export function ExtractionJobsPanel({
         <div>
           <p className="eyebrow">Engine queue</p>
           <h2>추출 작업</h2>
-          <p>대기, 실행, 승인 대기, 실패 작업을 한곳에서 확인합니다.</p>
+          <p>대기, 실행, 승인 대기, 실패 작업을 한 곳에서 확인합니다.</p>
         </div>
         <strong>진행 중 {activeJobCount}</strong>
       </div>
@@ -98,6 +102,10 @@ export function ExtractionJobsPanel({
           const canRetryJob = job.status === 'failed'
           const wouldOverwrite = jobWouldOverwrite(job.job_id)
           const allowOverwrite = jobOverwriteApprovals[job.job_id] === true
+          const lockedByAnotherJob = jobCandidates.some((candidate) =>
+            lockedSlotIds.has(candidate.suggested_slot_id),
+          )
+          const approveDisabled = busy || lockedByAnotherJob || (wouldOverwrite && !allowOverwrite)
           const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : '문서 분석'
           const jobTargetLabel = job.parse_all_parts ? '전체 문서' : (jobTrack?.name ?? `Track ${job.slot_id}`)
           const candidateSummary = getJobCandidateSummary(jobCandidates, tracks)
@@ -119,6 +127,11 @@ export function ExtractionJobsPanel({
               <p>{job.message ?? job.method}</p>
               <p className="extraction-jobs__state-hint">{getJobStateHint(job)}</p>
               {candidateSummary ? <p className="extraction-jobs__candidate-strip">{candidateSummary}</p> : null}
+              {lockedByAnotherJob ? (
+                <p className="extraction-jobs__state-hint">
+                  대상 트랙에 다른 추출 작업이 남아 있어 등록을 잠시 막았습니다.
+                </p>
+              ) : null}
               {canRegisterJob ? (
                 <div className="extraction-jobs__actions">
                   <span>{jobCandidates.length}개 트랙 후보</span>
@@ -127,6 +140,7 @@ export function ExtractionJobsPanel({
                       <input
                         checked={allowOverwrite}
                         data-testid={`job-overwrite-${job.job_id}`}
+                        disabled={busy}
                         type="checkbox"
                         onChange={(event) => onUpdateJobOverwriteApproval(job.job_id, event.target.checked)}
                       />
@@ -136,7 +150,7 @@ export function ExtractionJobsPanel({
                   <button
                     className="app-button"
                     data-testid={`job-approve-${job.job_id}`}
-                    disabled={wouldOverwrite && !allowOverwrite}
+                    disabled={approveDisabled}
                     type="button"
                     onClick={() => onApproveJobCandidates(job.job_id)}
                   >
@@ -150,6 +164,7 @@ export function ExtractionJobsPanel({
                   <button
                     className="app-button app-button--secondary"
                     data-testid={`job-retry-${job.job_id}`}
+                    disabled={busy}
                     type="button"
                     onClick={() => onRetryJob(job.job_id)}
                   >
@@ -189,18 +204,18 @@ function getJobStateHint(job: TrackExtractionJob): string {
   }
   if (job.status === 'running') {
     return job.job_type === 'voice'
-      ? '녹음 파일을 내부 메트로놈 기준으로 정렬하고 pitch-event 후보를 만드는 중입니다.'
+      ? '녹음 파일을 메트로놈 기준으로 정렬하고 pitch-event 후보를 만드는 중입니다.'
       : '문서 파트와 트랙 후보를 추출하는 중입니다. 완료되면 등록 가능한 후보가 표시됩니다.'
   }
   if (job.status === 'needs_review') {
     return job.parse_all_parts
-      ? '여러 파트 후보가 준비됐습니다. 트랙 배정과 덮어쓰기 여부를 확인한 뒤 등록하세요.'
-    : '후보가 준비됐습니다. 등록하면 해당 트랙의 피치 이벤트와 재생 소스로 반영됩니다.'
+      ? '여러 파트 후보가 준비되었습니다. 트랙 배정과 덮어쓰기 여부를 확인한 뒤 등록하세요.'
+      : '후보가 준비되었습니다. 등록하면 해당 트랙의 피치 이벤트와 재생 소스에 반영됩니다.'
   }
   if (job.status === 'completed') {
-    return '처리가 완료됐습니다.'
+    return '처리가 완료되었습니다.'
   }
-  return '처리에 실패했습니다. 아래 안내를 확인한 뒤 같은 입력으로 다시 시도할 수 있습니다.'
+  return '처리에 실패했습니다. 안내를 확인한 뒤 같은 입력으로 다시 시도할 수 있습니다.'
 }
 
 function getJobRecoveryHint(job: TrackExtractionJob): string {
@@ -212,7 +227,7 @@ function getJobRecoveryHint(job: TrackExtractionJob): string {
     return 'PDF에서 읽을 수 있는 벡터 데이터를 찾지 못했습니다. 더 선명한 원본, MusicXML, MIDI가 있으면 우선 사용하세요.'
   }
   if (job.job_type === 'document' && message.includes('timed out')) {
-    return '문서 분석 시간이 초과됐습니다. 다시 시도하거나, 가능하면 vector PDF/MusicXML/MIDI를 사용하세요.'
+    return '문서 분석 시간이 초과되었습니다. 다시 시도하거나 가능하면 vector PDF/MusicXML/MIDI를 사용하세요.'
   }
   return '원본 파일은 남아 있습니다. 같은 입력으로 다시 처리할 수 있습니다.'
 }

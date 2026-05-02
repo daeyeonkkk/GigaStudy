@@ -24,6 +24,7 @@ from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_documents import register_track_material, track_has_content
 from gigastudy_api.services.studio_home_audio_import import extract_home_audio_candidate
+from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.upload_policy import (
     AUDIO_SOURCE_SUFFIXES,
     DOCUMENT_IMAGE_SOURCE_SUFFIXES,
@@ -64,6 +65,16 @@ class StudioUploadCommands:
     ) -> DirectUploadTarget:
         studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._repository._find_track(studio, slot_id)
+        locked_slot_ids = (
+            {track.slot_id for track in studio.tracks if track.slot_id <= 5}
+            if request.source_kind == "document"
+            else {slot_id}
+        )
+        ensure_no_active_extraction_jobs(
+            studio,
+            locked_slot_ids,
+            action_label="Upload preparation",
+        )
         return self._assets.create_track_upload_target(
             studio_id,
             slot_id,
@@ -106,6 +117,16 @@ class StudioUploadCommands:
 
         studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._repository._find_track(studio, slot_id)
+        requested_slot_ids = (
+            {track.slot_id for track in studio.tracks if track.slot_id <= 5}
+            if request.source_kind == "document" and suffix in DOCUMENT_IMAGE_SOURCE_SUFFIXES
+            else {slot_id}
+        )
+        ensure_no_active_extraction_jobs(
+            studio,
+            requested_slot_ids,
+            action_label="Upload",
+        )
 
         if request.asset_path is not None:
             source_path = self._assets.resolve_existing_upload_asset(
@@ -137,6 +158,11 @@ class StudioUploadCommands:
                         parsed_symbolic.time_signature_denominator,
                     )
                 mapped_events = parsed_symbolic.mapped_events
+                ensure_no_active_extraction_jobs(
+                    studio,
+                    mapped_events.keys(),
+                    action_label="Symbolic import",
+                )
                 if request.review_before_register:
                     return self._repository._add_extraction_candidates(
                         studio_id,

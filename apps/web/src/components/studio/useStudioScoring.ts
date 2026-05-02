@@ -109,7 +109,7 @@ export function useStudioScoring({
     if (track.status !== 'registered' && references.length === 0) {
       setActionState({
         phase: 'error',
-        message: '정답 채점은 등록된 트랙이 필요하고, 화음 채점은 기준 트랙이 하나 이상 필요합니다.',
+        message: '정답 채점에는 등록된 대상 트랙이 필요하고, 화음 채점에는 기준 트랙이 하나 이상 필요합니다.',
       })
       return
     }
@@ -193,7 +193,7 @@ export function useStudioScoring({
   }
 
   function setScoreIncludeMetronome(includeMetronome: boolean) {
-    setScoreSession((current) => current ? { ...current, includeMetronome } : current)
+    setScoreSession((current) => (current ? { ...current, includeMetronome } : current))
   }
 
   async function startScoreListening() {
@@ -204,7 +204,7 @@ export function useStudioScoring({
     if (recordingSlotId !== null) {
       setActionState({
         phase: 'error',
-        message: '트랙 녹음이 진행 중입니다. 먼저 현재 녹음을 중지하고 채점을 시작해 주세요.',
+        message: '트랙 녹음이 진행 중입니다. 먼저 현재 녹음을 중지한 뒤 채점을 시작해 주세요.',
       })
       return
     }
@@ -294,8 +294,8 @@ export function useStudioScoring({
         phase: 'success',
         message:
           session.scoreMode === 'harmony'
-            ? '선택한 트랙 위에 새 파트를 얹어 부르면 화음 완성도를 채점합니다.'
-          : '선택한 기준 트랙과 동시에 채점 입력을 받습니다.',
+            ? '선택한 트랙 위에 내 파트를 불러 주세요. 화음 완성도를 채점합니다.'
+            : '선택한 기준 트랙과 동시에 채점 입력을 받고 있습니다.',
       })
       const hideZeroTimeoutId = window.setTimeout(() => {
         if (scoreRunIdRef.current !== runId) {
@@ -338,7 +338,7 @@ export function useStudioScoring({
       })
       setActionState({
         phase: 'success',
-        message: '박자 count-in 뒤 기준 트랙과 마이크 입력을 0박에서 시작합니다.',
+        message: '박자 count-in 후 기준 트랙과 마이크 입력이 0박에서 시작합니다.',
       })
 
       for (let pulseIndex = 1; pulseIndex < totalPulses - 1; pulseIndex += 1) {
@@ -432,7 +432,7 @@ export function useStudioScoring({
       phase: 'busy',
       message:
         session.scoreMode === 'harmony'
-          ? '새 파트가 기준 트랙들과 어울리는지 분석하는 중입니다.'
+          ? '내 파트가 기준 트랙들과 어울리는지 분석하는 중입니다.'
           : '0.01s 단위로 박자와 음정을 채점하는 중입니다.',
     })
     try {

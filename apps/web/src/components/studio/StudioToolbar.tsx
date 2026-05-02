@@ -24,6 +24,8 @@ type StudioToolbarProps = {
   studioId: string
   studioTitle: string
   syncStepSeconds: number
+  transportDisabled: boolean
+  transportDisabledReason: string | null
   onMetronomeChange: (enabled: boolean) => void
   onPlaybackSourceChange: (source: PlaybackSourceMode) => void
   onSeekPlayback: (seconds: number) => void
@@ -62,6 +64,8 @@ export function StudioToolbar({
   studioId,
   studioTitle,
   syncStepSeconds,
+  transportDisabled,
+  transportDisabledReason,
   onMetronomeChange,
   onPlaybackSourceChange,
   onSeekPlayback,
@@ -99,6 +103,8 @@ export function StudioToolbar({
         ),
       )
     : 0
+  const actionBusy = actionState.phase === 'busy'
+  const editControlsDisabled = actionBusy || transportDisabled || globalPlaying
 
   function updateSyncStep(rawValue: string) {
     setSyncStepInput(rawValue)
@@ -166,19 +172,22 @@ export function StudioToolbar({
           aria-label={globalPlaying ? '선택 재생 일시정지' : '트랙 선택 재생'}
           className="composer-tool composer-tool--primary"
           data-testid="global-play-button"
+          disabled={!globalPlaying && (transportDisabled || registeredTrackCount === 0)}
+          title={!globalPlaying ? transportDisabledReason ?? undefined : undefined}
           type="button"
           onClick={globalPlaying ? onToggleGlobalPlayback : onTogglePlaybackPicker}
         >
-          <span aria-hidden="true">{globalPlaying ? 'II' : '▶'}</span>
+          <span aria-hidden="true">{globalPlaying ? 'II' : 'Play'}</span>
         </button>
         <button
           aria-label="전체 중지"
           className="composer-tool"
           data-testid="global-stop-button"
+          disabled={!globalPlaying}
           type="button"
           onClick={onStopGlobalPlayback}
         >
-          <span aria-hidden="true">■</span>
+          <span aria-hidden="true">Stop</span>
         </button>
         <button className="composer-tool" type="button" aria-label="확대">
           <span aria-hidden="true">+</span>
@@ -207,7 +216,7 @@ export function StudioToolbar({
             aria-label={`등록된 전체 트랙을 ${formatStepInput(syncStepSeconds)}초 앞으로 이동`}
             className="composer-tool composer-tool--text composer-tool--sync-all"
             data-testid="sync-all-earlier-button"
-            disabled={registeredTrackCount === 0 || actionState.phase === 'busy'}
+            disabled={registeredTrackCount === 0 || editControlsDisabled}
             type="button"
             onClick={() => onShiftAllSync(-syncStepSeconds)}
           >
@@ -217,7 +226,7 @@ export function StudioToolbar({
             aria-label={`등록된 전체 트랙을 ${formatStepInput(syncStepSeconds)}초 뒤로 이동`}
             className="composer-tool composer-tool--text composer-tool--sync-all"
             data-testid="sync-all-later-button"
-            disabled={registeredTrackCount === 0 || actionState.phase === 'busy'}
+            disabled={registeredTrackCount === 0 || editControlsDisabled}
             type="button"
             onClick={() => onShiftAllSync(syncStepSeconds)}
           >
@@ -227,10 +236,11 @@ export function StudioToolbar({
         <label className="composer-metronome">
           <input
             checked={metronomeEnabled}
+            disabled={actionBusy}
             type="checkbox"
             onChange={(event) => onMetronomeChange(event.target.checked)}
           />
-          <span aria-hidden="true">♪</span>
+          <span aria-hidden="true">Met</span>
           메트로놈
         </label>
         <div className="composer-source-toggle" role="group" aria-label="재생 소스">
@@ -238,6 +248,7 @@ export function StudioToolbar({
             aria-pressed={playbackSource === 'audio'}
             className={playbackSource === 'audio' ? 'is-active' : ''}
             data-testid="playback-source-audio"
+            disabled={globalPlaying || transportDisabled}
             type="button"
             onClick={() => onPlaybackSourceChange('audio')}
           >
@@ -247,6 +258,7 @@ export function StudioToolbar({
             aria-pressed={playbackSource === 'events'}
             className={playbackSource === 'events' ? 'is-active' : ''}
             data-testid="playback-source-events"
+            disabled={globalPlaying || transportDisabled}
             type="button"
             onClick={() => onPlaybackSourceChange('events')}
           >
@@ -266,6 +278,7 @@ export function StudioToolbar({
                   <input
                     checked={selectedPlaybackSlotIds.has(track.slot_id)}
                     data-testid={`playback-track-checkbox-${track.slot_id}`}
+                    disabled={globalPlaying || transportDisabled}
                     type="checkbox"
                     onChange={() => onTogglePlaybackSelection(track.slot_id)}
                   />
@@ -277,7 +290,7 @@ export function StudioToolbar({
           <div className="composer-playback-actions">
             <button
               className="composer-mini-button"
-              disabled={registeredTracks.length === 0}
+              disabled={registeredTracks.length === 0 || globalPlaying || transportDisabled}
               type="button"
               onClick={onSelectAllPlaybackTracks}
             >
@@ -286,7 +299,7 @@ export function StudioToolbar({
             <button
               className="composer-mini-button composer-mini-button--primary"
               data-testid="selected-play-button"
-              disabled={selectedTrackCount === 0 || actionState.phase === 'busy'}
+              disabled={selectedTrackCount === 0 || actionBusy || transportDisabled}
               type="button"
               onClick={onStartSelectedPlayback}
             >

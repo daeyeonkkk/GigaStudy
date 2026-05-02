@@ -17,6 +17,7 @@ export type ScoreSessionState = {
 }
 
 type ScoringDrawerProps = {
+  busy: boolean
   scoreSession: ScoreSessionState | null
   targetTrack: TrackSlot | null
   tracks: TrackSlot[]
@@ -30,6 +31,7 @@ type ScoringDrawerProps = {
 }
 
 export function ScoringDrawer({
+  busy,
   scoreSession,
   targetTrack,
   tracks,
@@ -56,8 +58,8 @@ export function ScoringDrawer({
     scoreSession.selectedReferenceIds.includes(slotId),
   ).length
   const modeSummary = isHarmonyMode
-    ? `현재 모드: 화음 채점. ${selectedReferenceCount}개 기준 트랙을 기준으로 새 파트의 안정감과 충돌을 평가하고, ${playbackReferenceCount}개 트랙을 들려줍니다.`
-    : `현재 모드: 정답 채점. ${targetTrack.name} 이벤트를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 기준으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
+    ? `현재 모드: 화음 채점. ${selectedReferenceCount}개 기준 트랙을 기준으로 내 파트의 안정감과 충돌을 평가하고, ${playbackReferenceCount}개 트랙을 들려줍니다.`
+    : `현재 모드: 정답 채점. ${targetTrack.name} 이벤트를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 맥락으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
   const phaseLocked = scoreSession.phase !== 'ready'
 
   return (
@@ -71,6 +73,7 @@ export function ScoringDrawer({
           <button
             aria-label="채점 체크리스트 닫기"
             className="studio-icon-button"
+            disabled={scoreSession.phase === 'analyzing'}
             type="button"
             onClick={onCancel}
           >
@@ -81,21 +84,21 @@ export function ScoringDrawer({
         <div className="score-mode-switch" role="group" aria-label="채점 모드">
           <button
             className={scoreSession.scoreMode === 'answer' ? 'is-active' : ''}
-            disabled={!canUseAnswerMode || phaseLocked}
+            disabled={!canUseAnswerMode || phaseLocked || busy}
             type="button"
             onClick={() => onScoreModeChange('answer')}
           >
             <strong>정답 채점</strong>
-            <span>이 트랙 이벤트대로 불렀는지</span>
+            <span>내 트랙 이벤트와 얼마나 맞는지</span>
           </button>
           <button
             className={isHarmonyMode ? 'is-active' : ''}
-            disabled={!canUseHarmonyMode || phaseLocked}
+            disabled={!canUseHarmonyMode || phaseLocked || busy}
             type="button"
             onClick={() => onScoreModeChange('harmony')}
           >
             <strong>화음 채점</strong>
-            <span>선택한 트랙들과 어울리는 새 파트인지</span>
+            <span>선택한 트랙들과 어울리는 내 파트인지</span>
           </button>
         </div>
 
@@ -128,7 +131,7 @@ export function ScoringDrawer({
                 <label>
                   <input
                     checked={isReference}
-                    disabled={disabled || phaseLocked}
+                    disabled={disabled || phaseLocked || busy}
                     type="checkbox"
                     onChange={() => onToggleReference(track.slot_id)}
                   />
@@ -137,7 +140,7 @@ export function ScoringDrawer({
                 <label>
                   <input
                     checked={isAudible}
-                    disabled={disabled || !isReference || phaseLocked}
+                    disabled={disabled || !isReference || phaseLocked || busy}
                     type="checkbox"
                     onChange={() => onToggleReferencePlayback(track.slot_id)}
                   />
@@ -149,7 +152,7 @@ export function ScoringDrawer({
           <label className={`score-checklist__metronome ${isHarmonyMode ? 'is-optional' : ''}`}>
             <input
               checked={scoreSession.includeMetronome}
-              disabled={phaseLocked}
+              disabled={phaseLocked || busy}
               type="checkbox"
               onChange={(event) => onIncludeMetronomeChange(event.target.checked)}
             />
@@ -162,7 +165,7 @@ export function ScoringDrawer({
           <button
             className="app-button"
             data-testid="score-start-button"
-            disabled={scoreSession.phase !== 'ready'}
+            disabled={scoreSession.phase !== 'ready' || busy}
             type="button"
             onClick={onStart}
           >
@@ -177,8 +180,13 @@ export function ScoringDrawer({
           >
             {scoreSession.phase === 'counting_in' ? '취소' : '중지'}
           </button>
-          <button className="app-button app-button--secondary" type="button" onClick={onCancel}>
-            취소
+          <button
+            className="app-button app-button--secondary"
+            disabled={scoreSession.phase === 'analyzing'}
+            type="button"
+            onClick={onCancel}
+          >
+            닫기
           </button>
         </div>
 
@@ -194,10 +202,10 @@ export function ScoringDrawer({
           {scoreSession.phase === 'counting_in'
             ? '카운트인이 끝나는 다운비트부터 기준 트랙 재생과 마이크 입력이 동시에 시작됩니다.'
             : scoreSession.phase === 'listening'
-            ? '연주로 선택한 트랙만 스피커로 재생됩니다. 기준 체크는 채점 계산에 그대로 사용됩니다.'
-            : isHarmonyMode
-              ? '화음 채점은 정답 이벤트 없이, 기준 트랙 위에 새 파트가 안정적으로 얹히는지 평가합니다.'
-              : '정답 채점은 이 트랙 이벤트를 답안지로 삼고, 기준 트랙과 메트로놈은 평가 맥락과 연습 재생을 보조합니다.'}
+              ? '연주로 선택한 트랙만 스피커로 재생합니다. 기준 체크는 채점 계산에 그대로 사용됩니다.'
+              : isHarmonyMode
+                ? '화음 채점은 정답 이벤트 없이, 기준 트랙 위에 내 파트가 안정적으로 얹히는지 평가합니다.'
+                : '정답 채점은 내 트랙 이벤트를 답안지로 삼고, 기준 트랙과 메트로놈은 평가 맥락과 연습 재생을 보조합니다.'}
         </p>
       </div>
     </section>

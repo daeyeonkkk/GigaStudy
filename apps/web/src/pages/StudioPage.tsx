@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState } from 'react'
+import { useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 
 import { CandidateReviewPanel } from '../components/studio/CandidateReviewPanel'
@@ -46,6 +47,7 @@ export function StudioPage() {
   const focusedRegionId = searchParams.get('region')
   const focusedEventId = searchParams.get('event')
   const [actionState, setActionState] = useState<StudioActionState>({ phase: 'idle' })
+  const studioActionInFlightRef = useRef(false)
   const {
     activeExtractionJobs,
     loadState,
@@ -55,7 +57,11 @@ export function StudioPage() {
     setStudio,
     studio,
     visibleExtractionJobs,
-  } = useStudioResource(studioId, (message) => setActionState({ phase: 'error', message }))
+  } = useStudioResource(
+    studioId,
+    (message) => setActionState({ phase: 'error', message }),
+    (message, phase = 'busy') => setActionState({ phase, message }),
+  )
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const studioMeter = useMemo(
     () => (studio ? getStudioMeter(studio) : DEFAULT_METER),
@@ -153,8 +159,26 @@ export function StudioPage() {
     action: () => Promise<Studio>,
     busyMessage: string,
     successMessage: string,
+    progressMessages: string[] = [],
   ): Promise<boolean> {
+    if (studioActionInFlightRef.current) {
+      setActionState({
+        phase: 'error',
+        message: '다른 작업을 처리하는 중입니다. 현재 작업이 끝난 뒤 다시 시도해 주세요.',
+      })
+      return false
+    }
+
+    studioActionInFlightRef.current = true
     setActionState({ phase: 'busy', message: busyMessage })
+    let progressMessageIndex = 0
+    const progressIntervalId =
+      progressMessages.length > 0
+        ? window.setInterval(() => {
+            progressMessageIndex = (progressMessageIndex + 1) % progressMessages.length
+            setActionState({ phase: 'busy', message: progressMessages[progressMessageIndex] })
+          }, 2600)
+        : null
     try {
       const nextStudio = await action()
       setStudio(nextStudio)
@@ -166,6 +190,11 @@ export function StudioPage() {
         message: error instanceof Error ? error.message : '요청을 처리하지 못했습니다.',
       })
       return false
+    } finally {
+      if (progressIntervalId !== null) {
+        window.clearInterval(progressIntervalId)
+      }
+      studioActionInFlightRef.current = false
     }
   }
 
@@ -205,6 +234,45 @@ export function StudioPage() {
 
     await handleTrackRecording(track)
   }
+
+  const activeJobSlotIds = useMemo(() => {
+    const next = new Set<number>()
+    for (const job of activeExtractionJobs) {
+      if (job.parse_all_parts) {
+        studio?.tracks.forEach((track) => {
+          if (track.slot_id <= 5) {
+            next.add(track.slot_id)
+          }
+        })
+      } else {
+        next.add(job.slot_id)
+      }
+    }
+    return next
+  }, [activeExtractionJobs, studio])
+  const scoringInteractionLocked = scoreSession !== null
+  const recordingInteractionLocked = recordingSlotId !== null || trackCountIn !== null || pendingTrackRecording !== null
+  const playbackInteractionLocked = globalPlaying || playingSlots.size > 0
+  const actionBusy = actionState.phase === 'busy'
+  const arrangementEditDisabled =
+    actionBusy || scoringInteractionLocked || recordingInteractionLocked || playbackInteractionLocked
+  const arrangementEditDisabledReason = actionBusy
+    ? '현재 작업이 끝난 뒤 편집할 수 있습니다.'
+    : scoringInteractionLocked
+      ? '채점 패널이 열려 있습니다. 채점을 끝내거나 닫은 뒤 편집할 수 있습니다.'
+      : recordingInteractionLocked
+        ? '녹음 작업이 진행 중입니다. 녹음을 저장하거나 폐기한 뒤 편집할 수 있습니다.'
+        : playbackInteractionLocked
+          ? '재생 중에는 편집을 잠시 멈춥니다. 정지 후 다시 시도해 주세요.'
+          : null
+  const transportDisabled = actionBusy || scoringInteractionLocked || recordingInteractionLocked
+  const transportDisabledReason = actionBusy
+    ? '현재 작업이 끝난 뒤 재생할 수 있습니다.'
+    : scoringInteractionLocked
+      ? '채점 중에는 일반 재생을 잠시 멈춥니다.'
+      : recordingInteractionLocked
+        ? '녹음 중에는 일반 재생을 잠시 멈춥니다.'
+        : null
 
   async function handleMoveRegion(region: ArrangementRegion, targetSlotId: number, startSeconds: number) {
     if (!studio) {
@@ -333,6 +401,8 @@ export function StudioPage() {
           studioId={studio.studio_id}
           studioTitle={studio.title}
           syncStepSeconds={syncStepSeconds}
+          transportDisabled={transportDisabled}
+          transportDisabledReason={transportDisabledReason}
           onMetronomeChange={setMetronomeEnabled}
           onPlaybackSourceChange={changePlaybackSource}
           onSeekPlayback={seekSelectedPlayback}
@@ -366,6 +436,9 @@ export function StudioPage() {
               playingSlots={playingSlots}
               playheadSeconds={playheadSeconds}
               arrangementRegions={studio.regions}
+              activeJobSlotIds={activeJobSlotIds}
+              editDisabled={arrangementEditDisabled}
+              editDisabledReason={arrangementEditDisabledReason}
               registeredTracks={registeredTracks}
               syncStepSeconds={syncStepSeconds}
               trackCountIn={trackCountIn}
@@ -392,7 +465,9 @@ export function StudioPage() {
             />
             <ExtractionJobsPanel
               activeJobCount={activeExtractionJobs.length}
+              busy={arrangementEditDisabled}
               jobOverwriteApprovals={jobOverwriteApprovals}
+              lockedSlotIds={activeJobSlotIds}
               tracks={studio.tracks}
               visibleJobs={visibleExtractionJobs}
               getPendingJobCandidates={getPendingJobCandidates}
@@ -404,8 +479,10 @@ export function StudioPage() {
 
             <CandidateReviewPanel
               beatsPerMeasure={studioBeatsPerMeasure}
+              busy={arrangementEditDisabled}
               candidateOverwriteApprovals={candidateOverwriteApprovals}
               candidates={pendingCandidates}
+              lockedSlotIds={activeJobSlotIds}
               tracks={studio.tracks}
               candidateWouldOverwrite={candidateWouldOverwrite}
               getJobSourcePreviewUrl={(jobId) => getDocumentJobSourcePreviewUrl(studio.studio_id, jobId)}
@@ -432,6 +509,7 @@ export function StudioPage() {
       <ReportFeed reports={studio.reports} studioId={studio.studio_id} tracks={studio.tracks} />
 
       <ScoringDrawer
+        busy={actionBusy}
         scoreSession={scoreSession}
         targetTrack={scoreTargetTrack}
         tracks={studio.tracks}

@@ -612,6 +612,58 @@ def test_region_and_piano_roll_mutation_api_uses_explicit_regions(tmp_path: Path
     assert delete_payload["tracks"][0]["status"] == "registered"
 
 
+def test_active_extraction_job_blocks_conflicting_track_mutations(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        studio_repository.StudioRepository,
+        "_schedule_engine_queue_processing",
+        lambda self, background_tasks: None,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Active job lock",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_payload = upload_musicxml_track(client, studio_id).json()
+    source_region = upload_payload["regions"][0]
+    encoded_audio = base64.b64encode(b"RIFF\x24\x00\x00\x00WAVEfmt ").decode("ascii")
+
+    queued_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "queued.wav",
+            "content_base64": encoded_audio,
+            "review_before_register": True,
+        },
+    )
+
+    assert queued_response.status_code == 200
+    assert queued_response.json()["jobs"][0]["status"] == "queued"
+
+    edit_response = client.patch(
+        f"/api/studios/{studio_id}/regions/{source_region['region_id']}",
+        json={"start_seconds": 1.0},
+    )
+    assert edit_response.status_code == 409
+    assert "extraction is queued or running" in edit_response.json()["detail"]
+
+    upload_target_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload-target",
+        json={
+            "source_kind": "audio",
+            "filename": "another.wav",
+            "size_bytes": 8,
+            "content_type": "audio/wav",
+        },
+    )
+    assert upload_target_response.status_code == 409
+
+
 def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

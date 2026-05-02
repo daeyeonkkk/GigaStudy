@@ -34,8 +34,11 @@ type TrackCountInState = {
 }
 
 type TrackBoardProps = {
+  activeJobSlotIds: Set<number>
   beatsPerMeasure: number
   bpm: number
+  editDisabled: boolean
+  editDisabledReason: string | null
   metronomeEnabled: boolean
   pendingCandidateCount: number
   extractionJobs: TrackExtractionJob[]
@@ -159,9 +162,11 @@ function clampRegionStart(value: number): number {
 }
 
 function TrackVolumeControl({
+  disabled,
   track,
   onVolumeChange,
 }: {
+  disabled: boolean
   track: TrackSlot
   onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }) {
@@ -199,6 +204,7 @@ function TrackVolumeControl({
         min="0"
         step="1"
         type="range"
+        disabled={disabled}
         value={rangeVolume}
         onChange={(event) => setDraftVolume(event.currentTarget.value)}
         onKeyUp={(event) => {
@@ -224,6 +230,7 @@ function TrackVolumeControl({
         min="0"
         step="1"
         type="number"
+        disabled={disabled}
         value={draftVolume}
         onBlur={() => commitVolume()}
         onChange={(event) => setDraftVolume(event.currentTarget.value)}
@@ -239,6 +246,8 @@ function TrackVolumeControl({
 }
 
 function RegionTools({
+  disabled,
+  disabledReason,
   gridSeconds,
   region,
   tracks,
@@ -247,6 +256,8 @@ function RegionTools({
   onMoveRegion,
   onSplitRegion,
 }: {
+  disabled: boolean
+  disabledReason: string | null
   gridSeconds: number
   region: ArrangementRegion | null
   tracks: TrackSlot[]
@@ -265,42 +276,46 @@ function RegionTools({
 
   return (
     <div className="region-tools" aria-label="Region editing tools">
+      {disabled && disabledReason ? <p className="region-tools__hint">{disabledReason}</p> : null}
       <button
+        disabled={disabled}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds - gridSeconds))}
       >
         Move left
       </button>
       <button
+        disabled={disabled}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds + gridSeconds))}
       >
         Move right
       </button>
-      <button type="button" onClick={() => onSplitRegion(region, midpoint)}>
+      <button disabled={disabled} type="button" onClick={() => onSplitRegion(region, midpoint)}>
         Split
       </button>
       <button
+        disabled={disabled}
         type="button"
         onClick={() => onCopyRegion(region, region.track_slot_id, region.start_seconds + region.duration_seconds)}
       >
         Copy
       </button>
       <button
-        disabled={!canMoveUp}
+        disabled={disabled || !canMoveUp}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id - 1, region.start_seconds)}
       >
         Track up
       </button>
       <button
-        disabled={!canMoveDown}
+        disabled={disabled || !canMoveDown}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id + 1, region.start_seconds)}
       >
         Track down
       </button>
-      <button className="region-tools__danger" type="button" onClick={() => onDeleteRegion(region)}>
+      <button className="region-tools__danger" disabled={disabled} type="button" onClick={() => onDeleteRegion(region)}>
         Delete
       </button>
     </div>
@@ -308,6 +323,8 @@ function RegionTools({
 }
 
 function PianoRollPanel({
+  disabled,
+  disabledReason,
   focusedEventId,
   gridSeconds,
   region,
@@ -315,6 +332,8 @@ function PianoRollPanel({
   onSelectEvent,
   onUpdateEvent,
 }: {
+  disabled: boolean
+  disabledReason: string | null
   focusedEventId?: string | null
   gridSeconds: number
   region: ArrangementRegion | null
@@ -351,8 +370,9 @@ function PianoRollPanel({
           <h3>{region ? `${region.track_name} Piano Roll` : 'Piano Roll'}</h3>
         </div>
         <div className="piano-roll-panel__tools" aria-label="Piano roll tools">
+          {disabled && disabledReason ? <span className="piano-roll-panel__lock">{disabledReason}</span> : null}
           <button
-            disabled={!selectedEvent}
+            disabled={disabled || !selectedEvent}
             type="button"
             onClick={() => {
               if (selectedEvent?.pitch_midi !== null && selectedEvent?.pitch_midi !== undefined) {
@@ -363,7 +383,7 @@ function PianoRollPanel({
             Pitch -
           </button>
           <button
-            disabled={!selectedEvent}
+            disabled={disabled || !selectedEvent}
             type="button"
             onClick={() => {
               if (selectedEvent?.pitch_midi !== null && selectedEvent?.pitch_midi !== undefined) {
@@ -374,7 +394,7 @@ function PianoRollPanel({
             Pitch +
           </button>
           <button
-            disabled={!selectedEvent}
+            disabled={disabled || !selectedEvent}
             type="button"
             onClick={() =>
               selectedEvent
@@ -387,7 +407,7 @@ function PianoRollPanel({
             Nudge -
           </button>
           <button
-            disabled={!selectedEvent}
+            disabled={disabled || !selectedEvent}
             type="button"
             onClick={() =>
               selectedEvent
@@ -400,7 +420,7 @@ function PianoRollPanel({
             Nudge +
           </button>
           <button
-            disabled={!selectedEvent}
+            disabled={disabled || !selectedEvent}
             type="button"
             onClick={() =>
               selectedEvent
@@ -413,7 +433,7 @@ function PianoRollPanel({
             Shorter
           </button>
           <button
-            disabled={!selectedEvent}
+            disabled={disabled || !selectedEvent}
             type="button"
             onClick={() =>
               selectedEvent
@@ -426,7 +446,7 @@ function PianoRollPanel({
             Longer
           </button>
           <button
-            disabled={!selectedEvent}
+            disabled={disabled || !selectedEvent}
             type="button"
             onClick={() =>
               selectedEvent
@@ -533,8 +553,11 @@ function PracticeWaterfall({
 }
 
 export function TrackBoard({
+  activeJobSlotIds,
   beatsPerMeasure,
   bpm,
+  editDisabled,
+  editDisabledReason,
   metronomeEnabled,
   pendingCandidateCount,
   extractionJobs,
@@ -613,6 +636,11 @@ export function TrackBoard({
       : selectedRegion?.pitch_events.some((event) => event.event_id === focusedEventId)
         ? focusedEventId ?? null
         : selectedRegion?.pitch_events[0]?.event_id ?? null
+  const selectedRegionJobLocked = selectedRegion ? activeJobSlotIds.has(selectedRegion.track_slot_id) : false
+  const selectedRegionEditDisabled = editDisabled || selectedRegionJobLocked
+  const selectedRegionDisabledReason = selectedRegionJobLocked
+    ? `${selectedRegion?.track_name ?? '선택한 트랙'} 추출 작업이 끝난 뒤 편집할 수 있습니다.`
+    : editDisabledReason
 
   return (
     <section className="studio-tracks" aria-label="Six-track region editor">
@@ -648,6 +676,12 @@ export function TrackBoard({
           const isCountingIn = trackCountIn?.slotId === track.slot_id
           const isPlaying = playingSlots.has(track.slot_id)
           const activeJob = getTrackActiveJob(track, extractionJobs)
+          const activeJobLocked = activeJobSlotIds.has(track.slot_id) || track.status === 'extracting'
+          const isRecordToggleAvailable = isRecording || isCountingIn
+          const trackEditDisabled = editDisabled || activeJobLocked
+          const trackEditDisabledReason = activeJobLocked
+            ? `${track.name} 트랙은 추출 작업이 끝난 뒤 편집할 수 있습니다.`
+            : editDisabledReason
           const trackRegions = regionsByTrack.get(track.slot_id) ?? []
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
@@ -741,18 +775,21 @@ export function TrackBoard({
                   <button
                     className={`app-button app-button--record ${isRecording || isCountingIn ? 'is-active' : ''}`}
                     data-testid={`track-record-${track.slot_id}`}
+                    disabled={!isRecordToggleAvailable && trackEditDisabled}
                     type="button"
+                    title={!isRecordToggleAvailable ? trackEditDisabledReason ?? undefined : undefined}
                     onClick={() => onRecord(track)}
                   >
                     <span aria-hidden="true">{isRecording || isCountingIn ? 'Stop' : 'Rec'}</span>
                     {isRecording ? 'Recording' : isCountingIn ? 'Cancel' : 'Record'}
                   </button>
-                  <label className="app-button app-button--secondary track-upload">
+                  <label className={`app-button app-button--secondary track-upload ${trackEditDisabled ? 'is-disabled' : ''}`}>
                     <span aria-hidden="true">Up</span>
                     Upload
                     <input
                       accept={TRACK_UPLOAD_ACCEPT}
                       aria-label={`${track.name} upload`}
+                      disabled={trackEditDisabled}
                       type="file"
                       onChange={(event) => {
                         const file = event.currentTarget.files?.[0] ?? null
@@ -764,8 +801,9 @@ export function TrackBoard({
                   <button
                     className="app-button app-button--secondary"
                     data-testid={`track-generate-${track.slot_id}`}
-                    disabled={!canGenerateTrack}
+                    disabled={!canGenerateTrack || trackEditDisabled}
                     type="button"
+                    title={trackEditDisabledReason ?? undefined}
                     onClick={() => onGenerate(track)}
                   >
                     <span aria-hidden="true">AI</span>
@@ -778,6 +816,7 @@ export function TrackBoard({
                     aria-label={`${track.name} sync ${formatSyncStep(syncStepSeconds)} seconds earlier`}
                     className="studio-step-button"
                     data-testid={`track-sync-earlier-${track.slot_id}`}
+                    disabled={trackEditDisabled || !isRegistered}
                     type="button"
                     onClick={() => onSync(track, track.sync_offset_seconds - syncStepSeconds)}
                   >
@@ -787,17 +826,18 @@ export function TrackBoard({
                     aria-label={`${track.name} sync ${formatSyncStep(syncStepSeconds)} seconds later`}
                     className="studio-step-button"
                     data-testid={`track-sync-later-${track.slot_id}`}
+                    disabled={trackEditDisabled || !isRegistered}
                     type="button"
                     onClick={() => onSync(track, track.sync_offset_seconds + syncStepSeconds)}
                   >
                     +{formatSyncStep(syncStepSeconds)}
                   </button>
-                  <TrackVolumeControl track={track} onVolumeChange={onVolumeChange} />
+                  <TrackVolumeControl disabled={trackEditDisabled} track={track} onVolumeChange={onVolumeChange} />
                   <button
                     aria-label={isPlaying ? `${track.name} pause` : `${track.name} play`}
                     className="studio-icon-button"
                     data-testid={`track-play-${track.slot_id}`}
-                    disabled={!isRegistered}
+                    disabled={!isRegistered || (editDisabled && !isPlaying)}
                     type="button"
                     onClick={() => onTogglePlayback(track)}
                   >
@@ -807,7 +847,7 @@ export function TrackBoard({
                     aria-label={`${track.name} stop`}
                     className="studio-icon-button"
                     data-testid={`track-stop-${track.slot_id}`}
-                    disabled={!isRegistered}
+                    disabled={!isRegistered || !isPlaying}
                     type="button"
                     onClick={() => onStopPlayback(track)}
                   >
@@ -816,8 +856,9 @@ export function TrackBoard({
                   <button
                     className="app-button app-button--secondary"
                     data-testid={`track-score-${track.slot_id}`}
-                    disabled={!canScoreTrack}
+                    disabled={!canScoreTrack || trackEditDisabled}
                     type="button"
+                    title={trackEditDisabledReason ?? undefined}
                     onClick={() => onOpenScore(track)}
                   >
                     Score
@@ -854,6 +895,8 @@ export function TrackBoard({
       <div className="editor-panels">
         <div className="piano-roll-shell">
           <RegionTools
+            disabled={selectedRegionEditDisabled}
+            disabledReason={selectedRegionDisabledReason}
             gridSeconds={gridSeconds}
             region={selectedRegion}
             tracks={tracks}
@@ -863,6 +906,8 @@ export function TrackBoard({
             onSplitRegion={onSplitRegion}
           />
           <PianoRollPanel
+            disabled={selectedRegionEditDisabled}
+            disabledReason={selectedRegionDisabledReason}
             focusedEventId={focusedEventId}
             gridSeconds={gridSeconds}
             region={selectedRegion}

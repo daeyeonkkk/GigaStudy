@@ -10,4 +10,5 @@ export type RunStudioAction = (
   action: () => Promise<import('../../types/studio').Studio>,
   busyMessage: string,
   successMessage: string,
+  progressMessages?: string[],
 ) => Promise<boolean>

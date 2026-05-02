@@ -38,10 +38,33 @@ export function useStudioTrackActions({
   stopPlaybackSession,
   studio,
 }: UseStudioTrackActionsArgs) {
-  async function handleUpload(track: TrackSlot, file: File | null) {
-    if (!studio || !file) {
+  function stopPlaybackBeforeEditing() {
+    if (!globalPlaying && playingSlots.size === 0) {
       return
     }
+    stopPlaybackSession()
+    setActionState({
+      phase: 'success',
+      message: '편집을 위해 재생을 정지했습니다.',
+    })
+  }
+
+  function trackIsBusy(track: TrackSlot): boolean {
+    if (track.status !== 'extracting') {
+      return false
+    }
+    setActionState({
+      phase: 'error',
+      message: `${track.name} 트랙은 추출 작업이 진행 중입니다. 작업이 끝난 뒤 다시 시도해 주세요.`,
+    })
+    return true
+  }
+
+  async function handleUpload(track: TrackSlot, file: File | null) {
+    if (!studio || !file || trackIsBusy(track)) {
+      return
+    }
+    stopPlaybackBeforeEditing()
 
     const sourceKind = detectUploadKind(file)
     if (!sourceKind) {
@@ -88,8 +111,13 @@ export function useStudioTrackActions({
           review_before_register: true,
         })
       },
-      `${track.name} 파일을 서버에 올리고 추출 대기열에 등록하는 중입니다.`,
-      `${track.name} 트랙의 ${file.name} 추출 후보를 준비했습니다.`,
+      `${track.name} 파일을 업로드하고 추출 대기열에 등록하는 중입니다.`,
+      `${track.name} 트랙에 ${file.name} 추출 후보를 준비했습니다.`,
+      [
+        `${track.name} 파일을 서버에 올리는 중입니다.`,
+        `${track.name} 추출 작업을 대기열에 배치하는 중입니다.`,
+        '작업이 끝나면 후보 검토 목록에 표시됩니다.',
+      ],
     )
 
     if (!uploadSucceeded) {
@@ -99,22 +127,23 @@ export function useStudioTrackActions({
     if (isDocumentImageUpload(file)) {
       setActionState({
         phase: 'success',
-        message: `${track.name} 문서 분석 작업을 시작했습니다. 추출 후보가 준비되면 표시됩니다.`,
+        message: `${track.name} 문서 분석 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
       })
     } else if (sourceKind === 'audio') {
       setActionState({
         phase: 'success',
-        message: `${track.name} 오디오 추출 작업을 시작했습니다. 추출 후보가 준비되면 표시됩니다.`,
+        message: `${track.name} 오디오 추출 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
       })
     }
   }
 
   async function handleGenerate(track: TrackSlot) {
-    if (!studio) {
+    if (!studio || trackIsBusy(track)) {
       return
     }
+    stopPlaybackBeforeEditing()
     if (registeredSlotIds.length === 0) {
-      setActionState({ phase: 'error', message: 'AI 생성은 등록된 트랙이 하나 이상 필요합니다.' })
+      setActionState({ phase: 'error', message: 'AI 생성에는 등록된 기준 트랙이 하나 이상 필요합니다.' })
       return
     }
 
@@ -127,13 +156,19 @@ export function useStudioTrackActions({
       track.slot_id === 6
         ? '퍼커션 트랙에 BPM 기반 비트 후보 3개를 만들었습니다.'
         : `${track.name} 트랙에 참고 트랙 기반 이벤트 후보 3개를 만들었습니다.`,
+      [
+        'DeepSeek가 참고 트랙의 화성 방향을 훑는 중입니다.',
+        `${track.name} 음역과 성부 진행 규칙을 맞추는 중입니다.`,
+        '후보 리전을 검토 가능한 블록으로 정리하는 중입니다.',
+      ],
     )
   }
 
   async function handleSync(track: TrackSlot, nextOffset: number) {
-    if (!studio) {
+    if (!studio || trackIsBusy(track)) {
       return
     }
+    stopPlaybackBeforeEditing()
     const roundedOffset = Math.round(nextOffset * 1000) / 1000
     await runStudioAction(
       () => updateTrackSync(studio.studio_id, track.slot_id, roundedOffset),

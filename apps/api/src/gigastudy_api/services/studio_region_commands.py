@@ -21,6 +21,7 @@ from gigastudy_api.services.engine.music_theory import (
     midi_to_label,
     seconds_per_beat,
 )
+from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.studio_access import require_studio_access
 
 
@@ -47,14 +48,23 @@ class StudioRegionCommands:
             timestamp = self._now()
             region = _find_region(studio, region_id)
             touched_slots = {region.track_slot_id}
+            target_track = None
 
             if "target_track_slot_id" in request.model_fields_set and request.target_track_slot_id is not None:
                 target_track = self._repository._find_track(studio, request.target_track_slot_id)
+                touched_slots.add(target_track.slot_id)
+
+            ensure_no_active_extraction_jobs(
+                studio,
+                touched_slots,
+                action_label="Region editing",
+            )
+
+            if target_track is not None:
                 region.track_slot_id = target_track.slot_id
                 region.track_name = target_track.name
                 for event in region.pitch_events:
                     event.track_slot_id = target_track.slot_id
-                touched_slots.add(target_track.slot_id)
 
             if "start_seconds" in request.model_fields_set and request.start_seconds is not None:
                 next_start = round(request.start_seconds, 4)
@@ -93,6 +103,11 @@ class StudioRegionCommands:
             source_region = _find_region(studio, region_id)
             target_slot_id = request.target_track_slot_id or source_region.track_slot_id
             target_track = self._repository._find_track(studio, target_slot_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {source_region.track_slot_id, target_slot_id},
+                action_label="Region copy",
+            )
             next_start = (
                 round(request.start_seconds, 4)
                 if request.start_seconds is not None
@@ -145,6 +160,11 @@ class StudioRegionCommands:
             studio = self._load_editable_studio(studio_id, owner_token)
             timestamp = self._now()
             region = _find_region(studio, region_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {region.track_slot_id},
+                action_label="Region split",
+            )
             split_seconds = round(request.split_seconds, 4)
             region_end = region.start_seconds + region.duration_seconds
             if split_seconds <= region.start_seconds + 0.05 or split_seconds >= region_end - 0.05:
@@ -227,6 +247,11 @@ class StudioRegionCommands:
             studio = self._load_editable_studio(studio_id, owner_token)
             timestamp = self._now()
             region = _find_region(studio, region_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {region.track_slot_id},
+                action_label="Region delete",
+            )
             studio.regions = [candidate for candidate in studio.regions if candidate.region_id != region_id]
             self._sync_tracks_for_slots(studio, {region.track_slot_id}, timestamp=timestamp)
             studio.updated_at = timestamp
@@ -246,6 +271,11 @@ class StudioRegionCommands:
             studio = self._load_editable_studio(studio_id, owner_token)
             timestamp = self._now()
             region = _find_region(studio, region_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {region.track_slot_id},
+                action_label="Piano-roll event editing",
+            )
             event = _find_event(region, event_id)
             beat_seconds = seconds_per_beat(studio.bpm)
 

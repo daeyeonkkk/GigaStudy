@@ -18,6 +18,7 @@ from gigastudy_api.services.studio_jobs import (
     document_queue_payload,
     voice_queue_payload,
 )
+from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
 
 
@@ -68,6 +69,11 @@ class StudioExtractionJobCommands:
                 [track for track in studio.tracks if track.slot_id <= 5]
                 if parse_all_parts
                 else [self._repository._find_track(studio, slot_id)]
+            )
+            ensure_no_active_extraction_jobs(
+                studio,
+                (track.slot_id for track in placeholder_tracks),
+                action_label="Document extraction",
             )
             for track in placeholder_tracks:
                 if track_has_content(track):
@@ -124,6 +130,11 @@ class StudioExtractionJobCommands:
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             track = self._repository._find_track(studio, slot_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {slot_id},
+                action_label="Voice extraction",
+            )
             if not track_has_content(track) or not review_before_register:
                 track.status = "extracting"
                 track.source_kind = source_kind

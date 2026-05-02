@@ -35,6 +35,7 @@ from gigastudy_api.services.studio_candidates import (
 from gigastudy_api.services.studio_documents import register_track_material, track_has_content
 from gigastudy_api.services.studio_generation import generation_candidate_review_metadata
 from gigastudy_api.services.studio_jobs import clear_unmapped_document_placeholders
+from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 
 SUPERSEDED_AI_CANDIDATE_MESSAGE = "Superseded by newer AI generation candidates."
 
@@ -68,6 +69,11 @@ class StudioCandidateCommands:
                 raise HTTPException(status_code=409, detail="Only pending candidates can be approved.")
             target_slot_id = request.target_slot_id or candidate.suggested_slot_id
             track = self._repository._find_track(studio, target_slot_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {target_slot_id},
+                action_label="Candidate approval",
+            )
             if track_has_content(track) and not request.allow_overwrite:
                 raise HTTPException(
                     status_code=409,
@@ -164,6 +170,11 @@ class StudioCandidateCommands:
 
             unique_candidates_by_slot, duplicate_candidates = unique_candidates_by_suggested_slot(
                 pending_candidates
+            )
+            ensure_no_active_extraction_jobs(
+                studio,
+                unique_candidates_by_slot.keys(),
+                action_label="Job candidate approval",
             )
 
             occupied_slots = [
@@ -413,6 +424,11 @@ class StudioCandidateCommands:
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = self._now()
+            ensure_no_active_extraction_jobs(
+                studio,
+                {slot_id},
+                action_label="AI generation",
+            )
             self._discard_superseded_ai_generation_candidates(
                 studio,
                 slot_id,

@@ -82,6 +82,7 @@ from gigastudy_api.services.studio_generation_commands import StudioGenerationCo
 from gigastudy_api.services.studio_region_commands import StudioRegionCommands
 from gigastudy_api.services.studio_scoring_commands import StudioScoringCommands
 from gigastudy_api.services.studio_upload_commands import StudioUploadCommands
+from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
 from gigastudy_api.services.studio_resource_commands import StudioResourceCommands
@@ -474,6 +475,11 @@ class StudioRepository:
             require_studio_access(studio, owner_token)
             timestamp = _now()
             track = self._find_track(studio, slot_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {slot_id},
+                action_label="Track sync editing",
+            )
             previous_offset = track.sync_offset_seconds
             set_track_sync_offset(
                 track,
@@ -503,6 +509,11 @@ class StudioRepository:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             require_studio_access(studio, owner_token)
             timestamp = _now()
+            ensure_no_active_extraction_jobs(
+                studio,
+                (track.slot_id for track in studio.tracks if track.status == "registered"),
+                action_label="Global sync editing",
+            )
             previous_offsets = {track.slot_id: track.sync_offset_seconds for track in studio.tracks}
             try:
                 shift_registered_track_sync_offsets(

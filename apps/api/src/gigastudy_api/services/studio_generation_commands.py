@@ -11,6 +11,7 @@ from gigastudy_api.services.studio_generation import (
     GenerationRequestError,
     generate_track_material,
 )
+from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 
 
 class StudioGenerationCommands:
@@ -31,6 +32,11 @@ class StudioGenerationCommands:
     ) -> Studio:
         studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._repository._find_track(studio, slot_id)
+        ensure_no_active_extraction_jobs(
+            studio,
+            {slot_id, *request.context_slot_ids},
+            action_label="AI generation",
+        )
         try:
             generated = generate_track_material(
                 settings=get_settings(),

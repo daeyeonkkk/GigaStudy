@@ -52,7 +52,7 @@ function buildMetricCards(report: ScoringReport): MetricCard[] {
       { label: '성부 진행', value: formatNullableScore(report.voice_leading_score) },
       { label: '편곡', value: formatNullableScore(report.arrangement_score) },
       { label: '자동 싱크', value: formatSeconds(report.alignment_offset_seconds) },
-      { label: '이벤트', value: String(report.performance_event_count) },
+      { label: '음표', value: String(report.performance_event_count) },
     ]
   }
 
@@ -72,7 +72,7 @@ function getReportSummary(report: ScoringReport): string {
       `화음 ${formatNullableScore(report.harmony_score)}`,
       `코드 ${formatNullableScore(report.chord_fit_score)}`,
       `성부 진행 ${formatNullableScore(report.voice_leading_score)}`,
-      `기준 이벤트 ${report.performance_event_count}개`,
+      `기준 음표 ${report.performance_event_count}개`,
     ].join(' · ')
   }
 
@@ -98,8 +98,8 @@ function getIssueSummary(issue: ReportIssue): string {
     tension_resolution: '긴장음 해결이 불안정합니다.',
     bass_foundation: '베이스가 화성의 기반을 충분히 받치지 못합니다.',
     chord_coverage: '코드 구성음 커버리지가 부족합니다.',
-    missing: '기준 이벤트가 빠졌습니다.',
-    extra: '기준에 없는 추가 이벤트가 감지되었습니다.',
+    missing: '기준 음표가 빠졌습니다.',
+    extra: '기준에 없는 추가 음표가 감지되었습니다.',
   }
   return labels[issue.issue_type] ?? '확인이 필요한 구간입니다.'
 }
@@ -122,7 +122,7 @@ function getIssueCoordinate(issue: ReportIssue): string {
   const expectedBeat = issue.expected_beat !== null ? `기준 박 ${issue.expected_beat}` : null
   const actualBeat = issue.actual_beat !== null ? `실제 박 ${issue.actual_beat}` : null
   const eventId = issue.answer_event_id ?? issue.performance_event_id
-  const eventText = eventId ? `이벤트 ${eventId}` : null
+  const eventText = eventId ? `음표 ${eventId}` : null
   return [expectedBeat, actualBeat, eventText].filter(Boolean).join(' / ')
 }
 
@@ -299,7 +299,7 @@ export function ReportPage() {
                       <p>{getIssueDetail(issue)}</p>
                       {focusPath ? (
                         <Link className="report-issue__focus" to={focusPath}>
-                          피아노 롤에서 보기
+                          음표 편집에서 보기
                         </Link>
                       ) : null}
                     </div>

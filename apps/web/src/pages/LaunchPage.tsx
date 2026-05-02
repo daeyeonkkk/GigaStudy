@@ -270,7 +270,7 @@ export function LaunchPage() {
         </div>
 
         <div className="launch-document">
-          <section className="launch-arrange-preview" aria-label="빈 6트랙 리전 미리보기">
+          <section className="launch-arrange-preview" aria-label="빈 6트랙 편집 미리보기">
             <div className="launch-arrange-title">
               <strong>GigaStudy</strong>
               <span>6트랙 아카펠라 스튜디오</span>
@@ -448,7 +448,7 @@ export function LaunchPage() {
         <footer className="launch-statusbar">
           <span>준비 완료</span>
           <span>트랙 1-6</span>
-          <span>리전 / 악보 / 빈 스튜디오</span>
+          <span>편집 / 업로드 / 빈 스튜디오</span>
         </footer>
       </section>
 

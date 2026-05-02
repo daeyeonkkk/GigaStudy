@@ -29,6 +29,11 @@ const trackNameLabels: Record<string, string> = {
   Tenor: '테너',
 }
 
+const sourceLabelReplacements: Record<string, string> = {
+  'Generated percussion groove': '퍼커션 그루브',
+  'Voice-leading harmony region': '성부 진행 화음',
+}
+
 export function getJobStatusLabel(status: TrackExtractionJob['status']): string {
   const labels: Record<TrackExtractionJob['status'], string> = {
     queued: '대기 중',
@@ -51,9 +56,16 @@ export function formatTrackName(name: string | null | undefined): string {
   return trackNameLabels[name] ?? name
 }
 
+export function formatSourceLabel(label: string | null | undefined): string {
+  if (!label) {
+    return '소스'
+  }
+  return sourceLabelReplacements[label] ?? label
+}
+
 export function getTrackSourceLabel(track: TrackSlot): string {
   if (!track.source_kind) {
     return '아직 등록된 소스 없음'
   }
-  return `${sourceLabels[track.source_kind]} - ${track.source_label ?? '소스'}`
+  return `${sourceLabels[track.source_kind]} - ${formatSourceLabel(track.source_label)}`
 }

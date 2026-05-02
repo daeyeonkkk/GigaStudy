@@ -170,7 +170,7 @@ export function AdminPage() {
   }
 
   function handleDeleteAsset(asset: AdminAssetSummary) {
-    if (!window.confirm(`${asset.filename} 파일을 삭제할까요? 피치 이벤트와 리포트 데이터는 유지됩니다.`)) {
+    if (!window.confirm(`${asset.filename} 파일을 삭제할까요? 음표와 리포트 데이터는 유지됩니다.`)) {
       return
     }
     void runDeletion(`asset:${asset.asset_id}`, () =>
@@ -181,7 +181,7 @@ export function AdminPage() {
   function handleDeleteStudioAssets(studio: AdminStudioSummary) {
     if (
       !window.confirm(
-        `${studio.title}의 저장 파일을 삭제할까요? 정규화된 피치 이벤트 데이터는 유지됩니다. 저장소 스캔 전까지 파일 수가 일시적으로 맞지 않을 수 있습니다.`,
+        `${studio.title}의 저장 파일을 삭제할까요? 정규화된 음표 데이터는 유지됩니다. 저장소 스캔 전까지 파일 수가 일시적으로 맞지 않을 수 있습니다.`,
       )
     ) {
       return

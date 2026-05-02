@@ -4,9 +4,10 @@ import type { CSSProperties } from 'react'
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
   TRACK_UPLOAD_ACCEPT,
-  formatTrackName,
   formatDurationSeconds,
   formatSeconds,
+  formatSourceLabel,
+  formatTrackName,
   getArrangementRegionDurationSeconds,
   getJobStatusLabel,
   getPitchEventRange,
@@ -268,7 +269,7 @@ function RegionTools({
   onSplitRegion: (region: ArrangementRegion, splitSeconds: number) => void
 }) {
   if (!region) {
-    return <p className="piano-roll-panel__hint">편집할 리전을 선택하세요.</p>
+    return <p className="piano-roll-panel__hint">편집할 구간을 선택하세요.</p>
   }
 
   const canMoveUp = region.track_slot_id > Math.min(...tracks.map((track) => track.slot_id))
@@ -276,7 +277,7 @@ function RegionTools({
   const midpoint = region.start_seconds + region.duration_seconds / 2
 
   return (
-    <div className="region-tools" aria-label="리전 편집 도구">
+    <div className="region-tools" aria-label="구간 편집 도구">
       {disabled && disabledReason ? <p className="region-tools__hint">{disabledReason}</p> : null}
       <button
         disabled={disabled}
@@ -364,13 +365,13 @@ function PianoRollPanel({
   }
 
   return (
-    <section className="piano-roll-panel" aria-label="피아노 롤 편집기">
+    <section className="piano-roll-panel" aria-label="음표 세부 편집기">
       <header>
         <div>
           <p className="eyebrow">세부 편집</p>
-          <h3>{region ? `${formatTrackName(region.track_name)} 피아노 롤` : '피아노 롤'}</h3>
+          <h3>{region ? `${formatTrackName(region.track_name)} 음표 편집` : '음표 편집'}</h3>
         </div>
-        <div className="piano-roll-panel__tools" aria-label="피아노 롤 도구">
+        <div className="piano-roll-panel__tools" aria-label="음표 편집 도구">
           {disabled && disabledReason ? <span className="piano-roll-panel__lock">{disabledReason}</span> : null}
           <button
             disabled={disabled || !selectedEvent}
@@ -496,7 +497,7 @@ function PianoRollPanel({
               </button>
             ))
           ) : (
-            <p>음정 이벤트가 있는 리전을 선택하세요.</p>
+            <p>음표가 있는 구간을 선택하세요.</p>
           )}
         </div>
       </div>
@@ -526,7 +527,7 @@ function PracticeWaterfall({
           <p className="eyebrow">연습 모드</p>
           <h3>타임라인</h3>
         </div>
-        <span>{events.length}개 이벤트</span>
+        <span>{events.length}개 음표</span>
       </header>
       <div
         className="practice-waterfall__stage"
@@ -661,15 +662,15 @@ export function TrackBoard({
     : editDisabledReason
 
   return (
-    <section className="studio-tracks" aria-label="6트랙 리전 편집기">
+    <section className="studio-tracks" aria-label="6트랙 편집기">
       <div className="studio-tracks__header">
         <div>
           <p className="eyebrow">편곡</p>
-          <h2>리전 뷰 + 피아노 롤</h2>
+          <h2>트랙 편집</h2>
         </div>
         <div className="studio-tracks__summary">
           <span>등록 {registeredTracks.length}</span>
-          <span>리전 {regions.length}</span>
+          <span>구간 {regions.length}</span>
           <span>검토 {pendingCandidateCount}</span>
           <span>재생 {playingSlots.size}</span>
         </div>
@@ -741,7 +742,7 @@ export function TrackBoard({
 
               <div
                 className="track-card__timeline track-card__region-lane"
-                aria-label={`${formatTrackName(track.name)} 리전 레인`}
+                aria-label={`${formatTrackName(track.name)} 구간 타임라인`}
                 style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineSeconds, trackRegions.length)}
               >
                 <div className="track-card__measure-grid" aria-hidden="true">
@@ -758,7 +759,7 @@ export function TrackBoard({
                 {trackRegions.length > 0 ? (
                   trackRegions.map((region, index) => (
                     <button
-                      aria-label={`${formatTrackName(track.name)} 리전 ${index + 1}`}
+                      aria-label={`${formatTrackName(track.name)} 구간 ${index + 1}`}
                       aria-pressed={selectedRegion?.region_id === region.region_id}
                       className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
                       data-region-id={region.region_id}
@@ -775,8 +776,8 @@ export function TrackBoard({
                         setSelectedEventId(region.pitch_events[0]?.event_id ?? null)
                       }}
                     >
-                      <span>{region.source_label ?? formatTrackName(track.name)}</span>
-                      <strong>{getPitchedEvents(region.pitch_events).length}개 이벤트</strong>
+                      <span>{region.source_label ? formatSourceLabel(region.source_label) : formatTrackName(track.name)}</span>
+                      <strong>{getPitchedEvents(region.pitch_events).length}개 음표</strong>
                       <em>
                         {formatDurationSeconds(region.start_seconds)} -{' '}
                         {formatDurationSeconds(region.start_seconds + region.duration_seconds)}
@@ -784,7 +785,7 @@ export function TrackBoard({
                     </button>
                   ))
                 ) : (
-                  <p>{needsReview ? '검토할 후보가 있습니다' : '빈 트랙'}</p>
+                  <p>{needsReview ? '검토할 후보가 있습니다' : '아직 비어 있음'}</p>
                 )}
               </div>
 
@@ -798,11 +799,11 @@ export function TrackBoard({
                     title={!isRecordToggleAvailable ? trackEditDisabledReason ?? undefined : undefined}
                     onClick={() => onRecord(track)}
                   >
-                    <span aria-hidden="true">{isRecording || isCountingIn ? '중지' : '녹음'}</span>
+                    <span aria-hidden="true">{isRecording ? '■' : isCountingIn ? '×' : '●'}</span>
                     {isRecording ? '녹음 중' : isCountingIn ? '취소' : '녹음'}
                   </button>
                   <label className={`app-button app-button--secondary track-upload ${trackEditDisabled ? 'is-disabled' : ''}`}>
-                    <span aria-hidden="true">업</span>
+                    <span aria-hidden="true">↑</span>
                     업로드
                     <input
                       accept={TRACK_UPLOAD_ACCEPT}

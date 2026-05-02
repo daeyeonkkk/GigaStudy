@@ -259,7 +259,7 @@ export function useStudioPlayback({
     const AudioContextConstructor = getBrowserAudioContextConstructor()
     if (needsAudioContext) {
       if (!AudioContextConstructor) {
-        setActionState({ phase: 'error', message: '음정 이벤트나 메트로놈을 재생할 오디오 장치를 열 수 없습니다.' })
+        setActionState({ phase: 'error', message: '연주음이나 메트로놈을 재생할 오디오 장치를 열 수 없습니다.' })
         return false
       }
       try {
@@ -310,7 +310,7 @@ export function useStudioPlayback({
         const requiresSynchronizedStart = audioTracks.length > 1 || eventTracks.length > 0 || includeMetronome
         const synchronizedParts = [
           `녹음 ${audioTracks.length}개`,
-          eventTracks.length > 0 ? `음정 이벤트 ${eventTracks.length}개` : null,
+          eventTracks.length > 0 ? `음표 ${eventTracks.length}개` : null,
           includeMetronome ? '메트로놈' : null,
         ].filter(Boolean)
         setActionState({
@@ -441,7 +441,7 @@ export function useStudioPlayback({
 
       if (!scheduledAnyTrack) {
         disposePlaybackSession({ context, nodes, timeoutIds })
-        setActionState({ phase: 'error', message: '재생 가능한 녹음이나 음정 이벤트가 없습니다.' })
+        setActionState({ phase: 'error', message: '재생 가능한 녹음이나 음표가 없습니다.' })
         return false
       }
 
@@ -582,7 +582,7 @@ export function useStudioPlayback({
         message:
           playbackSource === 'audio'
             ? `${selectedTracks.length}개 트랙을 같은 박자 그리드에서 재생합니다.`
-            : `${selectedTracks.length}개 트랙을 음정 이벤트로 함께 재생합니다.`,
+            : `${selectedTracks.length}개 트랙을 연주음으로 함께 재생합니다.`,
       })
     }
   }
@@ -635,7 +635,7 @@ export function useStudioPlayback({
     setPlaybackSource(nextSource)
     setActionState({
       phase: 'success',
-      message: nextSource === 'audio' ? '재생 소스를 녹음으로 바꿨습니다.' : '재생 소스를 음정 이벤트로 바꿨습니다.',
+      message: nextSource === 'audio' ? '재생 방식을 녹음으로 바꿨습니다.' : '재생 방식을 연주음으로 바꿨습니다.',
     })
   }
 
@@ -663,7 +663,7 @@ export function useStudioPlayback({
         message:
           playbackSource === 'audio' && track.audio_source_path
             ? `${formatTrackName(track.name)} 녹음을 재생합니다.`
-            : `${formatTrackName(track.name)} 음정 이벤트를 재생합니다.`,
+            : `${formatTrackName(track.name)} 연주음을 재생합니다.`,
       })
     }
   }

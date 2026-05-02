@@ -100,7 +100,7 @@ function getCandidatePitchRange(candidate: ExtractionCandidate): string {
 export function getCandidatePreviewText(candidate: ExtractionCandidate): string {
   const events = getCandidateEvents(candidate)
   if (events.length === 0) {
-    return '이벤트 없음'
+    return '음표 없음'
   }
   return events
     .slice(0, 8)
@@ -131,12 +131,12 @@ export function getCandidateDecisionSummary(
   if (events.length === 0) {
     return {
       title: '빈 후보',
-      headline: '등록할 수 있는 음정 이벤트가 없습니다.',
+      headline: '등록할 수 있는 음표가 없습니다.',
       support: '다른 후보를 선택하거나 원본을 다시 확인하세요.',
-      tags: ['이벤트 없음'],
+      tags: ['음표 없음'],
       phrasePreview: '-',
       metrics: [
-        { label: '이벤트', value: '0' },
+        { label: '음표', value: '0' },
         { label: '신뢰도', value: confidence },
       ],
       diagnostics,
@@ -189,7 +189,7 @@ export function getCandidateDecisionSummary(
       { label: '리듬', value: rhythm.label },
       { label: '시작/끝', value: startEnd },
       { label: '신뢰도', value: confidence },
-      { label: '길이', value: `${durationSeconds.toFixed(2)}초 - 이벤트 ${events.length}개` },
+      { label: '길이', value: `${durationSeconds.toFixed(2)}초 - 음표 ${events.length}개` },
     ],
     diagnostics,
     technical: [
@@ -312,7 +312,7 @@ function getMovementSummary(midiEvents: PitchedCandidateEvent[]): {
 } {
   if (midiEvents.length < 2) {
     return {
-      detail: '음정 이벤트가 하나라 선율 움직임이 거의 없습니다',
+      detail: '음표가 하나라 선율 움직임이 거의 없습니다',
       label: '정적 진행',
       leapCount: 0,
       shortLabel: '정적',
@@ -378,7 +378,7 @@ function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
   const densityLabel =
     eventsPerMeasure >= 7 ? '촘촘한 리듬' : eventsPerMeasure >= 4 ? '보통 밀도 리듬' : '여유 있는 리듬'
   return {
-    detail: `마디당 ${eventsPerMeasure.toFixed(1)}개 이벤트, 최단 길이 ${shortestDuration.toFixed(2)}박`,
+    detail: `마디당 ${eventsPerMeasure.toFixed(1)}개 음표, 최단 길이 ${shortestDuration.toFixed(2)}박`,
     label: `${densityLabel} - 마디당 ${eventsPerMeasure.toFixed(1)}개`,
     tag: densityLabel,
   }
@@ -507,7 +507,7 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
     candidate.region.pitch_events.length
   metrics.push({
     label: '감지 결과',
-    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'} - 이벤트 ${eventCount}개`,
+    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'} - 음표 ${eventCount}개`,
   })
 
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
@@ -536,12 +536,12 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
   return (
     {
       few_events: {
-        tag: '이벤트 적음',
-        sentence: '감지된 이벤트 수가 적습니다. 원본이 일부만 들어왔는지 확인하세요.',
+        tag: '음표 적음',
+        sentence: '감지된 음표 수가 적습니다. 원본이 일부만 들어왔는지 확인하세요.',
       },
       low_event_confidence: {
         tag: '원본 대조',
-        sentence: '이벤트 신뢰도가 낮으므로 원본과 비교하세요.',
+        sentence: '음표 신뢰도가 낮으므로 원본과 비교하세요.',
       },
       range_outliers: {
         tag: '음역 검토',

@@ -240,10 +240,9 @@ export function StudioToolbar({
             type="checkbox"
             onChange={(event) => onMetronomeChange(event.target.checked)}
           />
-          <span aria-hidden="true">박</span>
           메트로놈
         </label>
-        <div className="composer-source-toggle" role="group" aria-label="재생 소스">
+        <div className="composer-source-toggle" role="group" aria-label="재생 방식">
           <button
             aria-pressed={playbackSource === 'audio'}
             className={playbackSource === 'audio' ? 'is-active' : ''}
@@ -262,7 +261,7 @@ export function StudioToolbar({
             type="button"
             onClick={() => onPlaybackSourceChange('events')}
           >
-            이벤트
+            연주음
           </button>
         </div>
       </div>
@@ -303,14 +302,14 @@ export function StudioToolbar({
               type="button"
               onClick={onStartSelectedPlayback}
             >
-              {globalPlaying ? '처음부터' : '선택 재생'}
+              {globalPlaying ? '처음부터' : '선택한 트랙 재생'}
             </button>
           </div>
           {playbackRange ? (
             <label className="composer-seek">
               <span>{formatClockSeconds(seekValue)}</span>
               <input
-                aria-label="선택 재생 위치"
+                aria-label="재생 위치"
                 data-testid="selected-playback-seek"
                 disabled={!globalPlaying}
                 max={playbackRange.maxSeconds}

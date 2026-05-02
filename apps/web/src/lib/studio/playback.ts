@@ -251,12 +251,12 @@ export function getPlaybackPreparationMessage(
   ).length
   const parts = [
     audioCount > 0 ? `녹음 ${audioCount}개` : null,
-    eventCount > 0 ? `음정 이벤트 ${eventCount}개` : null,
+    eventCount > 0 ? `음표 ${eventCount}개` : null,
     includeMetronome ? '메트로놈' : null,
   ].filter(Boolean)
 
   if (parts.length === 0) {
-    return '재생 가능한 녹음과 음정 이벤트를 확인하는 중입니다.'
+    return '재생 가능한 녹음과 음표를 확인하는 중입니다.'
   }
   if (parts.length === 1 && audioCount === 1) {
     return '녹음 파일을 불러오는 중입니다. 기준 트랙이 없으면 곧바로 재생됩니다.'

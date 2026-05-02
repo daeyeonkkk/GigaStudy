@@ -153,7 +153,7 @@ function PracticeWaterfallStage({
           </div>
         ))}
         {events.length === 0 ? (
-          <p className="practice-stage__empty">등록된 음정 이벤트가 아직 없습니다.</p>
+          <p className="practice-stage__empty">등록된 음표가 아직 없습니다.</p>
         ) : (
           events.map((item) => (
             <i
@@ -299,7 +299,7 @@ export function PracticePage() {
             />
             메트로놈
           </label>
-          <div className="composer-source-toggle" role="group" aria-label="재생 소스">
+          <div className="composer-source-toggle" role="group" aria-label="재생 방식">
             <button
               aria-pressed={playbackSource === 'audio'}
               className={playbackSource === 'audio' ? 'is-active' : ''}
@@ -314,7 +314,7 @@ export function PracticePage() {
               type="button"
               onClick={() => changePlaybackSource('events')}
             >
-              이벤트
+              연주음
             </button>
           </div>
         </div>
@@ -350,7 +350,7 @@ export function PracticePage() {
         <footer className="composer-statusbar">
           <span>{globalPlaying ? '재생 중' : '준비 완료'}</span>
           <span>{selectedTrackCount}/{registeredTracks.length} 트랙</span>
-          <span>{playbackSource === 'audio' ? '녹음 소스' : '이벤트 소스'}</span>
+          <span>{playbackSource === 'audio' ? '녹음 재생' : '연주음 재생'}</span>
           <span>
             {formatDurationSeconds(playheadSeconds ?? 0)} /{' '}
             {formatDurationSeconds(playbackTimeline?.maxSeconds ?? timelineBounds.maxSeconds)}

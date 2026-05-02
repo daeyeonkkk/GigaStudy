@@ -33,7 +33,7 @@ async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.getByTestId('start-blank-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
   await expect(page.getByRole('heading', { name: title })).toBeVisible()
-  await expect(page.getByText('리전 뷰 + 피아노 롤')).toBeVisible()
+  await expect(page.getByText('트랙 편집')).toBeVisible()
   await expect(page.getByTestId('track-card-1')).toBeVisible()
 }
 
@@ -54,7 +54,7 @@ async function approveFirstCandidate(page: Page) {
 async function expectRegisteredRegion(page: Page, slotId: number, labels: string[]) {
   const region = page.getByTestId(`track-region-${slotId}`)
   await expect(region).toBeVisible()
-  await expect(region).toContainText(`${labels.length}개 이벤트`)
+  await expect(region).toContainText(`${labels.length}개 음표`)
   await region.click()
   for (const label of labels) {
     await expect(page.locator('.piano-roll__event', { hasText: label })).toBeVisible()
@@ -70,7 +70,7 @@ test('blank studio opens the region editor and independent practice route', asyn
   await expect(page.getByText('GigaStudy 연습 - Region blank session')).toBeVisible()
   await expect(page.getByTestId('practice-waterfall-stage')).toBeVisible()
   await expect(page.getByText('등록된 트랙이 아직 없습니다.')).toBeVisible()
-  await expect(page.getByText('등록된 음정 이벤트가 아직 없습니다.')).toBeVisible()
+  await expect(page.getByText('등록된 음표가 아직 없습니다.')).toBeVisible()
 })
 
 test('document upload becomes a region, piano-roll events, and practice waterfall notes', async ({ page }) => {

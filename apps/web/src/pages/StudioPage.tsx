@@ -30,6 +30,7 @@ import {
   DEFAULT_METER,
   formatDurationSeconds,
   formatSeconds,
+  formatTrackName,
   getStudioMeter,
 } from '../lib/studio'
 import type {
@@ -286,8 +287,8 @@ export function StudioPage() {
           start_seconds: Math.max(0, Math.round(startSeconds * 1000) / 1000),
           target_track_slot_id: targetSlotId,
         }),
-      `${region.track_name} region을 이동하는 중입니다.`,
-      `${targetName} 위치로 region을 이동했습니다.`,
+      `${formatTrackName(region.track_name)} 구간을 이동하는 중입니다.`,
+      `${targetName} 위치로 구간을 이동했습니다.`,
     )
   }
 
@@ -303,8 +304,8 @@ export function StudioPage() {
           start_seconds: Math.max(0, Math.round(startSeconds * 1000) / 1000),
           target_track_slot_id: targetSlotId,
         }),
-      `${region.track_name} region을 복사하는 중입니다.`,
-      `${targetName}에 region을 복사했습니다.`,
+      `${formatTrackName(region.track_name)} 구간을 복사하는 중입니다.`,
+      `${targetName}에 구간을 복사했습니다.`,
     )
   }
 
@@ -317,8 +318,8 @@ export function StudioPage() {
         splitRegion(studio.studio_id, region.region_id, {
           split_seconds: Math.round(splitSeconds * 1000) / 1000,
         }),
-      `${region.track_name} region을 자르는 중입니다.`,
-      `${region.track_name} region을 두 블록으로 나눴습니다.`,
+      `${formatTrackName(region.track_name)} 구간을 자르는 중입니다.`,
+      `${formatTrackName(region.track_name)} 구간을 두 블록으로 나눴습니다.`,
     )
   }
 
@@ -328,8 +329,8 @@ export function StudioPage() {
     }
     await runStudioAction(
       () => deleteRegion(studio.studio_id, region.region_id),
-      `${region.track_name} region을 삭제하는 중입니다.`,
-      `${region.track_name} region을 삭제했습니다.`,
+      `${formatTrackName(region.track_name)} 구간을 삭제하는 중입니다.`,
+      `${formatTrackName(region.track_name)} 구간을 삭제했습니다.`,
     )
   }
 
@@ -343,8 +344,8 @@ export function StudioPage() {
     }
     await runStudioAction(
       () => updatePitchEvent(studio.studio_id, region.region_id, event.event_id, patch),
-      `${event.label} 이벤트를 저장하는 중입니다.`,
-      `${event.label} 이벤트를 업데이트했습니다.`,
+      `${event.label} 음표를 저장하는 중입니다.`,
+      `${event.label} 음표를 업데이트했습니다.`,
     )
   }
 

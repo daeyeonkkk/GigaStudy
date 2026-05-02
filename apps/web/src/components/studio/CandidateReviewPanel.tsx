@@ -7,6 +7,7 @@ import {
   formatGeneratedLabel,
   getPitchEventRange,
   getPitchedEvents,
+  formatSourceLabel,
   formatTrackName,
   sourceLabels,
   statusLabels,
@@ -75,10 +76,10 @@ function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate 
 
   return (
     <div className="candidate-review__region" data-testid={`candidate-region-${candidate.candidate_id}`}>
-      <span>리전 후보</span>
+      <span>구간 후보</span>
       <div className="candidate-review__region-grid">
         {events.length === 0 ? (
-          <p>음정 이벤트 없음</p>
+          <p>음표 없음</p>
         ) : (
           events.slice(0, 32).map((event) => (
             <i
@@ -253,11 +254,11 @@ export function CandidateReviewPanel({
                   <summary>원본 문서 대조</summary>
                   <div>
                     <img
-                      alt={`${candidate.source_label} 원본 문서 첫 페이지`}
+                      alt={`${formatSourceLabel(candidate.source_label)} 원본 문서 첫 페이지`}
                       loading="lazy"
                       src={sourcePreviewUrl}
                     />
-                    <span>원본 첫 페이지와 후보 리전, 리듬, 파트 위치를 비교해 확인하세요.</span>
+                    <span>원본 첫 페이지와 후보 구간, 리듬, 파트 위치를 비교해 확인하세요.</span>
                   </div>
                 </details>
               ) : null}
@@ -307,7 +308,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   if (candidate.region.pitch_events.length === 0) {
     return {
       label: '재시도 권장',
-      reason: '등록할 수 있는 음정 이벤트가 감지되지 않았습니다.',
+      reason: '등록할 수 있는 음표가 감지되지 않았습니다.',
       tone: 'retry',
     }
   }
@@ -348,7 +349,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
 
   return {
     label: '추천',
-    reason: '트랙 배정과 이벤트 추출 품질이 안정적인 후보입니다.',
+    reason: '트랙 배정과 음표 추출 품질이 안정적인 후보입니다.',
     tone: 'recommended',
   }
 }

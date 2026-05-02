@@ -60,7 +60,7 @@ export function ScoringDrawer({
   ).length
   const modeSummary = isHarmonyMode
     ? `현재 모드: 화음 채점. ${selectedReferenceCount}개 기준 트랙을 기준으로 내 파트의 안정감과 충돌을 평가하고, ${playbackReferenceCount}개 트랙을 들려줍니다.`
-    : `현재 모드: 정답 채점. ${formatTrackName(targetTrack.name)} 이벤트를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 맥락으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
+    : `현재 모드: 정답 채점. ${formatTrackName(targetTrack.name)} 음표를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 맥락으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
   const phaseLocked = scoreSession.phase !== 'ready'
 
   return (
@@ -90,7 +90,7 @@ export function ScoringDrawer({
             onClick={() => onScoreModeChange('answer')}
           >
             <strong>정답 채점</strong>
-            <span>내 트랙 이벤트와 얼마나 맞는지</span>
+            <span>내 트랙 음표와 얼마나 맞는지</span>
           </button>
           <button
             className={isHarmonyMode ? 'is-active' : ''}
@@ -205,8 +205,8 @@ export function ScoringDrawer({
             : scoreSession.phase === 'listening'
               ? '연주로 선택한 트랙만 스피커로 재생합니다. 기준 체크는 채점 계산에 그대로 사용됩니다.'
               : isHarmonyMode
-                ? '화음 채점은 정답 이벤트 없이, 기준 트랙 위에 내 파트가 안정적으로 얹히는지 평가합니다.'
-                : '정답 채점은 내 트랙 이벤트를 답안지로 삼고, 기준 트랙과 메트로놈은 평가 맥락과 연습 재생을 보조합니다.'}
+                ? '화음 채점은 정답 음표 없이, 기준 트랙 위에 내 파트가 안정적으로 얹히는지 평가합니다.'
+                : '정답 채점은 내 트랙 음표를 답안지로 삼고, 기준 트랙과 메트로놈은 평가 맥락과 연습 재생을 보조합니다.'}
         </p>
       </div>
     </section>

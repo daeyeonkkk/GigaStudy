@@ -332,7 +332,7 @@ export function updateRegion(
       method: 'PATCH',
       body: JSON.stringify(payload),
     },
-    '리전을 저장하지 못했습니다.',
+    '구간을 저장하지 못했습니다.',
   )
 }
 
@@ -347,7 +347,7 @@ export function copyRegion(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    '리전을 복사하지 못했습니다.',
+    '구간을 복사하지 못했습니다.',
   )
 }
 
@@ -362,7 +362,7 @@ export function splitRegion(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    '리전을 자르지 못했습니다.',
+    '구간을 자르지 못했습니다.',
   )
 }
 
@@ -370,7 +370,7 @@ export function deleteRegion(studioId: string, regionId: string): Promise<Studio
   return requestJson<Studio>(
     `/api/studios/${studioId}/regions/${regionId}`,
     { method: 'DELETE' },
-    '리전을 삭제하지 못했습니다.',
+    '구간을 삭제하지 못했습니다.',
   )
 }
 
@@ -386,7 +386,7 @@ export function updatePitchEvent(
       method: 'PATCH',
       body: JSON.stringify(payload),
     },
-    '피아노 롤 이벤트를 저장하지 못했습니다.',
+    '음표를 저장하지 못했습니다.',
   )
 }
 

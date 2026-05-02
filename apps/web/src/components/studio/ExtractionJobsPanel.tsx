@@ -204,13 +204,13 @@ function getJobStateHint(job: TrackExtractionJob): string {
   }
   if (job.status === 'running') {
     return job.job_type === 'voice'
-      ? '녹음 파일을 메트로놈 기준으로 정렬하고 음정 이벤트 후보를 만드는 중입니다.'
+      ? '녹음 파일을 메트로놈 기준으로 정렬하고 음표 후보를 만드는 중입니다.'
       : '문서 파트와 트랙 후보를 추출하는 중입니다. 완료되면 등록 가능한 후보가 표시됩니다.'
   }
   if (job.status === 'needs_review') {
     return job.parse_all_parts
       ? '여러 파트 후보가 준비되었습니다. 트랙 배정과 덮어쓰기 여부를 확인한 뒤 등록하세요.'
-      : '후보가 준비되었습니다. 등록하면 해당 트랙의 피치 이벤트와 재생 소스에 반영됩니다.'
+      : '후보가 준비되었습니다. 등록하면 해당 트랙의 음표와 연주음에 반영됩니다.'
   }
   if (job.status === 'completed') {
     return '처리가 완료되었습니다.'

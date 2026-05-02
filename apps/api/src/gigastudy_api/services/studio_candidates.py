@@ -35,7 +35,7 @@ def build_pending_candidate(
         method=method,
         variant_label=variant_label,
         confidence=confidence,
-        notes=notes,
+        events=notes,
         audio_source_path=audio_source_path,
         audio_source_label=audio_source_label,
         audio_mime_type=audio_mime_type,
@@ -65,7 +65,7 @@ def mark_candidate_approved(
     timestamp: str,
 ) -> None:
     candidate.status = "approved"
-    candidate.notes = notes
+    candidate.events = notes
     candidate.diagnostics = diagnostics_with_registration_quality(
         candidate.diagnostics,
         registration_diagnostics,
@@ -126,7 +126,7 @@ def mark_track_needs_review_if_empty(
     source_label: str,
     timestamp: str,
 ) -> None:
-    if track.status == "registered" or track.notes:
+    if track.status == "registered" or track.events:
         return
     track.status = "needs_review"
     track.source_kind = source_kind
@@ -167,8 +167,8 @@ def release_review_track_if_no_pending_candidates(
     )
     if has_other_pending_candidate:
         return
-    track.status = "registered" if track.notes else "empty"
-    if not track.notes:
+    track.status = "registered" if track.events else "empty"
+    if not track.events:
         track.source_kind = None
         track.source_label = None
         track.audio_source_path = None

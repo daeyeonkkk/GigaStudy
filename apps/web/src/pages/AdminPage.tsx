@@ -181,7 +181,7 @@ export function AdminPage() {
   function handleDeleteStudioAssets(studio: AdminStudioSummary) {
     if (
       !window.confirm(
-        `Delete stored file(s) for ${studio.title}? Normalized pitch-event data will remain. Legacy file counts may be incomplete until a storage scan runs.`,
+        `Delete stored file(s) for ${studio.title}? Normalized pitch-event data will remain. File counts may be incomplete until a storage scan runs.`,
       )
     ) {
       return

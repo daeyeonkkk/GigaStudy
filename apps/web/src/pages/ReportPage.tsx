@@ -51,7 +51,7 @@ function buildMetricCards(report: ScoringReport): MetricCard[] {
       { label: 'Voice lead', value: formatNullableScore(report.voice_leading_score) },
       { label: 'Arrangement', value: formatNullableScore(report.arrangement_score) },
       { label: 'Auto Sync', value: formatSeconds(report.alignment_offset_seconds) },
-      { label: 'Events', value: String(report.performance_note_count) },
+      { label: 'Events', value: String(report.performance_event_count) },
     ]
   }
 
@@ -59,9 +59,9 @@ function buildMetricCards(report: ScoringReport): MetricCard[] {
     { label: 'Pitch', value: formatScore(report.pitch_score) },
     { label: 'Rhythm', value: formatScore(report.rhythm_score) },
     { label: 'Auto Sync', value: formatSeconds(report.alignment_offset_seconds) },
-    { label: 'Matched', value: `${report.matched_note_count}/${report.answer_note_count}` },
-    { label: 'Missing', value: String(report.missing_note_count) },
-    { label: 'Extra', value: String(report.extra_note_count) },
+    { label: 'Matched', value: `${report.matched_event_count}/${report.answer_event_count}` },
+    { label: 'Missing', value: String(report.missing_event_count) },
+    { label: 'Extra', value: String(report.extra_event_count) },
   ]
 }
 

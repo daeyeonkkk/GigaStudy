@@ -110,7 +110,7 @@ def plan_voice_extraction_with_deepseek(
     source_kind: str,
     source_label: str,
     context_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
-    expected_track_notes: list[TrackPitchEvent] | None = None,
+    expected_track_events: list[TrackPitchEvent] | None = None,
 ) -> VoiceExtractionPlan | None:
     if not settings.deepseek_extraction_plan_enabled or not settings.deepseek_api_key:
         return None
@@ -128,7 +128,7 @@ def plan_voice_extraction_with_deepseek(
         source_kind=source_kind,
         source_label=source_label,
         context_tracks_by_slot=context_tracks_by_slot or {},
-        expected_track_notes=expected_track_notes or [],
+        expected_track_events=expected_track_events or [],
     )
 
     last_error: Exception | None = None
@@ -203,7 +203,7 @@ def _build_extraction_plan_payload(
     source_kind: str,
     source_label: str,
     context_tracks_by_slot: dict[int, list[TrackPitchEvent]],
-    expected_track_notes: list[TrackPitchEvent],
+    expected_track_events: list[TrackPitchEvent],
 ) -> dict[str, Any]:
     low, high = SLOT_RANGES.get(base_plan.slot_id, (base_plan.low_midi, base_plan.high_midi))
     context = {
@@ -228,8 +228,8 @@ def _build_extraction_plan_payload(
         },
         "current_default_plan": base_plan.diagnostics(),
         "expected_target_track": (
-            _summarize_track(base_plan.slot_id, expected_track_notes)
-            if expected_track_notes
+            _summarize_track(base_plan.slot_id, expected_track_events)
+            if expected_track_events
             else None
         ),
         "existing_tracks": [
@@ -280,7 +280,7 @@ def _summarize_track(slot_id: int, notes: list[TrackPitchEvent]) -> dict[str, An
     return {
         "slot_id": slot_id,
         "name": track_name(slot_id),
-        "note_count": len(pitched),
+        "event_count": len(pitched),
         "range": _range_label(pitches),
         "first_events": [
             {

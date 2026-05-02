@@ -363,7 +363,6 @@ def note_from_pitch(
     measure_index: int | None = None,
     beat_in_measure: float | None = None,
     voice_index: int | None = None,
-    source_staff_index: int | None = None,
     is_rest: bool = False,
     is_tied: bool = False,
     spelled_label: str | None = None,
@@ -427,7 +426,6 @@ def note_from_pitch(
         is_rest=is_rest,
         is_tied=is_tied,
         voice_index=voice_index,
-        source_staff_index=source_staff_index,
         quantization_grid=quantization_grid,
         quality_warnings=quality_warnings or [],
     )

@@ -18,13 +18,13 @@ from gigastudy_api.services.engine.music_theory import (
     rank_slot_candidates,
     slot_assignment_diagnostics,
 )
-from gigastudy_api.services.engine.event_normalization import annotate_track_notes_for_slot
+from gigastudy_api.services.engine.event_normalization import annotate_track_events_for_slot
 
 
 @dataclass
 class ParsedTrack:
     name: str
-    notes: list[TrackPitchEvent] = field(default_factory=list)
+    events: list[TrackPitchEvent] = field(default_factory=list)
     slot_id: int | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
@@ -32,7 +32,7 @@ class ParsedTrack:
 @dataclass
 class ParsedSymbolicFile:
     tracks: list[ParsedTrack]
-    mapped_notes: dict[int, list[TrackPitchEvent]]
+    mapped_events: dict[int, list[TrackPitchEvent]]
     time_signature_numerator: int = DEFAULT_TIME_SIGNATURE[0]
     time_signature_denominator: int = DEFAULT_TIME_SIGNATURE[1]
     has_time_signature: bool = False
@@ -43,7 +43,7 @@ class SymbolicParseError(ValueError):
 
 
 def parse_symbolic_file(path: Path, *, bpm: int, target_slot_id: int | None = None) -> dict[int, list[TrackPitchEvent]]:
-    return parse_symbolic_file_with_metadata(path, bpm=bpm, target_slot_id=target_slot_id).mapped_notes
+    return parse_symbolic_file_with_metadata(path, bpm=bpm, target_slot_id=target_slot_id).mapped_events
 
 
 def parse_symbolic_file_with_metadata(
@@ -63,7 +63,7 @@ def parse_symbolic_file_with_metadata(
 
     return ParsedSymbolicFile(
         tracks=parsed_score.tracks,
-        mapped_notes=map_tracks_to_slots(parsed_score.tracks, target_slot_id=target_slot_id),
+        mapped_events=map_tracks_to_slots(parsed_score.tracks, target_slot_id=target_slot_id),
         time_signature_numerator=parsed_score.time_signature_numerator,
         time_signature_denominator=parsed_score.time_signature_denominator,
         has_time_signature=parsed_score.has_time_signature,
@@ -75,7 +75,7 @@ def map_tracks_to_slots(
     *,
     target_slot_id: int | None = None,
 ) -> dict[int, list[TrackPitchEvent]]:
-    non_empty_tracks = [track for track in parsed_tracks if track.notes]
+    non_empty_tracks = [track for track in parsed_tracks if track.events]
     if not non_empty_tracks:
         raise SymbolicParseError("No notes were found in the symbolic file.")
 
@@ -86,12 +86,12 @@ def map_tracks_to_slots(
         selected.diagnostics.update(
             slot_assignment_diagnostics(
                 selected.name,
-                selected.notes,
+                selected.events,
                 assigned_slot_id=target_slot_id,
                 fallback=target_slot_id,
             )
         )
-        return {target_slot_id: annotate_track_notes_for_slot(selected.notes, slot_id=target_slot_id)}
+        return {target_slot_id: annotate_track_events_for_slot(selected.events, slot_id=target_slot_id)}
 
     assignments = _assign_tracks_by_name_and_range(non_empty_tracks)
     mapped: dict[int, list[TrackPitchEvent]] = {}
@@ -101,12 +101,12 @@ def map_tracks_to_slots(
             track.diagnostics.update(
                 slot_assignment_diagnostics(
                     track.name,
-                    track.notes,
+                    track.events,
                     assigned_slot_id=slot_id,
                     fallback=slot_id,
                 )
             )
-            mapped[slot_id] = annotate_track_notes_for_slot(track.notes, slot_id=slot_id)
+            mapped[slot_id] = annotate_track_events_for_slot(track.events, slot_id=slot_id)
     return mapped
 
 
@@ -121,7 +121,7 @@ def _assign_tracks_by_name_and_range(parsed_tracks: list[ParsedTrack]) -> list[t
             score.slot_id: score.score
             for score in rank_slot_candidates(
                 track.name,
-                track.notes,
+                track.events,
                 fallback=min(track_index + 1, 6),
                 allowed_slots=allowed_slots,
             )
@@ -201,7 +201,6 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                         label = midi_to_label(pitch_midi)
 
                     voice_index = _safe_int(_child_text(item, "voice"), default=None)
-                    source_staff_index = _safe_int(_child_text(item, "staff"), default=None)
                     is_tied = any(_local_name(tie.tag) == "tie" for tie in item.iter())
                     notes.append(
                         note_from_pitch(
@@ -218,7 +217,6 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                             measure_index=measure_number,
                             beat_in_measure=(onset_quarter - measure_start_quarter) + 1,
                             voice_index=voice_index,
-                            source_staff_index=source_staff_index,
                             is_rest=is_rest,
                             is_tied=is_tied,
                         )
@@ -233,14 +231,14 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         parsed_tracks.append(
             ParsedTrack(
                 name=part_name,
-                notes=notes,
+                events=notes,
                 slot_id=infer_slot_id(part_name, notes),
             )
         )
 
     return ParsedSymbolicFile(
         tracks=parsed_tracks,
-        mapped_notes={},
+        mapped_events={},
         time_signature_numerator=score_time_signature[0],
         time_signature_denominator=score_time_signature[1],
         has_time_signature=has_time_signature,
@@ -367,11 +365,11 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                 )
 
         slot_id = 6 if 9 in channels_seen else infer_slot_id(track_name, notes, fallback=track_index + 1)
-        tracks.append(ParsedTrack(name=track_name, notes=notes, slot_id=slot_id))
+        tracks.append(ParsedTrack(name=track_name, events=notes, slot_id=slot_id))
 
     return ParsedSymbolicFile(
         tracks=tracks,
-        mapped_notes={},
+        mapped_events={},
         time_signature_numerator=score_time_signature[0],
         time_signature_denominator=score_time_signature[1],
         has_time_signature=has_time_signature,

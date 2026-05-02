@@ -16,7 +16,7 @@ from gigastudy_api.services.engine.music_theory import (
     quantize,
 )
 from gigastudy_api.services.engine.extraction_plan import VoiceExtractionPlan, default_voice_extraction_plan
-from gigastudy_api.services.engine.event_normalization import normalize_track_notes
+from gigastudy_api.services.engine.event_normalization import normalize_track_events
 
 
 class VoiceTranscriptionError(ValueError):
@@ -52,7 +52,7 @@ class MetronomeAlignment:
 
 @dataclass(frozen=True)
 class VoiceTranscriptionResult:
-    notes: list[TrackPitchEvent]
+    events: list[TrackPitchEvent]
     alignment: MetronomeAlignment
     diagnostics: dict[str, object] | None = None
 
@@ -85,7 +85,7 @@ def transcribe_voice_file(
         time_signature_denominator=time_signature_denominator,
         backend=backend,
         extraction_plan=extraction_plan,
-    ).notes
+    ).events
 
 
 def transcribe_voice_file_with_alignment(
@@ -293,7 +293,7 @@ def _transcribe_with_basic_pitch(
         )
 
     return VoiceTranscriptionResult(
-        notes=normalize_track_notes(
+        events=normalize_track_events(
             notes,
             bpm=bpm,
             slot_id=slot_id,
@@ -308,7 +308,7 @@ def _transcribe_with_basic_pitch(
             extraction_method="basic_pitch_amt_v1",
             frame_count=0,
             segment_count=len(parsed_events),
-            note_count=len(notes),
+            event_count=len(notes),
         ),
     )
 
@@ -318,7 +318,7 @@ def _extract_basic_pitch_note_events(prediction: object) -> list[object]:
         candidate = prediction[2]
         return list(candidate) if isinstance(candidate, list | tuple) else []
     if isinstance(prediction, dict):
-        candidate = prediction.get("note_events") or prediction.get("notes")
+        candidate = prediction.get("note_events")
         return list(candidate) if isinstance(candidate, list | tuple) else []
     candidate = getattr(prediction, "note_events", None)
     return list(candidate) if isinstance(candidate, list | tuple) else []
@@ -756,7 +756,7 @@ def _frames_to_notes(
             )
         )
     return VoiceTranscriptionResult(
-        notes=normalize_track_notes(
+        events=normalize_track_events(
             notes,
             bpm=bpm,
             slot_id=slot_id,
@@ -771,7 +771,7 @@ def _frames_to_notes(
             extraction_method=extraction_method,
             frame_count=frame_count if frame_count is not None else len(frame_pitches),
             segment_count=len(segments),
-            note_count=len(notes),
+            event_count=len(notes),
         ),
     )
 
@@ -840,14 +840,14 @@ def _voice_transcription_diagnostics(
     extraction_method: str,
     frame_count: int,
     segment_count: int,
-    note_count: int,
+    event_count: int,
 ) -> dict[str, object]:
     return {
         "engine": extraction_method,
         "voice_extraction_plan": plan.diagnostics(),
         "pre_registration_frame_count": frame_count,
         "pre_registration_segment_count": segment_count,
-        "pre_normalization_note_count": note_count,
+        "pre_normalization_event_count": event_count,
         "bpm_is_absolute": True,
     }
 

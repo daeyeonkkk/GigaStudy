@@ -55,7 +55,7 @@ def default_voice_extraction_plan(
 ) -> VoiceExtractionPlan:
     low, high = SLOT_RANGES.get(slot_id, (40, 81))
     track = track_name(slot_id)
-    context_note_count = sum(len(notes) for notes in (context_tracks_by_slot or {}).values())
+    context_event_count = sum(len(notes) for notes in (context_tracks_by_slot or {}).values())
     slower_piece = bpm <= 72
     fast_piece = bpm >= 144
     strict_source = source_kind in {"recording", "audio", "music"}
@@ -88,8 +88,8 @@ def default_voice_extraction_plan(
         max_pitch_std = 0.62
         reasons.append("Recorded audio is filtered for stable singing before registration.")
 
-    if context_note_count:
-        reasons.append("Existing tracks are present; keep extraction compatible with the ensemble grid.")
+    if context_event_count:
+        reasons.append("Existing tracks are present; keep extraction aligned with the ensemble grid.")
 
     return VoiceExtractionPlan(
         slot_id=slot_id,

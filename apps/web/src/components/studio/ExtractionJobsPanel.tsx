@@ -176,7 +176,6 @@ function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: Track
       const measureCount = getCandidateDiagnosticNumber(candidate, 'measure_count')
       const eventCount =
         getCandidateDiagnosticNumber(candidate, 'event_count') ??
-        getCandidateDiagnosticNumber(candidate, 'note_count') ??
         candidate.region.pitch_events.length
       const measureLabel = measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'
       return `${track?.name ?? `Track ${candidate.suggested_slot_id}`} ${confidence} / ${measureLabel} / ${eventCount}개`
@@ -196,7 +195,7 @@ function getJobStateHint(job: TrackExtractionJob): string {
   if (job.status === 'needs_review') {
     return job.parse_all_parts
       ? '여러 파트 후보가 준비됐습니다. 트랙 배정과 덮어쓰기 여부를 확인한 뒤 등록하세요.'
-      : '후보가 준비됐습니다. 등록하면 해당 트랙의 노트 이벤트와 재생 소스로 반영됩니다.'
+    : '후보가 준비됐습니다. 등록하면 해당 트랙의 피치 이벤트와 재생 소스로 반영됩니다.'
   }
   if (job.status === 'completed') {
     return '처리가 완료됐습니다.'

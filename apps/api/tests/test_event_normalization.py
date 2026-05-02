@@ -2,10 +2,10 @@ from gigastudy_api.services.engine.music_theory import note_from_pitch
 from gigastudy_api.services.engine.event_normalization import (
     accidental_for_key,
     estimate_key_signature,
-    normalize_track_notes,
+    normalize_track_events,
     spell_midi_label,
 )
-from gigastudy_api.services.engine.event_quality import prepare_notes_for_track_registration
+from gigastudy_api.services.engine.event_quality import prepare_events_for_track_registration
 
 
 def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:
@@ -20,7 +20,7 @@ def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:
         duration_seconds=999,
     )
 
-    normalized = normalize_track_notes([note], bpm=90, slot_id=1)
+    normalized = normalize_track_events([note], bpm=90, slot_id=1)
 
     assert len(normalized) == 1
     assert normalized[0].beat == 2.25
@@ -40,7 +40,7 @@ def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
         pitch_midi=67,
     )
 
-    normalized = normalize_track_notes([note], bpm=120, slot_id=2)
+    normalized = normalize_track_events([note], bpm=120, slot_id=2)
 
     assert [(entry.beat, entry.duration_beats, entry.measure_index) for entry in normalized] == [
         (4.5, 0.5, 1),
@@ -54,8 +54,8 @@ def test_event_normalization_applies_track_pitch_register_policy() -> None:
     tenor = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55)
     baritone = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=50)
 
-    tenor_note = normalize_track_notes([tenor], bpm=120, slot_id=3)[0]
-    baritone_note = normalize_track_notes([baritone], bpm=120, slot_id=4)[0]
+    tenor_note = normalize_track_events([tenor], bpm=120, slot_id=3)[0]
+    baritone_note = normalize_track_events([baritone], bpm=120, slot_id=4)[0]
 
     assert tenor_note.pitch_register == "tenor_voice"
     assert tenor_note.pitch_label_octave_shift == 12
@@ -89,7 +89,7 @@ def test_registration_quality_simplifies_dense_voice_noise_to_event_grid() -> No
         for index in range(28)
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         noisy_notes,
         bpm=92,
         slot_id=1,
@@ -98,13 +98,13 @@ def test_registration_quality_simplifies_dense_voice_noise_to_event_grid() -> No
         time_signature_denominator=4,
     )
 
-    assert result.notes
+    assert result.events
     assert result.diagnostics["source_kind"] == "recording"
-    assert result.diagnostics["registered_note_count"] < len(noisy_notes)
-    assert result.diagnostics["max_notes_per_measure"] <= 8
+    assert result.diagnostics["registered_event_count"] < len(noisy_notes)
+    assert result.diagnostics["max_events_per_measure"] <= 8
     assert result.diagnostics["timing_grid_ratio"] == 1
-    assert all(note.quantization_grid in {0.25, 0.5} for note in result.notes)
-    assert all(note.measure_index == 1 for note in result.notes)
+    assert all(note.quantization_grid in {0.25, 0.5} for note in result.events)
+    assert all(note.measure_index == 1 for note in result.events)
 
 
 def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated() -> None:
@@ -117,7 +117,7 @@ def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated()
         pitch_midi=67,
     )
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         [note],
         bpm=90,
         slot_id=3,
@@ -126,13 +126,13 @@ def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated()
         time_signature_denominator=4,
     )
 
-    assert [(entry.beat, entry.duration_beats, entry.measure_index) for entry in result.notes] == [
+    assert [(entry.beat, entry.duration_beats, entry.measure_index) for entry in result.events] == [
         (4.5, 0.5, 1),
         (5.0, 0.5, 2),
     ]
-    assert all(entry.pitch_register == "tenor_voice" for entry in result.notes)
-    assert all(entry.key_signature for entry in result.notes)
-    assert result.diagnostics["cross_measure_note_count"] == 0
+    assert all(entry.pitch_register == "tenor_voice" for entry in result.events)
+    assert all(entry.key_signature for entry in result.events)
+    assert result.diagnostics["cross_measure_event_count"] == 0
 
 
 def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() -> None:
@@ -152,7 +152,7 @@ def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() ->
         for beat, pitch_midi in zip([1.5, 2.5, 3.5, 4.5], [60, 62, 64, 65], strict=True)
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         slightly_late_audio,
         bpm=92,
         slot_id=2,
@@ -162,7 +162,7 @@ def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() ->
         reference_tracks=[reference],
     )
 
-    assert [note.beat for note in result.notes] == [1.25, 2.25, 3.25, 4.25]
+    assert [note.beat for note in result.events] == [1.25, 2.25, 3.25, 4.25]
     assert result.diagnostics["reference_alignment"]["applied"] is True
     assert result.diagnostics["reference_alignment"]["offset_beats"] == -0.25
     assert "reference_track_grid_alignment" in result.diagnostics["actions"]
@@ -178,7 +178,7 @@ def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> 
         for beat in [1.5, 2.5, 3.5, 4.5]
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         syncopated_symbolic,
         bpm=92,
         slot_id=3,
@@ -188,7 +188,7 @@ def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> 
         reference_tracks=[reference],
     )
 
-    assert [note.beat for note in result.notes] == [1.5, 2.5, 3.5, 4.5]
+    assert [note.beat for note in result.events] == [1.5, 2.5, 3.5, 4.5]
     assert "reference_alignment" not in result.diagnostics
     assert "reference_track_grid_alignment" not in result.diagnostics["actions"]
 
@@ -208,7 +208,7 @@ def test_registration_quality_enforces_final_event_contract() -> None:
         voice_index=1,
     )
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         [note],
         bpm=90,
         slot_id=3,
@@ -217,7 +217,7 @@ def test_registration_quality_enforces_final_event_contract() -> None:
         time_signature_denominator=4,
     )
 
-    registered_note = result.notes[0]
+    registered_note = result.events[0]
     assert registered_note.beat == 2.25
     assert registered_note.duration_beats == 0.5
     assert registered_note.onset_seconds == 0.8333

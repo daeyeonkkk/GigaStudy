@@ -7,7 +7,7 @@ from gigastudy_api.services.engine.arrangement import prepare_ensemble_registrat
 from gigastudy_api.services.engine.event_quality import (
     RegistrationQualityResult,
     apply_registration_review_instruction,
-    prepare_notes_for_track_registration,
+    prepare_events_for_track_registration,
 )
 from gigastudy_api.services.engine.timeline import (
     registered_sync_resolved_tracks,
@@ -48,7 +48,7 @@ class TrackRegistrationPreparer:
     def prepare_batch(
         self,
         studio: Studio,
-        mapped_notes: dict[int, list[TrackPitchEvent]],
+        mapped_events: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
     ) -> dict[int, RegistrationQualityResult]:
@@ -59,10 +59,10 @@ class TrackRegistrationPreparer:
                 source_kind=source_kind,
                 notes=notes,
             )
-            for slot_id, notes in mapped_notes.items()
+            for slot_id, notes in mapped_events.items()
         }
         proposed_tracks_by_slot = {
-            slot_id: registration.notes
+            slot_id: registration.events
             for slot_id, registration in first_pass.items()
         }
         return {
@@ -86,7 +86,7 @@ class TrackRegistrationPreparer:
     ) -> RegistrationQualityResult:
         reference_tracks = self._reference_tracks(studio, exclude_slot_id=slot_id)
         reference_tracks_by_slot = self._reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
-        registration = prepare_notes_for_track_registration(
+        registration = prepare_events_for_track_registration(
             notes,
             bpm=studio.bpm,
             slot_id=slot_id,
@@ -109,8 +109,8 @@ class TrackRegistrationPreparer:
             time_signature_denominator=studio.time_signature_denominator,
             slot_id=slot_id,
             source_kind=source_kind,
-            original_notes=notes,
-            prepared_notes=registration.notes,
+            original_events=notes,
+            prepared_events=registration.events,
             diagnostics=registration.diagnostics,
             context_tracks_by_slot=reference_tracks_by_slot,
         )
@@ -141,14 +141,14 @@ class TrackRegistrationPreparer:
         if proposed_tracks_by_slot:
             existing_tracks_by_slot.update(
                 {
-                    proposed_slot_id: proposed_notes
-                    for proposed_slot_id, proposed_notes in proposed_tracks_by_slot.items()
-                    if proposed_slot_id != slot_id and proposed_notes
+                    proposed_slot_id: proposed_events
+                    for proposed_slot_id, proposed_events in proposed_tracks_by_slot.items()
+                    if proposed_slot_id != slot_id and proposed_events
                 }
             )
         ensemble_result = prepare_ensemble_registration(
             target_slot_id=slot_id,
-            candidate_notes=registration.notes,
+            candidate_events=registration.events,
             existing_tracks_by_slot=existing_tracks_by_slot,
             bpm=studio.bpm,
             source_kind=source_kind,
@@ -156,7 +156,7 @@ class TrackRegistrationPreparer:
             time_signature_denominator=studio.time_signature_denominator,
         )
         ensemble_registration = RegistrationQualityResult(
-            notes=ensemble_result.notes,
+            events=ensemble_result.events,
             diagnostics={
                 **registration.diagnostics,
                 "ensemble_arrangement": ensemble_result.diagnostics,
@@ -176,8 +176,8 @@ class TrackRegistrationPreparer:
             time_signature_denominator=studio.time_signature_denominator,
             slot_id=slot_id,
             source_kind=source_kind,
-            original_notes=registration.notes,
-            prepared_notes=ensemble_registration.notes,
+            original_events=registration.events,
+            prepared_events=ensemble_registration.events,
             diagnostics=ensemble_registration.diagnostics,
             context_tracks_by_slot=existing_tracks_by_slot,
             proposed_tracks_by_slot=proposed_tracks_by_slot,
@@ -186,7 +186,7 @@ class TrackRegistrationPreparer:
             return ensemble_registration
 
         reviewed_registration = apply_registration_review_instruction(
-            ensemble_registration.notes,
+            ensemble_registration.events,
             instruction=instruction.model_dump(exclude_none=True),
             bpm=studio.bpm,
             slot_id=slot_id,
@@ -198,7 +198,7 @@ class TrackRegistrationPreparer:
         )
         reviewed_ensemble_result = prepare_ensemble_registration(
             target_slot_id=slot_id,
-            candidate_notes=reviewed_registration.notes,
+            candidate_events=reviewed_registration.events,
             existing_tracks_by_slot=existing_tracks_by_slot,
             bpm=studio.bpm,
             source_kind=source_kind,
@@ -206,7 +206,7 @@ class TrackRegistrationPreparer:
             time_signature_denominator=studio.time_signature_denominator,
         )
         return RegistrationQualityResult(
-            notes=reviewed_ensemble_result.notes,
+            events=reviewed_ensemble_result.events,
             diagnostics={
                 **reviewed_registration.diagnostics,
                 "ensemble_arrangement": reviewed_ensemble_result.diagnostics,
@@ -254,7 +254,7 @@ def _with_llm_registration_review_skip(
         "applied": False,
         "skipped_reason": reason,
     }
-    return RegistrationQualityResult(notes=registration.notes, diagnostics=diagnostics)
+    return RegistrationQualityResult(events=registration.events, diagnostics=diagnostics)
 
 
 def _with_ensemble_llm_review_skip(
@@ -267,4 +267,4 @@ def _with_ensemble_llm_review_skip(
         "applied": False,
         "skipped_reason": reason,
     }
-    return RegistrationQualityResult(notes=registration.notes, diagnostics=diagnostics)
+    return RegistrationQualityResult(events=registration.events, diagnostics=diagnostics)

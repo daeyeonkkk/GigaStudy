@@ -27,7 +27,7 @@ export function PendingRecordingDialog({
         <p className="eyebrow">Recording review</p>
         <h2 id="pending-recording-title">{recording.trackName} 녹음 확인</h2>
         <p>
-          아직 트랙에 등록하지 않았습니다. 원음을 확인한 뒤 노트 추출을 시작하거나 녹음을 삭제하세요.
+          아직 트랙에 등록하지 않았습니다. 원음을 확인한 뒤 피치 이벤트 추출을 시작하거나 녹음을 삭제하세요.
         </p>
         <dl>
           <div>

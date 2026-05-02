@@ -246,12 +246,12 @@ export function getPlaybackPreparationMessage(
   ).length
   const parts = [
     audioCount > 0 ? `원음 ${audioCount}개` : null,
-    eventCount > 0 ? `노트 이벤트 ${eventCount}개` : null,
+    eventCount > 0 ? `피치 이벤트 ${eventCount}개` : null,
     includeMetronome ? '메트로놈' : null,
   ].filter(Boolean)
 
   if (parts.length === 0) {
-    return '재생 가능한 원음이나 노트 이벤트를 확인합니다.'
+    return '재생 가능한 원음이나 피치 이벤트를 확인합니다.'
   }
   if (parts.length === 1 && audioCount === 1) {
     return '녹음 원본을 불러옵니다. 기준 트랙이 없으면 거의 즉시 재생됩니다.'

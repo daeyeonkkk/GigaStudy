@@ -195,7 +195,7 @@ class StudioScoringCommands:
             source_kind=f"scoring_{score_mode}",
             source_label=source_label,
             context_tracks_by_slot=context_tracks_by_slot,
-            expected_track_notes=expected_notes,
+            expected_track_events=expected_notes,
         )
         return llm_plan or extraction_plan
 

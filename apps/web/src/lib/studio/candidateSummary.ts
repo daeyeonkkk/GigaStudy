@@ -130,12 +130,12 @@ export function getCandidateDecisionSummary(
   if (events.length === 0) {
     return {
       title: '비어 있는 후보',
-      headline: '등록할 노트 이벤트가 없습니다.',
+      headline: '등록할 피치 이벤트가 없습니다.',
       support: '다른 후보를 선택하거나 입력 소스를 다시 확인하세요.',
-      tags: ['노트 없음'],
+      tags: ['이벤트 없음'],
       phrasePreview: '-',
       metrics: [
-        { label: '노트', value: '0' },
+        { label: '이벤트', value: '0' },
         { label: '신뢰도', value: confidence },
       ],
       diagnostics,
@@ -503,7 +503,6 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   const measureCount = getDiagnosticNumber(diagnostics, 'measure_count')
   const eventCount =
     getDiagnosticNumber(diagnostics, 'event_count') ??
-    getDiagnosticNumber(diagnostics, 'note_count') ??
     candidate.region.pitch_events.length
   metrics.push({
     label: '감지량',
@@ -520,9 +519,7 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
     metrics.push({ label: '리듬 격자', value: formatRatio(timingGridRatio) })
   }
 
-  const density =
-    getDiagnosticNumber(diagnostics, 'density_events_per_measure') ??
-    getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
+  const density = getDiagnosticNumber(diagnostics, 'density_events_per_measure')
   if (density !== null) {
     metrics.push({ label: '밀도', value: `${density.toFixed(1)} events/measure` })
   }
@@ -541,13 +538,9 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
         tag: '이벤트 수 적음',
         sentence: '이벤트 수가 적어 파트 누락 여부를 확인하세요.',
       },
-      few_notes: {
-        tag: '이벤트 수 적음',
-        sentence: '이벤트 수가 적어 파트 누락 여부를 확인하세요.',
-      },
-      low_note_confidence: {
+      low_event_confidence: {
         tag: '원본 대조 필요',
-        sentence: '노트별 신뢰도가 낮아 원본 대조가 필요합니다.',
+        sentence: '이벤트별 신뢰도가 낮아 원본 대조가 필요합니다.',
       },
       range_outliers: {
         tag: '음역 확인',
@@ -557,7 +550,7 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
         tag: '박자 확인',
         sentence: '리듬 격자가 불안정해 박자 판독을 확인하세요.',
       },
-      partial_score_review: {
+      partial_document_review: {
         tag: '파트 누락 확인',
         sentence: '일부 파트만 감지되어 누락 파트를 확인하세요.',
       },

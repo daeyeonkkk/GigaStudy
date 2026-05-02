@@ -136,25 +136,25 @@ class StudioUploadCommands:
                         parsed_symbolic.time_signature_numerator,
                         parsed_symbolic.time_signature_denominator,
                     )
-                mapped_notes = parsed_symbolic.mapped_notes
+                mapped_events = parsed_symbolic.mapped_events
                 if request.review_before_register:
                     return self._repository._add_extraction_candidates(
                         studio_id,
-                        mapped_notes,
+                        mapped_events,
                         source_kind=registered_source_kind,
                         source_label=filename,
                         method="symbolic_import_review",
                         confidence=0.92,
                         message="Symbolic import is waiting for user approval.",
                     )
-                if self._repository._mapped_notes_would_overwrite(studio, mapped_notes) and not request.allow_overwrite:
+                if self._repository._mapped_events_would_overwrite(studio, mapped_events) and not request.allow_overwrite:
                     raise HTTPException(
                         status_code=409,
                         detail="Upload would overwrite an existing registered track.",
                     )
                 return self._repository._apply_extracted_tracks(
                     studio_id,
-                    mapped_notes,
+                    mapped_events,
                     source_kind=registered_source_kind,
                     source_label=filename,
                 )
@@ -222,10 +222,10 @@ class StudioUploadCommands:
             timestamp = self._now()
             registrations = self._repository._prepare_registration_batch(
                 studio,
-                parsed_symbolic.mapped_notes,
+                parsed_symbolic.mapped_events,
                 source_kind=registered_source_kind,
             )
-            for slot_id in parsed_symbolic.mapped_notes:
+            for slot_id in parsed_symbolic.mapped_events:
                 track = self._repository._find_track(studio, slot_id)
                 registration = registrations[slot_id]
                 register_track_material(
@@ -233,8 +233,8 @@ class StudioUploadCommands:
                     timestamp=timestamp,
                     source_kind=registered_source_kind,
                     source_label=source_filename,
-                    notes=registration.notes,
-                    duration_seconds=track_duration_seconds(registration.notes),
+                    notes=registration.events,
+                    duration_seconds=track_duration_seconds(registration.events),
                     registration_diagnostics=registration.diagnostics,
                 )
             studio.updated_at = timestamp
@@ -269,7 +269,7 @@ class StudioUploadCommands:
                 source_label=source_filename,
                 method="home_voice_transcription_review",
                 confidence=confidence,
-                notes=transcription.notes,
+                notes=transcription.events,
                 message="Audio upload produced a reviewable track candidate.",
                 audio_source_path=audio_source_path,
                 audio_source_label=source_filename,

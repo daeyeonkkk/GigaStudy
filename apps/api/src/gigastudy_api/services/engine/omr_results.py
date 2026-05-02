@@ -4,17 +4,17 @@ import json
 from pathlib import Path
 
 from gigastudy_api.domain.track_events import TrackPitchEvent
-from gigastudy_api.services.engine.event_normalization import annotate_track_notes_for_slot
+from gigastudy_api.services.engine.event_normalization import annotate_track_events_for_slot
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 
 
-def mark_notes_as_omr(
-    mapped_notes: dict[int, list[TrackPitchEvent]],
+def mark_events_as_omr(
+    mapped_events: dict[int, list[TrackPitchEvent]],
     *,
     extraction_method: str = "audiveris_omr_v0",
 ) -> dict[int, list[TrackPitchEvent]]:
     return {
-        slot_id: annotate_track_notes_for_slot(
+        slot_id: annotate_track_events_for_slot(
             [
                 note.model_copy(
                     update={
@@ -26,7 +26,7 @@ def mark_notes_as_omr(
             ],
             slot_id=slot_id,
         )
-        for slot_id, notes in mapped_notes.items()
+        for slot_id, notes in mapped_events.items()
     }
 
 
@@ -47,7 +47,7 @@ def write_pdf_vector_omr_summary(
             {
                 "slot_id": track.slot_id,
                 "name": track.name,
-                "event_count": len(track.notes),
+                "event_count": len(track.events),
                 "diagnostics": track.diagnostics,
             }
             for track in parsed_symbolic.tracks

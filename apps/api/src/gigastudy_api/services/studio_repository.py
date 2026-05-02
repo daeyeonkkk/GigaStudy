@@ -690,8 +690,8 @@ class StudioRepository:
                 timestamp=timestamp,
                 source_kind=source_kind,
                 source_label=source_label,
-                notes=registration.notes,
-                duration_seconds=_track_duration_seconds(registration.notes),
+                notes=registration.events,
+                duration_seconds=_track_duration_seconds(registration.events),
                 registration_diagnostics=registration_diagnostics,
                 audio_source_path=audio_source_path,
                 audio_source_label=audio_source_label,
@@ -704,7 +704,7 @@ class StudioRepository:
     def _apply_extracted_tracks(
         self,
         studio_id: str,
-        mapped_notes: dict[int, list[TrackPitchEvent]],
+        mapped_events: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
         source_label: str,
@@ -716,10 +716,10 @@ class StudioRepository:
             timestamp = _now()
             registrations = self._prepare_registration_batch(
                 studio,
-                mapped_notes,
+                mapped_events,
                 source_kind=source_kind,
             )
-            for slot_id in mapped_notes:
+            for slot_id in mapped_events:
                 track = self._find_track(studio, slot_id)
                 registration = registrations[slot_id]
                 _register_track_material(
@@ -727,8 +727,8 @@ class StudioRepository:
                     timestamp=timestamp,
                     source_kind=source_kind,
                     source_label=source_label,
-                    notes=registration.notes,
-                    duration_seconds=_track_duration_seconds(registration.notes),
+                    notes=registration.events,
+                    duration_seconds=_track_duration_seconds(registration.events),
                     registration_diagnostics=registration.diagnostics,
                 )
             studio.updated_at = timestamp
@@ -753,13 +753,13 @@ class StudioRepository:
     def _prepare_registration_batch(
         self,
         studio: Studio,
-        mapped_notes: dict[int, list[TrackPitchEvent]],
+        mapped_events: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
     ) -> dict[int, RegistrationQualityResult]:
         return self._registration_preparer.prepare_batch(
             studio,
-            mapped_notes,
+            mapped_events,
             source_kind=source_kind,
         )
 
@@ -886,9 +886,7 @@ class StudioRepository:
             timestamp = _now()
             source_kind: SourceKind = "audio" if record.job_type == "voice" else "document"
             payload_source_kind = record.payload.get("source_kind")
-            if payload_source_kind == "score":
-                source_kind = "document"
-            elif payload_source_kind in {"recording", "audio", "midi", "document", "music", "ai"}:
+            if payload_source_kind in {"recording", "audio", "midi", "document", "music", "ai"}:
                 source_kind = payload_source_kind
             source_label = str(record.payload.get("source_label") or "recovered-upload")
             audio_mime_type_value = record.payload.get("audio_mime_type")
@@ -930,7 +928,7 @@ class StudioRepository:
     def _add_extraction_candidates(
         self,
         studio_id: str,
-        mapped_notes: dict[int, list[TrackPitchEvent]],
+        mapped_events: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
         source_label: str,
@@ -950,7 +948,7 @@ class StudioRepository:
     ) -> Studio:
         return self._candidates.add_extraction_candidates(
             studio_id,
-            mapped_notes,
+            mapped_events,
             source_kind=source_kind,
             source_label=source_label,
             method=method,
@@ -971,7 +969,7 @@ class StudioRepository:
         self,
         studio_id: str,
         slot_id: int,
-        candidate_notes: list[list[TrackPitchEvent]],
+        candidate_events: list[list[TrackPitchEvent]],
         *,
         source_label: str,
         method: str,
@@ -981,7 +979,7 @@ class StudioRepository:
         return self._candidates.add_generation_candidates(
             studio_id,
             slot_id,
-            candidate_notes,
+            candidate_events,
             source_label=source_label,
             method=method,
             message=message,
@@ -1061,12 +1059,12 @@ class StudioRepository:
                 return candidate
         raise HTTPException(status_code=404, detail="Extraction candidate not found.")
 
-    def _mapped_notes_would_overwrite(
+    def _mapped_events_would_overwrite(
         self,
         studio: Studio,
-        mapped_notes: dict[int, list[TrackPitchEvent]],
+        mapped_events: dict[int, list[TrackPitchEvent]],
     ) -> bool:
-        return any(_track_has_content(self._find_track(studio, slot_id)) for slot_id in mapped_notes)
+        return any(_track_has_content(self._find_track(studio, slot_id)) for slot_id in mapped_events)
 
     def _transcribe_voice_file(
         self,
@@ -1101,7 +1099,7 @@ class StudioRepository:
         with _engine_execution_lock:
             if transcribe_voice_file is not _ORIGINAL_TRANSCRIBE_VOICE_FILE:
                 return VoiceTranscriptionResult(
-                    notes=transcribe_voice_file(
+                    events=transcribe_voice_file(
                         source_path,
                         bpm=bpm,
                         slot_id=slot_id,

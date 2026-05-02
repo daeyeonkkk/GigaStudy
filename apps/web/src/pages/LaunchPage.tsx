@@ -355,7 +355,7 @@ export function LaunchPage() {
                   }
                 >
                   <option value="auto">자동 판단</option>
-                  <option value="document">문서/노트</option>
+                  <option value="document">문서/MIDI</option>
                   <option value="music">음악</option>
                 </select>
               </label>

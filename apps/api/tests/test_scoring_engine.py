@@ -33,9 +33,9 @@ def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
     )
 
     assert report.alignment_offset_seconds == 0.37
-    assert report.matched_note_count == 3
-    assert report.missing_note_count == 0
-    assert report.extra_note_count == 0
+    assert report.matched_event_count == 3
+    assert report.missing_event_count == 0
+    assert report.extra_event_count == 0
     assert report.mean_abs_timing_error_seconds == 0
     assert report.overall_score == 100
 
@@ -76,15 +76,15 @@ def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
         performance_events=performance_events,
     )
 
-    assert report.matched_note_count == 2
+    assert report.matched_event_count == 2
     assert report.pitch_score < 100
     assert report.rhythm_score < 100
     assert {issue.issue_type for issue in report.issues} == {"pitch", "rhythm"}
     assert all(issue.answer_region_id == "track-1-region-1" for issue in report.issues)
     assert all(issue.performance_region_id == "performance-1-region-1" for issue in report.issues)
-    assert all(issue.answer_event_id == f"track-1-region-1-{issue.answer_note_id}" for issue in report.issues)
+    assert all(issue.answer_event_id == f"track-1-region-1-{issue.answer_source_event_id}" for issue in report.issues)
     assert all(
-        issue.performance_event_id == f"performance-1-region-1-{issue.performance_note_id}"
+        issue.performance_event_id == f"performance-1-region-1-{issue.performance_source_event_id}"
         for issue in report.issues
     )
     assert {issue.expected_beat for issue in report.issues} == {1, 2}
@@ -115,8 +115,8 @@ def test_harmony_scoring_rates_consonant_added_part_without_answer_track() -> No
     assert report.harmony_score is not None
     assert report.harmony_score >= 90
     assert report.overall_score >= 85
-    assert report.answer_note_count == 2
-    assert report.performance_note_count == 2
+    assert report.answer_event_count == 2
+    assert report.performance_event_count == 2
     assert not [issue for issue in report.issues if issue.issue_type == "harmony"]
 
 

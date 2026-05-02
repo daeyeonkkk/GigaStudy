@@ -136,8 +136,8 @@ export type ReportIssue = {
     | 'bass_foundation'
     | 'chord_coverage'
   severity: 'info' | 'warn' | 'error'
-  answer_note_id: string | null
-  performance_note_id: string | null
+  answer_source_event_id: string | null
+  performance_source_event_id: string | null
   answer_region_id: string | null
   answer_event_id: string | null
   performance_region_id: string | null
@@ -162,11 +162,11 @@ export type ScoringReport = {
   reference_slot_ids: number[]
   include_metronome: boolean
   created_at: string
-  answer_note_count: number
-  performance_note_count: number
-  matched_note_count: number
-  missing_note_count: number
-  extra_note_count: number
+  answer_event_count: number
+  performance_event_count: number
+  matched_event_count: number
+  missing_event_count: number
+  extra_event_count: number
   alignment_offset_seconds: number
   overall_score: number
   pitch_score: number

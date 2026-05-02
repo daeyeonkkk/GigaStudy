@@ -41,13 +41,13 @@ class StudioGenerationCommands:
         except GenerationRequestError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
 
-        if not generated.candidate_notes:
+        if not generated.candidate_events:
             raise HTTPException(status_code=409, detail="No harmony notes could be generated.")
         if request.review_before_register:
             return self._repository._add_generation_candidates(
                 studio_id,
                 slot_id,
-                generated.candidate_notes,
+                generated.candidate_events,
                 source_label=generated.source_label,
                 method=generated.method,
                 message=generated.message,
@@ -65,5 +65,5 @@ class StudioGenerationCommands:
             slot_id,
             source_kind="ai",
             source_label=generated.source_label,
-            notes=generated.candidate_notes[0],
+            notes=generated.candidate_events[0],
         )

@@ -290,7 +290,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   if (candidate.region.pitch_events.length === 0) {
     return {
       label: '재시도 권장',
-      reason: '등록할 노트 이벤트가 감지되지 않았습니다.',
+      reason: '등록할 피치 이벤트가 감지되지 않았습니다.',
       tone: 'retry',
     }
   }
@@ -301,11 +301,9 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags')
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
   const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
-  const density =
-    getDiagnosticNumber(diagnostics, 'density_events_per_measure') ??
-    getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
+  const density = getDiagnosticNumber(diagnostics, 'density_events_per_measure')
 
-  if (confidence < 0.5 || reviewHint === 'few_events' || reviewHint === 'few_notes') {
+  if (confidence < 0.5 || reviewHint === 'few_events') {
     return {
       label: '재시도 권장',
       reason: '판독 신뢰도가 낮거나 파트 누락 가능성이 큽니다.',
@@ -333,7 +331,7 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
 
   return {
     label: '추천',
-    reason: '트랙 배정과 노트 추출 품질이 안정적인 후보입니다.',
+    reason: '트랙 배정과 이벤트 추출 품질이 안정적인 후보입니다.',
     tone: 'recommended',
   }
 }

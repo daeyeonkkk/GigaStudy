@@ -49,8 +49,8 @@ If the user uploads a document, GigaStudy extracts track material into regions:
 - Non-a cappella source: register the main melody into the most appropriate
   track as region events.
 
-The canonical source kind for this flow is `document`; older `score` payloads
-are normalized for compatibility and should not be used by new UI or API code.
+The canonical source kind for this flow is `document`; `score` is not a valid
+source kind.
 
 If the user uploads music, GigaStudy extracts every usable part and registers
 those into the six tracks where possible. Browser-decodable MP3/M4A/OGG/FLAC
@@ -96,7 +96,7 @@ resolution.
 
 Reports appear at the bottom of the studio as compact title/date history items.
 Clicking a report opens a separate detail page with quantitative pitch, rhythm,
-sync, missing, and extra-note data. Each issue carries region/event IDs and
+sync, missing, and extra-event data. Each issue carries region/event IDs and
 beat coordinates, and answer-side issues can deep-link back into the studio with
 the matching region and piano-roll event focused.
 
@@ -106,11 +106,11 @@ internal adapter state inside extraction, persistence, and scoring engines.
 
 The web client treats `Studio.regions` and `ExtractionCandidate.region` as the
 only product event contract. Studio routes return a public response model that
-omits legacy note arrays from tracks and candidates; those arrays may still
-exist behind the API boundary for import and scoring adapters, but the studio
-API schema module must not export them and new UI code must not model or rebuild
-from them. Region `PitchEvent` objects carry source, extraction method, measure
-position, and quality warnings for product and diagnostic use.
+omits internal event shadows from tracks and candidates. Old note-array storage,
+`performance_notes`, staff-notation aliases, and `source_kind: "score"` are not
+compatibility inputs anymore; they are rejected. Region `PitchEvent` objects
+carry source, extraction method, measure position, and quality warnings for
+product and diagnostic use.
 
 ## Support Layers
 

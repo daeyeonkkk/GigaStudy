@@ -17,7 +17,7 @@ from gigastudy_api.services.llm.extraction_plan import plan_voice_extraction_wit
 
 @dataclass(frozen=True)
 class VoicePipelineResult:
-    notes: list[TrackPitchEvent]
+    events: list[TrackPitchEvent]
     relative_audio_path: str
     source_label: str
     audio_mime_type: str
@@ -74,7 +74,7 @@ def run_voice_pipeline(
         transcription=transcription,
     )
     return VoicePipelineResult(
-        notes=transcription.notes,
+        events=transcription.events,
         relative_audio_path=relative_audio_path,
         source_label=source_label,
         audio_mime_type=audio_mime_type,

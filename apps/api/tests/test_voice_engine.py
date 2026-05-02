@@ -207,7 +207,7 @@ def test_basic_pitch_notes_are_aligned_before_quantization(tmp_path: Path, monke
     monkeypatch.setitem(sys.modules, "basic_pitch.inference", inference)
 
     result = transcribe_voice_file_with_alignment(wav_path, bpm=120, slot_id=1, backend="basic_pitch")
-    notes = result.notes
+    notes = result.events
 
     assert [note.label for note in notes] == ["C5", "E5"]
     assert [note.beat for note in notes] == [1, 2]
@@ -246,8 +246,8 @@ def test_pre_extraction_plan_controls_voice_quantization(tmp_path: Path, monkeyp
         extraction_plan=plan,
     )
 
-    assert [note.label for note in result.notes] == ["C5", "E5"]
-    assert all(note.quantization_grid == 0.5 for note in result.notes)
+    assert [note.label for note in result.events] == ["C5", "E5"]
+    assert all(note.quantization_grid == 0.5 for note in result.events)
     assert result.diagnostics is not None
     diagnostic_plan = result.diagnostics["voice_extraction_plan"]
     assert isinstance(diagnostic_plan, dict)

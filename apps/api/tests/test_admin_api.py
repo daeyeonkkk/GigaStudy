@@ -154,21 +154,21 @@ def test_admin_storage_summary_is_paginated(tmp_path: Path, monkeypatch) -> None
     assert payload["limits"]["studio_hard_limit"] == 500
 
 
-def test_admin_storage_summary_skips_legacy_asset_scan_by_default(tmp_path: Path, monkeypatch) -> None:
+def test_admin_storage_summary_skips_filesystem_asset_scan_by_default(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "Legacy assets",
+            "title": "Filesystem assets",
             "bpm": 92,
             "start_mode": "blank",
         },
     )
     assert create_response.status_code == 200
     studio_id = create_response.json()["studio_id"]
-    legacy_path = tmp_path / "uploads" / studio_id / "1" / "legacy.wav"
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_path.write_bytes(b"legacy audio")
+    uploaded_path = tmp_path / "uploads" / studio_id / "1" / "retained.wav"
+    uploaded_path.parent.mkdir(parents=True, exist_ok=True)
+    uploaded_path.write_bytes(b"retained audio")
 
     fast_response = client.get("/api/admin/storage", headers=ADMIN_HEADERS)
 
@@ -184,7 +184,7 @@ def test_admin_storage_summary_skips_legacy_asset_scan_by_default(tmp_path: Path
     assert synced_response.status_code == 200
     synced_payload = synced_response.json()
     assert synced_payload["studios"][0]["asset_count"] == 1
-    assert synced_payload["studios"][0]["assets"][0]["relative_path"] == f"uploads/{studio_id}/1/legacy.wav"
+    assert synced_payload["studios"][0]["assets"][0]["relative_path"] == f"uploads/{studio_id}/1/retained.wav"
 
 
 def test_admin_can_delete_abandoned_staged_uploads(tmp_path: Path, monkeypatch) -> None:

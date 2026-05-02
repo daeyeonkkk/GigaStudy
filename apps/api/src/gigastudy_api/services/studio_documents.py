@@ -29,7 +29,7 @@ def empty_tracks(timestamp: str) -> list[TrackSlot]:
 
 
 def track_has_content(track: TrackSlot) -> bool:
-    return track.status == "registered" or bool(track.notes)
+    return track.status == "registered" or bool(track.events)
 
 
 def register_track_material(
@@ -52,7 +52,7 @@ def register_track_material(
     track.audio_source_label = audio_source_label
     track.audio_mime_type = audio_mime_type
     track.duration_seconds = duration_seconds
-    track.notes = notes
+    track.events = notes
     track.diagnostics = {"registration_quality": registration_diagnostics}
     track.updated_at = timestamp
 

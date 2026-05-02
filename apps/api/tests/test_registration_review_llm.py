@@ -4,7 +4,7 @@ from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.music_theory import note_from_pitch
 from gigastudy_api.services.engine.event_quality import (
     apply_registration_review_instruction,
-    prepare_notes_for_track_registration,
+    prepare_events_for_track_registration,
 )
 from gigastudy_api.services.llm.registration_review import (
     review_ensemble_registration_with_deepseek,
@@ -25,7 +25,7 @@ def test_registration_review_instruction_applies_coarser_voice_grid_and_noise_fi
         )
         for index in range(24)
     ]
-    baseline = prepare_notes_for_track_registration(
+    baseline = prepare_events_for_track_registration(
         noisy_notes,
         bpm=92,
         slot_id=1,
@@ -52,14 +52,14 @@ def test_registration_review_instruction_applies_coarser_voice_grid_and_noise_fi
         baseline_result=baseline,
     )
 
-    assert result.notes
+    assert result.events
     assert result.diagnostics["llm_registration_review"]["applied"] is True
-    assert result.diagnostics["pre_llm_registration_quality"]["registered_note_count"] == len(baseline.notes)
-    assert result.diagnostics["registered_note_count"] <= 8
-    assert result.diagnostics["max_notes_per_measure"] <= 8
+    assert result.diagnostics["pre_llm_registration_quality"]["registered_event_count"] == len(baseline.events)
+    assert result.diagnostics["registered_event_count"] <= 8
+    assert result.diagnostics["max_events_per_measure"] <= 8
     assert "llm_dense_voice_measure_simplification" in result.diagnostics["actions"]
-    assert all(note.quantization_grid == 0.5 for note in result.notes)
-    assert all(note.beat * 2 == int(note.beat * 2) for note in result.notes)
+    assert all(note.quantization_grid == 0.5 for note in result.events)
+    assert all(note.beat * 2 == int(note.beat * 2) for note in result.events)
 
 
 def test_registration_quality_collapses_short_neighbor_pitch_blip() -> None:
@@ -93,7 +93,7 @@ def test_registration_quality_collapses_short_neighbor_pitch_blip() -> None:
         ),
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         notes,
         bpm=92,
         slot_id=1,
@@ -102,7 +102,7 @@ def test_registration_quality_collapses_short_neighbor_pitch_blip() -> None:
         time_signature_denominator=4,
     )
 
-    assert [(note.label, note.beat, note.duration_beats) for note in result.notes] == [("C5", 1.0, 1.5)]
+    assert [(note.label, note.beat, note.duration_beats) for note in result.events] == [("C5", 1.0, 1.5)]
     assert "voice_pitch_blip_collapse_1" in result.diagnostics["actions"]
 
 
@@ -120,7 +120,7 @@ def test_registration_quality_prefers_readable_grid_for_moderate_micro_notes() -
         for index in range(7)
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         notes,
         bpm=92,
         slot_id=2,
@@ -130,8 +130,8 @@ def test_registration_quality_prefers_readable_grid_for_moderate_micro_notes() -
     )
 
     assert "readability_grid_0.5" in result.diagnostics["actions"]
-    assert result.diagnostics["max_notes_per_measure"] <= 4
-    assert all(note.quantization_grid == 0.5 for note in result.notes)
+    assert result.diagnostics["max_events_per_measure"] <= 4
+    assert all(note.quantization_grid == 0.5 for note in result.events)
 
 
 def test_registration_quality_removes_isolated_short_artifact() -> None:
@@ -165,7 +165,7 @@ def test_registration_quality_removes_isolated_short_artifact() -> None:
         ),
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         notes,
         bpm=92,
         slot_id=1,
@@ -174,10 +174,10 @@ def test_registration_quality_removes_isolated_short_artifact() -> None:
         time_signature_denominator=4,
     )
 
-    assert [note.label for note in result.notes] == ["C5", "D5"]
-    assert "F#5" not in [note.label for note in result.notes]
+    assert [note.label for note in result.events] == ["C5", "D5"]
+    assert "F#5" not in [note.label for note in result.events]
     assert "voice_isolated_artifact_removed_1" in result.diagnostics["actions"]
-    assert result.diagnostics["isolated_short_note_count"] == 0
+    assert result.diagnostics["isolated_short_event_count"] == 0
 
 
 def test_registration_quality_bridges_short_detector_gap_inside_phrase() -> None:
@@ -202,7 +202,7 @@ def test_registration_quality_bridges_short_detector_gap_inside_phrase() -> None
         ),
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         notes,
         bpm=92,
         slot_id=1,
@@ -211,7 +211,7 @@ def test_registration_quality_bridges_short_detector_gap_inside_phrase() -> None
         time_signature_denominator=4,
     )
 
-    assert [(note.label, note.beat, note.duration_beats) for note in result.notes] == [
+    assert [(note.label, note.beat, note.duration_beats) for note in result.events] == [
         ("C5", 1.0, 1.0),
         ("D5", 2.0, 1.0),
     ]
@@ -241,7 +241,7 @@ def test_registration_quality_bridges_short_measure_tail_before_barline() -> Non
         ),
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         notes,
         bpm=92,
         slot_id=1,
@@ -250,7 +250,7 @@ def test_registration_quality_bridges_short_measure_tail_before_barline() -> Non
         time_signature_denominator=4,
     )
 
-    assert [(note.label, note.beat, note.duration_beats, note.measure_index) for note in result.notes] == [
+    assert [(note.label, note.beat, note.duration_beats, note.measure_index) for note in result.events] == [
         ("C5", 1.0, 4.0, 1),
         ("D5", 5.0, 1.0, 2),
     ]
@@ -289,7 +289,7 @@ def test_registration_quality_collapses_low_confidence_short_note_cluster() -> N
         ),
     ]
 
-    result = prepare_notes_for_track_registration(
+    result = prepare_events_for_track_registration(
         notes,
         bpm=92,
         slot_id=1,
@@ -298,7 +298,7 @@ def test_registration_quality_collapses_low_confidence_short_note_cluster() -> N
         time_signature_denominator=4,
     )
 
-    assert [(note.label, note.beat, note.duration_beats) for note in result.notes] == [("C5", 1.0, 0.75)]
+    assert [(note.label, note.beat, note.duration_beats) for note in result.events] == [("C5", 1.0, 0.75)]
     assert "voice_short_cluster_collapse_1" in result.diagnostics["actions"]
     assert result.diagnostics["short_note_cluster_count"] == 0
 
@@ -314,7 +314,7 @@ def test_registration_review_instruction_can_force_key_spelling_without_llm_writ
             pitch_midi=70,
         )
     ]
-    baseline = prepare_notes_for_track_registration(
+    baseline = prepare_events_for_track_registration(
         notes,
         bpm=120,
         slot_id=2,
@@ -338,10 +338,10 @@ def test_registration_review_instruction_can_force_key_spelling_without_llm_writ
         baseline_result=baseline,
     )
 
-    assert result.notes[0].pitch_midi == 70
-    assert result.notes[0].key_signature == "F"
-    assert result.notes[0].spelled_label == "Bb4"
-    assert result.notes[0].accidental is None
+    assert result.events[0].pitch_midi == 70
+    assert result.events[0].key_signature == "F"
+    assert result.events[0].spelled_label == "Bb4"
+    assert result.events[0].accidental is None
     assert "llm_prefer_key_F" in result.diagnostics["actions"]
 
 
@@ -367,8 +367,8 @@ def test_deepseek_registration_review_is_disabled_without_feature_flag() -> None
         time_signature_denominator=4,
         slot_id=1,
         source_kind="recording",
-        original_notes=[note],
-        prepared_notes=[note],
+        original_events=[note],
+        prepared_events=[note],
         diagnostics={},
     )
 
@@ -397,8 +397,8 @@ def test_deepseek_ensemble_registration_review_is_disabled_without_feature_flag(
         time_signature_denominator=4,
         slot_id=2,
         source_kind="recording",
-        original_notes=[note],
-        prepared_notes=[note],
+        original_events=[note],
+        prepared_events=[note],
         diagnostics={},
         context_tracks_by_slot={1: [note]},
     )
@@ -485,9 +485,9 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
         time_signature_denominator=4,
         slot_id=1,
         source_kind="recording",
-        original_notes=notes,
-        prepared_notes=notes,
-        diagnostics={"max_notes_per_measure": 12},
+        original_events=notes,
+        prepared_events=notes,
+        diagnostics={"max_events_per_measure": 12},
     )
 
     assert instruction is not None
@@ -505,7 +505,7 @@ def test_deepseek_registration_review_parses_bounded_json_instruction(monkeypatc
     assert "thinking" not in captured_payload["body"]
     user_context = json.loads(captured_payload["body"]["messages"][1]["content"])
     options = user_context["deterministic_quality_options"]
-    assert options[0]["isolated_short_note_count"] == 1
+    assert options[0]["isolated_short_event_count"] == 1
     assert "short_phrase_gap_count" in options[0]
     assert "measure_tail_gap_count" in options[0]
     assert "short_note_cluster_count" in options[0]
@@ -531,7 +531,7 @@ def test_deepseek_registration_plan_sends_sibling_context(monkeypatch) -> None:
                     "confidence": 0.8,
                     "quantization_grid": "0.5",
                     "merge_adjacent_same_pitch": True,
-                    "reasons": ["기존 트랙 맥락상 더 읽기 쉬운 등록 계획입니다."],
+                    "reasons": ["湲곗〈 ?몃옓 留λ씫?????쎄린 ?ъ슫 ?깅줉 怨꾪쉷?낅땲??"],
                 }
             )
             return json.dumps({"choices": [{"message": {"content": content}}]}).encode("utf-8")
@@ -575,9 +575,9 @@ def test_deepseek_registration_plan_sends_sibling_context(monkeypatch) -> None:
         time_signature_denominator=4,
         slot_id=3,
         source_kind="recording",
-        original_notes=[tenor_take],
-        prepared_notes=[tenor_take],
-        diagnostics={"max_notes_per_measure": 8},
+        original_events=[tenor_take],
+        prepared_events=[tenor_take],
+        diagnostics={"max_events_per_measure": 8},
         context_tracks_by_slot={1: [soprano]},
     )
 
@@ -607,7 +607,7 @@ def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monke
                     "confidence": 0.82,
                     "quantization_grid": 0.5,
                     "merge_adjacent_same_pitch": True,
-                    "reasons": ["앙상블 안에서 읽기 쉽게 0.5 beat grid가 낫습니다."],
+                    "reasons": ["?숈긽釉??덉뿉???쎄린 ?쎄쾶 0.5 beat grid媛 ?レ뒿?덈떎."],
                 }
             )
             return json.dumps({"choices": [{"message": {"content": content}}]}).encode("utf-8")
@@ -651,8 +651,8 @@ def test_deepseek_ensemble_registration_review_sends_sibling_track_context(monke
         time_signature_denominator=4,
         slot_id=2,
         source_kind="recording",
-        original_notes=[alto],
-        prepared_notes=[alto],
+        original_events=[alto],
+        prepared_events=[alto],
         diagnostics={"ensemble_arrangement": {"warnings": ["spacing"]}},
         context_tracks_by_slot={1: [soprano]},
         proposed_tracks_by_slot={2: [alto]},

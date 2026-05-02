@@ -12,13 +12,13 @@ Canonical user-facing flow:
 
 `Studio -> Track -> Region -> PitchEvent/AudioClip -> Playback/Practice/Scoring`
 
-Compatibility flow:
+Internal engine flow:
 
 `TrackPitchEvent` lives in `gigastudy_api.domain.track_events` as an internal
-extraction, registration, storage, and scoring adapter while persistent regions
-are being migrated. API schemas do not export it as a public contract. Internal
-event records are converted to `PitchEvent`/`ArrangementRegion` for the product
-UI, API response, and submitted scoring event input.
+extraction, registration, storage-shadow, and scoring event type. It is not a
+staff-era adapter and is not exported as a public contract. Internal event records
+are converted to `PitchEvent`/`ArrangementRegion` for the product UI, API
+response, and submitted scoring event input.
 
 ## Runtime Shape
 
@@ -50,15 +50,18 @@ UI, API response, and submitted scoring event input.
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
 - `apps/api/src/gigastudy_api/api/schemas/studios.py`
-  Internal storage plus public response contracts. `Studio` may still retain
-  import/scoring compatibility notes internally, but studio routes return
-  `StudioResponse`, whose tracks and candidates omit legacy note arrays.
+  Internal storage plus public response contracts. `Studio.regions` is the
+  product arrangement truth. `TrackSlot.events` and
+  `ExtractionCandidate.events` are internal storage shadows for import,
+  registration, and scoring. They accept only `"events"`; old `"notes"` payloads
+  are rejected with the rest of the obsolete storage shape. Studio routes return
+  `StudioResponse`, whose tracks and candidates omit internal event arrays.
   `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
-  arrangement data flow. Document imports use `source_kind: "document"`; legacy
-  `"score"` input is accepted only as a compatibility alias and normalized at
-  the API boundary. `PitchEvent` carries timing, source, extraction method,
-  measure position, and quality warnings so consumers do not need legacy note
-  arrays for product behavior.
+  arrangement data flow. Document imports use `source_kind: "document"`;
+  `"score"` is no longer accepted as a source-kind alias. `PitchEvent` carries
+  timing, source, extraction method, measure position, and quality warnings so
+  consumers do not need storage shadows for product behavior. Scoring reports
+  expose event IDs and event counts only.
 - `apps/api/src/gigastudy_api/domain/track_events.py`
   Internal pitch-event adapter for extraction, registration, persistence, and
   scoring. `TrackPitchEvent` belongs here instead of the API schema module.
@@ -129,9 +132,10 @@ flowchart TD
 
 1. Web calls `GET /api/studios/{studio_id}`.
 2. API loads a `Studio` from `StudioStore`.
-3. API builds a `StudioResponse`, stripping internal note arrays from tracks
+3. API builds a `StudioResponse`, stripping internal event shadows from tracks
    and candidates.
-4. `StudioResponse.regions` is computed from registered tracks.
+4. `StudioResponse.regions` uses persisted explicit regions and derives a
+   fallback region from current registered track event shadows when needed.
 5. Web passes `studio.regions` into `TrackBoard`.
 6. `TrackBoard`, playback, candidate review, and practice waterfall consume
    pitch events from the same region payload.
@@ -204,23 +208,33 @@ flowchart TD
 - MIDI/MusicXML/PDF import adapters as extraction inputs.
 - Candidate review, diagnostics, AI generation, scoring, and report history.
 
-## Next Internal Migration
+## Architecture Fitness Check
 
-The remaining compatibility layer is now mostly storage shape:
+The rebuild now follows the intended separation:
 
-- `TrackPitchEvent` is no longer exposed by the studio API schema module. It is
-  the internal adapter until persistent studio state stores explicit regions and
-  events.
-- The old notation registration layer has been renamed around event
-  normalization, event quality, and registration review. Legacy storage aliases
-  exist only for reading old data, not as active product fields.
-- Studio API responses now use `StudioResponse` to prevent `TrackSlot.notes`
-  and `ExtractionCandidate.notes` from leaking back into product clients.
-- Score requests accept `performance_events`; `performance_notes` is no longer
-  part of the route input contract or the internal scoring pipeline.
-- Persistent studio state should eventually store explicit regions/events.
-- Candidate pitch-event arrays should remain internal compatibility state only;
-  candidate review must use `ExtractionCandidateResponse.region`.
+- Product truth: `Studio.regions`, `ArrangementRegion.pitch_events`, and
+  `CandidateRegion.pitch_events`.
+- Product surfaces: region lanes, selected-region piano roll, waterfall
+  practice, playback, and report focus consume region/event payloads only.
+- Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,
+  and scoring can use `TrackPitchEvent` internally, then publish regions.
+- No obsolete compatibility path: old `"notes"` storage arrays, `"score"` source
+  kind, staff-notation aliases, and old report note IDs/counts are rejected
+  rather than translated.
+- Responsibility split: schemas own public/private contracts; repository and
+  command services orchestrate persistence and workflows; engines own
+  extraction, normalization, registration quality, generation, and scoring;
+  web consumes the public region contract.
+
+## Remaining Boundaries
+
+These are accepted residuals, not staff-UI anchors:
+
+- Engine-local variables may still say `note` where they mean a musical pitched
+  event. This is domain language inside algorithms, not a product data contract.
+- Engine diagnostics may still use ordinary musical terms such as note, pitch,
+  chord, or beat when describing algorithmic analysis. Public contracts and UI
+  flow remain region/event based.
 - Report focus currently targets persisted answer regions. Performance-take
   focus should be expanded after recorded takes become explicit persisted
   regions instead of report-local comparison payloads.

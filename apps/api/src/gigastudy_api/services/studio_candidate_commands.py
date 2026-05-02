@@ -77,11 +77,11 @@ class StudioCandidateCommands:
                 studio,
                 target_slot_id,
                 source_kind=candidate.source_kind,
-                notes=candidate.notes,
+                notes=candidate.events,
             )
             mark_candidate_approved(
                 candidate,
-                notes=registration.notes,
+                notes=registration.events,
                 registration_diagnostics=registration.diagnostics,
                 timestamp=timestamp,
             )
@@ -90,8 +90,8 @@ class StudioCandidateCommands:
                 timestamp=timestamp,
                 source_kind=candidate.source_kind,
                 source_label=candidate.source_label,
-                notes=registration.notes,
-                duration_seconds=track_duration_seconds(registration.notes),
+                notes=registration.events,
+                duration_seconds=track_duration_seconds(registration.events),
                 registration_diagnostics=registration.diagnostics,
                 audio_source_path=candidate.audio_source_path,
                 audio_source_label=candidate.audio_source_label,
@@ -184,7 +184,7 @@ class StudioCandidateCommands:
                 registrations = self._repository._prepare_registration_batch(
                     studio,
                     {
-                        slot_id: candidate.notes
+                        slot_id: candidate.events
                         for slot_id, candidate in unique_candidates_by_slot.items()
                     },
                     source_kind=shared_source_kind,
@@ -195,7 +195,7 @@ class StudioCandidateCommands:
                         studio,
                         slot_id,
                         source_kind=candidate.source_kind,
-                        notes=candidate.notes,
+                        notes=candidate.events,
                     )
                     for slot_id, candidate in unique_candidates_by_slot.items()
                 }
@@ -204,7 +204,7 @@ class StudioCandidateCommands:
                 registration = registrations[slot_id]
                 mark_candidate_approved(
                     candidate,
-                    notes=registration.notes,
+                    notes=registration.events,
                     registration_diagnostics=registration.diagnostics,
                     timestamp=timestamp,
                 )
@@ -213,8 +213,8 @@ class StudioCandidateCommands:
                     timestamp=timestamp,
                     source_kind=candidate.source_kind,
                     source_label=candidate.source_label,
-                    notes=registration.notes,
-                    duration_seconds=track_duration_seconds(registration.notes),
+                    notes=registration.events,
+                    duration_seconds=track_duration_seconds(registration.events),
                     registration_diagnostics=registration.diagnostics,
                     audio_source_path=candidate.audio_source_path,
                     audio_source_label=candidate.audio_source_label,
@@ -254,7 +254,7 @@ class StudioCandidateCommands:
             source_kind=source_kind,
             notes=notes,
         )
-        notes = registration.notes
+        notes = registration.events
         diagnostics = candidate_diagnostics(
             suggested_slot_id,
             notes,
@@ -293,7 +293,7 @@ class StudioCandidateCommands:
     def add_extraction_candidates(
         self,
         studio_id: str,
-        mapped_notes: dict[int, list[TrackPitchEvent]],
+        mapped_events: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
         source_label: str,
@@ -315,14 +315,14 @@ class StudioCandidateCommands:
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = self._now()
-            for slot_id, notes in mapped_notes.items():
+            for slot_id, notes in mapped_events.items():
                 registration = self._repository._prepare_registration_notes(
                     studio,
                     slot_id,
                     source_kind=source_kind,
                     notes=notes,
                 )
-                notes = registration.notes
+                notes = registration.events
                 source_diagnostics = (diagnostics_by_slot or {}).get(slot_id)
                 slot_confidence = (
                     confidence_by_slot.get(slot_id)
@@ -389,7 +389,7 @@ class StudioCandidateCommands:
                         clear_unmapped_omr_placeholders(
                             studio,
                             job,
-                            mapped_slot_ids=set(mapped_notes),
+                            mapped_slot_ids=set(mapped_events),
                             timestamp=timestamp,
                         )
                     break
@@ -401,7 +401,7 @@ class StudioCandidateCommands:
         self,
         studio_id: str,
         slot_id: int,
-        candidate_notes: list[list[TrackPitchEvent]],
+        candidate_events: list[list[TrackPitchEvent]],
         *,
         source_label: str,
         method: str,
@@ -418,14 +418,14 @@ class StudioCandidateCommands:
                 slot_id,
             )
             candidate_group_id = uuid4().hex
-            for index, notes in enumerate(candidate_notes, start=1):
+            for index, notes in enumerate(candidate_events, start=1):
                 registration = self._repository._prepare_registration_notes(
                     studio,
                     slot_id,
                     source_kind="ai",
                     notes=notes,
                 )
-                notes = registration.notes
+                notes = registration.events
                 confidence = min((note.confidence for note in notes), default=0.65)
                 diagnostics, variant_label = generation_candidate_review_metadata(
                     slot_id=slot_id,

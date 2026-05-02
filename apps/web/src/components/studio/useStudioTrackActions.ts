@@ -126,7 +126,7 @@ export function useStudioTrackActions({
       `${track.name} 파트 후보를 생성하는 중입니다.`,
       track.slot_id === 6
         ? '퍼커션 트랙에 BPM 기반 비트 후보 3개를 만들었습니다.'
-        : `${track.name} 트랙에 참고 트랙 기반 노트 후보 3개를 만들었습니다.`,
+          : `${track.name} 트랙에 참고 트랙 기반 이벤트 후보 3개를 만들었습니다.`,
     )
   }
 

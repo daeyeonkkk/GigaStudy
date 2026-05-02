@@ -15,7 +15,7 @@ from gigastudy_api.services.llm.extraction_plan import (
     plan_voice_extraction_with_deepseek,
 )
 from gigastudy_api.services.studio_generation import (
-    DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT,
+    DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT,
     _generation_planning_settings,
 )
 
@@ -42,7 +42,7 @@ def test_deepseek_planner_is_disabled_until_explicitly_enabled() -> None:
         time_signature_numerator=4,
         time_signature_denominator=4,
         target_slot_id=2,
-        context_notes_by_slot={1: [_note()]},
+        context_events_by_slot={1: [_note()]},
         candidate_count=3,
     )
 
@@ -60,7 +60,7 @@ def test_generation_planning_skips_llm_for_large_context() -> None:
 
     planning_settings = _generation_planning_settings(
         settings,
-        context_note_count=DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT + 1,
+        context_event_count=DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT + 1,
     )
 
     assert planning_settings.deepseek_harmony_enabled is False
@@ -73,7 +73,7 @@ def test_generation_planning_uses_llm_for_typical_multitrack_context() -> None:
         deepseek_timeout_seconds=8,
     )
 
-    planning_settings = _generation_planning_settings(settings, context_note_count=54)
+    planning_settings = _generation_planning_settings(settings, context_event_count=54)
 
     assert planning_settings.deepseek_harmony_enabled is True
 
@@ -87,7 +87,7 @@ def test_generation_planning_caps_llm_latency_for_small_context() -> None:
         deepseek_revision_cycles=2,
     )
 
-    planning_settings = _generation_planning_settings(settings, context_note_count=4)
+    planning_settings = _generation_planning_settings(settings, context_event_count=4)
 
     assert planning_settings.deepseek_harmony_enabled is True
     assert planning_settings.deepseek_timeout_seconds == 6.0
@@ -169,7 +169,7 @@ def test_deepseek_payload_uses_json_mode_and_non_thinking_by_default() -> None:
         time_signature_numerator=4,
         time_signature_denominator=4,
         target_slot_id=3,
-        context_notes_by_slot={1: [_note(1, "C5"), _note(2, "G5")]},
+        context_events_by_slot={1: [_note(1, "C5"), _note(2, "G5")]},
         candidate_count=3,
     )
 
@@ -202,7 +202,7 @@ def test_openrouter_payload_omits_native_deepseek_thinking_field() -> None:
         time_signature_numerator=4,
         time_signature_denominator=4,
         target_slot_id=3,
-        context_notes_by_slot={1: [_note(1, "C5"), _note(2, "G5")]},
+        context_events_by_slot={1: [_note(1, "C5"), _note(2, "G5")]},
         candidate_count=3,
     )
     headers = _chat_completion_headers(settings)
@@ -292,7 +292,7 @@ def test_deepseek_revision_payload_keeps_draft_as_json_only_plan() -> None:
         time_signature_numerator=4,
         time_signature_denominator=4,
         target_slot_id=2,
-        context_notes_by_slot={1: [_note()]},
+        context_events_by_slot={1: [_note()]},
         candidate_count=3,
         draft_plan=draft_plan,
         cycle_index=1,

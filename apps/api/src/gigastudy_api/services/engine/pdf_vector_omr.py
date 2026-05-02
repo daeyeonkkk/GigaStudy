@@ -155,7 +155,7 @@ def parse_born_digital_pdf_score(
             next_measure_by_slot[staff.slot_id] += max(1, row_measure_count)
 
     tracks: list[ParsedTrack] = []
-    mapped_notes: dict[int, list[TrackPitchEvent]] = {}
+    mapped_events: dict[int, list[TrackPitchEvent]] = {}
     for slot_id, raw_notes in sorted(raw_notes_by_slot.items()):
         notes = _finalize_track_notes(
             raw_notes,
@@ -183,16 +183,16 @@ def parse_born_digital_pdf_score(
                 ),
             )
         )
-        mapped_notes[slot_id] = notes
+        mapped_events[slot_id] = notes
 
-    if not mapped_notes:
+    if not mapped_events:
         if labelled_slots_seen:
             raise PdfVectorOmrError("Part labels were found, but no score noteheads could be extracted.")
         raise PdfVectorOmrError("No labelled score staves could be extracted from the PDF.")
 
     return ParsedSymbolicFile(
         tracks=tracks,
-        mapped_notes=mapped_notes,
+        mapped_events=mapped_events,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
         has_time_signature=False,
@@ -591,7 +591,7 @@ def _vector_review_hint(
     if timing_grid_ratio < 0.82:
         return "rhythm_grid_review"
     if detected_part_count < 4:
-        return "partial_score_review"
+        return "partial_document_review"
     return "review_accidentals_and_rhythm"
 
 

@@ -250,7 +250,7 @@ export function StudioToolbar({
             type="button"
             onClick={() => onPlaybackSourceChange('events')}
           >
-            노트
+            이벤트
           </button>
         </div>
       </div>

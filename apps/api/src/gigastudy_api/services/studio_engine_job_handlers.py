@@ -11,7 +11,7 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     estimate_candidate_confidence,
     parsed_track_diagnostics_by_slot,
 )
-from gigastudy_api.services.engine.omr_results import mark_notes_as_omr
+from gigastudy_api.services.engine.omr_results import mark_events_as_omr
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 from gigastudy_api.services.engine_queue import EngineQueueJob
 from gigastudy_api.services.omr_pipeline import OmrPipelineError, run_omr_pipeline
@@ -69,11 +69,11 @@ class StudioEngineJobHandlers:
             return
 
         parsed_symbolic = result.parsed_symbolic
-        mapped_notes = mark_notes_as_omr(
-            parsed_symbolic.mapped_notes,
+        mapped_events = mark_events_as_omr(
+            parsed_symbolic.mapped_events,
             extraction_method=result.extraction_method,
         )
-        if not mapped_notes:
+        if not mapped_events:
             self._repository._mark_job_failed(
                 record.studio_id,
                 record.job_id,
@@ -106,7 +106,7 @@ class StudioEngineJobHandlers:
                 fallback_confidence=result.confidence,
                 diagnostics=diagnostics_by_slot.get(slot_id),
             )
-            for slot_id, notes in mapped_notes.items()
+            for slot_id, notes in mapped_events.items()
         }
         message_by_slot = {
             slot_id: candidate_review_message(
@@ -122,11 +122,11 @@ class StudioEngineJobHandlers:
                 ),
                 default_message=result.message,
             )
-            for slot_id, notes in mapped_notes.items()
+            for slot_id, notes in mapped_events.items()
         }
         self._repository._add_extraction_candidates(
             record.studio_id,
-            mapped_notes,
+            mapped_events,
             source_kind="document",
             source_label=source_label,
             method=result.candidate_method,
@@ -157,11 +157,11 @@ class StudioEngineJobHandlers:
         if review_before_register:
             self._repository._add_extraction_candidates(
                 record.studio_id,
-                {record.slot_id: result.notes},
+                {record.slot_id: result.events},
                 source_kind="audio",
                 source_label=result.source_label,
                 method="voice_transcription_review",
-                confidence=min((note.confidence for note in result.notes), default=0.45),
+                confidence=min((note.confidence for note in result.events), default=0.45),
                 diagnostics_by_slot={record.slot_id: result.diagnostics},
                 message="Voice transcription is waiting for user approval.",
                 job_id=record.job_id,
@@ -184,7 +184,7 @@ class StudioEngineJobHandlers:
             record.slot_id,
             source_kind="audio",
             source_label=result.source_label,
-            notes=result.notes,
+            notes=result.events,
             audio_source_path=result.relative_audio_path,
             audio_source_label=result.source_label,
             audio_mime_type=result.audio_mime_type,

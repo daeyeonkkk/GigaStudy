@@ -28,14 +28,14 @@ def plan_harmony_with_deepseek(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
 ) -> DeepSeekHarmonyPlan | None:
     if not settings.deepseek_harmony_enabled or not settings.deepseek_api_key:
         return None
     if target_slot_id == 6:
         return None
-    if not context_notes_by_slot:
+    if not context_events_by_slot:
         return None
 
     endpoint = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
@@ -46,7 +46,7 @@ def plan_harmony_with_deepseek(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
         target_slot_id=target_slot_id,
-        context_notes_by_slot=context_notes_by_slot,
+        context_events_by_slot=context_events_by_slot,
         candidate_count=candidate_count,
     )
 
@@ -67,7 +67,7 @@ def plan_harmony_with_deepseek(
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 target_slot_id=target_slot_id,
-                context_notes_by_slot=context_notes_by_slot,
+                context_events_by_slot=context_events_by_slot,
                 candidate_count=candidate_count,
             )
             return complete_harmony_plan(
@@ -117,7 +117,7 @@ def _revise_plan_with_deepseek(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
 ) -> DeepSeekHarmonyPlan:
     plan = draft_plan
@@ -131,7 +131,7 @@ def _revise_plan_with_deepseek(
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 target_slot_id=target_slot_id,
-                context_notes_by_slot=context_notes_by_slot,
+                context_events_by_slot=context_events_by_slot,
                 candidate_count=candidate_count,
                 draft_plan=plan,
                 cycle_index=cycle_index + 1,
@@ -157,7 +157,7 @@ def _build_chat_completion_payload(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
 ) -> dict[str, Any]:
     context = {
@@ -187,11 +187,11 @@ def _build_chat_completion_payload(
         ],
         "context_tracks": [
             _summarize_track(slot_id, notes)
-            for slot_id, notes in sorted(context_notes_by_slot.items())
+            for slot_id, notes in sorted(context_events_by_slot.items())
             if notes
         ],
         "measure_summaries": _summarize_measures(
-            context_notes_by_slot,
+            context_events_by_slot,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ),
@@ -259,7 +259,7 @@ def _build_plan_revision_payload(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
     draft_plan: DeepSeekHarmonyPlan,
     cycle_index: int,
@@ -287,11 +287,11 @@ def _build_plan_revision_payload(
         ],
         "context_tracks": [
             _summarize_track(slot_id, notes)
-            for slot_id, notes in sorted(context_notes_by_slot.items())
+            for slot_id, notes in sorted(context_events_by_slot.items())
             if notes
         ],
         "measure_summaries": _summarize_measures(
-            context_notes_by_slot,
+            context_events_by_slot,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ),
@@ -367,7 +367,7 @@ def _summarize_track(slot_id: int, notes: list[TrackPitchEvent]) -> dict[str, An
     return {
         "slot_id": slot_id,
         "name": track_name(slot_id),
-        "note_count": len(pitched_notes),
+        "event_count": len(pitched_notes),
         "range": _range_label(pitches),
         "events": [
             {
@@ -384,14 +384,14 @@ def _summarize_track(slot_id: int, notes: list[TrackPitchEvent]) -> dict[str, An
 
 
 def _summarize_measures(
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> list[dict[str, Any]]:
     beats_per_measure = max(0.25, time_signature_numerator * (4 / max(1, time_signature_denominator)))
     measure_map: dict[int, dict[str, Any]] = {}
-    for slot_id, notes in context_notes_by_slot.items():
+    for slot_id, notes in context_events_by_slot.items():
         for note in notes:
             if note.pitch_midi is None or note.is_rest:
                 continue

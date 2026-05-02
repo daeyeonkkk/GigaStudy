@@ -5,7 +5,8 @@ import re
 from pathlib import Path
 from typing import Type
 
-from pydantic import BaseModel
+import pytest
+from pydantic import BaseModel, ValidationError
 
 from gigastudy_api.api.schemas.admin import (
     AdminAssetSummary,
@@ -37,7 +38,7 @@ from gigastudy_api.api.schemas.studios import (
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.timeline import registered_region_events_for_slot
-from gigastudy_api.services.studio_generation import build_generation_context_notes_by_slot
+from gigastudy_api.services.studio_generation import build_generation_context_events_by_slot
 from gigastudy_api.services.studio_scoring import validate_score_track_request
 from gigastudy_api.services.studio_documents import encode_studio_payload
 
@@ -86,7 +87,7 @@ def test_studio_response_includes_arrangement_regions() -> None:
                 source_kind="midi",
                 source_label="seed.mid",
                 duration_seconds=0,
-                notes=[
+                events=[
                     TrackPitchEvent(
                         label="C4",
                         pitch_midi=60,
@@ -110,6 +111,7 @@ def test_studio_response_includes_arrangement_regions() -> None:
     payload = build_studio_response(studio).model_dump(mode="json")
 
     assert "notes" not in payload["tracks"][0]
+    assert "events" not in payload["tracks"][0]
     assert payload["regions"][0]["region_id"] == "track-1-region-1"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
     assert payload["regions"][0]["pitch_events"][0]["measure_index"] == 1
@@ -131,7 +133,7 @@ def test_studio_payload_persists_explicit_regions_from_internal_events() -> None
                 source_kind="midi",
                 source_label="seed.mid",
                 duration_seconds=0,
-                notes=[
+                events=[
                     TrackPitchEvent(
                         label="C4",
                         pitch_midi=60,
@@ -156,6 +158,58 @@ def test_studio_payload_persists_explicit_regions_from_internal_events() -> None
     assert studio.regions[0].pitch_events[0].label == "C4"
 
 
+def test_track_slot_rejects_obsolete_notes_field() -> None:
+    with pytest.raises(ValidationError):
+        TrackSlot.model_validate(
+            {
+                "slot_id": 1,
+                "name": "Soprano",
+                "status": "registered",
+                "source_kind": "midi",
+                "source_label": "old.mid",
+                "duration_seconds": 1,
+                "notes": [
+                    {
+                        "label": "C4",
+                        "pitch_midi": 60,
+                        "beat": 1,
+                        "duration_beats": 1,
+                        "source": "midi",
+                    }
+                ],
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+        )
+
+
+def test_track_slot_stores_events_only() -> None:
+    track = TrackSlot.model_validate(
+        {
+            "slot_id": 1,
+            "name": "Soprano",
+            "status": "registered",
+            "source_kind": "midi",
+            "source_label": "events.mid",
+            "duration_seconds": 1,
+            "events": [
+                {
+                    "label": "C4",
+                    "pitch_midi": 60,
+                    "beat": 1,
+                    "duration_beats": 1,
+                    "source": "midi",
+                }
+            ],
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    payload = track.model_dump(mode="json")
+
+    assert track.events[0].label == "C4"
+    assert payload["events"][0]["label"] == "C4"
+    assert "notes" not in payload
+
+
 def test_engine_context_reads_persisted_regions_without_track_notes() -> None:
     track = TrackSlot(
         slot_id=1,
@@ -164,7 +218,7 @@ def test_engine_context_reads_persisted_regions_without_track_notes() -> None:
         source_kind="midi",
         source_label="region-only.mid",
         duration_seconds=1,
-        notes=[],
+        events=[],
         updated_at="2026-01-01T00:00:00Z",
     )
     studio = Studio(
@@ -203,7 +257,7 @@ def test_engine_context_reads_persisted_regions_without_track_notes() -> None:
     )
 
     events = registered_region_events_for_slot(studio, 1)
-    context = build_generation_context_notes_by_slot(
+    context = build_generation_context_events_by_slot(
         studio,
         target_slot_id=2,
         requested_context_slot_ids=None,
@@ -232,7 +286,7 @@ def test_studio_payload_preserves_explicit_region_without_track_notes() -> None:
                 source_kind="midi",
                 source_label="region-only.mid",
                 duration_seconds=1,
-                notes=[],
+                events=[],
                 updated_at="2026-01-01T00:00:00Z",
             )
         ],
@@ -283,7 +337,7 @@ def test_studio_response_drops_stale_explicit_region_for_empty_track() -> None:
                 name="Soprano",
                 status="empty",
                 duration_seconds=0,
-                notes=[],
+                events=[],
                 updated_at="2026-01-01T00:00:00Z",
             )
         ],
@@ -327,7 +381,7 @@ def test_candidate_response_includes_region_candidate() -> None:
         source_kind="ai",
         source_label="AI harmony",
         method="rule_based",
-        notes=[
+        events=[
             TrackPitchEvent(
                 label="E4",
                 pitch_midi=64,
@@ -358,6 +412,7 @@ def test_candidate_response_includes_region_candidate() -> None:
     payload = build_studio_response(studio).model_dump(mode="json")["candidates"][0]
 
     assert "notes" not in payload
+    assert "events" not in payload
     assert payload["region"]["region_id"] == "candidate-candidate-region-contract-region-1"
     assert payload["region"]["suggested_slot_id"] == 2
     assert payload["region"]["pitch_events"][0]["label"] == "E4"
@@ -372,7 +427,7 @@ def test_studio_payload_persists_candidate_region_from_internal_events() -> None
         source_kind="ai",
         source_label="AI alto",
         method="rule_based",
-        notes=[
+        events=[
             TrackPitchEvent(
                 label="A3",
                 pitch_midi=57,
@@ -407,6 +462,85 @@ def test_studio_payload_persists_candidate_region_from_internal_events() -> None
     assert studio.candidates[0].region.pitch_events[0].label == "A3"
 
 
+def test_extraction_candidate_rejects_obsolete_notes_field() -> None:
+    with pytest.raises(ValidationError):
+        ExtractionCandidate.model_validate(
+            {
+                "candidate_id": "old-candidate-events",
+                "suggested_slot_id": 2,
+                "source_kind": "ai",
+                "source_label": "AI harmony",
+                "method": "rule_based",
+                "notes": [
+                    {
+                        "label": "E4",
+                        "pitch_midi": 64,
+                        "beat": 1,
+                        "duration_beats": 1,
+                        "source": "ai",
+                    }
+                ],
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+        )
+
+
+def test_extraction_candidate_stores_events_only() -> None:
+    candidate = ExtractionCandidate.model_validate(
+        {
+            "candidate_id": "candidate-events",
+            "suggested_slot_id": 2,
+            "source_kind": "ai",
+            "source_label": "AI harmony",
+            "method": "rule_based",
+            "events": [
+                {
+                    "label": "E4",
+                    "pitch_midi": 64,
+                    "beat": 1,
+                    "duration_beats": 1,
+                    "source": "ai",
+                }
+            ],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    payload = candidate.model_dump(mode="json")
+
+    assert candidate.events[0].label == "E4"
+    assert payload["events"][0]["label"] == "E4"
+    assert "notes" not in payload
+
+
+def test_scoring_report_rejects_obsolete_note_count_fields() -> None:
+    with pytest.raises(ValidationError):
+        ScoringReport.model_validate(
+            {
+                "report_id": "old-report",
+                "target_slot_id": 1,
+                "target_track_name": "Soprano",
+                "reference_slot_ids": [2],
+                "include_metronome": True,
+                "created_at": "2026-01-01T00:00:00Z",
+                "answer_note_count": 4,
+                "issues": [],
+            }
+        )
+
+
+def test_report_issue_rejects_obsolete_note_id_fields() -> None:
+    with pytest.raises(ValidationError):
+        ReportIssue.model_validate(
+            {
+                "at_seconds": 0,
+                "issue_type": "pitch",
+                "answer_note_id": "answer-source",
+            }
+        )
+
+
 def test_studio_payload_preserves_explicit_candidate_region_without_internal_events() -> None:
     candidate = ExtractionCandidate(
         candidate_id="candidate-region-only",
@@ -414,7 +548,7 @@ def test_studio_payload_preserves_explicit_candidate_region_without_internal_eve
         source_kind="ai",
         source_label="AI tenor",
         method="rule_based",
-        notes=[],
+        events=[],
         region=CandidateRegion(
             region_id="explicit-candidate-region",
             suggested_slot_id=4,
@@ -462,7 +596,7 @@ def test_score_track_request_uses_performance_events_not_notes() -> None:
     assert "performance_notes" not in ScoreTrackRequest.model_fields
 
 
-def test_public_openapi_does_not_expose_legacy_note_contracts() -> None:
+def test_public_openapi_does_not_expose_obsolete_note_contracts() -> None:
     openapi = create_app().openapi()
     schemas = openapi["components"]["schemas"]
     serialized = json.dumps(openapi)
@@ -474,64 +608,35 @@ def test_public_openapi_does_not_expose_legacy_note_contracts() -> None:
     assert "TrackNote" not in schemas
     assert "TrackPitchEvent" not in schemas
     assert "performance_notes" not in serialized
+    assert "answer_note_id" not in serialized
+    assert "performance_note_id" not in serialized
+    assert "answer_note_count" not in serialized
+    assert "performance_note_count" not in serialized
+    assert "matched_note_count" not in serialized
+    assert "missing_note_count" not in serialized
+    assert "extra_note_count" not in serialized
 
 
-def test_track_pitch_event_reads_legacy_warning_field_but_dumps_quality_warnings() -> None:
-    note = TrackPitchEvent.model_validate(
-        {
-            "label": "C4",
-            "pitch_midi": 60,
-            "beat": 1,
-            "duration_beats": 1,
-            "source": "midi",
-            "notation_warnings": ["legacy_warning"],
-        }
-    )
-    payload = note.model_dump(mode="json")
-
-    assert note.quality_warnings == ["legacy_warning"]
-    assert payload["quality_warnings"] == ["legacy_warning"]
-    assert "notation_warnings" not in payload
-
-
-def test_track_pitch_event_reads_legacy_staff_index_but_dumps_source_staff_index() -> None:
-    note = TrackPitchEvent.model_validate(
-        {
-            "label": "C4",
-            "pitch_midi": 60,
-            "beat": 1,
-            "duration_beats": 1,
-            "source": "musicxml",
-            "staff_index": 2,
-        }
-    )
-    payload = note.model_dump(mode="json")
-
-    assert note.source_staff_index == 2
-    assert payload["source_staff_index"] == 2
-    assert "staff_index" not in payload
-
-
-def test_track_pitch_event_reads_legacy_display_policy_but_dumps_pitch_policy() -> None:
-    note = TrackPitchEvent.model_validate(
-        {
-            "label": "G3",
-            "pitch_midi": 55,
-            "beat": 1,
-            "duration_beats": 1,
-            "source": "musicxml",
-            "clef": "treble_8vb",
-            "display_octave_shift": 12,
-        }
-    )
-    payload = note.model_dump(mode="json")
-
-    assert note.pitch_register == "tenor_voice"
-    assert note.pitch_label_octave_shift == 12
-    assert payload["pitch_register"] == "tenor_voice"
-    assert payload["pitch_label_octave_shift"] == 12
-    assert "clef" not in payload
-    assert "display_octave_shift" not in payload
+def test_track_pitch_event_rejects_staff_notation_aliases() -> None:
+    old_fields = [
+        {"notation_warnings": ["old"]},
+        {"source_staff_index": 2},
+        {"staff_index": 2},
+        {"clef": "treble_8vb"},
+        {"display_octave_shift": 12},
+    ]
+    for extra_fields in old_fields:
+        with pytest.raises(ValidationError):
+            TrackPitchEvent.model_validate(
+                {
+                    "label": "C4",
+                    "pitch_midi": 60,
+                    "beat": 1,
+                    "duration_beats": 1,
+                    "source": "musicxml",
+                    **extra_fields,
+                }
+            )
 
 
 def _extract_ts_type_fields(source: str, type_name: str) -> set[str]:

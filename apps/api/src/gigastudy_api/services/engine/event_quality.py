@@ -22,17 +22,17 @@ from gigastudy_api.services.engine.event_normalization import (
     KEY_FIFTHS,
     MIN_EVENT_DURATION_BEATS,
     VOICE_QUANTIZATION_GRID_BEATS,
-    annotate_track_notes_for_slot,
+    annotate_track_events_for_slot,
     accidental_for_key,
-    normalize_track_notes,
+    normalize_track_events,
     pitch_label_octave_shift_for_slot,
     pitch_register_for_slot,
     spell_midi_label,
 )
 
 VOICE_LIKE_SOURCE_KINDS: set[str] = {"recording", "audio", "music"}
-VOICE_LIKE_NOTE_SOURCES: set[str] = {"voice", "recording", "audio"}
-NOTE_GENERATION_SOURCE_KINDS: set[str] = {"ai"}
+VOICE_LIKE_EVENT_SOURCES: set[str] = {"voice", "recording", "audio"}
+EVENT_GENERATION_SOURCE_KINDS: set[str] = {"ai"}
 MAX_VOICE_EVENTS_PER_MEASURE_FACTOR = 2.0
 VOICE_DENSITY_SIMPLIFICATION_GRID = 0.5
 VOICE_SUSTAIN_MERGE_GAP_BEATS = 0.25
@@ -67,11 +67,11 @@ REFERENCE_ALIGNMENT_MIN_IMPROVEMENT = 0.12
 
 @dataclass(frozen=True)
 class RegistrationQualityResult:
-    notes: list[TrackPitchEvent]
+    events: list[TrackPitchEvent]
     diagnostics: dict[str, Any]
 
 
-def prepare_notes_for_track_registration(
+def prepare_events_for_track_registration(
     notes: list[TrackPitchEvent],
     *,
     bpm: int,
@@ -93,7 +93,7 @@ def prepare_notes_for_track_registration(
     actions: list[str] = []
     if not notes:
         return RegistrationQualityResult(
-            notes=[],
+            events=[],
             diagnostics=_registration_diagnostics(
                 [],
                 slot_id=slot_id,
@@ -110,7 +110,7 @@ def prepare_notes_for_track_registration(
         if _requires_noise_filter(source_kind, notes):
             working_notes, filter_actions = _filter_voice_noise(notes)
             actions.extend(filter_actions)
-        normalized_notes = normalize_track_notes(
+        normalized_notes = normalize_track_events(
             working_notes,
             bpm=bpm,
             slot_id=slot_id,
@@ -131,7 +131,7 @@ def prepare_notes_for_track_registration(
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
             )
-            normalized_notes = normalize_track_notes(
+            normalized_notes = normalize_track_events(
                 simplified_notes,
                 bpm=bpm,
                 slot_id=slot_id,
@@ -161,7 +161,7 @@ def prepare_notes_for_track_registration(
             time_signature_denominator=time_signature_denominator,
         )
         actions.extend(optimizer_actions)
-        prepared_notes = normalized_notes
+        prepared_events = normalized_notes
     else:
         repaired_notes = _repair_symbolic_timing_metadata(
             notes,
@@ -169,15 +169,15 @@ def prepare_notes_for_track_registration(
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
-        prepared_notes = annotate_track_notes_for_slot(repaired_notes, slot_id=slot_id)
+        prepared_events = annotate_track_events_for_slot(repaired_notes, slot_id=slot_id)
         actions.append("symbolic_event_metadata_annotation")
         if _has_measure_crossing_notes(
-            prepared_notes,
+            prepared_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ):
-            prepared_notes = normalize_track_notes(
-                prepared_notes,
+            prepared_events = normalize_track_events(
+                prepared_events,
                 bpm=bpm,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
@@ -187,9 +187,9 @@ def prepare_notes_for_track_registration(
             )
             actions.append("symbolic_measure_boundary_split")
 
-    prepared_notes = _deduplicate_and_sort(prepared_notes)
+    prepared_events = _deduplicate_and_sort(prepared_events)
     alignment = _align_to_reference_tracks(
-        prepared_notes,
+        prepared_events,
         reference_tracks or [],
         bpm=bpm,
         slot_id=slot_id,
@@ -198,10 +198,10 @@ def prepare_notes_for_track_registration(
         time_signature_denominator=time_signature_denominator,
     )
     if alignment["applied"]:
-        prepared_notes = alignment["notes"]
+        prepared_events = alignment["events"]
         actions.append("reference_track_grid_alignment")
-    prepared_notes, contract_actions, event_contract = _enforce_registration_event_contract(
-        prepared_notes,
+    prepared_events, contract_actions, event_contract = _enforce_registration_event_contract(
+        prepared_events,
         bpm=bpm,
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
@@ -209,7 +209,7 @@ def prepare_notes_for_track_registration(
     )
     actions.extend(contract_actions)
     diagnostics = _registration_diagnostics(
-        prepared_notes,
+        prepared_events,
         slot_id=slot_id,
         original_count=original_count,
         source_kind=source_kind,
@@ -221,11 +221,11 @@ def prepare_notes_for_track_registration(
         diagnostics["reference_alignment"] = {
             key: value
             for key, value in alignment.items()
-            if key != "notes"
+            if key != "events"
         }
     diagnostics["event_contract"] = event_contract
-    prepared_notes = _attach_quality_warnings(prepared_notes, diagnostics)
-    return RegistrationQualityResult(notes=prepared_notes, diagnostics=diagnostics)
+    prepared_events = _attach_quality_warnings(prepared_events, diagnostics)
+    return RegistrationQualityResult(events=prepared_events, diagnostics=diagnostics)
 
 
 def apply_registration_review_instruction(
@@ -249,7 +249,7 @@ def apply_registration_review_instruction(
     fixed BPM/meter.
     """
 
-    baseline = baseline_result or prepare_notes_for_track_registration(
+    baseline = baseline_result or prepare_events_for_track_registration(
         notes,
         bpm=bpm,
         slot_id=slot_id,
@@ -301,7 +301,7 @@ def apply_registration_review_instruction(
             working_notes, filter_actions = _filter_voice_noise(notes)
             actions.extend(f"llm_{action}" for action in filter_actions)
 
-        prepared_notes = normalize_track_notes(
+        prepared_events = normalize_track_events(
             working_notes,
             bpm=bpm,
             slot_id=slot_id,
@@ -313,18 +313,18 @@ def apply_registration_review_instruction(
         actions.append(f"llm_fixed_bpm_grid_{quantization_grid:g}")
 
         if _should_simplify_after_review(
-            prepared_notes,
+            prepared_events,
             instruction_data,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ):
             simplified_notes = _simplify_dense_voice_measures(
-                prepared_notes,
+                prepared_events,
                 bpm=bpm,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
             )
-            prepared_notes = normalize_track_notes(
+            prepared_events = normalize_track_events(
                 simplified_notes,
                 bpm=bpm,
                 slot_id=slot_id,
@@ -334,8 +334,8 @@ def apply_registration_review_instruction(
                 merge_adjacent_same_pitch=True,
             )
             actions.append("llm_dense_voice_measure_simplification")
-        prepared_notes, polish_actions = _polish_voice_events(
-            prepared_notes,
+        prepared_events, polish_actions = _polish_voice_events(
+            prepared_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -365,9 +365,9 @@ def apply_registration_review_instruction(
             sustain_repetitions=merge_adjacent_same_pitch,
         )
         actions.extend(f"llm_{action}" for action in polish_actions)
-        prepared_notes, optimizer_actions = _choose_readable_voice_candidate(
+        prepared_events, optimizer_actions = _choose_readable_voice_candidate(
             working_notes,
-            current_notes=prepared_notes,
+            current_notes=prepared_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -381,15 +381,15 @@ def apply_registration_review_instruction(
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
-        prepared_notes = annotate_track_notes_for_slot(repaired_notes, slot_id=slot_id)
+        prepared_events = annotate_track_events_for_slot(repaired_notes, slot_id=slot_id)
         actions.append("llm_symbolic_event_review_annotation")
         if _instruction_bool(instruction_data, "simplify_dense_measures") and _has_dense_voice_measures(
-            prepared_notes,
+            prepared_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ):
-            prepared_notes = normalize_track_notes(
-                prepared_notes,
+            prepared_events = normalize_track_events(
+                prepared_events,
                 bpm=bpm,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
@@ -399,12 +399,12 @@ def apply_registration_review_instruction(
             )
             actions.append("llm_symbolic_dense_measure_rewrite")
         elif _has_measure_crossing_notes(
-            prepared_notes,
+            prepared_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ):
-            prepared_notes = normalize_track_notes(
-                prepared_notes,
+            prepared_events = normalize_track_events(
+                prepared_events,
                 bpm=bpm,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
@@ -415,12 +415,12 @@ def apply_registration_review_instruction(
             actions.append("llm_symbolic_measure_boundary_split")
 
     if preferred_key is not None:
-        prepared_notes = _force_key_signature(prepared_notes, slot_id=slot_id, key_signature=preferred_key)
+        prepared_events = _force_key_signature(prepared_events, slot_id=slot_id, key_signature=preferred_key)
         actions.append(f"llm_prefer_key_{preferred_key}")
 
-    prepared_notes = _deduplicate_and_sort(prepared_notes)
+    prepared_events = _deduplicate_and_sort(prepared_events)
     alignment = _align_to_reference_tracks(
-        prepared_notes,
+        prepared_events,
         reference_tracks or [],
         bpm=bpm,
         slot_id=slot_id,
@@ -429,10 +429,10 @@ def apply_registration_review_instruction(
         time_signature_denominator=time_signature_denominator,
     )
     if alignment["applied"]:
-        prepared_notes = alignment["notes"]
+        prepared_events = alignment["events"]
         actions.append("llm_reference_track_grid_alignment")
-    prepared_notes, contract_actions, event_contract = _enforce_registration_event_contract(
-        prepared_notes,
+    prepared_events, contract_actions, event_contract = _enforce_registration_event_contract(
+        prepared_events,
         bpm=bpm,
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
@@ -440,7 +440,7 @@ def apply_registration_review_instruction(
     )
     actions.extend(f"llm_{action}" for action in contract_actions)
     diagnostics = _registration_diagnostics(
-        prepared_notes,
+        prepared_events,
         slot_id=slot_id,
         original_count=len(notes),
         source_kind=source_kind,
@@ -457,24 +457,24 @@ def apply_registration_review_instruction(
         diagnostics["reference_alignment"] = {
             key: value
             for key, value in alignment.items()
-            if key != "notes"
+            if key != "events"
         }
     diagnostics["event_contract"] = event_contract
     diagnostics["pre_llm_registration_quality"] = baseline.diagnostics
-    prepared_notes = _attach_quality_warnings(prepared_notes, diagnostics)
-    return RegistrationQualityResult(notes=prepared_notes, diagnostics=diagnostics)
+    prepared_events = _attach_quality_warnings(prepared_events, diagnostics)
+    return RegistrationQualityResult(events=prepared_events, diagnostics=diagnostics)
 
 
 def _requires_grid_rewrite(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
-    if source_kind in VOICE_LIKE_SOURCE_KINDS or source_kind in NOTE_GENERATION_SOURCE_KINDS:
+    if source_kind in VOICE_LIKE_SOURCE_KINDS or source_kind in EVENT_GENERATION_SOURCE_KINDS:
         return True
-    return any(note.source in VOICE_LIKE_NOTE_SOURCES or note.source == "ai" for note in notes)
+    return any(note.source in VOICE_LIKE_EVENT_SOURCES or note.source == "ai" for note in notes)
 
 
 def _requires_noise_filter(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
-    if source_kind in NOTE_GENERATION_SOURCE_KINDS:
+    if source_kind in EVENT_GENERATION_SOURCE_KINDS:
         return False
-    return source_kind in VOICE_LIKE_SOURCE_KINDS or any(note.source in VOICE_LIKE_NOTE_SOURCES for note in notes)
+    return source_kind in VOICE_LIKE_SOURCE_KINDS or any(note.source in VOICE_LIKE_EVENT_SOURCES for note in notes)
 
 
 def _filter_voice_noise(notes: list[TrackPitchEvent]) -> tuple[list[TrackPitchEvent], list[str]]:
@@ -634,7 +634,7 @@ def _polish_voice_events(
     if not actions:
         return notes, []
 
-    normalized = normalize_track_notes(
+    normalized = normalize_track_events(
         polished_notes,
         bpm=bpm,
         slot_id=slot_id,
@@ -1085,7 +1085,7 @@ def _choose_readable_voice_candidate(
     if not current_notes:
         return current_notes, []
 
-    coarse_notes = normalize_track_notes(
+    coarse_notes = normalize_track_events(
         source_notes,
         bpm=bpm,
         slot_id=slot_id,
@@ -1139,7 +1139,7 @@ def _voice_readability_score(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    max_notes_per_measure = max((len(group) for group in measure_groups.values()), default=0)
+    max_events_per_measure = max((len(group) for group in measure_groups.values()), default=0)
     short_ratio = sum(1 for note in pitched_notes if note.duration_beats <= 0.25) / len(pitched_notes)
     isolated_artifact_ratio = count_isolated_short_voice_artifacts(pitched_notes) / len(pitched_notes)
     short_gap_ratio = count_short_voice_phrase_gaps(pitched_notes) / len(pitched_notes)
@@ -1159,10 +1159,10 @@ def _voice_readability_score(
     out_of_range_ratio = sum(
         1 for note in pitched_notes if not low <= (_resolve_pitch_midi(note) or 0) <= high
     ) / len(pitched_notes)
-    density_penalty = max(0, max_notes_per_measure - max_events) * 1.25
+    density_penalty = max(0, max_events_per_measure - max_events) * 1.25
     return (
         density_penalty
-        + max_notes_per_measure * 0.35
+        + max_events_per_measure * 0.35
         + short_ratio * 4.0
         + isolated_artifact_ratio * 3.5
         + short_gap_ratio * 2.5
@@ -1299,7 +1299,7 @@ def _enforce_registration_event_contract(
             ),
             default=VOICE_QUANTIZATION_GRID_BEATS,
         )
-        contract_notes = normalize_track_notes(
+        contract_notes = normalize_track_events(
             contract_notes,
             bpm=bpm,
             slot_id=slot_id,
@@ -1311,7 +1311,7 @@ def _enforce_registration_event_contract(
         actions.append("event_contract_measure_split")
 
     shared_key_signature = _shared_key_signature(contract_notes)
-    annotated_notes = annotate_track_notes_for_slot(
+    annotated_notes = annotate_track_events_for_slot(
         contract_notes,
         slot_id=slot_id,
         key_signature=shared_key_signature,
@@ -1397,7 +1397,7 @@ def _event_contract_diagnostics(
     if not notes:
         return {
             "version": "event_contract_v1",
-            "note_count": 0,
+            "event_count": 0,
             "single_voice_index": True,
             "single_key_signature": True,
             "seconds_follow_beat_grid": True,
@@ -1437,7 +1437,7 @@ def _event_contract_diagnostics(
     )
     return {
         "version": "event_contract_v1",
-        "note_count": len(notes),
+        "event_count": len(notes),
         "single_voice_index": len(voice_indices) == 1 and slot_id in voice_indices,
         "single_key_signature": len(key_signatures) == 1 and None not in key_signatures,
         "seconds_follow_beat_grid": seconds_follow_beat_grid,
@@ -1460,15 +1460,15 @@ def _align_to_reference_tracks(
     time_signature_denominator: int,
 ) -> dict[str, Any]:
     base_result: dict[str, Any] = {
-        "notes": notes,
+        "events": notes,
         "evaluated": False,
         "applied": False,
         "offset_beats": 0.0,
         "zero_score": None,
         "best_score": None,
-        "matched_note_count": 0,
-        "reference_note_count": 0,
-        "candidate_note_count": len([note for note in notes if not note.is_rest]),
+        "matched_event_count": 0,
+        "reference_event_count": 0,
+        "candidate_event_count": len([note for note in notes if not note.is_rest]),
         "reason": "not_evaluated",
     }
     if not _is_reference_alignable(source_kind, notes):
@@ -1480,15 +1480,15 @@ def _align_to_reference_tracks(
         for note in track_notes
         if not note.is_rest
     ]
-    candidate_notes = [note for note in notes if not note.is_rest]
-    base_result["reference_note_count"] = len(reference_notes)
-    if len(candidate_notes) < REFERENCE_ALIGNMENT_MIN_NOTES:
-        return {**base_result, "reason": "too_few_candidate_notes"}
+    candidate_events = [note for note in notes if not note.is_rest]
+    base_result["reference_event_count"] = len(reference_notes)
+    if len(candidate_events) < REFERENCE_ALIGNMENT_MIN_NOTES:
+        return {**base_result, "reason": "too_few_candidate_events"}
     if len(reference_notes) < REFERENCE_ALIGNMENT_MIN_NOTES:
         return {**base_result, "reason": "too_few_reference_notes"}
 
     reference_beats = sorted({round(note.beat, 4) for note in reference_notes})
-    candidate_beats = [round(note.beat, 4) for note in candidate_notes]
+    candidate_beats = [round(note.beat, 4) for note in candidate_events]
     if not reference_beats or not candidate_beats:
         return {**base_result, "reason": "missing_reference_grid"}
 
@@ -1516,7 +1516,7 @@ def _align_to_reference_tracks(
         "offset_beats": round(best_offset, 4),
         "zero_score": round(zero_score, 4),
         "best_score": round(best_score, 4),
-        "matched_note_count": best_matches,
+        "matched_event_count": best_matches,
         "match_ratio": round(match_ratio, 4),
         "improvement": round(improvement, 4),
         "reason": "best_offset_is_zero",
@@ -1540,7 +1540,7 @@ def _align_to_reference_tracks(
     )
     return {
         **evaluation,
-        "notes": shifted_notes,
+        "events": shifted_notes,
         "applied": True,
         "reason": "applied_reference_grid_alignment",
     }
@@ -1635,7 +1635,7 @@ def _shift_notes_to_reference_grid(
             ),
             default=REFERENCE_ALIGNMENT_GRID_BEATS,
         )
-        shifted = normalize_track_notes(
+        shifted = normalize_track_events(
             shifted,
             bpm=bpm,
             slot_id=slot_id,
@@ -1714,7 +1714,7 @@ def _registration_diagnostics(
         and _is_on_grid(note.duration_beats, VOICE_QUANTIZATION_GRID_BEATS)
     ]
     measure_groups = _notes_by_measure(notes)
-    max_notes_per_measure = max((sum(1 for note in group if not note.is_rest) for group in measure_groups.values()), default=0)
+    max_events_per_measure = max((sum(1 for note in group if not note.is_rest) for group in measure_groups.values()), default=0)
     cross_measure_count = sum(
         1
         for note in notes
@@ -1724,7 +1724,7 @@ def _registration_diagnostics(
             time_signature_denominator=time_signature_denominator,
         )
     )
-    isolated_short_note_count = count_isolated_short_voice_artifacts(notes)
+    isolated_short_event_count = count_isolated_short_voice_artifacts(notes)
     short_phrase_gap_count = count_short_voice_phrase_gaps(notes)
     measure_tail_gap_count = count_measure_tail_gaps(
         notes,
@@ -1740,15 +1740,15 @@ def _registration_diagnostics(
         "registration_quality_version": "event_registration_v1",
         "source_kind": source_kind,
         "slot_id": slot_id,
-        "original_note_count": original_count,
-        "registered_note_count": len(notes),
-        "pitched_note_count": len(pitched_notes),
+        "original_event_count": original_count,
+        "registered_event_count": len(notes),
+        "pitched_event_count": len(pitched_notes),
         "measure_count": len(measure_groups),
-        "max_notes_per_measure": max_notes_per_measure,
+        "max_events_per_measure": max_events_per_measure,
         "range_fit_ratio": round(in_range_count / len(pitched_notes), 4) if pitched_notes else 1.0,
         "timing_grid_ratio": round(len(grid_notes) / len(notes), 4) if notes else 1.0,
-        "cross_measure_note_count": cross_measure_count,
-        "isolated_short_note_count": isolated_short_note_count,
+        "cross_measure_event_count": cross_measure_count,
+        "isolated_short_event_count": isolated_short_event_count,
         "short_phrase_gap_count": short_phrase_gap_count,
         "measure_tail_gap_count": measure_tail_gap_count,
         "short_note_cluster_count": short_note_cluster_count,
@@ -1764,9 +1764,9 @@ def _attach_quality_warnings(notes: list[TrackPitchEvent], diagnostics: dict[str
         warnings.append("registration_range_review")
     if diagnostics["timing_grid_ratio"] < 0.92:
         warnings.append("registration_grid_review")
-    if diagnostics["cross_measure_note_count"] > 0:
+    if diagnostics["cross_measure_event_count"] > 0:
         warnings.append("registration_measure_boundary_review")
-    if diagnostics["isolated_short_note_count"] > 0:
+    if diagnostics["isolated_short_event_count"] > 0:
         warnings.append("registration_isolated_artifact_review")
     if diagnostics["short_phrase_gap_count"] > 0:
         warnings.append("registration_phrase_gap_review")
@@ -1956,7 +1956,7 @@ def _with_llm_review_diagnostics(
     if skip_action not in actions:
         actions.append(skip_action)
     diagnostics["actions"] = actions
-    return RegistrationQualityResult(notes=result.notes, diagnostics=diagnostics)
+    return RegistrationQualityResult(events=result.events, diagnostics=diagnostics)
 
 
 def _public_review_instruction(instruction: Mapping[str, Any]) -> dict[str, Any]:

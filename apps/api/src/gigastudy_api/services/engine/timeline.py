@@ -5,7 +5,7 @@ from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import seconds_per_beat
 
 
-def notes_with_sync_offset(
+def events_with_sync_offset(
     notes: list[TrackPitchEvent],
     sync_offset_seconds: float,
     bpm: int,
@@ -63,10 +63,10 @@ def registered_region_events_for_slot(studio: Studio, slot_id: int) -> list[Trac
         return events_from_region(region, bpm=studio.bpm)
 
     track = next((candidate for candidate in studio.tracks if candidate.slot_id == slot_id), None)
-    if track is None or track.status != "registered" or not track.notes:
+    if track is None or track.status != "registered" or not track.events:
         return []
-    return notes_with_sync_offset(
-        track.notes,
+    return events_with_sync_offset(
+        track.events,
         track.sync_offset_seconds,
         studio.bpm,
         voice_index=track.slot_id,
@@ -95,8 +95,8 @@ def registered_sync_resolved_tracks_by_slot(
     exclude_slot_id: int | None = None,
 ) -> dict[int, list[TrackPitchEvent]]:
     return {
-        track.slot_id: notes_with_sync_offset(
-            track.notes,
+        track.slot_id: events_with_sync_offset(
+            track.events,
             track.sync_offset_seconds,
             bpm,
             voice_index=track.slot_id,
@@ -104,7 +104,7 @@ def registered_sync_resolved_tracks_by_slot(
         for track in tracks
         if track.slot_id != exclude_slot_id
         and track.status == "registered"
-        and track.notes
+        and track.events
     }
 
 

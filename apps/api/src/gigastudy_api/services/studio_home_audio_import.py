@@ -6,7 +6,7 @@ from pathlib import Path
 from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.music_theory import TRACKS, infer_slot_id
-from gigastudy_api.services.engine.event_normalization import annotate_track_notes_for_slot
+from gigastudy_api.services.engine.event_normalization import annotate_track_events_for_slot
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError, VoiceTranscriptionResult
 
 TranscribeWithAlignment = Callable[..., VoiceTranscriptionResult]
@@ -39,7 +39,7 @@ def extract_home_audio_candidate(
         except VoiceTranscriptionError as error:
             errors.append(str(error))
             continue
-        notes = transcription.notes
+        notes = transcription.events
         confidence = sum(note.confidence for note in notes) / len(notes)
         attempts.append((slot_id, transcription, confidence))
 
@@ -49,14 +49,14 @@ def extract_home_audio_candidate(
 
     source_slot_id, transcription, confidence = max(
         attempts,
-        key=lambda attempt: (len(attempt[1].notes), attempt[2]),
+        key=lambda attempt: (len(attempt[1].events), attempt[2]),
     )
-    suggested_slot_id = infer_slot_id(None, transcription.notes, fallback=source_slot_id)
+    suggested_slot_id = infer_slot_id(None, transcription.events, fallback=source_slot_id)
     return (
         suggested_slot_id,
         VoiceTranscriptionResult(
-            notes=annotate_track_notes_for_slot(
-                transcription.notes,
+            events=annotate_track_events_for_slot(
+                transcription.events,
                 slot_id=suggested_slot_id,
             ),
             alignment=transcription.alignment,

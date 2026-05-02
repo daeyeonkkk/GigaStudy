@@ -49,12 +49,12 @@ def test_postgres_store_skips_unchanged_sidecar_upserts() -> None:
     existing_candidate = {
         "candidate_id": "existing",
         "updated_at": "2026-04-30T12:00:00+00:00",
-        "payload": {"notes": [1, 2, 3]},
+        "payload": {"events": [1, 2, 3]},
     }
     new_candidate = {
         "candidate_id": "new",
         "updated_at": "2026-04-30T12:01:00+00:00",
-        "payload": {"notes": [4]},
+        "payload": {"events": [4]},
     }
 
     store._sync_sidecar_rows(

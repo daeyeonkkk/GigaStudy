@@ -1,7 +1,7 @@
 from math import isfinite
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from gigastudy_api.domain.track_events import PitchEventSource as EventSource, TrackPitchEvent as _TrackPitchEvent
 
@@ -25,15 +25,8 @@ ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
 
 
-def _normalize_source_kind(value: Any) -> Any:
-    return "document" if value == "score" else value
-
-
 class SourceKindModel(BaseModel):
-    @field_validator("source_kind", mode="before", check_fields=False)
-    @classmethod
-    def normalize_source_kind(cls, value: Any) -> Any:
-        return _normalize_source_kind(value)
+    model_config = ConfigDict(extra="forbid")
 
 
 class PitchEvent(BaseModel):
@@ -114,7 +107,7 @@ class ExtractionCandidate(SourceKindModel):
     variant_label: str | None = None
     confidence: float = Field(default=0.5, ge=0, le=1)
     status: ExtractionCandidateStatus = "pending"
-    notes: list[_TrackPitchEvent] = Field(default_factory=list)
+    events: list[_TrackPitchEvent] = Field(default_factory=list)
     audio_source_path: str | None = None
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
@@ -138,7 +131,7 @@ class TrackSlot(SourceKindModel):
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
     duration_seconds: float = 0
-    notes: list[_TrackPitchEvent] = Field(default_factory=list)
+    events: list[_TrackPitchEvent] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     updated_at: str
 
@@ -152,13 +145,13 @@ def build_arrangement_regions(tracks: list[TrackSlot], bpm: int) -> list[Arrange
 
 
 def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
-    if track.status != "registered" or (not track.notes and not track.audio_source_path):
+    if track.status != "registered" or (not track.events and not track.audio_source_path):
         return None
 
     region_id = f"track-{track.slot_id}-region-1"
     pitch_events = [
         _pitch_event_from_note(note, track=track, region_id=region_id, bpm=bpm)
-        for note in sorted(track.notes, key=lambda item: (item.beat, item.id))
+        for note in sorted(track.events, key=lambda item: (item.beat, item.id))
     ]
     region_start = track.sync_offset_seconds
     event_end_seconds = max(
@@ -235,7 +228,7 @@ def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
     region_id = f"candidate-{candidate.candidate_id}-region-1"
     pitch_events = [
         _candidate_pitch_event_from_note(note, candidate=candidate, region_id=region_id)
-        for note in sorted(candidate.notes, key=lambda item: (item.beat, item.id))
+        for note in sorted(candidate.events, key=lambda item: (item.beat, item.id))
     ]
     region_start = min((event.start_seconds for event in pitch_events), default=0.0)
     region_end = max(
@@ -259,7 +252,7 @@ def extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegi
 
 
 def sync_extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
-    if candidate.region is not None and not candidate.notes:
+    if candidate.region is not None and not candidate.events:
         return candidate.region
     candidate.region = build_candidate_region(candidate)
     return candidate.region
@@ -293,6 +286,8 @@ def _candidate_pitch_event_from_note(
 
 
 class ReportIssue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     at_seconds: float
     issue_type: Literal[
         "pitch",
@@ -312,8 +307,8 @@ class ReportIssue(BaseModel):
         "chord_coverage",
     ]
     severity: Literal["info", "warn", "error"] = "warn"
-    answer_note_id: str | None = None
-    performance_note_id: str | None = None
+    answer_source_event_id: str | None = None
+    performance_source_event_id: str | None = None
     answer_region_id: str | None = None
     answer_event_id: str | None = None
     performance_region_id: str | None = None
@@ -331,6 +326,8 @@ class ReportIssue(BaseModel):
 
 
 class ScoringReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     report_id: str
     score_mode: ScoreMode = "answer"
     target_slot_id: int
@@ -338,11 +335,11 @@ class ScoringReport(BaseModel):
     reference_slot_ids: list[int]
     include_metronome: bool
     created_at: str
-    answer_note_count: int = 0
-    performance_note_count: int = 0
-    matched_note_count: int = 0
-    missing_note_count: int = 0
-    extra_note_count: int = 0
+    answer_event_count: int = 0
+    performance_event_count: int = 0
+    matched_event_count: int = 0
+    missing_event_count: int = 0
+    extra_event_count: int = 0
     alignment_offset_seconds: float = 0
     overall_score: float = 0
     pitch_score: float = 0
@@ -472,7 +469,7 @@ def build_studio_response(studio: Studio) -> StudioResponse:
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
         tracks=[
-            TrackSlotResponse.model_validate(track.model_dump(mode="json", exclude={"notes"}))
+            TrackSlotResponse.model_validate(track.model_dump(mode="json", exclude={"events"}))
             for track in studio.tracks
         ],
         regions=studio_arrangement_regions(studio),
@@ -481,7 +478,7 @@ def build_studio_response(studio: Studio) -> StudioResponse:
         candidates=[
             ExtractionCandidateResponse.model_validate(
                 {
-                    **candidate.model_dump(mode="json", exclude={"notes", "region"}),
+                    **candidate.model_dump(mode="json", exclude={"events", "region"}),
                     "region": extraction_candidate_region(candidate).model_dump(mode="json"),
                 }
             )

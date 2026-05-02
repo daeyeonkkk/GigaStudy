@@ -21,7 +21,7 @@ def parsed_track_diagnostics_by_slot(
 ) -> dict[int, dict[str, Any]]:
     diagnostics_by_slot: dict[int, dict[str, Any]] = {}
     for parsed_track in parsed_symbolic.tracks:
-        if parsed_track.slot_id is None or not parsed_track.notes:
+        if parsed_track.slot_id is None or not parsed_track.events:
             continue
         diagnostics = dict(parsed_track.diagnostics)
         diagnostics.setdefault("engine", method)
@@ -58,13 +58,6 @@ def candidate_diagnostics(
     range_fit_ratio = candidate_range_fit_ratio(slot_id, pitched_notes)
     timing_grid_ratio = candidate_timing_grid_ratio(notes)
     event_count = len(notes)
-    for legacy_key in (
-        "note_count",
-        "pitched_note_count",
-        "rest_count",
-        "density_notes_per_measure",
-    ):
-        diagnostics.pop(legacy_key, None)
     diagnostics.update(
         {
             "candidate_method": method,
@@ -165,7 +158,7 @@ def candidate_review_message(
     event_count = diagnostic_int(
         diagnostics,
         "event_count",
-        default=diagnostic_int(diagnostics, "note_count", default=len(notes)),
+        default=len(notes),
     )
     measure_count = diagnostic_int(diagnostics, "measure_count", default=0)
     candidate_confidence_label = str(diagnostics.get("confidence_label") or "review")
@@ -173,13 +166,13 @@ def candidate_review_message(
     hint_label = review_hint_label(hint)
     if method.startswith("pdf_vector"):
         return (
-            f"{track_name(slot_id)}: vector PDF에서 {measure_count}마디, "
-            f"{event_count}개 이벤트를 추출했습니다. {candidate_confidence_label}; {hint_label}"
+            f"{track_name(slot_id)}: extracted {event_count} events across "
+            f"{measure_count} measures from vector PDF. {candidate_confidence_label}; {hint_label}"
         )
     if method.startswith("audiveris"):
         return (
-            f"{track_name(slot_id)}: Audiveris MusicXML 결과에서 {measure_count}마디, "
-            f"{event_count}개 이벤트를 추출했습니다. {candidate_confidence_label}; 원본과 대조 후 승인하세요."
+            f"{track_name(slot_id)}: extracted {event_count} events across "
+            f"{measure_count} measures from Audiveris MusicXML. {candidate_confidence_label}; review against source."
         )
     return default_message
 
@@ -298,10 +291,10 @@ def candidate_range_label(notes: list[TrackPitchEvent]) -> str:
 
 def confidence_label(confidence: float) -> str:
     if confidence >= 0.72:
-        return "높은 신뢰도"
+        return "high confidence"
     if confidence >= 0.5:
-        return "검토 필요"
-    return "낮은 신뢰도"
+        return "medium confidence"
+    return "low confidence"
 
 
 def review_hint_for_candidate(
@@ -315,7 +308,7 @@ def review_hint_for_candidate(
     if event_count < 4:
         return "few_events"
     if avg_note_confidence < 0.52:
-        return "low_note_confidence"
+        return "low_event_confidence"
     if range_fit_ratio < 0.85:
         return "range_outliers"
     if timing_grid_ratio < 0.82:
@@ -327,12 +320,11 @@ def review_hint_for_candidate(
 
 def review_hint_label(hint: str) -> str:
     return {
-        "few_events": "이벤트 수가 적어 파트 판독을 꼭 확인하세요.",
-        "few_notes": "이벤트 수가 적어 파트 판독을 꼭 확인하세요.",
-        "low_note_confidence": "음표별 신뢰도가 낮아 원본 대조가 필요합니다.",
-        "range_outliers": "파트 음역 밖 음이 있어 트랙 배정을 확인하세요.",
-        "rhythm_grid_review": "리듬 격자가 불안정해 박자 판독을 확인하세요.",
-        "partial_score_review": "일부 파트만 감지되어 누락 파트를 확인하세요.",
-        "review_accidentals_and_rhythm": "조표/임시표와 리듬을 원본과 대조하세요.",
-        "review_against_source": "원본과 대조 후 승인하세요.",
-    }.get(hint, "원본과 대조 후 승인하세요.")
+        "few_events": "Few events were detected; confirm the part assignment.",
+        "low_event_confidence": "Event confidence is low; compare against the source.",
+        "range_outliers": "Some events sit outside the target range; confirm the track.",
+        "rhythm_grid_review": "Rhythm grid is unstable; review timing against the source.",
+        "partial_document_review": "Only part of the document was detected; check missing parts.",
+        "review_accidentals_and_rhythm": "Review accidentals and rhythm against the source.",
+        "review_against_source": "Review against the source before approval.",
+    }.get(hint, "Review against the source before approval.")

@@ -13,7 +13,7 @@ from gigastudy_api.api.schemas.studios import SourceKind
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.music_theory import label_to_midi, quarter_beats_per_measure, track_name
-from gigastudy_api.services.engine.event_normalization import KEY_FIFTHS, normalize_track_notes
+from gigastudy_api.services.engine.event_normalization import KEY_FIFTHS, normalize_track_events
 from gigastudy_api.services.engine.event_quality import (
     count_isolated_short_voice_artifacts,
     count_measure_tail_gaps,
@@ -136,14 +136,14 @@ def review_track_registration_with_deepseek(
     time_signature_denominator: int,
     slot_id: int,
     source_kind: SourceKind,
-    original_notes: list[TrackPitchEvent],
-    prepared_notes: list[TrackPitchEvent],
+    original_events: list[TrackPitchEvent],
+    prepared_events: list[TrackPitchEvent],
     diagnostics: dict[str, Any],
     context_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
 ) -> RegistrationReviewInstruction | None:
     if not settings.deepseek_registration_review_enabled or not settings.deepseek_api_key:
         return None
-    if not original_notes and not prepared_notes:
+    if not original_events and not prepared_events:
         return None
 
     endpoint = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
@@ -155,8 +155,8 @@ def review_track_registration_with_deepseek(
         time_signature_denominator=time_signature_denominator,
         slot_id=slot_id,
         source_kind=source_kind,
-        original_notes=original_notes,
-        prepared_notes=prepared_notes,
+        original_events=original_events,
+        prepared_events=prepared_events,
         diagnostics=diagnostics,
         review_scope="single_track_registration_plan",
         context_tracks_by_slot=context_tracks_by_slot,
@@ -191,15 +191,15 @@ def review_ensemble_registration_with_deepseek(
     time_signature_denominator: int,
     slot_id: int,
     source_kind: SourceKind,
-    original_notes: list[TrackPitchEvent],
-    prepared_notes: list[TrackPitchEvent],
+    original_events: list[TrackPitchEvent],
+    prepared_events: list[TrackPitchEvent],
     diagnostics: dict[str, Any],
     context_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     proposed_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
 ) -> RegistrationReviewInstruction | None:
     if not settings.deepseek_ensemble_review_enabled or not settings.deepseek_api_key:
         return None
-    if not prepared_notes:
+    if not prepared_events:
         return None
     if not context_tracks_by_slot and not proposed_tracks_by_slot:
         return None
@@ -213,8 +213,8 @@ def review_ensemble_registration_with_deepseek(
         time_signature_denominator=time_signature_denominator,
         slot_id=slot_id,
         source_kind=source_kind,
-        original_notes=original_notes,
-        prepared_notes=prepared_notes,
+        original_events=original_events,
+        prepared_events=prepared_events,
         diagnostics=diagnostics,
         review_scope="a_cappella_ensemble_registration",
         context_tracks_by_slot=context_tracks_by_slot,
@@ -272,8 +272,8 @@ def _build_registration_review_payload(
     time_signature_denominator: int,
     slot_id: int,
     source_kind: SourceKind,
-    original_notes: list[TrackPitchEvent],
-    prepared_notes: list[TrackPitchEvent],
+    original_events: list[TrackPitchEvent],
+    prepared_events: list[TrackPitchEvent],
     diagnostics: dict[str, Any],
     review_scope: str = "single_track_registration_plan",
     context_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
@@ -331,18 +331,18 @@ def _build_registration_review_payload(
         "allowed_key_signatures": sorted(KEY_FIFTHS, key=lambda key: KEY_FIFTHS[key]),
         "current_diagnostics": diagnostics,
         "original_summary": _summarize_notes(
-            original_notes,
+            original_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ),
         "prepared_summary": _summarize_notes(
-            prepared_notes,
+            prepared_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         ),
         "deterministic_quality_options": _build_quality_options(
-            original_notes=original_notes,
-            prepared_notes=prepared_notes,
+            original_events=original_events,
+            prepared_events=prepared_events,
             bpm=bpm,
             slot_id=slot_id,
             source_kind=source_kind,
@@ -550,15 +550,15 @@ def _summarize_notes(
     ties = sum(1 for note in notes if note.is_tied)
     low_confidence = sum(1 for note in notes if note.confidence < 0.45)
     return {
-        "note_count": len(notes),
-        "pitched_note_count": len(pitched_notes),
-        "rest_count": len(notes) - len(pitched_notes),
+        "event_count": len(notes),
+        "pitched_event_count": len(pitched_notes),
+        "rest_event_count": len(notes) - len(pitched_notes),
         "range_midi": _range_label([pitch for pitch in pitches if pitch is not None]),
         "duration_values": sorted(set(durations))[:12],
         "accidental_count": accidentals,
         "tie_count": ties,
         "low_confidence_count": low_confidence,
-        "isolated_short_note_count": count_isolated_short_voice_artifacts(notes),
+        "isolated_short_event_count": count_isolated_short_voice_artifacts(notes),
         "short_phrase_gap_count": count_short_voice_phrase_gaps(notes),
         "measure_tail_gap_count": count_measure_tail_gaps(
             notes,
@@ -580,8 +580,8 @@ def _summarize_notes(
 
 def _build_quality_options(
     *,
-    original_notes: list[TrackPitchEvent],
-    prepared_notes: list[TrackPitchEvent],
+    original_events: list[TrackPitchEvent],
+    prepared_events: list[TrackPitchEvent],
     bpm: int,
     slot_id: int,
     source_kind: SourceKind,
@@ -591,14 +591,14 @@ def _build_quality_options(
     options = [
         _quality_option_summary(
             "current_prepared_result",
-            prepared_notes,
+            prepared_events,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
     ]
-    if source_kind in {"recording", "audio", "music", "ai"} and original_notes:
-        coarse_notes = normalize_track_notes(
-            original_notes,
+    if source_kind in {"recording", "audio", "music", "ai"} and original_events:
+        coarse_notes = normalize_track_events(
+            original_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
@@ -630,12 +630,12 @@ def _quality_option_summary(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    max_notes_per_measure = max((summary["pitched_count"] for summary in measure_summaries), default=0)
+    max_events_per_measure = max((summary["pitched_event_count"] for summary in measure_summaries), default=0)
     return {
         "option": option_name,
-        "note_count": len(notes),
-        "pitched_note_count": len(pitched_notes),
-        "max_notes_per_measure": max_notes_per_measure,
+        "event_count": len(notes),
+        "pitched_event_count": len(pitched_notes),
+        "max_events_per_measure": max_events_per_measure,
         "short_note_ratio": round(
             sum(1 for note in pitched_notes if note.duration_beats <= 0.25) / len(pitched_notes),
             4,
@@ -644,7 +644,7 @@ def _quality_option_summary(
         else 0,
         "tie_count": sum(1 for note in notes if note.is_tied),
         "accidental_count": sum(1 for note in notes if note.accidental),
-        "isolated_short_note_count": count_isolated_short_voice_artifacts(notes),
+        "isolated_short_event_count": count_isolated_short_voice_artifacts(notes),
         "short_phrase_gap_count": count_short_voice_phrase_gaps(notes),
         "measure_tail_gap_count": count_measure_tail_gaps(
             notes,
@@ -681,9 +681,9 @@ def _summarize_measures(
         summaries.append(
             {
                 "measure_index": measure_index,
-                "note_count": len(measure_notes),
-                "pitched_count": len(pitched),
-                "rest_count": len(measure_notes) - len(pitched),
+                "event_count": len(measure_notes),
+                "pitched_event_count": len(pitched),
+                "rest_event_count": len(measure_notes) - len(pitched),
                 "shortest_duration": min((round(note.duration_beats, 4) for note in measure_notes), default=0),
                 "low_confidence_count": sum(1 for note in measure_notes if note.confidence < 0.45),
                 "tie_count": sum(1 for note in measure_notes if note.is_tied),

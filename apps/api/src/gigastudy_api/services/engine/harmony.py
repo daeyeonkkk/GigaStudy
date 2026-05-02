@@ -17,7 +17,7 @@ from gigastudy_api.services.engine.harmony_plan import (
     MeasureHarmonyIntent,
     key_tonic_from_name,
 )
-from gigastudy_api.services.engine.event_normalization import normalize_track_notes
+from gigastudy_api.services.engine.event_normalization import normalize_track_events
 
 VOICE_LEADING_METHOD = "rule_based_voice_leading_v1"
 PERCUSSION_METHOD = "rule_based_percussion_v0"
@@ -170,11 +170,11 @@ def generate_rule_based_harmony(
     bpm: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
+    context_events_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
     harmony_plan: DeepSeekHarmonyPlan | None = None,
 ) -> list[TrackPitchEvent]:
     if target_slot_id == 6:
-        return normalize_track_notes(
+        return normalize_track_events(
             _generate_percussion(
                 context_tracks=context_tracks,
                 bpm=bpm,
@@ -196,7 +196,7 @@ def generate_rule_based_harmony(
         bpm=bpm,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
-        context_notes_by_slot=context_notes_by_slot,
+        context_events_by_slot=context_events_by_slot,
         candidate_count=1,
         harmony_plan=harmony_plan,
     )
@@ -210,7 +210,7 @@ def generate_rule_based_harmony_candidates(
     bpm: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
+    context_events_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
     candidate_count: int = 3,
     profile_names: list[str] | None = None,
     harmony_plan: DeepSeekHarmonyPlan | None = None,
@@ -218,7 +218,7 @@ def generate_rule_based_harmony_candidates(
     resolved_candidate_count = max(1, min(5, candidate_count))
     if target_slot_id == 6:
         return [
-            normalize_track_notes(
+            normalize_track_events(
                 _generate_percussion(
                     context_tracks=context_tracks,
                     bpm=bpm,
@@ -237,7 +237,7 @@ def generate_rule_based_harmony_candidates(
     if not context_tracks:
         return []
 
-    context_by_slot = _normalize_context_map(context_tracks, context_notes_by_slot)
+    context_by_slot = _normalize_context_map(context_tracks, context_events_by_slot)
     events = _build_harmony_events(
         context_by_slot,
         time_signature_numerator=time_signature_numerator,
@@ -271,7 +271,7 @@ def generate_rule_based_harmony_candidates(
         for index, path in enumerate(selected_paths, start=1)
     ]
     return [
-        normalize_track_notes(
+        normalize_track_events(
             notes,
             bpm=bpm,
             slot_id=target_slot_id,
@@ -285,12 +285,12 @@ def generate_rule_based_harmony_candidates(
 
 def _normalize_context_map(
     context_tracks: list[TrackPitchEvent],
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]] | None,
+    context_events_by_slot: dict[int, list[TrackPitchEvent]] | None,
 ) -> dict[int, list[TrackPitchEvent]]:
-    if context_notes_by_slot:
+    if context_events_by_slot:
         normalized = {
             slot_id: _pitched_notes(notes)
-            for slot_id, notes in context_notes_by_slot.items()
+            for slot_id, notes in context_events_by_slot.items()
             if 1 <= slot_id <= 5
         }
         if any(normalized.values()):

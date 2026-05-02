@@ -44,7 +44,7 @@ def validate_score_track_request(
     reference_slot_ids: list[int],
     target_has_events: bool | None = None,
 ) -> None:
-    has_target_events = bool(target_track.notes) if target_has_events is None else target_has_events
+    has_target_events = bool(target_track.events) if target_has_events is None else target_has_events
     if request.score_mode == "answer" and (
         target_track.status != "registered" or not has_target_events
     ):

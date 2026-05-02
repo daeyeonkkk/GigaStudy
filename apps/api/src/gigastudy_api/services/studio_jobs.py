@@ -250,4 +250,4 @@ def _find_track(tracks: list[TrackSlot], slot_id: int) -> TrackSlot:
 
 
 def _track_has_content(track: TrackSlot) -> bool:
-    return track.status == "registered" or bool(track.notes)
+    return track.status == "registered" or bool(track.events)

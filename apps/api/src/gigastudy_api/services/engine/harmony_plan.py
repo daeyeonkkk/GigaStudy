@@ -248,12 +248,12 @@ def _fallback_goal(profile_name: str, target_slot_id: int) -> str:
 def _fallback_title(profile_name: str, target_slot_id: int) -> str:
     goal = _fallback_goal(profile_name, target_slot_id)
     return {
-        "rehearsal_safe": "안정형 블렌드",
-        "counterline": "대선율형 진행",
-        "open_support": "넓은 받침",
-        "upper_blend": "위성부 블렌드",
-        "active_motion": "움직임 강조",
-    }.get(goal, "화음 후보")
+        "rehearsal_safe": "Stable blend",
+        "counterline": "Moving counterline",
+        "open_support": "Open lower support",
+        "upper_blend": "Upper blend",
+        "active_motion": "Active motion",
+    }.get(goal, "Balanced candidate")
 
 
 def _fallback_register_bias(goal: str, target_slot_id: int) -> str:
@@ -292,19 +292,19 @@ def _fallback_chord_tone_priority(goal: str, target_slot_id: int) -> list[str]:
 
 def _fallback_role(goal: str, target_slot_id: int) -> str:
     if goal == "counterline":
-        return "기존 선율과 반대 방향 움직임을 늘려 독립적인 성부를 만듭니다."
+        return "Adds independent motion against the existing melody."
     if goal == "open_support":
-        return "저음 또는 중저음에서 화성의 바닥을 안정적으로 받칩니다."
+        return "Supports the harmony from a lower or lower-middle register."
     if goal == "upper_blend":
-        return "윗성부 주변에서 밝고 가까운 블렌드를 만듭니다."
-    return "첫 연습에 쓰기 좋은 안전한 화음선을 만듭니다."
+        return "Blends near the upper voices with a brighter contour."
+    return "Creates a safe harmony line for first rehearsal."
 
 
 def _fallback_selection_hint(goal: str) -> str:
     if goal == "counterline":
-        return "기존 멜로디와 다른 움직임이 필요할 때 선택하세요."
+        return "Choose this when the part needs more independent motion."
     if goal == "open_support":
-        return "합창의 두께와 저음 받침이 부족할 때 선택하세요."
+        return "Choose this when the ensemble needs weight or lower support."
     if goal == "upper_blend":
-        return "윗성부가 비어 보이거나 밝은 울림이 필요할 때 선택하세요."
-    return "가장 무난한 후보가 필요할 때 선택하세요."
+        return "Choose this when the upper texture feels empty or dull."
+    return "Choose this when you need the most neutral candidate."

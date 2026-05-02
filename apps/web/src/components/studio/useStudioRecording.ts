@@ -247,7 +247,7 @@ export function useStudioRecording({
       setTrackRecordingMeter({ durationSeconds: 0, level: recorder.rmsLevel })
       setActionState({
         phase: 'success',
-        message: `${track.name} 녹음을 시작했습니다. 내부 메트로놈 기준으로 노트 이벤트에 기록됩니다.`,
+      message: `${track.name} 녹음을 시작했습니다. 내부 메트로놈 기준으로 피치 이벤트에 기록됩니다.`,
       })
       const hideZeroTimeoutId = window.setTimeout(() => {
         if (trackCountInRunIdRef.current !== runId) {
@@ -340,7 +340,7 @@ export function useStudioRecording({
       track.status === 'registered' ||
       Boolean(existingRegion && (existingRegion.pitch_events.length > 0 || existingRegion.audio_source_path))
     const allowOverwrite =
-      !wouldOverwrite || window.confirm(`${track.name} 트랙의 기존 노트 이벤트를 새 녹음으로 덮어쓸까요?`)
+        !wouldOverwrite || window.confirm(`${track.name} 트랙의 기존 피치 이벤트를 새 녹음으로 덮어쓸까요?`)
     if (!allowOverwrite) {
       setActionState({ phase: 'idle' })
       return

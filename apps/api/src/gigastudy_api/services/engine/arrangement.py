@@ -33,14 +33,14 @@ BASS_HIGH_FOUNDATION_PITCH = 55
 
 @dataclass(frozen=True)
 class EnsembleValidationResult:
-    notes: list[TrackPitchEvent]
+    events: list[TrackPitchEvent]
     diagnostics: dict[str, Any]
 
 
 def prepare_ensemble_registration(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackPitchEvent],
+    candidate_events: list[TrackPitchEvent],
     existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     bpm: int,
     source_kind: str,
@@ -57,7 +57,7 @@ def prepare_ensemble_registration(
 
     repaired_notes, repair_diagnostics = _repair_contextual_octaves(
         target_slot_id=target_slot_id,
-        candidate_notes=candidate_notes,
+        candidate_events=candidate_events,
         existing_tracks_by_slot=existing_tracks_by_slot,
         bpm=bpm,
         source_kind=source_kind,
@@ -66,14 +66,14 @@ def prepare_ensemble_registration(
     )
     validation = validate_ensemble_registration(
         target_slot_id=target_slot_id,
-        candidate_notes=repaired_notes,
+        candidate_events=repaired_notes,
         existing_tracks_by_slot=existing_tracks_by_slot,
         bpm=bpm,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
     return EnsembleValidationResult(
-        notes=validation.notes,
+        events=validation.events,
         diagnostics={
             **validation.diagnostics,
             "repair": repair_diagnostics,
@@ -84,7 +84,7 @@ def prepare_ensemble_registration(
 def validate_ensemble_registration(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackPitchEvent],
+    candidate_events: list[TrackPitchEvent],
     existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     bpm: int,
     time_signature_numerator: int = 4,
@@ -99,31 +99,31 @@ def validate_ensemble_registration(
 
     if target_slot_id not in range(1, 7):
         return EnsembleValidationResult(
-            notes=candidate_notes,
+            events=candidate_events,
             diagnostics=_empty_diagnostics(target_slot_id, reason="invalid_target_slot"),
         )
 
     if target_slot_id == 6:
         diagnostics = _percussion_diagnostics(
             target_slot_id,
-            candidate_notes,
+            candidate_events,
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
-        return EnsembleValidationResult(notes=candidate_notes, diagnostics=diagnostics)
+        return EnsembleValidationResult(events=candidate_events, diagnostics=diagnostics)
 
     ensemble_tracks = {
         slot_id: list(notes)
         for slot_id, notes in existing_tracks_by_slot.items()
         if slot_id in VOCAL_SLOT_IDS and slot_id != target_slot_id and notes
     }
-    ensemble_tracks[target_slot_id] = candidate_notes
+    ensemble_tracks[target_slot_id] = candidate_events
 
-    target_pitched = _pitched_notes(candidate_notes)
+    target_pitched = _pitched_notes(candidate_events)
     if not target_pitched:
         return EnsembleValidationResult(
-            notes=candidate_notes,
+            events=candidate_events,
             diagnostics=_empty_diagnostics(target_slot_id, reason="no_target_pitched_notes"),
         )
 
@@ -167,7 +167,7 @@ def validate_ensemble_registration(
 
     diagnostics = _build_diagnostics(
         target_slot_id=target_slot_id,
-        candidate_notes=candidate_notes,
+        candidate_events=candidate_events,
         existing_tracks_by_slot=existing_tracks_by_slot,
         issues=issues,
         snapshot_count=len(snapshot_beats),
@@ -175,14 +175,14 @@ def validate_ensemble_registration(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    annotated_notes = _attach_ensemble_warnings(candidate_notes, issues)
-    return EnsembleValidationResult(notes=annotated_notes, diagnostics=diagnostics)
+    annotated_notes = _attach_ensemble_warnings(candidate_events, issues)
+    return EnsembleValidationResult(events=annotated_notes, diagnostics=diagnostics)
 
 
 def _repair_contextual_octaves(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackPitchEvent],
+    candidate_events: list[TrackPitchEvent],
     existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     bpm: int,
     source_kind: str,
@@ -196,19 +196,19 @@ def _repair_contextual_octaves(
         "source_kind": source_kind,
         "target_slot_id": target_slot_id,
         "target_track_name": _safe_track_name(target_slot_id),
-        "changed_note_count": 0,
+        "changed_event_count": 0,
         "changes": [],
         "reason": "no_repair_needed",
     }
     if target_slot_id not in VOCAL_SLOT_IDS:
         diagnostics["reason"] = "non_vocal_target"
-        return candidate_notes, diagnostics
+        return candidate_events, diagnostics
     if source_kind not in ENSEMBLE_REPAIR_SOURCE_KINDS:
         diagnostics["reason"] = "symbolic_source_preserved"
-        return candidate_notes, diagnostics
-    if not candidate_notes or not existing_tracks_by_slot:
+        return candidate_events, diagnostics
+    if not candidate_events or not existing_tracks_by_slot:
         diagnostics["reason"] = "insufficient_context"
-        return candidate_notes, diagnostics
+        return candidate_events, diagnostics
 
     context_tracks = {
         slot_id: notes
@@ -217,15 +217,15 @@ def _repair_contextual_octaves(
     }
     if not context_tracks:
         diagnostics["reason"] = "no_vocal_context"
-        return candidate_notes, diagnostics
+        return candidate_events, diagnostics
 
     repaired: list[TrackPitchEvent] = []
     changed: list[dict[str, Any]] = []
     previous_pitch: int | None = None
-    pitched_notes = _pitched_notes(candidate_notes)
+    pitched_notes = _pitched_notes(candidate_events)
     next_pitch_by_id = _next_pitch_by_note_id(pitched_notes)
 
-    for note in candidate_notes:
+    for note in candidate_events:
         if note.is_rest or note.pitch_midi is None:
             repaired.append(note)
             continue
@@ -273,7 +273,7 @@ def _repair_contextual_octaves(
         diagnostics.update(
             {
                 "applied": True,
-                "changed_note_count": len(changed),
+                "changed_event_count": len(changed),
                 "changes": changed[:MAX_EXPOSED_ISSUES],
                 "reason": "contextual_octave_repair_applied",
             }
@@ -318,7 +318,7 @@ def _percussion_diagnostics(
         )
     return _build_diagnostics(
         target_slot_id=target_slot_id,
-        candidate_notes=notes,
+        candidate_events=notes,
         existing_tracks_by_slot={},
         issues=issues,
         snapshot_count=0,
@@ -707,11 +707,11 @@ def _parallel_perfect_issues(
         target_motion = _motion_direction(previous_target.pitch_midi, current_target.pitch_midi)
         if target_motion == 0:
             continue
-        for slot_id, context_notes in tracks_by_slot.items():
+        for slot_id, context_events in tracks_by_slot.items():
             if slot_id == target_slot_id or slot_id not in VOCAL_SLOT_IDS:
                 continue
-            previous_context = _active_note_at(context_notes, previous_target.beat)
-            current_context = _active_note_at(context_notes, current_target.beat)
+            previous_context = _active_note_at(context_events, previous_target.beat)
+            current_context = _active_note_at(context_events, current_target.beat)
             if previous_context is None or current_context is None:
                 continue
             if previous_context.pitch_midi is None or current_context.pitch_midi is None:
@@ -955,7 +955,7 @@ def _beat_strength(
 def _build_diagnostics(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackPitchEvent],
+    candidate_events: list[TrackPitchEvent],
     existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     issues: list[dict[str, Any]],
     snapshot_count: int,
@@ -970,7 +970,7 @@ def _build_diagnostics(
         for slot_id, notes in existing_tracks_by_slot.items()
         if slot_id in VOCAL_SLOT_IDS and _pitched_notes(notes)
     )
-    target_range_fit_ratio = _range_fit_ratio(target_slot_id, _pitched_notes(candidate_notes))
+    target_range_fit_ratio = _range_fit_ratio(target_slot_id, _pitched_notes(candidate_events))
     return {
         "version": ENSEMBLE_VALIDATION_VERSION,
         "evaluated": True,
@@ -982,7 +982,7 @@ def _build_diagnostics(
         "time_signature": f"{time_signature_numerator}/{time_signature_denominator}",
         "active_reference_vocal_track_count": active_vocal_track_count,
         "snapshot_count": snapshot_count,
-        "target_note_count": len([note for note in candidate_notes if not note.is_rest]),
+        "target_event_count": len([note for note in candidate_events if not note.is_rest]),
         "target_range_fit_ratio": round(target_range_fit_ratio, 4),
         "issue_count": len(issues),
         "severity_counts": dict(severity_counts),

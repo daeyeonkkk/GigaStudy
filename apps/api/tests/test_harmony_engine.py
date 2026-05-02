@@ -86,7 +86,7 @@ def test_vocal_generation_uses_known_slots_to_avoid_voice_crossing() -> None:
     notes = generate_rule_based_harmony(
         target_slot_id=2,
         context_tracks=soprano + tenor,
-        context_notes_by_slot={1: soprano, 3: tenor},
+        context_events_by_slot={1: soprano, 3: tenor},
         bpm=120,
         time_signature_numerator=4,
         time_signature_denominator=4,
@@ -104,7 +104,7 @@ def test_vocal_generation_uses_middle_gap_when_neighbor_voices_are_close() -> No
     notes = generate_rule_based_harmony(
         target_slot_id=4,
         context_tracks=tenor + bass,
-        context_notes_by_slot={3: tenor, 5: bass},
+        context_events_by_slot={3: tenor, 5: bass},
         bpm=120,
     )
 
@@ -125,7 +125,7 @@ def test_vocal_generation_avoids_parallel_perfects_against_soprano() -> None:
     notes = generate_rule_based_harmony(
         target_slot_id=2,
         context_tracks=soprano,
-        context_notes_by_slot={1: soprano},
+        context_events_by_slot={1: soprano},
         bpm=120,
     )
 
@@ -145,7 +145,7 @@ def test_vocal_generation_shapes_final_cadence_toward_tonic_chord() -> None:
     notes = generate_rule_based_harmony(
         target_slot_id=2,
         context_tracks=soprano,
-        context_notes_by_slot={1: soprano},
+        context_events_by_slot={1: soprano},
         bpm=120,
     )
 
@@ -166,7 +166,7 @@ def test_vocal_generation_keeps_subbeat_rhythm_and_stepwise_connectors() -> None
     notes = generate_rule_based_harmony(
         target_slot_id=2,
         context_tracks=soprano,
-        context_notes_by_slot={1: soprano},
+        context_events_by_slot={1: soprano},
         bpm=120,
     )
 
@@ -192,7 +192,7 @@ def test_vocal_generation_candidates_are_distinct_arrangements() -> None:
     candidates = generate_rule_based_harmony_candidates(
         target_slot_id=3,
         context_tracks=soprano,
-        context_notes_by_slot={1: soprano},
+        context_events_by_slot={1: soprano},
         bpm=120,
         candidate_count=3,
     )
@@ -219,7 +219,7 @@ def test_harmony_plan_changes_notes_and_rhythm_policy() -> None:
     baseline = generate_rule_based_harmony_candidates(
         target_slot_id=3,
         context_tracks=soprano,
-        context_notes_by_slot={1: soprano},
+        context_events_by_slot={1: soprano},
         bpm=120,
         candidate_count=1,
     )[0]
@@ -239,7 +239,7 @@ def test_harmony_plan_changes_notes_and_rhythm_policy() -> None:
             DeepSeekCandidateDirection(
                 candidate_index=1,
                 profile_name="lower_support",
-                title="넓은 받침",
+                title="?볦? 諛쏆묠",
                 goal="open_support",
                 register_bias="low",
                 motion_bias="stable",
@@ -252,7 +252,7 @@ def test_harmony_plan_changes_notes_and_rhythm_policy() -> None:
     planned = generate_rule_based_harmony_candidates(
         target_slot_id=3,
         context_tracks=soprano,
-        context_notes_by_slot={1: soprano},
+        context_events_by_slot={1: soprano},
         bpm=120,
         candidate_count=1,
         profile_names=plan.profile_names(),

@@ -14,13 +14,13 @@ from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_ca
 from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan, plan_harmony_with_deepseek
 
-DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT = 160
+DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT = 160
 DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 6.0
 
 
 @dataclass(frozen=True)
 class GeneratedTrackMaterial:
-    candidate_notes: list[list[TrackPitchEvent]]
+    candidate_events: list[list[TrackPitchEvent]]
     source_label: str
     method: str
     message: str
@@ -34,7 +34,7 @@ class GenerationRequestError(ValueError):
         self.detail = detail
 
 
-def build_generation_context_notes_by_slot(
+def build_generation_context_events_by_slot(
     studio: Studio,
     *,
     target_slot_id: int,
@@ -51,10 +51,10 @@ def build_generation_context_notes_by_slot(
     }
 
 
-def flattened_generation_context_notes(
-    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
+def flattened_generation_context_events(
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
 ) -> list[TrackPitchEvent]:
-    return [note for notes in context_notes_by_slot.values() for note in notes]
+    return [note for notes in context_events_by_slot.values() for note in notes]
 
 
 def generate_track_material(
@@ -64,20 +64,20 @@ def generate_track_material(
     target_slot_id: int,
     request: GenerateTrackRequest,
 ) -> GeneratedTrackMaterial:
-    context_notes_by_slot = build_generation_context_notes_by_slot(
+    context_events_by_slot = build_generation_context_events_by_slot(
         studio,
         target_slot_id=target_slot_id,
         requested_context_slot_ids=request.context_slot_ids,
     )
-    context_notes = flattened_generation_context_notes(context_notes_by_slot)
-    if not context_notes:
+    context_events = flattened_generation_context_events(context_events_by_slot)
+    if not context_events:
         raise GenerationRequestError(
             409,
             "AI generation requires at least one registered context track.",
         )
     planning_settings = _generation_planning_settings(
         settings,
-        context_note_count=len(context_notes),
+        context_event_count=len(context_events),
     )
     llm_plan = plan_harmony_with_deepseek(
         settings=planning_settings,
@@ -86,29 +86,29 @@ def generate_track_material(
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
         target_slot_id=target_slot_id,
-        context_notes_by_slot=context_notes_by_slot,
+        context_events_by_slot=context_events_by_slot,
         candidate_count=request.candidate_count,
     )
-    candidate_notes = generate_rule_based_harmony_candidates(
+    candidate_events = generate_rule_based_harmony_candidates(
         target_slot_id=target_slot_id,
-        context_tracks=context_notes,
+        context_tracks=context_events,
         bpm=studio.bpm,
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
-        context_notes_by_slot=context_notes_by_slot,
+        context_events_by_slot=context_events_by_slot,
         candidate_count=request.candidate_count,
         profile_names=llm_plan.profile_names() if llm_plan is not None else None,
         harmony_plan=llm_plan,
     )
-    if not candidate_notes and llm_plan is not None:
+    if not candidate_events and llm_plan is not None:
         llm_plan = None
-        candidate_notes = generate_rule_based_harmony_candidates(
+        candidate_events = generate_rule_based_harmony_candidates(
             target_slot_id=target_slot_id,
-            context_tracks=context_notes,
+            context_tracks=context_events,
             bpm=studio.bpm,
             time_signature_numerator=studio.time_signature_numerator,
             time_signature_denominator=studio.time_signature_denominator,
-            context_notes_by_slot=context_notes_by_slot,
+            context_events_by_slot=context_events_by_slot,
             candidate_count=request.candidate_count,
         )
     label = "Generated percussion groove" if target_slot_id == 6 else "Voice-leading harmony region"
@@ -128,7 +128,7 @@ def generate_track_material(
         else "Deterministic voice-leading generated multiple candidates. Approve one candidate to register it."
     )
     return GeneratedTrackMaterial(
-        candidate_notes=candidate_notes,
+        candidate_events=candidate_events,
         source_label=label,
         method=method,
         message=message,
@@ -136,8 +136,8 @@ def generate_track_material(
     )
 
 
-def _generation_planning_settings(settings: Settings, *, context_note_count: int) -> Settings:
-    if context_note_count > DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT:
+def _generation_planning_settings(settings: Settings, *, context_event_count: int) -> Settings:
+    if context_event_count > DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT:
         return settings.model_copy(update={"deepseek_harmony_enabled": False})
     return settings.model_copy(
         update={

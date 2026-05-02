@@ -53,4 +53,4 @@ the important files.
 ## Non-Goals
 
 Do not add foundation material for unrelated operational, deployment, marketing,
-or legacy surfaces unless the user explicitly brings them back into scope.
+or retired surfaces unless the user explicitly brings them back into scope.

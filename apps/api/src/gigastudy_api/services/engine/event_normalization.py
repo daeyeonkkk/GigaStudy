@@ -85,7 +85,7 @@ def pitch_label_octave_shift_for_slot(slot_id: int) -> int:
     return 12 if slot_id == 3 else 0
 
 
-def normalize_track_notes(
+def normalize_track_events(
     notes: list[TrackPitchEvent],
     *,
     bpm: int,
@@ -141,7 +141,7 @@ def normalize_track_notes(
     return normalized
 
 
-def annotate_track_notes_for_slot(
+def annotate_track_events_for_slot(
     notes: list[TrackPitchEvent],
     *,
     slot_id: int,
@@ -373,7 +373,6 @@ def _split_interval_at_measure_boundaries(
             label=spelled_label,
             confidence=interval.confidence,
             voice_index=source_note.voice_index,
-            source_staff_index=source_note.source_staff_index,
             is_rest=source_note.is_rest,
             is_tied=split_tie,
             spelled_label=spelled_label,

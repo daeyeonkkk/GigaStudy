@@ -36,7 +36,7 @@ GigaStudy should keep DeepSeek V4 Flash as the single low-cost LLM planner, but
 the planner must move from "candidate profile ordering" to "measure-level
 harmony intent." The LLM still must not write final `PitchEvent` arrays. The
 deterministic engine remains the only layer allowed to create, normalize, and
-validate persisted notes.
+validate persisted events.
 
 This keeps the product auditable and cheap while giving the LLM enough leverage
 to change the actual generated music.
@@ -159,9 +159,9 @@ constraint/search engine realize that plan.
 
    The UI should compare candidates by musical role, not by engine fields:
 
-   - "안정형: 기존 성부를 크게 방해하지 않는 기본 화음"
-   - "대선율형: 소프라노와 반진행이 많아 독립성이 큼"
-   - "넓은 간격형: 저음 받침이 강하지만 음역 확인 필요"
+   - "Stable: basic harmony that does not disturb existing voices"
+   - "Counterline: more independent motion against the soprano"
+   - "Open spacing: strong lower support, range should be checked"
 
 ## HarmonyPlan Schema V2
 
@@ -173,7 +173,7 @@ generation.
   "key": "C",
   "mode": "major",
   "confidence": 0.78,
-  "phrase_summary": "1-2마디 안정, 3마디 긴장, 4마디 종지",
+  "phrase_summary": "measures 1-2 stable, measure 3 tension, measure 4 cadence",
   "measures": [
     {
       "measure_index": 1,
@@ -198,14 +198,14 @@ generation.
     {
       "candidate_index": 1,
       "profile_name": "balanced",
-      "title": "안정형 블렌드",
+      "title": "Stable blend",
       "goal": "rehearsal_safe",
       "register_bias": "middle",
       "motion_bias": "mostly_stepwise",
       "rhythm_policy": "follow_context",
       "chord_tone_priority": ["third", "root", "fifth"],
-      "role": "기존 성부를 크게 방해하지 않는 기본 화음",
-      "selection_hint": "처음 연습하거나 무난한 합창감을 원할 때 선택",
+      "role": "Basic harmony that does not disturb existing voices",
+      "selection_hint": "Choose first for rehearsal-safe blend",
       "risk_tags": []
     }
   ],

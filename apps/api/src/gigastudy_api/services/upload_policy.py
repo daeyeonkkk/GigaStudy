@@ -31,7 +31,6 @@ AUDIO_MIME_TYPES = {
 
 
 def validate_track_upload_filename(source_kind: str, filename: str) -> tuple[str, str]:
-    source_kind = normalize_upload_source_kind(source_kind)
     safe_filename = Path(filename.strip()).name
     suffix = Path(safe_filename).suffix.lower()
     allowed_suffixes = TRACK_UPLOAD_SUFFIXES.get(source_kind)
@@ -41,7 +40,6 @@ def validate_track_upload_filename(source_kind: str, filename: str) -> tuple[str
 
 
 def validate_studio_seed_upload_filename(source_kind: str, filename: str) -> tuple[str, str]:
-    source_kind = normalize_upload_source_kind(source_kind)
     safe_filename = Path(filename.strip()).name
     suffix = Path(safe_filename).suffix.lower()
     allowed_suffixes = STUDIO_SEED_UPLOAD_SUFFIXES.get(source_kind)
@@ -70,13 +68,9 @@ def guess_audio_mime_type(filename: str) -> str:
 
 
 def should_route_seed_upload_to_omr(source_kind: str, filename: str | None) -> bool:
-    if normalize_upload_source_kind(source_kind) != "document" or filename is None:
+    if source_kind != "document" or filename is None:
         return False
     return Path(filename).suffix.lower() in OMR_SOURCE_SUFFIXES
-
-
-def normalize_upload_source_kind(source_kind: str) -> str:
-    return "document" if source_kind == "score" else source_kind
 
 
 def guess_content_type(filename: str) -> str | None:

@@ -48,7 +48,10 @@ for the product UI and API response.
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
 - `apps/api/src/gigastudy_api/api/schemas/studios.py`
-  Public contract. `Studio.regions` and `ExtractionCandidate.region` expose the
+  Internal storage plus public response contracts. `Studio` may still retain
+  import/scoring compatibility notes internally, but studio routes return
+  `StudioResponse`, whose tracks and candidates omit legacy note arrays.
+  `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
   arrangement data flow. Document imports use `source_kind: "document"`; legacy
   `"score"` input is accepted only as a compatibility alias and normalized at
   the API boundary. `PitchEvent` carries timing, source, extraction method,
@@ -112,9 +115,11 @@ flowchart TD
 
 1. Web calls `GET /api/studios/{studio_id}`.
 2. API loads a `Studio` from `StudioStore`.
-3. `Studio.regions` is computed from registered tracks.
-4. Web passes `studio.regions` into `TrackBoard`.
-5. `TrackBoard`, playback, candidate review, and practice waterfall consume
+3. API builds a `StudioResponse`, stripping internal note arrays from tracks
+   and candidates.
+4. `StudioResponse.regions` is computed from registered tracks.
+5. Web passes `studio.regions` into `TrackBoard`.
+6. `TrackBoard`, playback, candidate review, and practice waterfall consume
    pitch events from the same region payload.
 
 ### Upload / Import
@@ -184,9 +189,11 @@ The remaining compatibility layer is mostly naming and storage shape:
 
 - `TrackNote` is no longer modeled by the web client. It should continue moving
   inward until it is only an internal import/scoring adapter.
+- Studio API responses now use `StudioResponse` to prevent `TrackSlot.notes`
+  and `ExtractionCandidate.notes` from leaking back into product clients.
 - Persistent studio state should eventually store explicit regions/events.
-- Candidate note arrays should remain compatibility payload only; candidate
-  review must use `ExtractionCandidate.region`.
+- Candidate note arrays should remain internal compatibility state only;
+  candidate review must use `ExtractionCandidateResponse.region`.
 - Report focus currently targets persisted answer regions. Performance-take
   focus should be expanded after recorded takes become explicit persisted
   regions instead of report-local comparison payloads.

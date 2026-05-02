@@ -12,10 +12,12 @@ from gigastudy_api.api.schemas.studios import (
     ShiftTrackSyncRequest,
     Studio,
     StudioListItem,
+    StudioResponse,
     StudioSeedUploadRequest,
     SyncTrackRequest,
     UploadTrackRequest,
     VolumeTrackRequest,
+    build_studio_response,
 )
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
 
@@ -38,40 +40,48 @@ def list_studios(
     return repository.list_accessible_studios(limit=limit, offset=offset, owner_token=owner_token)
 
 
-@router.post("", response_model=Studio)
+def _studio_response(studio: Studio) -> StudioResponse:
+    return build_studio_response(studio)
+
+
+@router.post("", response_model=StudioResponse)
 def create_studio(
     request: CreateStudioRequest,
     background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.create_studio(
-        title=request.title,
-        bpm=request.bpm,
-        start_mode=request.start_mode,
-        time_signature_numerator=request.time_signature_numerator,
-        time_signature_denominator=request.time_signature_denominator,
-        source_kind=request.source_kind,
-        source_filename=request.source_filename,
-        source_content_base64=request.source_content_base64,
-        source_asset_path=request.source_asset_path,
-        owner_token=owner_token,
-        background_tasks=background_tasks,
+) -> StudioResponse:
+    return _studio_response(
+        repository.create_studio(
+            title=request.title,
+            bpm=request.bpm,
+            start_mode=request.start_mode,
+            time_signature_numerator=request.time_signature_numerator,
+            time_signature_denominator=request.time_signature_denominator,
+            source_kind=request.source_kind,
+            source_filename=request.source_filename,
+            source_content_base64=request.source_content_base64,
+            source_asset_path=request.source_asset_path,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
     )
 
 
-@router.get("/{studio_id}", response_model=Studio)
+@router.get("/{studio_id}", response_model=StudioResponse)
 def get_studio(
     studio_id: str,
     background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.get_studio(
-        studio_id,
-        background_tasks=background_tasks,
-        owner_token=owner_token,
-        enforce_owner=True,
+) -> StudioResponse:
+    return _studio_response(
+        repository.get_studio(
+            studio_id,
+            background_tasks=background_tasks,
+            owner_token=owner_token,
+            enforce_owner=True,
+        )
     )
 
 
@@ -163,7 +173,7 @@ def create_track_upload_target(
     return target
 
 
-@router.post("/{studio_id}/tracks/{slot_id}/upload", response_model=Studio)
+@router.post("/{studio_id}/tracks/{slot_id}/upload", response_model=StudioResponse)
 def upload_track(
     studio_id: str,
     slot_id: int,
@@ -171,113 +181,133 @@ def upload_track(
     background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.upload_track(
-        studio_id,
-        slot_id,
-        request,
-        owner_token=owner_token,
-        background_tasks=background_tasks,
+) -> StudioResponse:
+    return _studio_response(
+        repository.upload_track(
+            studio_id,
+            slot_id,
+            request,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
     )
 
 
-@router.post("/{studio_id}/tracks/{slot_id}/generate", response_model=Studio)
+@router.post("/{studio_id}/tracks/{slot_id}/generate", response_model=StudioResponse)
 def generate_track(
     studio_id: str,
     slot_id: int,
     request: GenerateTrackRequest,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.generate_track(studio_id, slot_id, request, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.generate_track(studio_id, slot_id, request, owner_token=owner_token)
+    )
 
 
-@router.patch("/{studio_id}/tracks/sync", response_model=Studio)
+@router.patch("/{studio_id}/tracks/sync", response_model=StudioResponse)
 def shift_registered_track_syncs(
     studio_id: str,
     request: ShiftTrackSyncRequest,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.shift_registered_syncs(studio_id, request, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.shift_registered_syncs(studio_id, request, owner_token=owner_token)
+    )
 
 
-@router.patch("/{studio_id}/tracks/{slot_id}/sync", response_model=Studio)
+@router.patch("/{studio_id}/tracks/{slot_id}/sync", response_model=StudioResponse)
 def update_track_sync(
     studio_id: str,
     slot_id: int,
     request: SyncTrackRequest,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.update_sync(studio_id, slot_id, request, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.update_sync(studio_id, slot_id, request, owner_token=owner_token)
+    )
 
 
-@router.patch("/{studio_id}/tracks/{slot_id}/volume", response_model=Studio)
+@router.patch("/{studio_id}/tracks/{slot_id}/volume", response_model=StudioResponse)
 def update_track_volume(
     studio_id: str,
     slot_id: int,
     request: VolumeTrackRequest,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.update_volume(studio_id, slot_id, request, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.update_volume(studio_id, slot_id, request, owner_token=owner_token)
+    )
 
 
-@router.post("/{studio_id}/candidates/{candidate_id}/approve", response_model=Studio)
+@router.post("/{studio_id}/candidates/{candidate_id}/approve", response_model=StudioResponse)
 def approve_candidate(
     studio_id: str,
     candidate_id: str,
     request: ApproveCandidateRequest,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.approve_candidate(studio_id, candidate_id, request, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.approve_candidate(studio_id, candidate_id, request, owner_token=owner_token)
+    )
 
 
-@router.post("/{studio_id}/candidates/{candidate_id}/reject", response_model=Studio)
+@router.post("/{studio_id}/candidates/{candidate_id}/reject", response_model=StudioResponse)
 def reject_candidate(
     studio_id: str,
     candidate_id: str,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.reject_candidate(studio_id, candidate_id, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.reject_candidate(studio_id, candidate_id, owner_token=owner_token)
+    )
 
 
-@router.post("/{studio_id}/jobs/{job_id}/approve-candidates", response_model=Studio)
+@router.post("/{studio_id}/jobs/{job_id}/approve-candidates", response_model=StudioResponse)
 def approve_job_candidates(
     studio_id: str,
     job_id: str,
     request: ApproveJobCandidatesRequest,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.approve_job_candidates(studio_id, job_id, request, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.approve_job_candidates(studio_id, job_id, request, owner_token=owner_token)
+    )
 
 
-@router.post("/{studio_id}/jobs/{job_id}/retry", response_model=Studio)
+@router.post("/{studio_id}/jobs/{job_id}/retry", response_model=StudioResponse)
 def retry_extraction_job(
     studio_id: str,
     job_id: str,
     background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.retry_extraction_job(
-        studio_id,
-        job_id,
-        owner_token=owner_token,
-        background_tasks=background_tasks,
+) -> StudioResponse:
+    return _studio_response(
+        repository.retry_extraction_job(
+            studio_id,
+            job_id,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
     )
 
 
-@router.post("/{studio_id}/tracks/{slot_id}/score", response_model=Studio)
+@router.post("/{studio_id}/tracks/{slot_id}/score", response_model=StudioResponse)
 def score_track(
     studio_id: str,
     slot_id: int,
     request: ScoreTrackRequest,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> Studio:
-    return repository.score_track(studio_id, slot_id, request, owner_token=owner_token)
+) -> StudioResponse:
+    return _studio_response(
+        repository.score_track(studio_id, slot_id, request, owner_token=owner_token)
+    )

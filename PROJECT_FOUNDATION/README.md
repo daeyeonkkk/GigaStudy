@@ -101,10 +101,12 @@ beat coordinates, and answer-side issues can deep-link back into the studio with
 the matching region and piano-roll event focused.
 
 The web client treats `Studio.regions` and `ExtractionCandidate.region` as the
-only product event contract. Legacy note arrays may still exist behind the API
-boundary for import and scoring adapters, but new UI code must not model or
-rebuild from them. Region `PitchEvent` objects carry source, extraction method,
-measure position, and quality warnings for product and diagnostic use.
+only product event contract. Studio routes return a public response model that
+omits legacy note arrays from tracks and candidates; those arrays may still
+exist behind the API boundary for import and scoring adapters, but new UI code
+must not model or rebuild from them. Region `PitchEvent` objects carry source,
+extraction method, measure position, and quality warnings for product and
+diagnostic use.
 
 ## Support Layers
 

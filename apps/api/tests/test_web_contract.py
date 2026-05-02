@@ -19,14 +19,18 @@ from gigastudy_api.api.schemas.studios import (
     CandidateRegion,
     DirectUploadTarget,
     ExtractionCandidate,
+    ExtractionCandidateResponse,
     PitchEvent,
     ReportIssue,
     ScoringReport,
     Studio,
     StudioListItem,
+    StudioResponse,
     TrackExtractionJob,
     TrackNote,
     TrackSlot,
+    TrackSlotResponse,
+    build_studio_response,
 )
 
 
@@ -40,11 +44,11 @@ def test_web_studio_response_types_cover_api_schema_fields() -> None:
         (ArrangementRegion, "ArrangementRegion", set()),
         (CandidateRegion, "CandidateRegion", set()),
         (TrackExtractionJob, "TrackExtractionJob", set()),
-        (ExtractionCandidate, "ExtractionCandidate", {"notes"}),
-        (TrackSlot, "TrackSlot", {"notes"}),
+        (ExtractionCandidateResponse, "ExtractionCandidate", set()),
+        (TrackSlotResponse, "TrackSlot", set()),
         (ReportIssue, "ReportIssue", set()),
         (ScoringReport, "ScoringReport", set()),
-        (Studio, "Studio", {"owner_token_hash"}),
+        (StudioResponse, "Studio", set()),
         (StudioListItem, "StudioListItem", set()),
         (DirectUploadTarget, "DirectUploadTarget", set()),
         (AdminAssetSummary, "AdminAssetSummary", set()),
@@ -95,8 +99,9 @@ def test_studio_response_includes_arrangement_regions() -> None:
         updated_at="2026-01-01T00:00:00Z",
     )
 
-    payload = studio.model_dump(mode="json")
+    payload = build_studio_response(studio).model_dump(mode="json")
 
+    assert "notes" not in payload["tracks"][0]
     assert payload["regions"][0]["region_id"] == "track-1-region-1"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
     assert payload["regions"][0]["pitch_events"][0]["measure_index"] == 1
@@ -129,8 +134,20 @@ def test_candidate_response_includes_region_candidate() -> None:
         updated_at="2026-01-01T00:00:00Z",
     )
 
-    payload = candidate.model_dump(mode="json")
+    studio = Studio(
+        studio_id="candidate-region-contract-studio",
+        title="Candidate response contract",
+        bpm=120,
+        tracks=[],
+        reports=[],
+        candidates=[candidate],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
 
+    payload = build_studio_response(studio).model_dump(mode="json")["candidates"][0]
+
+    assert "notes" not in payload
     assert payload["region"]["region_id"] == "candidate-candidate-region-contract-region-1"
     assert payload["region"]["suggested_slot_id"] == 2
     assert payload["region"]["pitch_events"][0]["label"] == "E4"

@@ -400,6 +400,83 @@ class Studio(BaseModel):
         return build_arrangement_regions(self.tracks, self.bpm)
 
 
+class TrackSlotResponse(SourceKindModel):
+    slot_id: int
+    name: str
+    status: TrackStatus
+    sync_offset_seconds: float = 0
+    volume_percent: int = Field(default=100, ge=0, le=100)
+    source_kind: SourceKind | None = None
+    source_label: str | None = None
+    audio_source_path: str | None = None
+    audio_source_label: str | None = None
+    audio_mime_type: str | None = None
+    duration_seconds: float = 0
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    updated_at: str
+
+
+class ExtractionCandidateResponse(SourceKindModel):
+    candidate_id: str
+    candidate_group_id: str | None = None
+    suggested_slot_id: int
+    source_kind: SourceKind
+    source_label: str
+    method: str
+    variant_label: str | None = None
+    confidence: float = Field(default=0.5, ge=0, le=1)
+    status: ExtractionCandidateStatus = "pending"
+    audio_source_path: str | None = None
+    audio_source_label: str | None = None
+    audio_mime_type: str | None = None
+    job_id: str | None = None
+    message: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    region: CandidateRegion
+    created_at: str
+    updated_at: str
+
+
+class StudioResponse(BaseModel):
+    studio_id: str
+    title: str
+    bpm: int
+    time_signature_numerator: int = Field(default=4, ge=1, le=32)
+    time_signature_denominator: TimeSignatureDenominator = 4
+    tracks: list[TrackSlotResponse]
+    regions: list[ArrangementRegion]
+    reports: list[ScoringReport]
+    jobs: list[TrackExtractionJob] = Field(default_factory=list)
+    candidates: list[ExtractionCandidateResponse] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+
+
+def build_studio_response(studio: Studio) -> StudioResponse:
+    return StudioResponse(
+        studio_id=studio.studio_id,
+        title=studio.title,
+        bpm=studio.bpm,
+        time_signature_numerator=studio.time_signature_numerator,
+        time_signature_denominator=studio.time_signature_denominator,
+        tracks=[
+            TrackSlotResponse.model_validate(track.model_dump(mode="json", exclude={"notes"}))
+            for track in studio.tracks
+        ],
+        regions=studio.regions,
+        reports=studio.reports,
+        jobs=studio.jobs,
+        candidates=[
+            ExtractionCandidateResponse.model_validate(
+                candidate.model_dump(mode="json", exclude={"notes"})
+            )
+            for candidate in studio.candidates
+        ],
+        created_at=studio.created_at,
+        updated_at=studio.updated_at,
+    )
+
+
 class StudioListItem(BaseModel):
     studio_id: str
     title: str

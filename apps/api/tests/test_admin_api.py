@@ -64,6 +64,13 @@ def create_audio_studio(client: TestClient) -> tuple[str, dict]:
     return studio_id, client.get(f"/api/studios/{studio_id}").json()
 
 
+def _track_notes(payload: dict, slot_id: int) -> list[dict]:
+    for region in payload["regions"]:
+        if region["track_slot_id"] == slot_id:
+            return region["pitch_events"]
+    return []
+
+
 def test_admin_storage_accepts_default_admin_login(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
 
@@ -301,7 +308,7 @@ def test_admin_can_list_and_delete_individual_studio_asset(tmp_path: Path, monke
     studio_after_delete = client.get(f"/api/studios/{studio_id}").json()
     assert studio_after_delete["tracks"][0]["audio_source_path"] is None
     assert studio_after_delete["tracks"][0]["status"] == "registered"
-    assert studio_after_delete["tracks"][0]["notes"][0]["label"] == "C5"
+    assert _track_notes(studio_after_delete, 1)[0]["label"] == "C5"
     assert client.get("/api/admin/storage", headers=ADMIN_HEADERS).json()["asset_count"] == 0
 
 

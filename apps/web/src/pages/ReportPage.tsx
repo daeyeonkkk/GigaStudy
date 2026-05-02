@@ -101,6 +101,21 @@ function getIssueCoordinate(issue: ReportIssue): string {
   return [expectedBeat, actualBeat, eventText].filter(Boolean).join(' / ')
 }
 
+function getIssueFocusPath(studioId: string, issue: ReportIssue): string | null {
+  if (!issue.answer_region_id) {
+    return null
+  }
+  const params = new URLSearchParams()
+  params.set('region', issue.answer_region_id)
+  if (issue.answer_event_id) {
+    params.set('event', issue.answer_event_id)
+  }
+  if (issue.expected_beat !== null) {
+    params.set('beat', String(issue.expected_beat))
+  }
+  return `/studios/${studioId}?${params.toString()}`
+}
+
 function ReportRouteState({
   eyebrow,
   title,
@@ -248,15 +263,26 @@ export function ReportPage() {
             </div>
           ) : (
             <ol>
-              {report.issues.map((issue, index) => (
-                <li className={`report-issue report-issue--${issue.issue_type}`} key={`${issue.at_seconds}-${index}`}>
-                  <strong>{formatSeconds(issue.at_seconds)}</strong>
-                  <div>
-                    <span>{getIssueLabel(issue)}</span>
-                    <p>{getIssueDetail(issue)}</p>
-                  </div>
-                </li>
-              ))}
+              {report.issues.map((issue, index) => {
+                const focusPath = getIssueFocusPath(studio.studio_id, issue)
+                return (
+                  <li
+                    className={`report-issue report-issue--${issue.issue_type}`}
+                    key={`${issue.at_seconds}-${index}`}
+                  >
+                    <strong>{formatSeconds(issue.at_seconds)}</strong>
+                    <div>
+                      <span>{getIssueLabel(issue)}</span>
+                      <p>{getIssueDetail(issue)}</p>
+                      {focusPath ? (
+                        <Link className="report-issue__focus" to={focusPath}>
+                          Open in piano roll
+                        </Link>
+                      ) : null}
+                    </div>
+                  </li>
+                )
+              })}
             </ol>
           )}
         </section>

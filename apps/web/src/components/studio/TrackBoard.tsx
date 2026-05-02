@@ -36,6 +36,8 @@ type TrackBoardProps = {
   extractionJobs: TrackExtractionJob[]
   playingSlots: Set<number>
   playheadSeconds: number | null
+  focusedEventId?: string | null
+  focusedRegionId?: string | null
   arrangementRegions: ArrangementRegion[]
   registeredTracks: TrackSlot[]
   recordingSlotId: number | null
@@ -201,7 +203,13 @@ function TrackVolumeControl({
   )
 }
 
-function PianoRollPanel({ region }: { region: ArrangementRegion | null }) {
+function PianoRollPanel({
+  focusedEventId,
+  region,
+}: {
+  focusedEventId?: string | null
+  region: ArrangementRegion | null
+}) {
   const events = region ? getPitchedEvents(region.pitch_events) : []
   const pitchRange = getPitchEventRange(events)
   const pitchLabels = Array.from({ length: 5 }, (_, index) => {
@@ -235,7 +243,8 @@ function PianoRollPanel({ region }: { region: ArrangementRegion | null }) {
           {region && events.length > 0 ? (
             events.map((event) => (
               <button
-                className="piano-roll__event"
+                className={`piano-roll__event ${event.event_id === focusedEventId ? 'is-focused' : ''}`}
+                data-testid={`piano-event-${event.event_id}`}
                 key={event.event_id}
                 style={
                   {
@@ -316,6 +325,8 @@ export function TrackBoard({
   extractionJobs,
   playingSlots,
   playheadSeconds,
+  focusedEventId,
+  focusedRegionId,
   arrangementRegions,
   registeredTracks,
   recordingSlotId,
@@ -353,8 +364,12 @@ export function TrackBoard({
     [beatsPerMeasure, bpm, timelineSeconds],
   )
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const focusedRegionExists = focusedRegionId
+    ? regions.some((region) => region.region_id === focusedRegionId)
+    : false
+  const effectiveSelectedRegionId = selectedRegionId ?? (focusedRegionExists ? focusedRegionId : null)
   const selectedRegion =
-    regions.find((region) => region.region_id === selectedRegionId) ?? regions[0] ?? null
+    regions.find((region) => region.region_id === effectiveSelectedRegionId) ?? regions[0] ?? null
 
   return (
     <section className="studio-tracks" aria-label="6트랙 리전 편곡">
@@ -447,7 +462,7 @@ export function TrackBoard({
                 {region ? (
                   <button
                     aria-pressed={selectedRegion?.region_id === region.region_id}
-                    className="track-card__region-block"
+                    className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
                     data-testid={`track-region-${track.slot_id}`}
                     style={getRegionStyle(region, timelineSeconds)}
                     type="button"
@@ -579,7 +594,7 @@ export function TrackBoard({
       </div>
 
       <div className="editor-panels">
-        <PianoRollPanel region={selectedRegion} />
+        <PianoRollPanel focusedEventId={focusedEventId} region={selectedRegion} />
         <PracticeWaterfall
           playheadSeconds={playheadSeconds}
           regions={regions}

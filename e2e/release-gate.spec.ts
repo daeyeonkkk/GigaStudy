@@ -79,6 +79,14 @@ test('document upload becomes a region, piano-roll events, and practice waterfal
   await approveFirstCandidate(page)
 
   await expectRegisteredRegion(page, 1, ['C5', 'G5'])
+  const c5EventTestId = await page.locator('.piano-roll__event', { hasText: 'C5' }).first().getAttribute('data-testid')
+  if (!c5EventTestId) {
+    throw new Error('Expected imported piano-roll event to expose a stable test id')
+  }
+  const c5EventId = c5EventTestId.replace('piano-event-', '')
+  await page.goto(`${page.url()}?region=track-1-region-1&event=${encodeURIComponent(c5EventId)}`)
+  await expect(page.getByTestId('track-region-1')).toHaveClass(/is-focused/)
+  await expect(page.getByTestId(c5EventTestId)).toHaveClass(/is-focused/)
 
   await page.getByTestId('practice-mode-link').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)

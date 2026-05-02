@@ -221,6 +221,13 @@
   box-shadow: 0 0 0 2px rgba(8, 47, 189, 0.14);
 }
 
+.track-card__region-block.is-focused {
+  border-color: #c2362d;
+  box-shadow:
+    0 0 0 2px rgba(194, 54, 45, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
 .track-card__region-block span,
 .track-card__region-block strong,
 .track-card__region-block em {
@@ -477,6 +484,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.piano-roll__event.is-focused {
+  z-index: 3;
+  border-color: #8d241b;
+  background: #ffcf7c;
+  box-shadow: 0 0 0 3px rgba(194, 54, 45, 0.2);
 }
 
 .practice-waterfall header > span {

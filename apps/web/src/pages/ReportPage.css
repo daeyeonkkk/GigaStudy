@@ -171,6 +171,17 @@
   font-weight: 700;
 }
 
+.report-issue__focus {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 6px;
+  color: #082fbd;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .report-issues__empty {
   display: grid;
   gap: 4px;

@@ -1,5 +1,5 @@
 ﻿import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
 import { CandidateReviewPanel } from '../components/studio/CandidateReviewPanel'
 import { ExtractionJobsPanel } from '../components/studio/ExtractionJobsPanel'
@@ -34,6 +34,9 @@ import './StudioPage.css'
 
 export function StudioPage() {
   const { studioId } = useParams()
+  const [searchParams] = useSearchParams()
+  const focusedRegionId = searchParams.get('region')
+  const focusedEventId = searchParams.get('event')
   const [actionState, setActionState] = useState<StudioActionState>({ phase: 'idle' })
   const {
     activeExtractionJobs,
@@ -276,6 +279,8 @@ export function StudioPage() {
               metronomeEnabled={metronomeEnabled}
               pendingCandidateCount={pendingCandidates.length}
               extractionJobs={visibleExtractionJobs}
+              focusedEventId={focusedEventId}
+              focusedRegionId={focusedRegionId}
               playingSlots={playingSlots}
               playheadSeconds={playheadSeconds}
               arrangementRegions={studio.regions}

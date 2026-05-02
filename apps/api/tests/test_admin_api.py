@@ -186,7 +186,7 @@ def test_admin_can_delete_abandoned_staged_uploads(tmp_path: Path, monkeypatch) 
     target_response = client.post(
         "/api/studios/upload-target",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "abandoned.pdf",
             "size_bytes": len(content),
             "content_type": "application/pdf",
@@ -220,7 +220,7 @@ def test_upload_target_creation_cleans_expired_staged_assets(tmp_path: Path, mon
     target_response = client.post(
         "/api/studios/upload-target",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "expired.pdf",
             "size_bytes": len(content),
             "content_type": "application/pdf",
@@ -241,7 +241,7 @@ def test_upload_target_creation_cleans_expired_staged_assets(tmp_path: Path, mon
     next_target_response = client.post(
         "/api/studios/upload-target",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "next.pdf",
             "size_bytes": len(content),
             "content_type": "application/pdf",

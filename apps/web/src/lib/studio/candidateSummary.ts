@@ -37,7 +37,7 @@ const sourceDecisionLabels: Record<SourceKind, string> = {
   recording: '녹음 추출',
   audio: '오디오 추출',
   midi: 'MIDI 파트',
-  score: '문서 파트',
+  document: '문서 파트',
   music: '음원 추출',
   ai: 'AI 화음',
 }

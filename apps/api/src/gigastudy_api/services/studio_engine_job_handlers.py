@@ -48,7 +48,7 @@ class StudioEngineJobHandlers:
         settings = get_settings()
         studio = self._repository.get_studio(record.studio_id)
         input_path = self._assets.resolve_data_asset_path(str(record.payload.get("input_path") or ""))
-        source_label = str(record.payload.get("source_label") or "uploaded-score")
+        source_label = str(record.payload.get("source_label") or "uploaded-document")
         try:
             result = run_omr_pipeline(
                 audiveris_bin=settings.audiveris_bin,
@@ -127,7 +127,7 @@ class StudioEngineJobHandlers:
         self._repository._add_extraction_candidates(
             record.studio_id,
             mapped_notes,
-            source_kind="score",
+            source_kind="document",
             source_label=source_label,
             method=result.candidate_method,
             confidence=result.confidence,

@@ -2,7 +2,7 @@ from math import isfinite
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 TrackStatus = Literal[
     "empty",
@@ -14,15 +14,26 @@ TrackStatus = Literal[
     "registered",
     "failed",
 ]
-SourceKind = Literal["recording", "audio", "midi", "score", "music", "ai"]
+SourceKind = Literal["recording", "audio", "midi", "document", "music", "ai"]
 ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
-SeedSourceKind = Literal["score", "music"]
+SeedSourceKind = Literal["document", "music"]
 NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
 ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
 ExtractionJobType = Literal["omr", "voice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
+
+
+def _normalize_source_kind(value: Any) -> Any:
+    return "document" if value == "score" else value
+
+
+class SourceKindModel(BaseModel):
+    @field_validator("source_kind", mode="before", check_fields=False)
+    @classmethod
+    def normalize_source_kind(cls, value: Any) -> Any:
+        return _normalize_source_kind(value)
 
 
 class TrackNote(BaseModel):
@@ -67,7 +78,7 @@ class PitchEvent(BaseModel):
     is_rest: bool = False
 
 
-class ArrangementRegion(BaseModel):
+class ArrangementRegion(SourceKindModel):
     region_id: str
     track_slot_id: int
     track_name: str
@@ -83,7 +94,7 @@ class ArrangementRegion(BaseModel):
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
-class CandidateRegion(BaseModel):
+class CandidateRegion(SourceKindModel):
     region_id: str
     suggested_slot_id: int
     source_kind: SourceKind
@@ -94,7 +105,7 @@ class CandidateRegion(BaseModel):
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
-class TrackExtractionJob(BaseModel):
+class TrackExtractionJob(SourceKindModel):
     job_id: str
     job_type: ExtractionJobType = "omr"
     slot_id: int
@@ -115,7 +126,7 @@ class TrackExtractionJob(BaseModel):
     updated_at: str
 
 
-class ExtractionCandidate(BaseModel):
+class ExtractionCandidate(SourceKindModel):
     candidate_id: str
     candidate_group_id: str | None = None
     suggested_slot_id: int
@@ -141,7 +152,7 @@ class ExtractionCandidate(BaseModel):
         return build_candidate_region(self)
 
 
-class TrackSlot(BaseModel):
+class TrackSlot(SourceKindModel):
     slot_id: int
     name: str
     status: TrackStatus
@@ -388,7 +399,7 @@ class StudioListItem(BaseModel):
     updated_at: str
 
 
-class CreateStudioRequest(BaseModel):
+class CreateStudioRequest(SourceKindModel):
     title: str = Field(min_length=1, max_length=100)
     bpm: int | None = Field(default=None, ge=40, le=240)
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
@@ -415,8 +426,8 @@ class CreateStudioRequest(BaseModel):
         return self
 
 
-class UploadTrackRequest(BaseModel):
-    source_kind: Literal["audio", "midi", "score"]
+class UploadTrackRequest(SourceKindModel):
+    source_kind: Literal["audio", "midi", "document"]
     filename: str = Field(min_length=1, max_length=180)
     content_base64: str | None = Field(default=None, min_length=1)
     asset_path: str | None = Field(default=None, min_length=1)
@@ -432,14 +443,14 @@ class UploadTrackRequest(BaseModel):
         return self
 
 
-class DirectUploadRequest(BaseModel):
-    source_kind: Literal["audio", "midi", "score"]
+class DirectUploadRequest(SourceKindModel):
+    source_kind: Literal["audio", "midi", "document"]
     filename: str = Field(min_length=1, max_length=180)
     size_bytes: int = Field(ge=1)
     content_type: str | None = Field(default=None, max_length=120)
 
 
-class StudioSeedUploadRequest(BaseModel):
+class StudioSeedUploadRequest(SourceKindModel):
     source_kind: SeedSourceKind
     filename: str = Field(min_length=1, max_length=180)
     size_bytes: int = Field(ge=1)

@@ -124,7 +124,7 @@ class StudioUploadCommands:
 
         try:
             if request.source_kind == "midi" or suffix in SYMBOLIC_SOURCE_SUFFIXES:
-                registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "score"
+                registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "document"
                 parsed_symbolic = parse_symbolic_file_with_metadata(
                     source_path,
                     bpm=studio.bpm,
@@ -177,11 +177,11 @@ class StudioUploadCommands:
                     allow_overwrite=request.allow_overwrite,
                 )
 
-            if request.source_kind == "score" and suffix in OMR_SOURCE_SUFFIXES:
+            if request.source_kind == "document" and suffix in OMR_SOURCE_SUFFIXES:
                 return self._repository._enqueue_omr_job(
                     studio_id,
                     slot_id,
-                    source_kind="score",
+                    source_kind="document",
                     source_label=filename,
                     source_path=source_path,
                     background_tasks=background_tasks,
@@ -210,12 +210,12 @@ class StudioUploadCommands:
         )
         suffix = source_path.suffix.lower()
 
-        if source_kind == "score" and suffix in SYMBOLIC_SOURCE_SUFFIXES:
+        if source_kind == "document" and suffix in SYMBOLIC_SOURCE_SUFFIXES:
             try:
                 parsed_symbolic = parse_symbolic_file_with_metadata(source_path, bpm=studio.bpm)
             except SymbolicParseError as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
-            registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "score"
+            registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "document"
             if parsed_symbolic.has_time_signature:
                 studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
                 studio.time_signature_denominator = parsed_symbolic.time_signature_denominator

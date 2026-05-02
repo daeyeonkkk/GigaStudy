@@ -115,7 +115,7 @@ def generate_track_material(
             context_notes_by_slot=context_notes_by_slot,
             candidate_count=request.candidate_count,
         )
-    label = "Generated percussion groove" if target_slot_id == 6 else "Voice-leading harmony score"
+    label = "Generated percussion groove" if target_slot_id == 6 else "Voice-leading harmony region"
     method = (
         "rule_based_percussion_candidates_v0"
         if target_slot_id == 6

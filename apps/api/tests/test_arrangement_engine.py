@@ -93,7 +93,7 @@ def test_ensemble_preparation_preserves_symbolic_octaves() -> None:
         candidate_notes=alto_candidate,
         existing_tracks_by_slot={1: soprano},
         bpm=120,
-        source_kind="score",
+        source_kind="document",
     )
 
     assert result.notes[0].label == "C5"

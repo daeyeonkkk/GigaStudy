@@ -264,7 +264,7 @@ class StudioRepository:
                 return self._enqueue_omr_job(
                     studio.studio_id,
                     1,
-                    source_kind="score",
+                    source_kind="document",
                     source_label=source_label,
                     source_path=source_path,
                     background_tasks=background_tasks,
@@ -884,9 +884,11 @@ class StudioRepository:
                 return
 
             timestamp = _now()
-            source_kind: SourceKind = "audio" if record.job_type == "voice" else "score"
+            source_kind: SourceKind = "audio" if record.job_type == "voice" else "document"
             payload_source_kind = record.payload.get("source_kind")
-            if payload_source_kind in {"recording", "audio", "midi", "score", "music", "ai"}:
+            if payload_source_kind == "score":
+                source_kind = "document"
+            elif payload_source_kind in {"recording", "audio", "midi", "document", "music", "ai"}:
                 source_kind = payload_source_kind
             source_label = str(record.payload.get("source_label") or "recovered-upload")
             audio_mime_type_value = record.payload.get("audio_mime_type")

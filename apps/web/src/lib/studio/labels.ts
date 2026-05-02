@@ -15,7 +15,7 @@ export const sourceLabels: Record<SourceKind, string> = {
   recording: '녹음',
   audio: '음성파일',
   midi: 'MIDI',
-  score: '문서',
+  document: '문서',
   music: '음악',
   ai: 'AI 생성',
 }

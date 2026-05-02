@@ -1,6 +1,6 @@
 import { AUDIO_UPLOAD_EXTENSIONS, isAudioUploadFile } from '../audio/audioUpload'
 
-type UploadKind = 'audio' | 'midi' | 'score'
+type UploadKind = 'audio' | 'midi' | 'document'
 
 const DOCUMENT_UPLOAD_EXTENSIONS = [
   '.musicxml',
@@ -29,7 +29,7 @@ export function detectUploadKind(file: File): UploadKind | null {
     return 'midi'
   }
   if (DOCUMENT_UPLOAD_EXTENSIONS.some((extension) => name.endsWith(extension))) {
-    return 'score'
+    return 'document'
   }
   if (isAudioUploadFile(file)) {
     return 'audio'

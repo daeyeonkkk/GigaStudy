@@ -222,7 +222,7 @@ def upload_musicxml_track(
     response = client.post(
         f"/api/studios/{studio_id}/tracks/{slot_id}/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": filename,
             "content_base64": encoded,
             "allow_overwrite": allow_overwrite,
@@ -373,7 +373,7 @@ def test_upload_start_does_not_require_bpm_and_maps_symbolic_tracks(tmp_path: Pa
         json={
             "title": "Upload without bpm",
             "start_mode": "upload",
-            "source_kind": "score",
+            "source_kind": "document",
             "source_filename": "soprano.musicxml",
             "source_content_base64": encoded,
         },
@@ -778,7 +778,7 @@ def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatc
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
         },
@@ -787,10 +787,35 @@ def test_upload_musicxml_registers_parsed_track_notes(tmp_path: Path, monkeypatc
     assert upload_response.status_code == 200
     soprano = upload_response.json()["tracks"][0]
     assert soprano["status"] == "registered"
-    assert soprano["source_kind"] == "score"
+    assert soprano["source_kind"] == "document"
     assert [note["label"] for note in soprano["notes"]] == ["C5", "G5"]
     assert soprano["notes"][0]["source"] == "musicxml"
     assert soprano["notes"][0]["pitch_midi"] == 72
+
+
+def test_legacy_score_source_kind_is_normalized_to_document(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    studio_id = client.post(
+        "/api/studios",
+        json={
+            "title": "Legacy source kind",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    ).json()["studio_id"]
+    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "score",
+            "filename": "soprano.musicxml",
+            "content_base64": encoded,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    assert upload_response.json()["tracks"][0]["source_kind"] == "document"
 
 
 def test_track_registration_stores_ensemble_arrangement_diagnostics(tmp_path: Path, monkeypatch) -> None:
@@ -831,7 +856,7 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
     target_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload-target",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "size_bytes": len(content),
             "content_type": "application/vnd.recordare.musicxml+xml",
@@ -850,7 +875,7 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "asset_path": target["asset_path"],
         },
@@ -882,7 +907,7 @@ def test_owner_scoped_direct_upload_put_requires_matching_owner_token(tmp_path: 
         f"/api/studios/{studio_id}/tracks/1/upload-target",
         headers=owner_headers,
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "size_bytes": len(content),
             "content_type": "application/vnd.recordare.musicxml+xml",
@@ -903,7 +928,7 @@ def test_upload_start_can_use_staged_direct_uploaded_symbolic_asset(tmp_path: Pa
     target_response = client.post(
         "/api/studios/upload-target",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "size_bytes": len(content),
             "content_type": "application/vnd.recordare.musicxml+xml",
@@ -923,7 +948,7 @@ def test_upload_start_can_use_staged_direct_uploaded_symbolic_asset(tmp_path: Pa
         json={
             "title": "Staged start",
             "start_mode": "upload",
-            "source_kind": "score",
+            "source_kind": "document",
             "source_filename": "soprano.musicxml",
             "source_asset_path": target["asset_path"],
         },
@@ -947,7 +972,7 @@ def test_upload_start_can_use_staged_direct_uploaded_pdf_for_omr(
     target_response = client.post(
         "/api/studios/upload-target",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "full-score.pdf",
             "size_bytes": len(PDF_UPLOAD_BYTES),
             "content_type": "application/pdf",
@@ -967,7 +992,7 @@ def test_upload_start_can_use_staged_direct_uploaded_pdf_for_omr(
         json={
             "title": "Staged PDF start",
             "start_mode": "upload",
-            "source_kind": "score",
+            "source_kind": "document",
             "source_filename": "full-score.pdf",
             "source_asset_path": target["asset_path"],
         },
@@ -1061,7 +1086,7 @@ def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypat
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "three-four.musicxml",
             "content_base64": encoded,
         },
@@ -1095,7 +1120,7 @@ def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypat
     blocked_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
         },
@@ -1105,7 +1130,7 @@ def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypat
     overwrite_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
             "allow_overwrite": True,
@@ -1130,7 +1155,7 @@ def test_upload_requires_file_content_instead_of_fixture_fallback(tmp_path: Path
     response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
         },
     )
@@ -1154,7 +1179,7 @@ def test_upload_musicxml_can_wait_for_candidate_approval(tmp_path: Path, monkeyp
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
             "review_before_register": True,
@@ -1200,7 +1225,7 @@ def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, mon
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.pdf",
             "content_base64": encoded,
             "review_before_register": True,
@@ -1267,7 +1292,7 @@ def test_upload_pdf_can_register_omr_candidates_into_each_suggested_track(
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "satb.pdf",
             "content_base64": encoded,
             "review_before_register": True,
@@ -1334,7 +1359,7 @@ def test_upload_pdf_falls_back_to_vector_omr_and_attempts_all_vocal_tracks(
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "phonecert.pdf",
             "content_base64": encoded,
         },
@@ -1392,7 +1417,7 @@ def test_vector_omr_four_part_score_clears_unmapped_bass_placeholder(
     response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "four-part.pdf",
             "content_base64": encoded,
         },
@@ -1429,7 +1454,7 @@ def test_omr_job_bulk_approval_requires_overwrite_confirmation(
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "satb.pdf",
             "content_base64": encoded,
             "review_before_register": True,
@@ -1467,7 +1492,7 @@ def test_create_studio_with_pdf_starts_omr_without_fixture_registration(
             "title": "PDF start",
             "bpm": 120,
             "start_mode": "upload",
-            "source_kind": "score",
+            "source_kind": "document",
             "source_filename": "full-score.pdf",
             "source_content_base64": encoded,
         },
@@ -1516,7 +1541,7 @@ def test_upload_pdf_marks_omr_job_failed_when_audiveris_unavailable(
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "broken.pdf",
             "content_base64": encoded,
             "review_before_register": True,
@@ -1565,7 +1590,7 @@ def test_failed_omr_job_can_be_retried_from_durable_queue(
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "retry.pdf",
             "content_base64": encoded,
         },
@@ -1816,7 +1841,7 @@ def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, mo
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
             "review_before_register": True,
@@ -1853,7 +1878,7 @@ def test_candidate_approval_requires_overwrite_confirmation(tmp_path: Path, monk
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
             "review_before_register": True,
@@ -1896,7 +1921,7 @@ def test_reject_candidate_keeps_track_empty(tmp_path: Path, monkeypatch) -> None
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "score",
+            "source_kind": "document",
             "filename": "soprano.musicxml",
             "content_base64": encoded,
             "review_before_register": True,

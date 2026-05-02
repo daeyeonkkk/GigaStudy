@@ -15,10 +15,10 @@ AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
 TRACK_UPLOAD_SUFFIXES = {
     "audio": tuple(AUDIO_SOURCE_SUFFIXES),
     "midi": (".mid", ".midi"),
-    "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
+    "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
 }
 STUDIO_SEED_UPLOAD_SUFFIXES = {
-    "score": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
+    "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | OMR_SOURCE_SUFFIXES),
     "music": tuple(AUDIO_SOURCE_SUFFIXES),
 }
 AUDIO_MIME_TYPES = {
@@ -31,6 +31,7 @@ AUDIO_MIME_TYPES = {
 
 
 def validate_track_upload_filename(source_kind: str, filename: str) -> tuple[str, str]:
+    source_kind = normalize_upload_source_kind(source_kind)
     safe_filename = Path(filename.strip()).name
     suffix = Path(safe_filename).suffix.lower()
     allowed_suffixes = TRACK_UPLOAD_SUFFIXES.get(source_kind)
@@ -40,6 +41,7 @@ def validate_track_upload_filename(source_kind: str, filename: str) -> tuple[str
 
 
 def validate_studio_seed_upload_filename(source_kind: str, filename: str) -> tuple[str, str]:
+    source_kind = normalize_upload_source_kind(source_kind)
     safe_filename = Path(filename.strip()).name
     suffix = Path(safe_filename).suffix.lower()
     allowed_suffixes = STUDIO_SEED_UPLOAD_SUFFIXES.get(source_kind)
@@ -68,9 +70,13 @@ def guess_audio_mime_type(filename: str) -> str:
 
 
 def should_route_seed_upload_to_omr(source_kind: str, filename: str | None) -> bool:
-    if source_kind != "score" or filename is None:
+    if normalize_upload_source_kind(source_kind) != "document" or filename is None:
         return False
     return Path(filename).suffix.lower() in OMR_SOURCE_SUFFIXES
+
+
+def normalize_upload_source_kind(source_kind: str) -> str:
+    return "document" if source_kind == "score" else source_kind
 
 
 def guess_content_type(filename: str) -> str | None:

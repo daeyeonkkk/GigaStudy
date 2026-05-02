@@ -121,7 +121,7 @@ def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated()
         [note],
         bpm=90,
         slot_id=3,
-        source_kind="score",
+        source_kind="document",
         time_signature_numerator=4,
         time_signature_denominator=4,
     )
@@ -182,7 +182,7 @@ def test_registration_quality_does_not_shift_explicit_symbolic_syncopation() -> 
         syncopated_symbolic,
         bpm=92,
         slot_id=3,
-        source_kind="score",
+        source_kind="document",
         time_signature_numerator=4,
         time_signature_denominator=4,
         reference_tracks=[reference],

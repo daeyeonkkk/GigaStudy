@@ -318,7 +318,7 @@ def test_notation_review_instruction_can_force_key_spelling_without_llm_writing_
         notes,
         bpm=120,
         slot_id=2,
-        source_kind="score",
+        source_kind="document",
         time_signature_numerator=4,
         time_signature_denominator=4,
     )
@@ -332,7 +332,7 @@ def test_notation_review_instruction_can_force_key_spelling_without_llm_writing_
         },
         bpm=120,
         slot_id=2,
-        source_kind="score",
+        source_kind="document",
         time_signature_numerator=4,
         time_signature_denominator=4,
         baseline_result=baseline,

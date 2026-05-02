@@ -365,7 +365,7 @@ function getCandidateEngineLabel(candidate: ExtractionCandidate): string {
 
 function shouldShowSourcePreview(candidate: ExtractionCandidate): boolean {
   return (
-    candidate.source_kind === 'score' &&
+    candidate.source_kind === 'document' &&
     candidate.job_id !== null &&
     (candidate.method.includes('omr') || candidate.method.includes('score'))
   )

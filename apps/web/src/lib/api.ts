@@ -114,7 +114,7 @@ export function createStudio(payload: CreateStudioRequest): Promise<Studio> {
 }
 
 export function createStudioUploadTarget(payload: {
-  source_kind: 'score' | 'music'
+  source_kind: 'document' | 'music'
   filename: string
   size_bytes: number
   content_type?: string
@@ -150,7 +150,7 @@ export function createTrackUploadTarget(
   studioId: string,
   slotId: number,
   payload: {
-    source_kind: 'audio' | 'midi' | 'score'
+    source_kind: 'audio' | 'midi' | 'document'
     filename: string
     size_bytes: number
     content_type?: string
@@ -181,7 +181,7 @@ export function uploadTrack(
   studioId: string,
   slotId: number,
   payload: {
-    source_kind: 'audio' | 'midi' | 'score'
+    source_kind: 'audio' | 'midi' | 'document'
     filename: string
     content_base64?: string
     asset_path?: string

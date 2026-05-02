@@ -54,10 +54,10 @@ function isSupportedSourceFile(file: File): boolean {
   return DOCUMENT_SOURCE_EXTENSIONS.has(extension) || isAudioUploadFile(file)
 }
 
-function detectSourceKind(file: File): 'score' | 'music' {
+function detectSourceKind(file: File): 'document' | 'music' {
   const extension = getFileExtension(file.name)
   if (DOCUMENT_SOURCE_EXTENSIONS.has(extension)) {
-    return 'score'
+    return 'document'
   }
   return 'music'
 }
@@ -71,7 +71,7 @@ export function LaunchPage() {
   const [timeSignatureDenominator, setTimeSignatureDenominator] = useState('4')
   const [sourceFile, setSourceFile] = useState<File | null>(null)
   const [sourceInputKey, setSourceInputKey] = useState(0)
-  const [sourceKindOverride, setSourceKindOverride] = useState<'auto' | 'score' | 'music'>('auto')
+  const [sourceKindOverride, setSourceKindOverride] = useState<'auto' | 'document' | 'music'>('auto')
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
   const [recentStudios, setRecentStudios] = useState<StudioListItem[]>([])
   const [recentMessage, setRecentMessage] = useState<string | null>(null)
@@ -351,11 +351,11 @@ export function LaunchPage() {
                 <select
                   value={sourceKindOverride}
                   onChange={(event) =>
-                    setSourceKindOverride(event.target.value as 'auto' | 'score' | 'music')
+                    setSourceKindOverride(event.target.value as 'auto' | 'document' | 'music')
                   }
                 >
                   <option value="auto">자동 판단</option>
-                  <option value="score">문서/노트</option>
+                  <option value="document">문서/노트</option>
                   <option value="music">음악</option>
                 </select>
               </label>

@@ -11,6 +11,9 @@ export type PlaybackNode = {
 export type DecodedInstrumentSample = {
   buffer: AudioBuffer
   gain?: number
+  loopEndSeconds?: number
+  loopStartSeconds?: number
+  releaseSeconds?: number
   rootFrequency: number
 }
 
@@ -108,10 +111,25 @@ function createSampledInstrumentPlayback(
   const source = context.createBufferSource()
   const gain = context.createGain()
   const duration = Math.max(0.03, request.duration)
-  const releaseTime = Math.max(0.08, Math.min(0.2, duration * 0.18))
+  const releaseTime = Math.max(
+    0.08,
+    sample.releaseSeconds ?? Math.min(0.32, Math.max(0.16, duration * 0.18)),
+  )
   const sampleGain = sample.gain ?? 1
+  const loopStartSeconds = sample.loopStartSeconds ?? null
+  const loopEndSeconds = sample.loopEndSeconds ?? null
+  const hasLoop =
+    loopStartSeconds !== null &&
+    loopEndSeconds !== null &&
+    loopEndSeconds > loopStartSeconds + 0.02 &&
+    loopEndSeconds <= sample.buffer.duration + 0.01
 
   source.buffer = sample.buffer
+  if (hasLoop) {
+    source.loop = true
+    source.loopStart = Math.max(0, loopStartSeconds)
+    source.loopEnd = Math.min(sample.buffer.duration, loopEndSeconds)
+  }
   source.playbackRate.setValueAtTime(request.frequency / sample.rootFrequency, request.startTime)
   gain.gain.setValueAtTime(0.0001, request.startTime)
   gain.gain.linearRampToValueAtTime(request.volume * sampleGain, request.startTime + 0.012)

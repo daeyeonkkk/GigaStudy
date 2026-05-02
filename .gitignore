@@ -29,3 +29,6 @@ apps/api/.e2e-storage/
 playwright-report/
 test-results/
 output/
+
+# Raw local sound-bank downloads. Curated deployable copies live under apps/web/public/instruments/.
+SynthPadChoir SFZ+WAV-20200516/

@@ -378,7 +378,7 @@ function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
     notesPerMeasure >= 7 ? '촘촘한 리듬' : notesPerMeasure >= 4 ? '보통 밀도' : '여유 있는 리듬'
   return {
     detail: `마디당 약 ${notesPerMeasure.toFixed(1)}개 이벤트, 최단 ${shortestDuration.toFixed(2)}박입니다`,
-    label: `${densityLabel} · ${notesPerMeasure.toFixed(1)} notes/measure`,
+    label: `${densityLabel} · ${notesPerMeasure.toFixed(1)} events/measure`,
     tag: densityLabel,
   }
 }
@@ -504,7 +504,7 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   const noteCount = getDiagnosticNumber(diagnostics, 'note_count') ?? candidate.region.pitch_events.length
   metrics.push({
     label: '감지량',
-    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인'} · ${noteCount} notes`,
+    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인'} · ${noteCount} events`,
   })
 
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
@@ -519,7 +519,7 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
 
   const density = getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
   if (density !== null) {
-    metrics.push({ label: '밀도', value: `${density.toFixed(1)} notes/measure` })
+    metrics.push({ label: '밀도', value: `${density.toFixed(1)} events/measure` })
   }
 
   return metrics

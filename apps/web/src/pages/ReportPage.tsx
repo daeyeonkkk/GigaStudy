@@ -51,7 +51,7 @@ function buildMetricCards(report: ScoringReport): MetricCard[] {
       { label: 'Voice lead', value: formatNullableScore(report.voice_leading_score) },
       { label: 'Arrangement', value: formatNullableScore(report.arrangement_score) },
       { label: 'Auto Sync', value: formatSeconds(report.alignment_offset_seconds) },
-      { label: 'Notes', value: String(report.performance_note_count) },
+      { label: 'Events', value: String(report.performance_note_count) },
     ]
   }
 

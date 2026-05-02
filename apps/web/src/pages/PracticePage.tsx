@@ -320,7 +320,7 @@ export function PracticePage() {
               type="button"
               onClick={() => changePlaybackSource('events')}
             >
-              Notes
+              Events
             </button>
           </div>
         </div>

@@ -5,7 +5,7 @@ import fitz
 from fastapi.testclient import TestClient
 
 from gigastudy_api.config import get_settings
-from gigastudy_api.api.schemas.studios import TrackNote
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.omr import OmrUnavailableError
 from gigastudy_api.services.engine.music_theory import note_from_pitch

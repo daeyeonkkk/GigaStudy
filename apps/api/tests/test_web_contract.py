@@ -15,6 +15,7 @@ from gigastudy_api.api.schemas.admin import (
     AdminStorageSummary,
     AdminStudioSummary,
 )
+from gigastudy_api.api.schemas import studios as studio_schemas
 from gigastudy_api.api.schemas.studios import (
     ArrangementRegion,
     CandidateRegion,
@@ -29,11 +30,11 @@ from gigastudy_api.api.schemas.studios import (
     StudioListItem,
     StudioResponse,
     TrackExtractionJob,
-    TrackNote,
     TrackSlot,
     TrackSlotResponse,
     build_studio_response,
 )
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.main import create_app
 
 
@@ -168,6 +169,8 @@ def test_public_openapi_does_not_expose_legacy_note_contracts() -> None:
     schemas = openapi["components"]["schemas"]
     serialized = json.dumps(openapi)
 
+    assert not hasattr(studio_schemas, "NoteSource")
+    assert not hasattr(studio_schemas, "TrackNote")
     assert "TrackNote" not in schemas
     assert "performance_notes" not in serialized
 

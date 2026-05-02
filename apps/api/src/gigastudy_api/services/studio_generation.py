@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from gigastudy_api.api.schemas.studios import GenerateTrackRequest, Studio, TrackNote
+from gigastudy_api.api.schemas.studios import GenerateTrackRequest, Studio
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,

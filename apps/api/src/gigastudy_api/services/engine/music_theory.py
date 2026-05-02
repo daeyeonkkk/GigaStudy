@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from uuid import uuid4
 
-from gigastudy_api.api.schemas.studios import TrackNote
+from gigastudy_api.domain.track_events import TrackNote
 
 TRACKS: tuple[tuple[int, str], ...] = (
     (1, "Soprano"),

@@ -14,9 +14,11 @@ Canonical user-facing flow:
 
 Compatibility flow:
 
-`TrackNote` still exists as an import and scoring compatibility shape while old
-engines are being migrated. It is converted to `PitchEvent`/`ArrangementRegion`
-for the product UI, API response, and submitted scoring event input.
+`TrackNote` now lives in `gigastudy_api.domain.track_events` as an internal
+extraction/scoring adapter while old engines are being migrated. API schemas do
+not export it as a public contract. Internal notes are converted to
+`PitchEvent`/`ArrangementRegion` for the product UI, API response, and submitted
+scoring event input.
 
 ## Runtime Shape
 
@@ -57,6 +59,9 @@ for the product UI, API response, and submitted scoring event input.
   the API boundary. `PitchEvent` carries timing, source, extraction method,
   measure position, and quality warnings so consumers do not need legacy note
   arrays for product behavior.
+- `apps/api/src/gigastudy_api/domain/track_events.py`
+  Internal legacy event adapters for extraction, registration, and scoring.
+  `TrackNote` belongs here instead of the API schema module.
 - `apps/api/src/gigastudy_api/services/studio_store.py`
   Studio persistence abstraction.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`
@@ -194,8 +199,8 @@ flowchart TD
 
 The remaining compatibility layer is mostly naming and storage shape:
 
-- `TrackNote` is no longer modeled by the web client. It should continue moving
-  inward until it is only an internal import/scoring adapter.
+- `TrackNote` is no longer modeled by the web client or exported by the studio
+  API schema module. It remains only as an internal import/scoring adapter.
 - Studio API responses now use `StudioResponse` to prevent `TrackSlot.notes`
   and `ExtractionCandidate.notes` from leaking back into product clients.
 - Score requests accept `performance_events`; `performance_notes` is no longer

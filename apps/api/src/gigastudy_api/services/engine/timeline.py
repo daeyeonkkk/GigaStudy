@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from gigastudy_api.api.schemas.studios import TrackNote, TrackSlot
+from gigastudy_api.api.schemas.studios import TrackSlot
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.music_theory import seconds_per_beat
 
 

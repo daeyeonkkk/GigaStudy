@@ -9,10 +9,10 @@ from gigastudy_api.api.schemas.studios import (
     PerformanceEvent,
     ScoreTrackRequest,
     Studio,
-    TrackNote,
     TrackSlot,
 )
 from gigastudy_api.config import get_settings
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.engine.timeline import notes_with_sync_offset

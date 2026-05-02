@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 from pydantic import ValidationError
 
-from gigastudy_api.api.schemas.studios import TrackNote
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.harmony_plan import (
     ALLOWED_PROFILE_NAMES,

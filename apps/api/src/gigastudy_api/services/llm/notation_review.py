@@ -9,7 +9,8 @@ from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from gigastudy_api.api.schemas.studios import SourceKind, TrackNote
+from gigastudy_api.api.schemas.studios import SourceKind
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.music_theory import label_to_midi, quarter_beats_per_measure, track_name
 from gigastudy_api.services.engine.notation import KEY_FIFTHS, normalize_track_notes

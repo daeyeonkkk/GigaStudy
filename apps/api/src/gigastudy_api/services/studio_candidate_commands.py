@@ -10,8 +10,8 @@ from gigastudy_api.api.schemas.studios import (
     ApproveJobCandidatesRequest,
     SourceKind,
     Studio,
-    TrackNote,
 )
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
     candidate_review_message,

@@ -5,7 +5,7 @@ import math
 from collections import Counter
 from dataclasses import dataclass
 
-from gigastudy_api.api.schemas.studios import TrackNote
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     note_from_pitch,

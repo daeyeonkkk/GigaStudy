@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from gigastudy_api.api.schemas.studios import Studio, TrackNote
+from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.config import get_settings
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionResult
 from gigastudy_api.services.engine_queue import EngineQueueJob

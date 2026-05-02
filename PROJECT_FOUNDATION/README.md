@@ -107,10 +107,10 @@ adapter state inside extraction and scoring engines.
 The web client treats `Studio.regions` and `ExtractionCandidate.region` as the
 only product event contract. Studio routes return a public response model that
 omits legacy note arrays from tracks and candidates; those arrays may still
-exist behind the API boundary for import and scoring adapters, but new UI code
-must not model or rebuild from them. Region `PitchEvent` objects carry source,
-extraction method, measure position, and quality warnings for product and
-diagnostic use.
+exist behind the API boundary for import and scoring adapters, but the studio
+API schema module must not export them and new UI code must not model or rebuild
+from them. Region `PitchEvent` objects carry source, extraction method, measure
+position, and quality warnings for product and diagnostic use.
 
 ## Support Layers
 

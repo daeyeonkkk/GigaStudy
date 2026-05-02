@@ -4,9 +4,9 @@ from gigastudy_api.api.schemas.studios import (
     ScoreTrackRequest,
     ScoringReport,
     Studio,
-    TrackNote,
     TrackSlot,
 )
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.scoring import (
     build_harmony_scoring_report,
     build_scoring_report,

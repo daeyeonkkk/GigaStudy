@@ -4,7 +4,8 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from gigastudy_api.api.schemas.studios import SourceKind, Studio, StudioListItem, TrackNote, TrackSlot
+from gigastudy_api.api.schemas.studios import SourceKind, Studio, StudioListItem, TrackSlot
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.music_theory import TRACKS
 
 

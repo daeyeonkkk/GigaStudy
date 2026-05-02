@@ -1,8 +1,9 @@
 from math import isfinite
 from typing import Any, Literal
-from uuid import uuid4
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+
+from gigastudy_api.domain.track_events import NoteSource as EventSource, TrackNote as _TrackNote
 
 TrackStatus = Literal[
     "empty",
@@ -18,7 +19,6 @@ SourceKind = Literal["recording", "audio", "midi", "document", "music", "ai"]
 ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["document", "music"]
-NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
 ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
 ExtractionJobType = Literal["omr", "voice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
@@ -36,32 +36,6 @@ class SourceKindModel(BaseModel):
         return _normalize_source_kind(value)
 
 
-class TrackNote(BaseModel):
-    id: str = Field(default_factory=lambda: uuid4().hex)
-    pitch_midi: int | None = None
-    pitch_hz: float | None = None
-    label: str
-    spelled_label: str | None = None
-    accidental: str | None = None
-    clef: str | None = None
-    key_signature: str | None = None
-    display_octave_shift: int = 0
-    onset_seconds: float = 0
-    duration_seconds: float = 0
-    beat: float
-    duration_beats: float
-    measure_index: int | None = None
-    beat_in_measure: float | None = None
-    confidence: float = Field(default=1, ge=0, le=1)
-    source: NoteSource
-    extraction_method: str = "unknown"
-    is_rest: bool = False
-    is_tied: bool = False
-    voice_index: int | None = None
-    staff_index: int | None = None
-    quantization_grid: float | None = None
-    notation_warnings: list[str] = Field(default_factory=list)
-
 class PitchEvent(BaseModel):
     event_id: str
     track_slot_id: int
@@ -74,7 +48,7 @@ class PitchEvent(BaseModel):
     start_beat: float
     duration_beats: float
     confidence: float = Field(default=1, ge=0, le=1)
-    source: NoteSource
+    source: EventSource
     extraction_method: str = "unknown"
     is_rest: bool = False
     measure_index: int | None = None
@@ -140,7 +114,7 @@ class ExtractionCandidate(SourceKindModel):
     variant_label: str | None = None
     confidence: float = Field(default=0.5, ge=0, le=1)
     status: ExtractionCandidateStatus = "pending"
-    notes: list[TrackNote] = Field(default_factory=list)
+    notes: list[_TrackNote] = Field(default_factory=list)
     audio_source_path: str | None = None
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
@@ -168,7 +142,7 @@ class TrackSlot(SourceKindModel):
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
     duration_seconds: float = 0
-    notes: list[TrackNote] = Field(default_factory=list)
+    notes: list[_TrackNote] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     updated_at: str
 
@@ -218,7 +192,7 @@ def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
 
 
 def _pitch_event_from_note(
-    note: TrackNote,
+    note: _TrackNote,
     *,
     track: TrackSlot,
     region_id: str,
@@ -245,13 +219,13 @@ def _pitch_event_from_note(
     )
 
 
-def _note_start_seconds(note: TrackNote, bpm: int) -> float:
+def _note_start_seconds(note: _TrackNote, bpm: int) -> float:
     if isfinite(note.onset_seconds) and note.onset_seconds > 0:
         return note.onset_seconds
     return max(0.0, (note.beat - 1) * _beat_seconds(bpm))
 
 
-def _note_duration_seconds(note: TrackNote, bpm: int) -> float:
+def _note_duration_seconds(note: _TrackNote, bpm: int) -> float:
     if isfinite(note.duration_seconds) and note.duration_seconds > 0:
         return note.duration_seconds
     return max(0.08, note.duration_beats * _beat_seconds(bpm))
@@ -285,7 +259,7 @@ def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
 
 
 def _candidate_pitch_event_from_note(
-    note: TrackNote,
+    note: _TrackNote,
     *,
     candidate: ExtractionCandidate,
     region_id: str,
@@ -587,7 +561,7 @@ class PerformanceEvent(BaseModel):
     start_beat: float
     duration_beats: float
     confidence: float = Field(default=1, ge=0, le=1)
-    source: NoteSource
+    source: EventSource
     extraction_method: str = "unknown"
     is_rest: bool = False
     measure_index: int | None = None

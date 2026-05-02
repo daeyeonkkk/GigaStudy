@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from statistics import mean, median
 from uuid import uuid4
 
-from gigastudy_api.api.schemas.studios import ReportIssue, ScoringReport, TrackNote
+from gigastudy_api.api.schemas.studios import ReportIssue, ScoringReport
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     quarter_beats_per_measure,

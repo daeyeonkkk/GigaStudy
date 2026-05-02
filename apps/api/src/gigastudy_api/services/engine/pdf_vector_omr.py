@@ -7,7 +7,7 @@ from math import ceil
 from pathlib import Path
 from typing import Any
 
-from gigastudy_api.api.schemas.studios import TrackNote
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.music_theory import (
     DEFAULT_TIME_SIGNATURE,
     NOTE_SEMITONES,

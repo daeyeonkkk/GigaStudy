@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from gigastudy_api.api.schemas.studios import ExtractionCandidate, SourceKind, Studio, TrackNote, TrackSlot
+from gigastudy_api.api.schemas.studios import ExtractionCandidate, SourceKind, Studio, TrackSlot
+from gigastudy_api.domain.track_events import TrackNote
 
 
 def build_pending_candidate(

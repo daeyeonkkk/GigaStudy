@@ -8,7 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from statistics import median
 
-from gigastudy_api.api.schemas.studios import TrackNote
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.music_theory import (
     frequency_to_midi,

@@ -29,12 +29,12 @@ from gigastudy_api.api.schemas.studios import (
     StudioSeedUploadRequest,
     SyncTrackRequest,
     TrackExtractionJob,
-    TrackNote,
     TrackSlot,
     UploadTrackRequest,
     VolumeTrackRequest,
 )
 from gigastudy_api.config import get_settings
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.asset_storage import (
     AssetStorageError,
     build_asset_storage,

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from gigastudy_api.api.schemas.studios import SourceKind, Studio, TrackNote
+from gigastudy_api.api.schemas.studios import SourceKind, Studio
 from gigastudy_api.config import get_settings
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.arrangement import prepare_ensemble_registration
 from gigastudy_api.services.engine.notation_quality import (
     RegistrationNotationResult,

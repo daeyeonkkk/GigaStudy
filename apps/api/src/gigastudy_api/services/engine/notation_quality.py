@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from math import ceil, floor
 from typing import Any, Mapping
 
-from gigastudy_api.api.schemas.studios import SourceKind, TrackNote
+from gigastudy_api.api.schemas.studios import SourceKind
+from gigastudy_api.domain.track_events import TrackNote
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     beat_in_measure_from_beat,

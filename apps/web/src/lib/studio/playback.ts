@@ -5,16 +5,12 @@ import {
   isMeasureDownbeat,
   type MeterContext,
 } from './timing'
+import {
+  createInstrumentPlayback,
+  PERCUSSION_CLICK_INSTRUMENT,
+  type PlaybackNode,
+} from './instruments'
 import type { ArrangementRegion, PitchEvent, TrackSlot } from '../../types/studio'
-
-export type PlaybackNode = {
-  filters?: BiquadFilterNode[]
-  oscillator?: OscillatorNode
-  oscillators?: OscillatorNode[]
-  source?: AudioBufferSourceNode
-  gain?: GainNode
-  gains?: GainNode[]
-}
 
 export type PlaybackSourceMode = 'audio' | 'events'
 
@@ -26,107 +22,6 @@ export type PlaybackSession = {
 }
 
 const RETAINED_METRONOME_NODE_LIMIT = 64
-
-export function createTone(
-  context: AudioContext,
-  startTime: number,
-  duration: number,
-  frequency: number,
-  volume: number,
-  type: OscillatorType | 'piano',
-  destination: AudioNode = context.destination,
-): PlaybackNode {
-  if (type === 'piano') {
-    return createPianoTone(context, startTime, duration, frequency, volume, destination)
-  }
-
-  const oscillator = context.createOscillator()
-  const gain = context.createGain()
-  const attackTime = Math.min(0.025, duration / 3)
-
-  oscillator.type = type
-  oscillator.frequency.setValueAtTime(frequency, startTime)
-  gain.gain.setValueAtTime(0.0001, startTime)
-  gain.gain.linearRampToValueAtTime(volume, startTime + attackTime)
-  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
-
-  oscillator.connect(gain)
-  gain.connect(destination)
-  oscillator.start(startTime)
-  oscillator.stop(startTime + duration + 0.03)
-
-  return { oscillator, gain }
-}
-
-function createPianoTone(
-  context: AudioContext,
-  startTime: number,
-  duration: number,
-  frequency: number,
-  volume: number,
-  destination: AudioNode,
-): PlaybackNode {
-  const filter = context.createBiquadFilter()
-  const masterGain = context.createGain()
-  const attackTime = Math.min(0.01, duration / 5)
-  const decayTime = Math.min(duration * 0.55, 0.28)
-  const sustainLevel = Math.max(0.0001, volume * 0.28)
-  const releaseTime = Math.max(0.12, Math.min(0.34, duration * 0.35))
-  const oscillators: OscillatorNode[] = []
-  const gains: GainNode[] = [masterGain]
-
-  filter.type = 'lowpass'
-  filter.frequency.setValueAtTime(Math.min(5200, Math.max(1500, frequency * 8.5)), startTime)
-  filter.Q.setValueAtTime(0.72, startTime)
-
-  masterGain.gain.setValueAtTime(0.0001, startTime)
-  masterGain.gain.linearRampToValueAtTime(volume, startTime + attackTime)
-  masterGain.gain.exponentialRampToValueAtTime(
-    Math.max(0.0001, sustainLevel),
-    startTime + attackTime + decayTime,
-  )
-  masterGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration + releaseTime)
-
-  filter.connect(masterGain)
-  masterGain.connect(destination)
-
-  const partials: Array<{ ratio: number; type: OscillatorType; gain: number; releaseScale: number }> = [
-    { ratio: 1, type: 'triangle', gain: 0.86, releaseScale: 1 },
-    { ratio: 1.003, type: 'sine', gain: 0.26, releaseScale: 0.9 },
-    { ratio: 2, type: 'sine', gain: 0.2, releaseScale: 0.68 },
-    { ratio: 3, type: 'sine', gain: 0.07, releaseScale: 0.52 },
-  ]
-
-  partials.forEach((partial, index) => {
-    const oscillator = context.createOscillator()
-    const partialGain = context.createGain()
-    oscillator.type = partial.type
-    oscillator.frequency.setValueAtTime(frequency * partial.ratio, startTime)
-    partialGain.gain.setValueAtTime(0.0001, startTime)
-    partialGain.gain.linearRampToValueAtTime(partial.gain, startTime + attackTime)
-    partialGain.gain.exponentialRampToValueAtTime(
-      Math.max(0.0001, partial.gain * 0.12),
-      startTime + attackTime + decayTime * partial.releaseScale,
-    )
-    partialGain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      startTime + duration + releaseTime * (index === 0 ? 1 : partial.releaseScale),
-    )
-    oscillator.connect(partialGain)
-    partialGain.connect(filter)
-    oscillator.start(startTime)
-    oscillator.stop(startTime + duration + releaseTime + 0.03)
-    oscillators.push(oscillator)
-    gains.push(partialGain)
-  })
-
-  return {
-    filters: [filter],
-    gain: masterGain,
-    gains,
-    oscillators,
-  }
-}
 
 export function createAudioBufferPlayback(
   context: AudioContext,
@@ -320,13 +215,15 @@ export function startLoopingMetronomeSession(
         const quarterBeatOffset = pulseIndex * meter.pulseQuarterBeats
         const isDownbeat = isMeasureDownbeat(quarterBeatOffset, meter.beatsPerMeasure)
         session.nodes.push(
-          createTone(
+          createInstrumentPlayback(
             context,
-            nextClickTime,
-            0.045,
-            isDownbeat ? 1040 : 760,
-            isDownbeat ? 0.052 : 0.038,
-            'square',
+            {
+              duration: 0.045,
+              frequency: isDownbeat ? 1040 : 760,
+              instrument: PERCUSSION_CLICK_INSTRUMENT,
+              startTime: nextClickTime,
+              volume: isDownbeat ? 0.052 : 0.038,
+            },
           ),
         )
         pulseIndex += 1
@@ -352,7 +249,7 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ filters, oscillator, oscillators, source, gain, gains }) => {
+  session.nodes.forEach(({ filters, oscillator, oscillators, source, sources, gain, gains }) => {
     try {
       new Set([gain, ...(gains ?? [])]).forEach((currentGain) => {
         currentGain?.gain.cancelScheduledValues(0)
@@ -366,6 +263,10 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
       })
       source?.stop()
       source?.disconnect()
+      sources?.forEach((currentSource) => {
+        currentSource.stop()
+        currentSource.disconnect()
+      })
       gain?.disconnect()
       gains?.forEach((currentGain) => currentGain.disconnect())
       filters?.forEach((filter) => filter.disconnect())
@@ -403,13 +304,15 @@ export function scheduleMetronomeClicksFromTimeline(
     const relativeStartSeconds = Math.max(0, clickStartSeconds - startSeconds)
     const frequency = isMeasureDownbeat(quarterBeatOffset, meter.beatsPerMeasure) ? 960 : 720
     nodes.push(
-      createTone(
+      createInstrumentPlayback(
         context,
-        scheduledStart + relativeStartSeconds,
-        0.045,
-        frequency,
-        volume,
-        'square',
+        {
+          duration: 0.045,
+          frequency,
+          instrument: PERCUSSION_CLICK_INSTRUMENT,
+          startTime: scheduledStart + relativeStartSeconds,
+          volume,
+        },
       ),
     )
     latestStop = Math.max(latestStop, relativeStartSeconds + 0.045)

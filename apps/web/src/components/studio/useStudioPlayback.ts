@@ -4,7 +4,9 @@ import { getTrackAudioUrl } from '../../lib/api'
 import { getBrowserAudioContextConstructor } from '../../lib/audio'
 import {
   createAudioBufferPlayback,
-  createTone,
+  createInstrumentPlayback,
+  DEFAULT_MELODIC_INSTRUMENT,
+  DEFAULT_PERCUSSION_INSTRUMENT,
   disposePlaybackSession,
   fetchAudioArrayBuffer,
   formatTrackName,
@@ -62,7 +64,7 @@ function getSustainedPitchEvents(events: PitchEvent[], isPercussion: boolean): S
       return frequency === null
         ? null
         : {
-            durationSeconds: Math.max(isPercussion ? 0.08 : 0.18, event.duration_seconds * (isPercussion ? 1 : 1.04)),
+            durationSeconds: Math.max(isPercussion ? 0.08 : 0.12, event.duration_seconds),
             event,
             frequency,
             startSeconds: event.start_seconds,
@@ -275,7 +277,7 @@ export function useStudioPlayback({
     try {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
-      const eventToneVolume = Math.max(0.35, Math.min(0.8, 0.8 / Math.sqrt(Math.max(1, eventTracks.length))))
+      const eventToneVolume = Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length))))
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
 
@@ -419,18 +421,17 @@ export function useStudioPlayback({
               0.05,
               eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
             )
-            const volume = isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume
-            const toneType: OscillatorType | 'piano' = isPercussion ? 'square' : 'piano'
-
             nodes.push(
-              createTone(
+              createInstrumentPlayback(
                 activeContext,
-                scheduledStart + relativeStartSeconds,
-                remainingDuration,
-                frequency,
-                volume,
-                toneType,
-                getTrackOutput(track) ?? activeContext.destination,
+                {
+                  destination: getTrackOutput(track) ?? activeContext.destination,
+                  duration: remainingDuration,
+                  frequency,
+                  instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : DEFAULT_MELODIC_INSTRUMENT,
+                  startTime: scheduledStart + relativeStartSeconds,
+                  volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
+                },
               ),
             )
             latestStop = Math.max(latestStop, relativeStartSeconds + remainingDuration)

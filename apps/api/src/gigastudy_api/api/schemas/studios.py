@@ -575,11 +575,31 @@ class VolumeTrackRequest(BaseModel):
     volume_percent: int = Field(ge=0, le=100)
 
 
+class PerformanceEvent(BaseModel):
+    event_id: str | None = None
+    track_slot_id: int | None = None
+    region_id: str | None = None
+    label: str
+    pitch_midi: int | None = None
+    pitch_hz: float | None = None
+    start_seconds: float
+    duration_seconds: float
+    start_beat: float
+    duration_beats: float
+    confidence: float = Field(default=1, ge=0, le=1)
+    source: NoteSource
+    extraction_method: str = "unknown"
+    is_rest: bool = False
+    measure_index: int | None = None
+    beat_in_measure: float | None = None
+    quality_warnings: list[str] = Field(default_factory=list)
+
+
 class ScoreTrackRequest(BaseModel):
     score_mode: ScoreMode = "answer"
     reference_slot_ids: list[int] = Field(default_factory=list)
     include_metronome: bool = False
-    performance_notes: list[TrackNote] = Field(default_factory=list)
+    performance_events: list[PerformanceEvent] = Field(default_factory=list)
     performance_audio_base64: str | None = None
     performance_filename: str | None = Field(default=None, max_length=180)
 

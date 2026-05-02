@@ -16,7 +16,7 @@ Compatibility flow:
 
 `TrackNote` still exists as an import and scoring compatibility shape while old
 engines are being migrated. It is converted to `PitchEvent`/`ArrangementRegion`
-for the product UI and API response.
+for the product UI, API response, and submitted scoring event input.
 
 ## Runtime Shape
 
@@ -140,6 +140,13 @@ flowchart TD
 3. Extracted pitch material becomes a candidate or registered track.
 4. Region and pitch-event views update from the studio response.
 
+### Scoring
+
+1. Browser submits recorded audio or `performance_events`.
+2. API converts submitted performance events to the internal scoring adapter.
+3. Scoring compares those events with registered arrangement regions.
+4. Reports return region/event IDs that can focus the piano roll.
+
 ### AI Generation
 
 1. User asks a target track to generate from registered context tracks.
@@ -191,6 +198,8 @@ The remaining compatibility layer is mostly naming and storage shape:
   inward until it is only an internal import/scoring adapter.
 - Studio API responses now use `StudioResponse` to prevent `TrackSlot.notes`
   and `ExtractionCandidate.notes` from leaking back into product clients.
+- Score requests accept `performance_events`; `performance_notes` is no longer
+  part of the route input contract.
 - Persistent studio state should eventually store explicit regions/events.
 - Candidate note arrays should remain internal compatibility state only;
   candidate review must use `ExtractionCandidateResponse.region`.

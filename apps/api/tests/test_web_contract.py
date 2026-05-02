@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Type
@@ -22,6 +23,7 @@ from gigastudy_api.api.schemas.studios import (
     ExtractionCandidateResponse,
     PitchEvent,
     ReportIssue,
+    ScoreTrackRequest,
     ScoringReport,
     Studio,
     StudioListItem,
@@ -32,6 +34,7 @@ from gigastudy_api.api.schemas.studios import (
     TrackSlotResponse,
     build_studio_response,
 )
+from gigastudy_api.main import create_app
 
 
 WEB_TYPES_PATH = Path(__file__).resolve().parents[3] / "apps" / "web" / "src" / "types" / "studio.ts"
@@ -153,6 +156,20 @@ def test_candidate_response_includes_region_candidate() -> None:
     assert payload["region"]["pitch_events"][0]["label"] == "E4"
     assert payload["region"]["pitch_events"][0]["extraction_method"] == "candidate_fixture"
     assert payload["region"]["pitch_events"][0]["quality_warnings"] == ["candidate_checked"]
+
+
+def test_score_track_request_uses_performance_events_not_notes() -> None:
+    assert "performance_events" in ScoreTrackRequest.model_fields
+    assert "performance_notes" not in ScoreTrackRequest.model_fields
+
+
+def test_public_openapi_does_not_expose_legacy_note_contracts() -> None:
+    openapi = create_app().openapi()
+    schemas = openapi["components"]["schemas"]
+    serialized = json.dumps(openapi)
+
+    assert "TrackNote" not in schemas
+    assert "performance_notes" not in serialized
 
 
 def _extract_ts_type_fields(source: str, type_name: str) -> set[str]:

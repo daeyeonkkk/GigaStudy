@@ -4,6 +4,7 @@ import type {
   AdminStorageSummary,
   CreateStudioRequest,
   DirectUploadTarget,
+  PitchEvent,
   ScoreMode,
   Studio,
   StudioListItem,
@@ -323,6 +324,7 @@ export function scoreTrack(
     score_mode?: ScoreMode
     reference_slot_ids: number[]
     include_metronome: boolean
+    performance_events?: PitchEvent[]
     performance_audio_base64?: string
     performance_filename?: string
   },

@@ -233,9 +233,13 @@ def upload_musicxml_track(
 
 
 def _track_notes(payload: dict, slot_id: int) -> list[dict]:
+    return [_note_from_pitch_event(event) for event in _track_events(payload, slot_id)]
+
+
+def _track_events(payload: dict, slot_id: int) -> list[dict]:
     for region in payload["regions"]:
         if region["track_slot_id"] == slot_id:
-            return [_note_from_pitch_event(event) for event in region["pitch_events"]]
+            return [dict(event) for event in region["pitch_events"]]
     return []
 
 
@@ -259,6 +263,29 @@ def _note_from_pitch_event(event: dict) -> dict:
         "measure_index": event["measure_index"],
         "beat_in_measure": event["beat_in_measure"],
         "notation_warnings": event["quality_warnings"],
+    }
+
+
+def _performance_event_from_note(note: TrackNote | dict) -> dict:
+    payload = note.model_dump(mode="json") if isinstance(note, TrackNote) else dict(note)
+    return {
+        "event_id": payload.get("id"),
+        "track_slot_id": payload.get("voice_index"),
+        "region_id": "test-performance",
+        "label": payload["label"],
+        "pitch_midi": payload.get("pitch_midi"),
+        "pitch_hz": payload.get("pitch_hz"),
+        "start_seconds": payload["onset_seconds"],
+        "duration_seconds": payload["duration_seconds"],
+        "start_beat": payload["beat"],
+        "duration_beats": payload["duration_beats"],
+        "confidence": payload["confidence"],
+        "source": payload["source"],
+        "extraction_method": payload["extraction_method"],
+        "is_rest": payload.get("is_rest", False),
+        "measure_index": payload.get("measure_index"),
+        "beat_in_measure": payload.get("beat_in_measure"),
+        "quality_warnings": payload.get("notation_warnings", []),
     }
 
 
@@ -478,16 +505,16 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     )
     assert invalid_volume_response.status_code == 422
 
-    performance_notes = _track_notes(soprano_response.json(), 1)
-    for note in performance_notes:
-        note["onset_seconds"] = round(note["onset_seconds"] + 0.42, 4)
+    performance_events = _track_events(soprano_response.json(), 1)
+    for event in performance_events:
+        event["start_seconds"] = round(event["start_seconds"] + 0.42, 4)
 
     score_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/score",
         json={
             "reference_slot_ids": [6],
             "include_metronome": True,
-            "performance_notes": performance_notes,
+            "performance_events": performance_events,
         },
     )
     assert score_response.status_code == 200
@@ -513,23 +540,27 @@ def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path:
     studio_id = create_response.json()["studio_id"]
     upload_musicxml_track(client, studio_id, slot_id=1)
 
-    performance_notes = [
-        note_from_pitch(
-            beat=1,
-            duration_beats=1,
-            bpm=120,
-            source="voice",
-            extraction_method="test",
-            pitch_midi=76,
-        ).model_dump(mode="json"),
-        note_from_pitch(
-            beat=2,
-            duration_beats=1,
-            bpm=120,
-            source="voice",
-            extraction_method="test",
-            pitch_midi=71,
-        ).model_dump(mode="json"),
+    performance_events = [
+        _performance_event_from_note(
+            note_from_pitch(
+                beat=1,
+                duration_beats=1,
+                bpm=120,
+                source="voice",
+                extraction_method="test",
+                pitch_midi=76,
+            )
+        ),
+        _performance_event_from_note(
+            note_from_pitch(
+                beat=2,
+                duration_beats=1,
+                bpm=120,
+                source="voice",
+                extraction_method="test",
+                pitch_midi=71,
+            )
+        ),
     ]
 
     score_response = client.post(
@@ -538,7 +569,7 @@ def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path:
             "score_mode": "harmony",
             "reference_slot_ids": [1],
             "include_metronome": True,
-            "performance_notes": performance_notes,
+            "performance_events": performance_events,
         },
     )
 
@@ -573,18 +604,18 @@ def test_answer_score_uses_target_track_sync_offset(tmp_path: Path, monkeypatch)
     )
     assert sync_response.status_code == 200
 
-    performance_notes = []
-    for note in _track_notes(upload_response.json(), 1):
-        performance_note = dict(note)
-        performance_note["beat"] = round(performance_note["beat"] + 1, 4)
-        performance_note["onset_seconds"] = round(performance_note["onset_seconds"] + 1, 4)
-        performance_notes.append(performance_note)
+    performance_events = []
+    for event in _track_events(upload_response.json(), 1):
+        performance_event = dict(event)
+        performance_event["start_beat"] = round(performance_event["start_beat"] + 1, 4)
+        performance_event["start_seconds"] = round(performance_event["start_seconds"] + 1, 4)
+        performance_events.append(performance_event)
 
     score_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/score",
         json={
             "include_metronome": True,
-            "performance_notes": performance_notes,
+            "performance_events": performance_events,
         },
     )
 
@@ -648,15 +679,17 @@ def test_harmony_score_requires_registered_reference_track(tmp_path: Path, monke
             "score_mode": "harmony",
             "reference_slot_ids": [],
             "include_metronome": True,
-            "performance_notes": [
-                note_from_pitch(
-                    beat=1,
-                    duration_beats=1,
-                    bpm=120,
-                    source="voice",
-                    extraction_method="test",
-                    pitch_midi=64,
-                ).model_dump(mode="json")
+            "performance_events": [
+                _performance_event_from_note(
+                    note_from_pitch(
+                        beat=1,
+                        duration_beats=1,
+                        bpm=120,
+                        source="voice",
+                        extraction_method="test",
+                        pitch_midi=64,
+                    )
+                )
             ],
         },
     )

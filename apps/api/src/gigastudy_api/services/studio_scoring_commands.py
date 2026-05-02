@@ -5,7 +5,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from gigastudy_api.api.schemas.studios import ScoreTrackRequest, Studio, TrackNote, TrackSlot
+from gigastudy_api.api.schemas.studios import (
+    PerformanceEvent,
+    ScoreTrackRequest,
+    Studio,
+    TrackNote,
+    TrackSlot,
+)
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
@@ -57,7 +63,10 @@ class StudioScoringCommands:
         except ScoringRequestError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
 
-        performance_notes = list(request.performance_notes)
+        performance_notes = [
+            _track_note_from_performance_event(event)
+            for event in request.performance_events
+        ]
         has_submitted_performance = score_track_request_has_performance(request)
         if request.performance_audio_base64 is not None:
             performance_notes = self.extract_scoring_audio(
@@ -195,3 +204,25 @@ class StudioScoringCommands:
             expected_track_notes=expected_notes,
         )
         return llm_plan or extraction_plan
+
+
+def _track_note_from_performance_event(event: PerformanceEvent) -> TrackNote:
+    payload = {
+        "label": event.label,
+        "pitch_midi": event.pitch_midi,
+        "pitch_hz": event.pitch_hz,
+        "onset_seconds": event.start_seconds,
+        "duration_seconds": event.duration_seconds,
+        "beat": event.start_beat,
+        "duration_beats": event.duration_beats,
+        "confidence": event.confidence,
+        "source": event.source,
+        "extraction_method": event.extraction_method,
+        "is_rest": event.is_rest,
+        "measure_index": event.measure_index,
+        "beat_in_measure": event.beat_in_measure,
+        "notation_warnings": event.quality_warnings,
+    }
+    if event.event_id:
+        payload["id"] = event.event_id
+    return TrackNote(**payload)

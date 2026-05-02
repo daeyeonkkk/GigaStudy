@@ -14,7 +14,7 @@ import {
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
   getTrackVolumeScale,
-  loadDrawbarOrganInstrument,
+  loadPercussiveOrganInstrument,
   scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
   trackHasPlayableAudio,
@@ -279,7 +279,8 @@ export function useStudioPlayback({
     try {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
-      const eventToneVolume = Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length))))
+      const eventToneVolume =
+        Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length)))) * 0.4
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
       let melodicPlaybackInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
@@ -352,7 +353,7 @@ export function useStudioPlayback({
           message: '연습용 연주음 샘플을 불러오는 중입니다.',
         })
         try {
-          melodicPlaybackInstrument = await loadDrawbarOrganInstrument(activeContext)
+          melodicPlaybackInstrument = await loadPercussiveOrganInstrument(activeContext)
         } catch (error) {
           console.warn('Failed to load sampled playback instrument.', error)
           melodicPlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT

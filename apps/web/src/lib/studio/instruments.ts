@@ -2,19 +2,26 @@ export type PlaybackNode = {
   filters?: BiquadFilterNode[]
   oscillator?: OscillatorNode
   oscillators?: OscillatorNode[]
+  panners?: StereoPannerNode[]
   source?: AudioBufferSourceNode
   sources?: AudioBufferSourceNode[]
   gain?: GainNode
   gains?: GainNode[]
 }
 
-export type DecodedInstrumentSample = {
+export type DecodedInstrumentSampleLayer = {
   buffer: AudioBuffer
   gain?: number
   loopEndSeconds?: number
   loopStartSeconds?: number
+  pan?: number
   releaseSeconds?: number
   rootFrequency: number
+}
+
+export type DecodedInstrumentSample = DecodedInstrumentSampleLayer & {
+  attackSeconds?: number
+  layers?: DecodedInstrumentSampleLayer[]
   tone?: SampledInstrumentTone
 }
 
@@ -120,42 +127,76 @@ function createSampledInstrumentPlayback(
   sample: DecodedInstrumentSample,
 ): PlaybackNode {
   const destination = request.destination ?? context.destination
-  const source = context.createBufferSource()
   const filters: BiquadFilterNode[] = []
+  const panners: StereoPannerNode[] = []
+  const sources: AudioBufferSourceNode[] = []
   const gain = context.createGain()
+  const gains: GainNode[] = [gain]
   const duration = Math.max(0.03, request.duration)
   const releaseTime = Math.max(
     0.08,
     sample.releaseSeconds ?? Math.min(0.32, Math.max(0.16, duration * 0.18)),
   )
+  const attackTime = Math.min(
+    Math.max(0.001, sample.attackSeconds ?? 0.012),
+    Math.max(0.001, duration * 0.3),
+  )
   const sampleGain = sample.gain ?? 1
-  const loopStartSeconds = sample.loopStartSeconds ?? null
-  const loopEndSeconds = sample.loopEndSeconds ?? null
-  const hasLoop =
-    loopStartSeconds !== null &&
-    loopEndSeconds !== null &&
-    loopEndSeconds > loopStartSeconds + 0.02 &&
-    loopEndSeconds <= sample.buffer.duration + 0.01
+  const layers = sample.layers?.length ? sample.layers : [sample]
 
-  source.buffer = sample.buffer
-  if (hasLoop) {
-    source.loop = true
-    source.loopStart = Math.max(0, loopStartSeconds)
-    source.loopEnd = Math.min(sample.buffer.duration, loopEndSeconds)
-  }
-  source.playbackRate.setValueAtTime(request.frequency / sample.rootFrequency, request.startTime)
   gain.gain.setValueAtTime(0.0001, request.startTime)
-  gain.gain.linearRampToValueAtTime(request.volume * sampleGain, request.startTime + 0.012)
+  gain.gain.linearRampToValueAtTime(request.volume * sampleGain, request.startTime + attackTime)
   gain.gain.setValueAtTime(request.volume * sampleGain, request.startTime + duration)
   gain.gain.exponentialRampToValueAtTime(0.0001, request.startTime + duration + releaseTime)
 
-  const finalToneNode = connectSampleToneChain(context, source, sample.tone, request.startTime, filters)
-  finalToneNode.connect(gain)
-  gain.connect(destination)
-  source.start(request.startTime)
-  source.stop(request.startTime + duration + releaseTime + 0.04)
+  layers.forEach((layer) => {
+    const source = context.createBufferSource()
+    const layerGain = layer.gain ?? 1
+    const loopStartSeconds = layer.loopStartSeconds ?? null
+    const loopEndSeconds = layer.loopEndSeconds ?? null
+    const hasLoop =
+      loopStartSeconds !== null &&
+      loopEndSeconds !== null &&
+      loopEndSeconds > loopStartSeconds + 0.02 &&
+      loopEndSeconds <= layer.buffer.duration + 0.01
 
-  return { filters, gain, source }
+    source.buffer = layer.buffer
+    if (hasLoop) {
+      source.loop = true
+      source.loopStart = Math.max(0, loopStartSeconds)
+      source.loopEnd = Math.min(layer.buffer.duration, loopEndSeconds)
+    }
+    source.playbackRate.setValueAtTime(request.frequency / layer.rootFrequency, request.startTime)
+
+    const layerOutput = connectSampleToneChain(context, source, sample.tone, request.startTime, filters)
+    if (layer.pan !== undefined && Number.isFinite(layer.pan)) {
+      const panner = context.createStereoPanner()
+      panner.pan.setValueAtTime(Math.max(-1, Math.min(1, layer.pan)), request.startTime)
+      const layerLevel = context.createGain()
+      layerLevel.gain.setValueAtTime(layerGain, request.startTime)
+      layerOutput.connect(panner)
+      panner.connect(layerLevel)
+      layerLevel.connect(gain)
+      gains.push(layerLevel)
+      panners.push(panner)
+    } else if (layerGain !== 1) {
+      const layerLevel = context.createGain()
+      layerLevel.gain.setValueAtTime(layerGain, request.startTime)
+      layerOutput.connect(layerLevel)
+      layerLevel.connect(gain)
+      gains.push(layerLevel)
+    } else {
+      layerOutput.connect(gain)
+    }
+
+    source.start(request.startTime)
+    source.stop(request.startTime + duration + releaseTime + 0.04)
+    sources.push(source)
+  })
+
+  gain.connect(destination)
+
+  return { filters, gain, gains, panners, source: sources[0], sources }
 }
 
 function connectSampleToneChain(

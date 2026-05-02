@@ -1,0 +1,268 @@
+﻿//+ Name: Percussive organ emulation
+//+ Date: 2019-07-11
+//+ URL: http://freepats.zenvoid.org/Organ/electric-organ.html
+
+// Created with setBfree by Strix Soundfont Team for Freepats. Modified by
+// Roberto <roberto@zenvoid.org>. Published under the terms of the Creative
+// Commons CC0 public domain dedication.
+
+<group>
+ampeg_release=0.7
+loop_mode=loop_continuous
+ampeg_attack=0.001
+
+<region>
+sample=samples/C2R.wav
+lokey=G1 hikey=Db2
+pitch_keycenter=C2
+pan=100
+loop_start=10258
+loop_end=282065
+
+<region>
+sample=samples/C2L.wav
+lokey=G1 hikey=Db2
+pitch_keycenter=C2
+pan=-100
+loop_start=64232
+loop_end=282065
+
+<region>
+sample=samples/E2R.wav
+lokey=D2 hikey=F2
+pitch_keycenter=E2
+pan=100
+loop_start=33911
+loop_end=171465
+
+<region>
+sample=samples/E2L.wav
+lokey=D2 hikey=F2
+pitch_keycenter=E2
+pan=-100
+loop_start=36049
+loop_end=171465
+
+<region>
+sample=samples/Gsharp2R.wav
+lokey=Gb2 hikey=A2
+pitch_keycenter=Ab2
+pan=100
+loop_start=111526
+loop_end=256449
+
+<region>
+sample=samples/Gsharp2L.wav
+lokey=Gb2 hikey=A2
+pitch_keycenter=Ab2
+pan=-100
+loop_start=39285
+loop_end=256449
+
+<region>
+sample=samples/C3R.wav
+lokey=Bb2 hikey=Db3
+pitch_keycenter=C3
+pan=100
+loop_start=142012
+loop_end=257375
+
+<region>
+sample=samples/C3L.wav
+lokey=Bb2 hikey=Db3
+pitch_keycenter=C3
+pan=-100
+loop_start=143393
+loop_end=257375
+
+<region>
+sample=samples/E3R.wav
+lokey=D3 hikey=F3
+pitch_keycenter=E3
+pan=100
+loop_start=134137
+loop_end=275973
+
+<region>
+sample=samples/E3L.wav
+lokey=D3 hikey=F3
+pitch_keycenter=E3
+pan=-100
+loop_start=146394
+loop_end=275973
+
+<region>
+sample=samples/Gsharp3R.wav
+lokey=Gb3 hikey=A3
+pitch_keycenter=Ab3
+pan=100
+loop_start=55704
+loop_end=198019
+
+<region>
+sample=samples/Gsharp3L.wav
+lokey=Gb3 hikey=A3
+pitch_keycenter=Ab3
+pan=-100
+loop_start=16161
+loop_end=198019
+
+<region>
+sample=samples/C4R.wav
+lokey=Bb3 hikey=Db4
+pitch_keycenter=C4
+pan=100
+loop_start=51767
+loop_end=194072
+
+<region>
+sample=samples/C4L.wav
+lokey=Bb3 hikey=Db4
+pitch_keycenter=C4
+pan=-100
+loop_start=120556
+loop_end=194072
+
+<region>
+sample=samples/E4R.wav
+lokey=D4 hikey=F4
+pitch_keycenter=E4
+pan=100
+loop_start=164620
+loop_end=237951
+
+<region>
+sample=samples/E4L.wav
+lokey=D4 hikey=F4
+pitch_keycenter=E4
+pan=-100
+loop_start=164618
+loop_end=237951
+
+<region>
+sample=samples/Gsharp4R.wav
+lokey=Gb4 hikey=A4
+pitch_keycenter=Ab4
+pan=100
+loop_start=95867
+loop_end=169371
+
+<region>
+sample=samples/Gsharp4L.wav
+lokey=Gb4 hikey=A4
+pitch_keycenter=Ab4
+pan=-100
+loop_start=103515
+loop_end=169371
+
+<region>
+sample=samples/C5R.wav
+lokey=Bb4 hikey=Db5
+pitch_keycenter=C5
+pan=100
+loop_start=109093
+loop_end=184805
+
+<region>
+sample=samples/C5L.wav
+lokey=Bb4 hikey=Db5
+pitch_keycenter=C5
+pan=-100
+loop_start=107750
+loop_end=184805
+
+<region>
+sample=samples/E5R.wav
+lokey=D5 hikey=F5
+pitch_keycenter=E5
+pan=100
+loop_start=94723
+loop_end=208365
+
+<region>
+sample=samples/E5L.wav
+lokey=D5 hikey=F5
+pitch_keycenter=E5
+pan=-100
+loop_start=84042
+loop_end=208365
+
+<region>
+sample=samples/Gsharp5R.wav
+lokey=Gb5 hikey=A5
+pitch_keycenter=Ab5
+pan=100
+loop_start=152779
+loop_end=218586
+
+<region>
+sample=samples/Gsharp5L.wav
+lokey=Gb5 hikey=A5
+pitch_keycenter=Ab5
+pan=-100
+loop_start=138584
+loop_end=218586
+
+<region>
+sample=samples/C6R.wav
+lokey=Bb5 hikey=Db6
+pitch_keycenter=C6
+pan=100
+loop_start=126647
+loop_end=273754
+
+<region>
+sample=samples/C6L.wav
+lokey=Bb5 hikey=Db6
+pitch_keycenter=C6
+pan=-100
+loop_start=91644
+loop_end=273754
+
+<region>
+sample=samples/E6R.wav
+lokey=D6 hikey=F6
+pitch_keycenter=E6
+pan=100
+loop_start=117872
+loop_end=215414
+
+<region>
+sample=samples/E6L.wav
+lokey=D6 hikey=F6
+pitch_keycenter=E6
+pan=-100
+loop_start=129809
+loop_end=215414
+
+<region>
+sample=samples/Gsharp6R.wav
+lokey=Gb6 hikey=A6
+pitch_keycenter=Ab6
+pan=100
+loop_start=46499
+loop_end=247173
+
+<region>
+sample=samples/Gsharp6L.wav
+lokey=Gb6 hikey=A6
+pitch_keycenter=Ab6
+pan=-100
+loop_start=179559
+loop_end=247173
+
+<region>
+sample=samples/C7R.wav
+lokey=Bb6 hikey=C8
+pitch_keycenter=C7
+pan=100
+loop_start=143603
+loop_end=244044
+
+<region>
+sample=samples/C7L.wav
+lokey=Bb6 hikey=C8
+pitch_keycenter=C7
+pan=-100
+loop_start=47690
+loop_end=244044

@@ -189,7 +189,7 @@ def test_voice_transcription_can_use_optional_basic_pitch_backend(tmp_path: Path
 
     assert [note.label for note in notes] == ["C5", "E5"]
     assert all(note.extraction_method == "basic_pitch_amt_v1" for note in notes)
-    assert all(note.clef == "treble" for note in notes)
+    assert all(note.pitch_register == "upper_voice" for note in notes)
 
 
 def test_basic_pitch_notes_are_aligned_before_quantization(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

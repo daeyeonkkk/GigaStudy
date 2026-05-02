@@ -201,7 +201,7 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                         label = midi_to_label(pitch_midi)
 
                     voice_index = _safe_int(_child_text(item, "voice"), default=None)
-                    staff_index = _safe_int(_child_text(item, "staff"), default=None)
+                    source_staff_index = _safe_int(_child_text(item, "staff"), default=None)
                     is_tied = any(_local_name(tie.tag) == "tie" for tie in item.iter())
                     notes.append(
                         note_from_pitch(
@@ -218,7 +218,7 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                             measure_index=measure_number,
                             beat_in_measure=(onset_quarter - measure_start_quarter) + 1,
                             voice_index=voice_index,
-                            staff_index=staff_index,
+                            source_staff_index=source_staff_index,
                             is_rest=is_rest,
                             is_tied=is_tied,
                         )

@@ -132,11 +132,11 @@ def test_voice_event_tolerates_vibrato_and_attack_scoop(tmp_path: Path) -> None:
     assert notes[0].label == "E5"
     assert notes[0].beat in {1.25, 1.5}
     assert notes[0].duration_beats >= 1.0
-    assert notes[0].clef == "treble"
+    assert notes[0].pitch_register == "upper_voice"
     assert notes[0].key_signature
 
 
-def test_voice_event_keeps_track_display_policy_consistent(tmp_path: Path) -> None:
+def test_voice_event_keeps_track_pitch_policy_consistent(tmp_path: Path) -> None:
     wav_path = tmp_path / "tenor-line.wav"
     _write_vocal_fixture(
         wav_path,
@@ -152,6 +152,6 @@ def test_voice_event_keeps_track_display_policy_consistent(tmp_path: Path) -> No
     notes = transcribe_voice_file(wav_path, bpm=120, slot_id=3, backend="local")
 
     assert [note.label for note in notes] == ["G3", "B3"]
-    assert all(note.clef == "treble_8vb" for note in notes)
-    assert all(note.display_octave_shift == 12 for note in notes)
+    assert all(note.pitch_register == "tenor_voice" for note in notes)
+    assert all(note.pitch_label_octave_shift == 12 for note in notes)
     assert [note.beat for note in notes] == [1.5, 2.5]

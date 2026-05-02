@@ -254,7 +254,7 @@ def test_symbolic_mapping_uses_pitch_range_when_part_names_are_generic(tmp_path:
     assert [note.label for note in parsed.mapped_notes[1]] == ["E5", "G5"]
     assert [note.label for note in parsed.mapped_notes[4]] == ["G3", "B3"]
     assert [note.label for note in parsed.mapped_notes[5]] == ["C3", "E3"]
-    assert all(note.clef == "bass" for note in parsed.mapped_notes[5])
+    assert all(note.pitch_register == "lower_voice" for note in parsed.mapped_notes[5])
 
 
 def test_slot_inference_respects_bass_range_over_generic_order() -> None:

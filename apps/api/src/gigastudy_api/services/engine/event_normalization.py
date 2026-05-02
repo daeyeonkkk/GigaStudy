@@ -12,7 +12,7 @@ from gigastudy_api.services.engine.music_theory import (
     quantize,
 )
 
-TrackDisplayClef = Literal["treble", "treble_8vb", "bass", "percussion"]
+TrackPitchRegister = Literal["upper_voice", "tenor_voice", "lower_voice", "percussion"]
 
 VOICE_QUANTIZATION_GRID_BEATS = 0.25
 MIN_EVENT_DURATION_BEATS = 0.25
@@ -71,17 +71,17 @@ class _NoteInterval:
     confidence: float
 
 
-def clef_for_slot(slot_id: int) -> TrackDisplayClef:
+def pitch_register_for_slot(slot_id: int) -> TrackPitchRegister:
     if slot_id == 3:
-        return "treble_8vb"
+        return "tenor_voice"
     if slot_id in {4, 5}:
-        return "bass"
+        return "lower_voice"
     if slot_id == 6:
         return "percussion"
-    return "treble"
+    return "upper_voice"
 
 
-def display_octave_shift_for_slot(slot_id: int) -> int:
+def pitch_label_octave_shift_for_slot(slot_id: int) -> int:
     return 12 if slot_id == 3 else 0
 
 
@@ -109,8 +109,8 @@ def normalize_track_notes(
     safe_bpm = max(1, bpm)
     safe_grid = max(0.0625, quantization_grid)
     beats_per_measure = quarter_beats_per_measure(time_signature_numerator, time_signature_denominator)
-    clef = clef_for_slot(slot_id)
-    display_octave_shift = display_octave_shift_for_slot(slot_id)
+    pitch_register = pitch_register_for_slot(slot_id)
+    pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
     key_signature = estimate_key_signature(notes)
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
 
@@ -132,8 +132,8 @@ def normalize_track_notes(
                 time_signature_denominator=time_signature_denominator,
                 key_signature=key_signature,
                 spelling_mode=spelling_mode,
-                clef=clef,
-                display_octave_shift=display_octave_shift,
+                pitch_register=pitch_register,
+                pitch_label_octave_shift=pitch_label_octave_shift,
                 quantization_grid=safe_grid,
             )
         )
@@ -150,7 +150,7 @@ def annotate_track_notes_for_slot(
     """Attach event display metadata without rewriting imported rhythm.
 
     Symbolic imports and OMR exports often already contain trustworthy beat and
-    duration values. They still need the same clef, key, spelling, and range
+    duration values. They still need the same register, key, spelling, and range
     policy as voice-derived notes so all six tracks share the same event conventions.
     """
 
@@ -159,8 +159,8 @@ def annotate_track_notes_for_slot(
 
     resolved_key_signature = key_signature or estimate_key_signature(notes)
     spelling_mode = "flat" if KEY_FIFTHS.get(resolved_key_signature, 0) < 0 else "sharp"
-    clef = clef_for_slot(slot_id)
-    display_octave_shift = display_octave_shift_for_slot(slot_id)
+    pitch_register = pitch_register_for_slot(slot_id)
+    pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
 
     annotated: list[TrackNote] = []
@@ -182,9 +182,9 @@ def annotate_track_notes_for_slot(
                     "pitch_midi": pitch_midi,
                     "spelled_label": spelled_label,
                     "accidental": accidental,
-                    "clef": note.clef or clef,
+                    "pitch_register": note.pitch_register or pitch_register,
                     "key_signature": note.key_signature or resolved_key_signature,
-                    "display_octave_shift": note.display_octave_shift or display_octave_shift,
+                    "pitch_label_octave_shift": note.pitch_label_octave_shift or pitch_label_octave_shift,
                     "quality_warnings": warnings,
                 }
             )
@@ -333,8 +333,8 @@ def _split_interval_at_measure_boundaries(
     time_signature_denominator: int,
     key_signature: str,
     spelling_mode: Literal["sharp", "flat"],
-    clef: TrackDisplayClef,
-    display_octave_shift: int,
+    pitch_register: TrackPitchRegister,
+    pitch_label_octave_shift: int,
     quantization_grid: float,
 ) -> list[TrackNote]:
     source_note = interval.note
@@ -373,16 +373,16 @@ def _split_interval_at_measure_boundaries(
             label=spelled_label,
             confidence=interval.confidence,
             voice_index=source_note.voice_index,
-            staff_index=source_note.staff_index,
+            source_staff_index=source_note.source_staff_index,
             is_rest=source_note.is_rest,
             is_tied=split_tie,
             spelled_label=spelled_label,
             accidental=accidental,
-            clef=clef,
+            pitch_register=pitch_register,
             key_signature=key_signature,
-            display_octave_shift=display_octave_shift,
+            pitch_label_octave_shift=pitch_label_octave_shift,
             quantization_grid=quantization_grid,
-            quality_warnings=_quality_warnings(source_note, clef, split_tie),
+            quality_warnings=_quality_warnings(source_note, pitch_register, split_tie),
         )
         note.id = f"{source_note.id}-q{index + 1}" if len(pieces) > 1 else source_note.id
         normalized.append(note)
@@ -440,12 +440,12 @@ def _same_pitch(left: _NoteInterval, right: _NoteInterval) -> bool:
     return left.note.label == right.note.label
 
 
-def _quality_warnings(note: TrackNote, clef: TrackDisplayClef, is_split_tie: bool) -> list[str]:
+def _quality_warnings(note: TrackNote, pitch_register: TrackPitchRegister, is_split_tie: bool) -> list[str]:
     warnings = list(note.quality_warnings)
     if is_split_tie:
         warnings.append("measure_boundary_tie")
     if note.pitch_midi is not None and note.pitch_hz is None:
         warnings.append("pitch_frequency_recomputed")
-    if clef == "percussion" and note.pitch_midi is not None:
+    if pitch_register == "percussion" and note.pitch_midi is not None:
         warnings.append("pitched_note_on_percussion_track")
     return warnings

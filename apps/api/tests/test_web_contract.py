@@ -193,6 +193,46 @@ def test_track_note_reads_legacy_warning_field_but_dumps_quality_warnings() -> N
     assert "notation_warnings" not in payload
 
 
+def test_track_note_reads_legacy_staff_index_but_dumps_source_staff_index() -> None:
+    note = TrackNote.model_validate(
+        {
+            "label": "C4",
+            "pitch_midi": 60,
+            "beat": 1,
+            "duration_beats": 1,
+            "source": "musicxml",
+            "staff_index": 2,
+        }
+    )
+    payload = note.model_dump(mode="json")
+
+    assert note.source_staff_index == 2
+    assert payload["source_staff_index"] == 2
+    assert "staff_index" not in payload
+
+
+def test_track_note_reads_legacy_display_policy_but_dumps_pitch_policy() -> None:
+    note = TrackNote.model_validate(
+        {
+            "label": "G3",
+            "pitch_midi": 55,
+            "beat": 1,
+            "duration_beats": 1,
+            "source": "musicxml",
+            "clef": "treble_8vb",
+            "display_octave_shift": 12,
+        }
+    )
+    payload = note.model_dump(mode="json")
+
+    assert note.pitch_register == "tenor_voice"
+    assert note.pitch_label_octave_shift == 12
+    assert payload["pitch_register"] == "tenor_voice"
+    assert payload["pitch_label_octave_shift"] == 12
+    assert "clef" not in payload
+    assert "display_octave_shift" not in payload
+
+
 def _extract_ts_type_fields(source: str, type_name: str) -> set[str]:
     match = re.search(rf"(?:export\s+)?type\s+{re.escape(type_name)}\s*=\s*\{{(?P<body>.*?)\n\}}", source, re.S)
     assert match is not None, f"Missing TypeScript type {type_name}"

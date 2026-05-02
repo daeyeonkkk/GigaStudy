@@ -24,9 +24,9 @@ from gigastudy_api.services.engine.event_normalization import (
     VOICE_QUANTIZATION_GRID_BEATS,
     annotate_track_notes_for_slot,
     accidental_for_key,
-    clef_for_slot,
-    display_octave_shift_for_slot,
     normalize_track_notes,
+    pitch_label_octave_shift_for_slot,
+    pitch_register_for_slot,
     spell_midi_label,
 )
 
@@ -1272,7 +1272,7 @@ def _enforce_registration_event_contract(
 
     Earlier stages may transcribe, import, simplify, align, or review notes.
     Registration must end with one canonical event contract: the studio BPM and
-    meter define seconds, measures, track voice identity, clef, and key spelling.
+    meter define seconds, measures, track voice identity, pitch register, and key spelling.
     """
 
     if not notes:
@@ -1316,8 +1316,8 @@ def _enforce_registration_event_contract(
         slot_id=slot_id,
         key_signature=shared_key_signature,
     )
-    clef = clef_for_slot(slot_id)
-    display_octave_shift = display_octave_shift_for_slot(slot_id)
+    pitch_register = pitch_register_for_slot(slot_id)
+    pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
     key_signature = shared_key_signature or _shared_key_signature(annotated_notes) or "C"
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
     beat_seconds = seconds_per_beat(max(1, bpm))
@@ -1342,9 +1342,9 @@ def _enforce_registration_event_contract(
             "label": label,
             "spelled_label": spelled_label,
             "accidental": accidental,
-            "clef": clef,
+            "pitch_register": pitch_register,
             "key_signature": key_signature,
-            "display_octave_shift": display_octave_shift,
+            "pitch_label_octave_shift": pitch_label_octave_shift,
             "onset_seconds": round(max(0, (beat - 1) * beat_seconds), 4),
             "duration_seconds": round(duration_beats * beat_seconds, 4),
             "beat": beat,
@@ -1402,14 +1402,14 @@ def _event_contract_diagnostics(
             "single_key_signature": True,
             "seconds_follow_beat_grid": True,
             "measure_metadata_consistent": True,
-            "clef_policy_consistent": True,
+            "pitch_register_policy_consistent": True,
         }
 
     voice_indices = {note.voice_index for note in notes}
     key_signatures = {note.key_signature for note in notes}
-    clefs = {note.clef for note in notes}
+    pitch_registers = {note.pitch_register for note in notes}
     beat_seconds = seconds_per_beat(max(1, bpm))
-    expected_clef = clef_for_slot(slot_id)
+    expected_pitch_register = pitch_register_for_slot(slot_id)
     seconds_follow_beat_grid = all(
         abs(note.onset_seconds - round(max(0, (note.beat - 1) * beat_seconds), 4)) <= 0.0001
         and abs(note.duration_seconds - round(note.duration_beats * beat_seconds, 4)) <= 0.0001
@@ -1442,10 +1442,10 @@ def _event_contract_diagnostics(
         "single_key_signature": len(key_signatures) == 1 and None not in key_signatures,
         "seconds_follow_beat_grid": seconds_follow_beat_grid,
         "measure_metadata_consistent": measure_metadata_consistent,
-        "clef_policy_consistent": clefs == {expected_clef},
+        "pitch_register_policy_consistent": pitch_registers == {expected_pitch_register},
         "voice_index": next(iter(voice_indices)) if len(voice_indices) == 1 else None,
         "key_signature": next(iter(key_signatures)) if len(key_signatures) == 1 else None,
-        "clef": next(iter(clefs)) if len(clefs) == 1 else None,
+        "pitch_register": next(iter(pitch_registers)) if len(pitch_registers) == 1 else None,
     }
 
 
@@ -1752,7 +1752,7 @@ def _registration_diagnostics(
         "short_phrase_gap_count": short_phrase_gap_count,
         "measure_tail_gap_count": measure_tail_gap_count,
         "short_note_cluster_count": short_note_cluster_count,
-        "has_clef_policy": all(note.clef for note in notes),
+        "has_pitch_register_policy": all(note.pitch_register for note in notes),
         "has_key_policy": all(note.key_signature for note in notes),
         "actions": actions,
     }
@@ -1912,8 +1912,8 @@ def _should_simplify_after_review(
 
 def _force_key_signature(notes: list[TrackNote], *, slot_id: int, key_signature: str) -> list[TrackNote]:
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
-    clef = clef_for_slot(slot_id)
-    display_octave_shift = display_octave_shift_for_slot(slot_id)
+    pitch_register = pitch_register_for_slot(slot_id)
+    pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
     forced: list[TrackNote] = []
     for note in notes:
         pitch_midi = _resolve_pitch_midi(note)
@@ -1928,9 +1928,9 @@ def _force_key_signature(notes: list[TrackNote], *, slot_id: int, key_signature:
                     "pitch_midi": pitch_midi,
                     "spelled_label": spelled_label,
                     "accidental": accidental,
-                    "clef": clef,
+                    "pitch_register": pitch_register,
                     "key_signature": key_signature,
-                    "display_octave_shift": display_octave_shift,
+                    "pitch_label_octave_shift": pitch_label_octave_shift,
                 }
             )
         )

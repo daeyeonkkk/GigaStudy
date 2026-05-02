@@ -50,17 +50,17 @@ def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
     assert all("measure_boundary_tie" in entry.quality_warnings for entry in normalized)
 
 
-def test_event_normalization_applies_track_clef_policy() -> None:
+def test_event_normalization_applies_track_pitch_register_policy() -> None:
     tenor = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55)
     baritone = note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=50)
 
     tenor_note = normalize_track_notes([tenor], bpm=120, slot_id=3)[0]
     baritone_note = normalize_track_notes([baritone], bpm=120, slot_id=4)[0]
 
-    assert tenor_note.clef == "treble_8vb"
-    assert tenor_note.display_octave_shift == 12
-    assert baritone_note.clef == "bass"
-    assert baritone_note.display_octave_shift == 0
+    assert tenor_note.pitch_register == "tenor_voice"
+    assert tenor_note.pitch_label_octave_shift == 12
+    assert baritone_note.pitch_register == "lower_voice"
+    assert baritone_note.pitch_label_octave_shift == 0
 
 
 def test_event_spelling_uses_key_signature_for_accidentals() -> None:
@@ -130,7 +130,7 @@ def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated()
         (4.5, 0.5, 1),
         (5.0, 0.5, 2),
     ]
-    assert all(entry.clef == "treble_8vb" for entry in result.notes)
+    assert all(entry.pitch_register == "tenor_voice" for entry in result.notes)
     assert all(entry.key_signature for entry in result.notes)
     assert result.diagnostics["cross_measure_note_count"] == 0
 
@@ -203,7 +203,7 @@ def test_registration_quality_enforces_final_event_contract() -> None:
         pitch_midi=55,
         onset_seconds=99,
         duration_seconds=99,
-        clef="treble",
+        pitch_register="upper_voice",
         key_signature="F#",
         voice_index=1,
     )
@@ -225,8 +225,8 @@ def test_registration_quality_enforces_final_event_contract() -> None:
     assert registered_note.measure_index == 1
     assert registered_note.beat_in_measure == 2.25
     assert registered_note.voice_index == 3
-    assert registered_note.clef == "treble_8vb"
-    assert registered_note.display_octave_shift == 12
+    assert registered_note.pitch_register == "tenor_voice"
+    assert registered_note.pitch_label_octave_shift == 12
     assert registered_note.key_signature
     assert result.diagnostics["event_contract"]["single_voice_index"] is True
     assert result.diagnostics["event_contract"]["seconds_follow_beat_grid"] is True

@@ -51,7 +51,9 @@ for the product UI and API response.
   Public contract. `Studio.regions` and `ExtractionCandidate.region` expose the
   arrangement data flow. Document imports use `source_kind: "document"`; legacy
   `"score"` input is accepted only as a compatibility alias and normalized at
-  the API boundary.
+  the API boundary. `PitchEvent` carries timing, source, extraction method,
+  measure position, and quality warnings so consumers do not need legacy note
+  arrays for product behavior.
 - `apps/api/src/gigastudy_api/services/studio_store.py`
   Studio persistence abstraction.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`

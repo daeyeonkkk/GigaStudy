@@ -91,7 +91,7 @@ def test_studio_response_includes_arrangement_regions() -> None:
                         measure_index=1,
                         beat_in_measure=1,
                         extraction_method="contract_fixture",
-                        notation_warnings=["range_checked"],
+                        quality_warnings=["range_checked"],
                         source="midi",
                     )
                 ],
@@ -130,7 +130,7 @@ def test_candidate_response_includes_region_candidate() -> None:
                 onset_seconds=0,
                 duration_seconds=0.5,
                 extraction_method="candidate_fixture",
-                notation_warnings=["candidate_checked"],
+                quality_warnings=["candidate_checked"],
                 source="ai",
             )
         ],
@@ -173,6 +173,24 @@ def test_public_openapi_does_not_expose_legacy_note_contracts() -> None:
     assert not hasattr(studio_schemas, "TrackNote")
     assert "TrackNote" not in schemas
     assert "performance_notes" not in serialized
+
+
+def test_track_note_reads_legacy_warning_field_but_dumps_quality_warnings() -> None:
+    note = TrackNote.model_validate(
+        {
+            "label": "C4",
+            "pitch_midi": 60,
+            "beat": 1,
+            "duration_beats": 1,
+            "source": "midi",
+            "notation_warnings": ["legacy_warning"],
+        }
+    )
+    payload = note.model_dump(mode="json")
+
+    assert note.quality_warnings == ["legacy_warning"]
+    assert payload["quality_warnings"] == ["legacy_warning"]
+    assert "notation_warnings" not in payload
 
 
 def _extract_ts_type_fields(source: str, type_name: str) -> set[str]:

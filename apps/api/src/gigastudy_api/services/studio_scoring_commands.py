@@ -221,7 +221,7 @@ def _track_note_from_performance_event(event: PerformanceEvent) -> TrackNote:
         "is_rest": event.is_rest,
         "measure_index": event.measure_index,
         "beat_in_measure": event.beat_in_measure,
-        "notation_warnings": event.quality_warnings,
+        "quality_warnings": event.quality_warnings,
     }
     if event.event_id:
         payload["id"] = event.event_id

@@ -47,7 +47,7 @@ def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
         (5.0, 0.5, 2),
     ]
     assert all(entry.is_tied for entry in normalized)
-    assert all("measure_boundary_tie" in entry.notation_warnings for entry in normalized)
+    assert all("measure_boundary_tie" in entry.quality_warnings for entry in normalized)
 
 
 def test_event_normalization_applies_track_clef_policy() -> None:

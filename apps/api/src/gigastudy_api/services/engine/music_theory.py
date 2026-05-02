@@ -372,7 +372,7 @@ def note_from_pitch(
     key_signature: str | None = None,
     display_octave_shift: int = 0,
     quantization_grid: float | None = None,
-    notation_warnings: list[str] | None = None,
+    quality_warnings: list[str] | None = None,
 ) -> TrackNote:
     resolved_label = label
     if not resolved_label and pitch_midi is not None:
@@ -429,5 +429,5 @@ def note_from_pitch(
         voice_index=voice_index,
         staff_index=staff_index,
         quantization_grid=quantization_grid,
-        notation_warnings=notation_warnings or [],
+        quality_warnings=quality_warnings or [],
     )

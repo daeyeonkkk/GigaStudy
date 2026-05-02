@@ -567,7 +567,7 @@ def _simplify_dense_voice_measures(
                         "duration_beats": VOICE_DENSITY_SIMPLIFICATION_GRID,
                         "onset_seconds": round(max(0, (cell_start - 1) * seconds_per_beat(bpm)), 4),
                         "duration_seconds": round(VOICE_DENSITY_SIMPLIFICATION_GRID * seconds_per_beat(bpm), 4),
-                        "notation_warnings": _append_warning(note.notation_warnings, "dense_measure_simplified"),
+                        "quality_warnings": _append_warning(note.quality_warnings, "dense_measure_simplified"),
                     }
                 )
         simplified.extend(cells[index] for index in sorted(cells))
@@ -1202,7 +1202,7 @@ def _merge_note_span(
             "duration_seconds": round(duration_beats * seconds_per_beat(bpm), 4),
             "confidence": round(min(1.0, max(0.0, confidence)), 4),
             "is_tied": first_note.is_tied or last_note.is_tied,
-            "notation_warnings": _append_warning(first_note.notation_warnings, warning),
+            "quality_warnings": _append_warning(first_note.quality_warnings, warning),
         }
     )
 
@@ -1213,7 +1213,7 @@ def _extend_note_to_beat(note: TrackNote, *, end_beat: float, bpm: int, warning:
         update={
             "duration_beats": duration_beats,
             "duration_seconds": round(duration_beats * seconds_per_beat(bpm), 4),
-            "notation_warnings": _append_warning(note.notation_warnings, warning),
+            "quality_warnings": _append_warning(note.quality_warnings, warning),
         }
     )
 
@@ -1615,8 +1615,8 @@ def _shift_notes_to_reference_grid(
                         ),
                         4,
                     ),
-                    "notation_warnings": _append_warning(
-                        note.notation_warnings,
+                    "quality_warnings": _append_warning(
+                        note.quality_warnings,
                         "reference_grid_aligned",
                     ),
                 }
@@ -1647,8 +1647,8 @@ def _shift_notes_to_reference_grid(
         shifted = [
             note.model_copy(
                 update={
-                    "notation_warnings": _append_warning(
-                        note.notation_warnings,
+                    "quality_warnings": _append_warning(
+                        note.quality_warnings,
                         "reference_grid_aligned",
                     )
                 }
@@ -1777,7 +1777,7 @@ def _attach_quality_warnings(notes: list[TrackNote], diagnostics: dict[str, Any]
     if not warnings:
         return notes
     return [
-        note.model_copy(update={"notation_warnings": _append_warning(note.notation_warnings, *warnings)})
+        note.model_copy(update={"quality_warnings": _append_warning(note.quality_warnings, *warnings)})
         for note in notes
     ]
 

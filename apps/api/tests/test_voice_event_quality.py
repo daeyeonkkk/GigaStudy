@@ -111,7 +111,7 @@ def test_voice_event_splits_sustained_note_at_measure_boundary(tmp_path: Path) -
         (5.0, 0.5, 2),
     ]
     assert all(note.is_tied for note in notes)
-    assert all("measure_boundary_tie" in note.notation_warnings for note in notes)
+    assert all("measure_boundary_tie" in note.quality_warnings for note in notes)
 
 
 def test_voice_event_tolerates_vibrato_and_attack_scoop(tmp_path: Path) -> None:

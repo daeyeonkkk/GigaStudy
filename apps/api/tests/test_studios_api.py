@@ -262,7 +262,7 @@ def _note_from_pitch_event(event: dict) -> dict:
         "is_rest": event["is_rest"],
         "measure_index": event["measure_index"],
         "beat_in_measure": event["beat_in_measure"],
-        "notation_warnings": event["quality_warnings"],
+        "quality_warnings": event["quality_warnings"],
     }
 
 
@@ -285,7 +285,7 @@ def _performance_event_from_note(note: TrackNote | dict) -> dict:
         "is_rest": payload.get("is_rest", False),
         "measure_index": payload.get("measure_index"),
         "beat_in_measure": payload.get("beat_in_measure"),
-        "quality_warnings": payload.get("notation_warnings", []),
+        "quality_warnings": payload.get("quality_warnings", []),
     }
 
 
@@ -906,7 +906,7 @@ def test_track_registration_stores_ensemble_arrangement_diagnostics(tmp_path: Pa
     ensemble = alto["diagnostics"]["registration_quality"]["ensemble_arrangement"]
     assert ensemble["evaluated"] is True
     assert ensemble["issue_code_counts"]["voice_crossing"] >= 1
-    assert any("ensemble_voice_crossing" in note["notation_warnings"] for note in _track_notes(alto_payload, 2))
+    assert any("ensemble_voice_crossing" in note["quality_warnings"] for note in _track_notes(alto_payload, 2))
 
 
 def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeypatch) -> None:

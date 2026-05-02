@@ -32,7 +32,7 @@ def test_ensemble_validation_flags_voice_crossing_before_registration() -> None:
     assert diagnostics["evaluated"] is True
     assert diagnostics["passed"] is False
     assert diagnostics["issue_code_counts"]["voice_crossing"] >= 2
-    assert all("ensemble_voice_crossing" in note.notation_warnings for note in result.notes)
+    assert all("ensemble_voice_crossing" in note.quality_warnings for note in result.notes)
 
 
 def test_ensemble_validation_flags_wide_adjacent_voice_spacing() -> None:
@@ -48,7 +48,7 @@ def test_ensemble_validation_flags_wide_adjacent_voice_spacing() -> None:
 
     assert result.diagnostics["passed"] is True
     assert result.diagnostics["issue_code_counts"]["spacing_too_wide"] == 1
-    assert "ensemble_spacing_too_wide" in result.notes[0].notation_warnings
+    assert "ensemble_spacing_too_wide" in result.notes[0].quality_warnings
 
 
 def test_ensemble_validation_flags_parallel_perfect_motion() -> None:
@@ -63,7 +63,7 @@ def test_ensemble_validation_flags_parallel_perfect_motion() -> None:
     )
 
     assert result.diagnostics["issue_code_counts"]["parallel_perfect_interval"] == 1
-    assert "ensemble_parallel_perfect_interval" in result.notes[1].notation_warnings
+    assert "ensemble_parallel_perfect_interval" in result.notes[1].quality_warnings
 
 
 def test_ensemble_preparation_repairs_extractable_octave_crossing() -> None:
@@ -81,7 +81,7 @@ def test_ensemble_preparation_repairs_extractable_octave_crossing() -> None:
     assert [note.label for note in result.notes] == ["C4", "D4"]
     assert result.diagnostics["repair"]["applied"] is True
     assert result.diagnostics["issue_code_counts"].get("voice_crossing", 0) == 0
-    assert all("ensemble_octave_repaired" in note.notation_warnings for note in result.notes)
+    assert all("ensemble_octave_repaired" in note.quality_warnings for note in result.notes)
 
 
 def test_ensemble_preparation_preserves_symbolic_octaves() -> None:
@@ -112,4 +112,4 @@ def test_ensemble_validation_flags_unsingable_large_leaps() -> None:
     )
 
     assert result.diagnostics["issue_code_counts"]["large_melodic_leap"] == 1
-    assert "ensemble_large_melodic_leap" in result.notes[1].notation_warnings
+    assert "ensemble_large_melodic_leap" in result.notes[1].quality_warnings

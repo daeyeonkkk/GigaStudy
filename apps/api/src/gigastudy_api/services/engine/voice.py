@@ -288,7 +288,7 @@ def _transcribe_with_basic_pitch(
                 onset_seconds=aligned_onset_seconds,
                 duration_seconds=duration_seconds,
                 confidence=max(0.25, min(0.98, amplitude)),
-                notation_warnings=warnings,
+                quality_warnings=warnings,
             )
         )
 
@@ -752,7 +752,7 @@ def _frames_to_notes(
                 onset_seconds=aligned_onset_seconds,
                 duration_seconds=segment.duration_seconds,
                 confidence=segment.confidence,
-                notation_warnings=warnings,
+                quality_warnings=warnings,
             )
         )
     return VoiceTranscriptionResult(

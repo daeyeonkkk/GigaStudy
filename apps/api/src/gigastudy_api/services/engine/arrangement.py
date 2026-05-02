@@ -567,7 +567,7 @@ def _copy_note_pitch(
                 4,
             ),
             "duration_seconds": round(note.duration_beats * (60 / max(1, bpm)), 4),
-            "notation_warnings": _append_warning(note.notation_warnings, warning),
+            "quality_warnings": _append_warning(note.quality_warnings, warning),
         }
     )
 
@@ -1002,9 +1002,9 @@ def _attach_ensemble_warnings(notes: list[TrackNote], issues: list[dict[str, Any
     return [
         note.model_copy(
             update={
-                "notation_warnings": sorted(
+                "quality_warnings": sorted(
                     {
-                        *note.notation_warnings,
+                        *note.quality_warnings,
                         *warnings_by_note_id.get(note.id, set()),
                     }
                 )

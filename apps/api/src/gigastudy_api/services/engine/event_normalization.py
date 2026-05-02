@@ -172,7 +172,7 @@ def annotate_track_notes_for_slot(
             spelled_label = spelled_label or spell_midi_label(pitch_midi, spelling_mode=spelling_mode)
             accidental = accidental_for_key(spelled_label, resolved_key_signature)
 
-        warnings = list(note.notation_warnings)
+        warnings = list(note.quality_warnings)
         if pitch_midi is not None and not low <= pitch_midi <= high:
             warnings.append("range_outlier_for_assigned_slot")
 
@@ -185,7 +185,7 @@ def annotate_track_notes_for_slot(
                     "clef": note.clef or clef,
                     "key_signature": note.key_signature or resolved_key_signature,
                     "display_octave_shift": note.display_octave_shift or display_octave_shift,
-                    "notation_warnings": warnings,
+                    "quality_warnings": warnings,
                 }
             )
         )
@@ -382,7 +382,7 @@ def _split_interval_at_measure_boundaries(
             key_signature=key_signature,
             display_octave_shift=display_octave_shift,
             quantization_grid=quantization_grid,
-            notation_warnings=_quality_warnings(source_note, clef, split_tie),
+            quality_warnings=_quality_warnings(source_note, clef, split_tie),
         )
         note.id = f"{source_note.id}-q{index + 1}" if len(pieces) > 1 else source_note.id
         normalized.append(note)
@@ -441,7 +441,7 @@ def _same_pitch(left: _NoteInterval, right: _NoteInterval) -> bool:
 
 
 def _quality_warnings(note: TrackNote, clef: TrackDisplayClef, is_split_tie: bool) -> list[str]:
-    warnings = list(note.notation_warnings)
+    warnings = list(note.quality_warnings)
     if is_split_tie:
         warnings.append("measure_boundary_tie")
     if note.pitch_midi is not None and note.pitch_hz is None:

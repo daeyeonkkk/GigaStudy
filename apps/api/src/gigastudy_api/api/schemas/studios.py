@@ -215,7 +215,7 @@ def _pitch_event_from_note(
         is_rest=note.is_rest,
         measure_index=note.measure_index,
         beat_in_measure=note.beat_in_measure,
-        quality_warnings=note.notation_warnings,
+        quality_warnings=note.quality_warnings,
     )
 
 
@@ -281,7 +281,7 @@ def _candidate_pitch_event_from_note(
         is_rest=note.is_rest,
         measure_index=note.measure_index,
         beat_in_measure=note.beat_in_measure,
-        quality_warnings=note.notation_warnings,
+        quality_warnings=note.quality_warnings,
     )
 
 

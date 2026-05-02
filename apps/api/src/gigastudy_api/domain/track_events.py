@@ -1,12 +1,14 @@
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
 
 
 class TrackNote(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str = Field(default_factory=lambda: uuid4().hex)
     pitch_midi: int | None = None
     pitch_hz: float | None = None
@@ -30,4 +32,7 @@ class TrackNote(BaseModel):
     voice_index: int | None = None
     staff_index: int | None = None
     quantization_grid: float | None = None
-    notation_warnings: list[str] = Field(default_factory=list)
+    quality_warnings: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("quality_warnings", "notation_warnings"),
+    )

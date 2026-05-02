@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { getTrackAudioUrl } from '../../lib/api'
 import { getBrowserAudioContextConstructor } from '../../lib/audio'
 import {
-  buildArrangementRegions,
   createAudioBufferPlayback,
   createTone,
   disposePlaybackSession,
@@ -139,9 +138,7 @@ export function useStudioPlayback({
     if (!studio) {
       return new Map()
     }
-    const arrangementRegions =
-      studio.regions.length > 0 ? studio.regions : buildArrangementRegions(studio.tracks, studio.bpm)
-    return new Map(arrangementRegions.map((region) => [region.track_slot_id, region]))
+    return new Map(studio.regions.map((region) => [region.track_slot_id, region]))
   }
 
   async function startPlaybackSession(

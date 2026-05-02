@@ -4,7 +4,6 @@ import type { CSSProperties } from 'react'
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
   TRACK_UPLOAD_ACCEPT,
-  buildArrangementRegions,
   formatDurationSeconds,
   formatSeconds,
   getArrangementRegionDurationSeconds,
@@ -343,10 +342,7 @@ export function TrackBoard({
   onUpload,
   onVolumeChange,
 }: TrackBoardProps) {
-  const regions = useMemo(
-    () => (arrangementRegions.length > 0 ? arrangementRegions : buildArrangementRegions(tracks, bpm)),
-    [arrangementRegions, bpm, tracks],
-  )
+  const regions = useMemo(() => arrangementRegions, [arrangementRegions])
   const regionsByTrack = useMemo(
     () => new Map(regions.map((region) => [region.track_slot_id, region])),
     [regions],

@@ -8,7 +8,6 @@ import { useStudioPlayback } from '../components/studio/useStudioPlayback'
 import { useStudioResource } from '../components/studio/useStudioResource'
 import {
   DEFAULT_METER,
-  buildArrangementRegions,
   formatDurationSeconds,
   getPitchEventRange,
   getPitchedEvents,
@@ -213,15 +212,7 @@ export function PracticePage() {
     studioMeter,
   })
 
-  const regions = useMemo(
-    () =>
-      studio
-        ? studio.regions.length > 0
-          ? studio.regions
-          : buildArrangementRegions(studio.tracks, studio.bpm)
-        : [],
-    [studio],
-  )
+  const regions = useMemo(() => studio?.regions ?? [], [studio])
   const timelineBounds = useMemo(
     () => getTimelineBounds(regions, playheadSeconds),
     [playheadSeconds, regions],

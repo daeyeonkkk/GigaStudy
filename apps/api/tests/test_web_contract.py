@@ -36,6 +36,9 @@ from gigastudy_api.api.schemas.studios import (
 )
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.main import create_app
+from gigastudy_api.services.engine.timeline import registered_region_events_for_slot
+from gigastudy_api.services.studio_generation import build_generation_context_notes_by_slot
+from gigastudy_api.services.studio_scoring import validate_score_track_request
 from gigastudy_api.services.studio_documents import encode_studio_payload
 
 
@@ -151,6 +154,69 @@ def test_studio_payload_persists_explicit_regions_from_internal_events() -> None
     assert payload["regions"][0]["region_id"] == "track-1-region-1"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
     assert studio.regions[0].pitch_events[0].label == "C4"
+
+
+def test_engine_context_reads_persisted_regions_without_track_notes() -> None:
+    track = TrackSlot(
+        slot_id=1,
+        name="Soprano",
+        status="registered",
+        source_kind="midi",
+        source_label="region-only.mid",
+        duration_seconds=1,
+        notes=[],
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    studio = Studio(
+        studio_id="studio-region-first-contract",
+        title="Region-first contract",
+        bpm=120,
+        tracks=[track],
+        regions=[
+            ArrangementRegion(
+                region_id="track-1-region-1",
+                track_slot_id=1,
+                track_name="Soprano",
+                source_kind="midi",
+                source_label="region-only.mid",
+                start_seconds=0,
+                duration_seconds=1,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="track-1-region-1-event-1",
+                        track_slot_id=1,
+                        region_id="track-1-region-1",
+                        label="C4",
+                        pitch_midi=60,
+                        start_seconds=0,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+            )
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    events = registered_region_events_for_slot(studio, 1)
+    context = build_generation_context_notes_by_slot(
+        studio,
+        target_slot_id=2,
+        requested_context_slot_ids=None,
+    )
+
+    validate_score_track_request(
+        ScoreTrackRequest(include_metronome=True),
+        target_track=track,
+        reference_slot_ids=[],
+        target_has_events=bool(events),
+    )
+    assert events[0].label == "C4"
+    assert context[1][0].label == "C4"
 
 
 def test_candidate_response_includes_region_candidate() -> None:

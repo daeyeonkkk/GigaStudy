@@ -15,7 +15,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
-from gigastudy_api.services.engine.timeline import notes_with_sync_offset
+from gigastudy_api.services.engine.timeline import registered_region_events_for_slot
 from gigastudy_api.services.llm.extraction_plan import plan_voice_extraction_with_deepseek
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_scoring import (
@@ -59,6 +59,7 @@ class StudioScoringCommands:
                 request,
                 target_track=target_track,
                 reference_slot_ids=reference_slot_ids,
+                target_has_events=bool(registered_region_events_for_slot(studio, slot_id)),
             )
         except ScoringRequestError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
@@ -166,23 +167,14 @@ class StudioScoringCommands:
     ):
         reference_slot_set = set(reference_slot_ids)
         context_tracks_by_slot = {
-            track.slot_id: notes_with_sync_offset(
-                track.notes,
-                track.sync_offset_seconds,
-                studio.bpm,
-                voice_index=track.slot_id,
-            )
+            track.slot_id: registered_region_events_for_slot(studio, track.slot_id)
             for track in studio.tracks
-            if track.slot_id in reference_slot_set and track.notes
+            if track.slot_id in reference_slot_set
+            and registered_region_events_for_slot(studio, track.slot_id)
         }
         expected_notes: list[TrackPitchEvent] = []
-        if score_mode == "answer" and target_track.notes:
-            expected_notes = notes_with_sync_offset(
-                target_track.notes,
-                target_track.sync_offset_seconds,
-                studio.bpm,
-                voice_index=target_track.slot_id,
-            )
+        if score_mode == "answer":
+            expected_notes = registered_region_events_for_slot(studio, target_track.slot_id)
             context_tracks_by_slot[target_track.slot_id] = expected_notes
 
         extraction_plan = default_voice_extraction_plan(

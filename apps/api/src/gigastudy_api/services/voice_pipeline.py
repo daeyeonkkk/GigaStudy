@@ -9,6 +9,7 @@ from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
+from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 from gigastudy_api.services.engine.voice import VoiceTranscriptionResult
 from gigastudy_api.services.engine_queue import EngineQueueJob
 from gigastudy_api.services.llm.extraction_plan import plan_voice_extraction_with_deepseek
@@ -34,11 +35,7 @@ def run_voice_pipeline(
     transcribe_with_alignment: Callable[..., VoiceTranscriptionResult],
 ) -> VoicePipelineResult:
     source_kind = str(getattr(record, "source_kind", None) or record.payload.get("source_kind") or "audio")
-    context_tracks_by_slot = {
-        track.slot_id: track.notes
-        for track in studio.tracks
-        if track.slot_id != record.slot_id and track.notes
-    }
+    context_tracks_by_slot = registered_region_events_by_slot(studio, exclude_slot_id=record.slot_id)
     settings = get_settings()
     extraction_plan = default_voice_extraction_plan(
         slot_id=record.slot_id,

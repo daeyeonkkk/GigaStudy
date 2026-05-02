@@ -11,7 +11,7 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     generation_variant_label,
 )
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
-from gigastudy_api.services.engine.timeline import notes_with_sync_offset
+from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan, plan_harmony_with_deepseek
 
 DEEPSEEK_GENERATION_CONTEXT_NOTE_LIMIT = 160
@@ -40,19 +40,14 @@ def build_generation_context_notes_by_slot(
     target_slot_id: int,
     requested_context_slot_ids: list[int] | None,
 ) -> dict[int, list[TrackPitchEvent]]:
-    registered_tracks = [track for track in studio.tracks if track.status == "registered"]
+    registered_events_by_slot = registered_region_events_by_slot(studio, exclude_slot_id=target_slot_id)
     context_slot_ids = requested_context_slot_ids or [
-        track.slot_id for track in registered_tracks
+        slot_id for slot_id in registered_events_by_slot
     ]
     return {
-        track.slot_id: notes_with_sync_offset(
-            track.notes,
-            track.sync_offset_seconds,
-            studio.bpm,
-            voice_index=track.slot_id,
-        )
-        for track in registered_tracks
-        if track.slot_id in context_slot_ids and track.slot_id != target_slot_id
+        slot_id: events
+        for slot_id, events in registered_events_by_slot.items()
+        if slot_id in context_slot_ids
     }
 
 

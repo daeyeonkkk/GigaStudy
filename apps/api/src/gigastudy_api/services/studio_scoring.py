@@ -11,7 +11,7 @@ from gigastudy_api.services.engine.scoring import (
     build_harmony_scoring_report,
     build_scoring_report,
 )
-from gigastudy_api.services.engine.timeline import notes_with_sync_offset
+from gigastudy_api.services.engine.timeline import registered_region_events_for_slot
 
 
 class ScoringRequestError(ValueError):
@@ -42,9 +42,11 @@ def validate_score_track_request(
     *,
     target_track: TrackSlot,
     reference_slot_ids: list[int],
+    target_has_events: bool | None = None,
 ) -> None:
+    has_target_events = bool(target_track.notes) if target_has_events is None else target_has_events
     if request.score_mode == "answer" and (
-        target_track.status != "registered" or not target_track.notes
+        target_track.status != "registered" or not has_target_events
     ):
         raise ScoringRequestError(409, "Scoring requires a registered answer track.")
     if (
@@ -74,12 +76,7 @@ def build_score_track_report(
     if request.score_mode == "harmony":
         reference_slot_id_set = set(reference_slot_ids)
         reference_tracks_by_slot = {
-            track.slot_id: notes_with_sync_offset(
-                track.notes,
-                track.sync_offset_seconds,
-                studio.bpm,
-                voice_index=track.slot_id,
-            )
+            track.slot_id: registered_region_events_for_slot(studio, track.slot_id)
             for track in studio.tracks
             if track.slot_id in reference_slot_id_set
         }
@@ -96,12 +93,7 @@ def build_score_track_report(
             time_signature_denominator=studio.time_signature_denominator,
         )
 
-    answer_events = notes_with_sync_offset(
-        target_track.notes,
-        target_track.sync_offset_seconds,
-        studio.bpm,
-        voice_index=target_track.slot_id,
-    )
+    answer_events = registered_region_events_for_slot(studio, target_track.slot_id)
     return build_scoring_report(
         target_slot_id=target_slot_id,
         target_track_name=target_track.name,

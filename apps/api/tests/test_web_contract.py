@@ -264,6 +264,48 @@ def test_candidate_response_includes_region_candidate() -> None:
     assert payload["region"]["pitch_events"][0]["quality_warnings"] == ["candidate_checked"]
 
 
+def test_studio_payload_persists_candidate_region_from_internal_events() -> None:
+    candidate = ExtractionCandidate(
+        candidate_id="candidate-persisted-region",
+        suggested_slot_id=3,
+        source_kind="ai",
+        source_label="AI alto",
+        method="rule_based",
+        notes=[
+            TrackPitchEvent(
+                label="A3",
+                pitch_midi=57,
+                beat=2,
+                duration_beats=1.5,
+                onset_seconds=0.5,
+                duration_seconds=0.75,
+                extraction_method="candidate_persist_fixture",
+                source="ai",
+            )
+        ],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    studio = Studio(
+        studio_id="candidate-persisted-region-studio",
+        title="Candidate persisted region",
+        bpm=120,
+        tracks=[],
+        reports=[],
+        candidates=[candidate],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = encode_studio_payload(studio)
+
+    assert payload["candidates"][0]["region"]["region_id"] == "candidate-candidate-persisted-region-region-1"
+    assert payload["candidates"][0]["region"]["suggested_slot_id"] == 3
+    assert payload["candidates"][0]["region"]["pitch_events"][0]["label"] == "A3"
+    assert studio.candidates[0].region is not None
+    assert studio.candidates[0].region.pitch_events[0].label == "A3"
+
+
 def test_score_track_request_uses_performance_events_not_notes() -> None:
     assert "performance_events" in ScoreTrackRequest.model_fields
     assert "performance_notes" not in ScoreTrackRequest.model_fields

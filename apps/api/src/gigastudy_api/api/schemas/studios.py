@@ -1,7 +1,7 @@
 from math import isfinite
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from gigastudy_api.domain.track_events import PitchEventSource as EventSource, TrackPitchEvent as _TrackPitchEvent
 
@@ -121,13 +121,9 @@ class ExtractionCandidate(SourceKindModel):
     job_id: str | None = None
     message: str | None = None
     diagnostics: dict[str, Any] = Field(default_factory=dict)
+    region: CandidateRegion | None = None
     created_at: str
     updated_at: str
-
-    @computed_field(return_type=CandidateRegion)
-    @property
-    def region(self) -> CandidateRegion:
-        return build_candidate_region(self)
 
 
 class TrackSlot(SourceKindModel):
@@ -256,6 +252,15 @@ def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
         pitch_events=pitch_events,
         diagnostics=candidate.diagnostics,
     )
+
+
+def extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
+    return candidate.region or build_candidate_region(candidate)
+
+
+def sync_extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
+    candidate.region = build_candidate_region(candidate)
+    return candidate.region
 
 
 def _candidate_pitch_event_from_note(
@@ -431,6 +436,10 @@ def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     return studio.regions
 
 
+def sync_studio_candidate_regions(studio: Studio) -> list[CandidateRegion]:
+    return [sync_extraction_candidate_region(candidate) for candidate in studio.candidates]
+
+
 def build_studio_response(studio: Studio) -> StudioResponse:
     return StudioResponse(
         studio_id=studio.studio_id,
@@ -447,7 +456,10 @@ def build_studio_response(studio: Studio) -> StudioResponse:
         jobs=studio.jobs,
         candidates=[
             ExtractionCandidateResponse.model_validate(
-                candidate.model_dump(mode="json", exclude={"notes"})
+                {
+                    **candidate.model_dump(mode="json", exclude={"notes", "region"}),
+                    "region": extraction_candidate_region(candidate).model_dump(mode="json"),
+                }
             )
             for candidate in studio.candidates
         ],

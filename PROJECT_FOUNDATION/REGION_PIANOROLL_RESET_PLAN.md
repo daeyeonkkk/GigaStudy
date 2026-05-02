@@ -134,7 +134,7 @@ Region
   track_id
   start_seconds
   duration_seconds
-  source_kind: recording | audio | midi | musicxml | ai
+  source_kind: recording | audio | midi | document | music | ai
   source_label
   audio_asset_path?
   pitch_events: PitchEvent[]

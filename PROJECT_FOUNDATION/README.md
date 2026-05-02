@@ -49,6 +49,9 @@ If the user uploads a document, GigaStudy extracts track material into regions:
 - Non-a cappella source: register the main melody into the most appropriate
   track as region events.
 
+The canonical source kind for this flow is `document`; older `score` payloads
+are normalized for compatibility and should not be used by new UI or API code.
+
 If the user uploads music, GigaStudy extracts every usable part and registers
 those into the six tracks where possible. Browser-decodable MP3/M4A/OGG/FLAC
 input is normalized to WAV before the symbolic pitch/rhythm extraction engine

@@ -93,7 +93,8 @@ resolution.
 
 Reports appear at the bottom of the studio as compact title/date history items.
 Clicking a report opens a separate detail page with quantitative pitch, rhythm,
-sync, missing, and extra-note data.
+sync, missing, and extra-note data. Each issue carries region/event IDs and
+beat coordinates so the report can be tied back to piano-roll positions.
 
 ## Support Layers
 

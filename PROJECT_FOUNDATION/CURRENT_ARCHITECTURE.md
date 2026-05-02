@@ -154,8 +154,8 @@ flowchart TD
 3. Browser records a take while selected references play.
 4. API extracts the take and compares pitch/timing against the target or
    harmony context.
-5. Reports remain the feedback asset, but future report views should refer back
-   to region/piano-roll positions rather than staff positions.
+5. Report issues include region/event IDs and expected/actual beat coordinates
+   so the feedback can point back to piano-roll positions.
 
 ## Removed Surface
 
@@ -182,6 +182,7 @@ The remaining compatibility layer is mostly naming and storage shape:
 - Persistent studio state should eventually store explicit regions/events.
 - Candidate note arrays should remain compatibility payload only; candidate
   review must use `ExtractionCandidate.region`.
-- Scoring reports should include event/region coordinates for piano-roll review.
+- Scoring reports already include event/region coordinates; the next step is a
+  click-through piano-roll focus interaction from report detail.
 - PDF/MusicXML/MIDI ingestion should stay behind document-extraction naming and
   never reintroduce staff rendering as a product surface.

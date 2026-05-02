@@ -247,11 +247,27 @@ export function LaunchPage() {
         </header>
 
         <nav className="launch-menubar" aria-label="상단 메뉴">
-          <span>파일</span>
-          <span>보기</span>
-          <span>재생</span>
-          <span>도구</span>
-          <span>도움말</span>
+          <button
+            className="launch-menubar__item"
+            disabled={submitState.phase === 'submitting'}
+            title="문서 또는 음악 파일 선택"
+            type="button"
+            onClick={() => sourceInputRef.current?.click()}
+          >
+            파일
+          </button>
+          <button className="launch-menubar__item" disabled title="보기 메뉴는 준비 중입니다." type="button">
+            보기
+          </button>
+          <button className="launch-menubar__item" disabled title="스튜디오 안에서 사용할 수 있습니다." type="button">
+            재생
+          </button>
+          <button className="launch-menubar__item" disabled title="도구 메뉴는 준비 중입니다." type="button">
+            도구
+          </button>
+          <button className="launch-menubar__item" disabled title="도움말 문서는 준비 중입니다." type="button">
+            도움말
+          </button>
         </nav>
 
         <div className="launch-toolbar" aria-label="스튜디오 생성 도구">

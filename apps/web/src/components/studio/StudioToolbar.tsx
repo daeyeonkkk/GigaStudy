@@ -148,18 +148,54 @@ export function StudioToolbar({
       </header>
 
       <nav className="composer-menubar" aria-label="스튜디오 메뉴">
-        <span>파일</span>
-        <span>트랙</span>
-        <span>재생</span>
-        <span>연습</span>
-        <span>도구</span>
-        <span>도움말</span>
+        <Link className="composer-menubar__item" to="/" title="스튜디오 목록으로 이동">
+          파일
+        </Link>
+        <button
+          className="composer-menubar__item"
+          disabled
+          title="트랙 작업은 각 트랙 행에서 사용할 수 있습니다."
+          type="button"
+        >
+          트랙
+        </button>
+        <button
+          className="composer-menubar__item"
+          disabled={!globalPlaying && (transportDisabled || registeredTrackCount === 0)}
+          title={!globalPlaying ? transportDisabledReason ?? '동시 재생할 트랙을 선택합니다.' : '재생을 멈춥니다.'}
+          type="button"
+          onClick={globalPlaying ? onToggleGlobalPlayback : onTogglePlaybackPicker}
+        >
+          재생
+        </button>
+        <Link
+          className="composer-menubar__item"
+          to={`/studios/${studioId}/practice`}
+          title="연습 화면으로 이동"
+        >
+          연습
+        </Link>
+        <button
+          className="composer-menubar__item"
+          disabled
+          title="세부 도구 메뉴는 준비 중입니다."
+          type="button"
+        >
+          도구
+        </button>
+        <button
+          className="composer-menubar__item"
+          disabled
+          title="도움말 문서는 준비 중입니다."
+          type="button"
+        >
+          도움말
+        </button>
       </nav>
 
       <div className="composer-toolbar" aria-label="전체 트랙 재생 제어">
         <Link className="composer-tool composer-tool--home" to="/" aria-label="홈으로">
-          <span aria-hidden="true">H</span>
-          <span>홈</span>
+          홈
         </Link>
         <Link
           className="composer-tool composer-tool--text"
@@ -251,7 +287,7 @@ export function StudioToolbar({
             type="button"
             onClick={() => onPlaybackSourceChange('audio')}
           >
-            녹음
+            원음 우선
           </button>
           <button
             aria-pressed={playbackSource === 'events'}
@@ -261,7 +297,7 @@ export function StudioToolbar({
             type="button"
             onClick={() => onPlaybackSourceChange('events')}
           >
-            연주음
+            연주음만
           </button>
         </div>
       </div>

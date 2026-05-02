@@ -250,16 +250,16 @@ export function getPlaybackPreparationMessage(
       regionsHavePlayableEvents(regionsBySlot.get(track.slot_id)),
   ).length
   const parts = [
-    audioCount > 0 ? `녹음 ${audioCount}개` : null,
+    audioCount > 0 ? `원음 ${audioCount}개` : null,
     eventCount > 0 ? `음표 ${eventCount}개` : null,
     includeMetronome ? '메트로놈' : null,
   ].filter(Boolean)
 
   if (parts.length === 0) {
-    return '재생 가능한 녹음과 음표를 확인하는 중입니다.'
+    return '재생 가능한 원음과 음표를 확인하는 중입니다.'
   }
   if (parts.length === 1 && audioCount === 1) {
-    return '녹음 파일을 불러오는 중입니다. 기준 트랙이 없으면 곧바로 재생됩니다.'
+    return '원음 파일을 불러오는 중입니다. 기준 트랙이 없으면 곧바로 재생됩니다.'
   }
   return `${parts.join(', ')}를 같은 타임라인 기준으로 준비합니다.`
 }
@@ -420,7 +420,7 @@ export function scheduleMetronomeClicksFromTimeline(
 export async function fetchAudioArrayBuffer(audioUrl: string): Promise<ArrayBuffer> {
   const response = await fetch(audioUrl)
   if (!response.ok) {
-    throw new Error('녹음 파일을 불러오지 못했습니다.')
+    throw new Error('원음 파일을 불러오지 못했습니다.')
   }
   return response.arrayBuffer()
 }

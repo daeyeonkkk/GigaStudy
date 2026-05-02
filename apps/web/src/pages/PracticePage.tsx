@@ -214,6 +214,7 @@ export function PracticePage() {
   const selectedTrackCount = registeredTracks.filter((track) =>
     selectedPlaybackSlotIds.has(track.slot_id),
   ).length
+  const actionBusy = actionState.phase === 'busy'
 
   if (!studioId) {
     return (
@@ -269,7 +270,7 @@ export function PracticePage() {
           <button
             className="composer-tool composer-tool--primary"
             data-testid="practice-play-button"
-            disabled={selectedTrackCount === 0 || actionState.phase === 'busy'}
+            disabled={selectedTrackCount === 0 || actionBusy}
             type="button"
             onClick={() => void startSelectedPlayback()}
           >
@@ -278,6 +279,7 @@ export function PracticePage() {
           <button
             className="composer-tool"
             data-testid="practice-stop-button"
+            disabled={!globalPlaying}
             type="button"
             onClick={stopGlobalPlayback}
           >
@@ -285,15 +287,16 @@ export function PracticePage() {
           </button>
           <button
             className="composer-tool composer-tool--text"
-            disabled={registeredTracks.length === 0}
+            disabled={registeredTracks.length === 0 || globalPlaying || actionBusy}
             type="button"
             onClick={selectAllPlaybackTracks}
           >
-            전체
+            전체 선택
           </button>
           <label className="composer-metronome">
             <input
               checked={metronomeEnabled}
+              disabled={actionBusy}
               type="checkbox"
               onChange={(event) => setMetronomeEnabled(event.target.checked)}
             />
@@ -303,18 +306,20 @@ export function PracticePage() {
             <button
               aria-pressed={playbackSource === 'audio'}
               className={playbackSource === 'audio' ? 'is-active' : ''}
+              disabled={globalPlaying || actionBusy}
               type="button"
               onClick={() => changePlaybackSource('audio')}
             >
-              녹음
+              원음 우선
             </button>
             <button
               aria-pressed={playbackSource === 'events'}
               className={playbackSource === 'events' ? 'is-active' : ''}
+              disabled={globalPlaying || actionBusy}
               type="button"
               onClick={() => changePlaybackSource('events')}
             >
-              연주음
+              연주음만
             </button>
           </div>
         </div>
@@ -328,6 +333,7 @@ export function PracticePage() {
                 <input
                   checked={selectedPlaybackSlotIds.has(track.slot_id)}
                   data-testid={`practice-track-checkbox-${track.slot_id}`}
+                  disabled={globalPlaying || actionBusy}
                   type="checkbox"
                   onChange={() => togglePlaybackSelection(track.slot_id)}
                 />
@@ -350,7 +356,7 @@ export function PracticePage() {
         <footer className="composer-statusbar">
           <span>{globalPlaying ? '재생 중' : '준비 완료'}</span>
           <span>{selectedTrackCount}/{registeredTracks.length} 트랙</span>
-          <span>{playbackSource === 'audio' ? '녹음 재생' : '연주음 재생'}</span>
+          <span>{playbackSource === 'audio' ? '원음 우선 재생' : '연주음만 재생'}</span>
           <span>
             {formatDurationSeconds(playheadSeconds ?? 0)} /{' '}
             {formatDurationSeconds(playbackTimeline?.maxSeconds ?? timelineBounds.maxSeconds)}

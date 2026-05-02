@@ -305,11 +305,11 @@ export function useStudioPlayback({
 
       if (audioTracks.length > 0) {
         if (!activeContext) {
-          throw new Error('녹음 재생용 오디오 장치를 열 수 없습니다.')
+          throw new Error('원음 재생용 오디오 장치를 열 수 없습니다.')
         }
         const requiresSynchronizedStart = audioTracks.length > 1 || eventTracks.length > 0 || includeMetronome
         const synchronizedParts = [
-          `녹음 ${audioTracks.length}개`,
+          `원음 ${audioTracks.length}개`,
           eventTracks.length > 0 ? `음표 ${eventTracks.length}개` : null,
           includeMetronome ? '메트로놈' : null,
         ].filter(Boolean)
@@ -318,7 +318,7 @@ export function useStudioPlayback({
           message:
             requiresSynchronizedStart
               ? `${synchronizedParts.join(', ')}를 한 번에 맞춰 재생하도록 불러오는 중입니다.`
-              : '녹음 파일을 바로 재생할 수 있게 불러오는 중입니다.',
+              : '원음 파일을 바로 재생할 수 있게 불러오는 중입니다.',
         })
         const decodedAudioTracks = await Promise.all(
           audioTracks.map(async (track) => {
@@ -581,8 +581,8 @@ export function useStudioPlayback({
         phase: 'success',
         message:
           playbackSource === 'audio'
-            ? `${selectedTracks.length}개 트랙을 같은 박자 그리드에서 재생합니다.`
-            : `${selectedTracks.length}개 트랙을 연주음으로 함께 재생합니다.`,
+            ? `${selectedTracks.length}개 트랙을 원음 우선으로 재생합니다.`
+            : `${selectedTracks.length}개 트랙을 연주음만으로 재생합니다.`,
       })
     }
   }
@@ -635,7 +635,7 @@ export function useStudioPlayback({
     setPlaybackSource(nextSource)
     setActionState({
       phase: 'success',
-      message: nextSource === 'audio' ? '재생 방식을 녹음으로 바꿨습니다.' : '재생 방식을 연주음으로 바꿨습니다.',
+      message: nextSource === 'audio' ? '재생 방식을 원음 우선으로 바꿨습니다.' : '재생 방식을 연주음만으로 바꿨습니다.',
     })
   }
 
@@ -662,7 +662,7 @@ export function useStudioPlayback({
         phase: 'success',
         message:
           playbackSource === 'audio' && track.audio_source_path
-            ? `${formatTrackName(track.name)} 녹음을 재생합니다.`
+            ? `${formatTrackName(track.name)} 원음을 재생합니다.`
             : `${formatTrackName(track.name)} 연주음을 재생합니다.`,
       })
     }

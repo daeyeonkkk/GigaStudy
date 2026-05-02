@@ -40,14 +40,37 @@
 
 .launch-menubar {
   display: flex;
-  gap: 16px;
+  gap: 4px;
   align-items: center;
   min-height: 28px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-bottom: 1px solid #a8b2bb;
   background: #f0f2f4;
   color: #111111;
   font-size: 0.9rem;
+}
+
+.launch-menubar__item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #111111;
+  font: inherit;
+  font-weight: 700;
+}
+
+.launch-menubar__item:hover:not(:disabled) {
+  border-color: #9aa7b3;
+  background: #ffffff;
+}
+
+.launch-menubar__item:disabled {
+  color: #98a2ab;
+  cursor: not-allowed;
 }
 
 .launch-toolbar {

@@ -34,6 +34,11 @@ async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
   await expect(page.getByRole('heading', { name: title })).toBeVisible()
   await expect(page.getByText('트랙 편집')).toBeVisible()
+  await expect(page.getByRole('link', { exact: true, name: '파일' })).toBeVisible()
+  await expect(page.getByRole('button', { exact: true, name: '트랙' })).toBeDisabled()
+  await expect(page.locator('.composer-tool--home')).toHaveText('홈')
+  await expect(page.getByTestId('playback-source-audio')).toHaveText('원음 우선')
+  await expect(page.getByTestId('playback-source-events')).toHaveText('연주음만')
   await expect(page.getByTestId('track-card-1')).toBeVisible()
 }
 
@@ -68,6 +73,9 @@ test('blank studio opens the region editor and independent practice route', asyn
 
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)
   await expect(page.getByText('GigaStudy 연습 - Region blank session')).toBeVisible()
+  await expect(page.getByTestId('practice-stop-button')).toBeDisabled()
+  await expect(page.getByRole('button', { name: '원음 우선' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '연주음만' })).toBeVisible()
   await expect(page.getByTestId('practice-waterfall-stage')).toBeVisible()
   await expect(page.getByText('등록된 트랙이 아직 없습니다.')).toBeVisible()
   await expect(page.getByText('등록된 음표가 아직 없습니다.')).toBeVisible()

@@ -69,7 +69,8 @@ test('blank studio opens the region editor and independent practice route', asyn
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)
   await expect(page.getByText('GigaStudy Practice - Region blank session')).toBeVisible()
   await expect(page.getByTestId('practice-waterfall-stage')).toBeVisible()
-  await expect(page.getByText('등록된 트랙이 없습니다.')).toBeVisible()
+  await expect(page.getByText('No registered tracks yet.')).toBeVisible()
+  await expect(page.getByText('No registered pitch events yet.')).toBeVisible()
 })
 
 test('document upload becomes a region, piano-roll events, and practice waterfall notes', async ({ page }) => {

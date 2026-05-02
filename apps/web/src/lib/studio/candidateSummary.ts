@@ -501,10 +501,13 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   }
 
   const measureCount = getDiagnosticNumber(diagnostics, 'measure_count')
-  const noteCount = getDiagnosticNumber(diagnostics, 'note_count') ?? candidate.region.pitch_events.length
+  const eventCount =
+    getDiagnosticNumber(diagnostics, 'event_count') ??
+    getDiagnosticNumber(diagnostics, 'note_count') ??
+    candidate.region.pitch_events.length
   metrics.push({
     label: '감지량',
-    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인'} · ${noteCount} events`,
+    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인'} · ${eventCount} events`,
   })
 
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
@@ -517,7 +520,9 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
     metrics.push({ label: '리듬 격자', value: formatRatio(timingGridRatio) })
   }
 
-  const density = getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
+  const density =
+    getDiagnosticNumber(diagnostics, 'density_events_per_measure') ??
+    getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
   if (density !== null) {
     metrics.push({ label: '밀도', value: `${density.toFixed(1)} events/measure` })
   }
@@ -532,9 +537,13 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
   }
   return (
     {
+      few_events: {
+        tag: '이벤트 수 적음',
+        sentence: '이벤트 수가 적어 파트 누락 여부를 확인하세요.',
+      },
       few_notes: {
-        tag: '노트 수 적음',
-        sentence: '노트 수가 적어 파트 누락 여부를 확인하세요.',
+        tag: '이벤트 수 적음',
+        sentence: '이벤트 수가 적어 파트 누락 여부를 확인하세요.',
       },
       low_note_confidence: {
         tag: '원본 대조 필요',

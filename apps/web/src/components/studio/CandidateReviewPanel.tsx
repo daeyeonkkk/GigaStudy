@@ -301,9 +301,11 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags')
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
   const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
-  const density = getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
+  const density =
+    getDiagnosticNumber(diagnostics, 'density_events_per_measure') ??
+    getDiagnosticNumber(diagnostics, 'density_notes_per_measure')
 
-  if (confidence < 0.5 || reviewHint === 'few_notes') {
+  if (confidence < 0.5 || reviewHint === 'few_events' || reviewHint === 'few_notes') {
     return {
       label: '재시도 권장',
       reason: '판독 신뢰도가 낮거나 파트 누락 가능성이 큽니다.',

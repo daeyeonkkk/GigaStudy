@@ -54,12 +54,13 @@ class StudioScoringCommands:
             target_slot_id=slot_id,
             requested_reference_slot_ids=request.reference_slot_ids,
         )
+        target_events = registered_region_events_for_slot(studio, slot_id)
         try:
             validate_score_track_request(
                 request,
                 target_track=target_track,
                 reference_slot_ids=reference_slot_ids,
-                target_has_events=bool(registered_region_events_for_slot(studio, slot_id)),
+                target_has_events=bool(target_events),
             )
         except ScoringRequestError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
@@ -166,12 +167,13 @@ class StudioScoringCommands:
         source_label: str,
     ):
         reference_slot_set = set(reference_slot_ids)
-        context_tracks_by_slot = {
-            track.slot_id: registered_region_events_for_slot(studio, track.slot_id)
-            for track in studio.tracks
-            if track.slot_id in reference_slot_set
-            and registered_region_events_for_slot(studio, track.slot_id)
-        }
+        context_tracks_by_slot: dict[int, list[TrackPitchEvent]] = {}
+        for track in studio.tracks:
+            if track.slot_id not in reference_slot_set:
+                continue
+            track_events = registered_region_events_for_slot(studio, track.slot_id)
+            if track_events:
+                context_tracks_by_slot[track.slot_id] = track_events
         expected_notes: list[TrackPitchEvent] = []
         if score_mode == "answer":
             expected_notes = registered_region_events_for_slot(studio, target_track.slot_id)

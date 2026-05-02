@@ -536,16 +536,16 @@ def _build_vector_track_diagnostics(
         "document_page_count": document_page_count,
         "candidate_page_count": len(page_indices),
         "detected_part_count": detected_part_count,
-        "staff_row_count": staff_row_count,
-        "note_count": len(notes),
-        "pitched_note_count": len(pitched_notes),
+        "source_row_count": staff_row_count,
+        "event_count": len(notes),
+        "pitched_event_count": len(pitched_notes),
         "measure_count": measure_count,
         "avg_note_confidence": round(avg_note_confidence, 3),
         "range_fit_ratio": round(range_fit_ratio, 3),
         "timing_grid_ratio": round(timing_grid_ratio, 3),
-        "density_notes_per_measure": round(len(notes) / max(1, measure_count), 2),
+        "density_events_per_measure": round(len(notes) / max(1, measure_count), 2),
         "review_hint": _vector_review_hint(
-            note_count=len(notes),
+            event_count=len(notes),
             range_fit_ratio=range_fit_ratio,
             timing_grid_ratio=timing_grid_ratio,
             detected_part_count=detected_part_count,
@@ -579,13 +579,13 @@ def _timing_grid_ratio(notes: list[TrackPitchEvent]) -> float:
 
 def _vector_review_hint(
     *,
-    note_count: int,
+    event_count: int,
     range_fit_ratio: float,
     timing_grid_ratio: float,
     detected_part_count: int,
 ) -> str:
-    if note_count < 4:
-        return "few_notes"
+    if event_count < 4:
+        return "few_events"
     if range_fit_ratio < 0.85:
         return "range_outliers"
     if timing_grid_ratio < 0.82:

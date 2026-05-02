@@ -47,7 +47,7 @@ def write_pdf_vector_omr_summary(
             {
                 "slot_id": track.slot_id,
                 "name": track.name,
-                "note_count": len(track.notes),
+                "event_count": len(track.notes),
                 "diagnostics": track.diagnostics,
             }
             for track in parsed_symbolic.tracks

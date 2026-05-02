@@ -57,26 +57,33 @@ def candidate_diagnostics(
     avg_note_confidence = sum(note.confidence for note in notes) / len(notes) if notes else 0
     range_fit_ratio = candidate_range_fit_ratio(slot_id, pitched_notes)
     timing_grid_ratio = candidate_timing_grid_ratio(notes)
-    note_count = len(notes)
+    event_count = len(notes)
+    for legacy_key in (
+        "note_count",
+        "pitched_note_count",
+        "rest_count",
+        "density_notes_per_measure",
+    ):
+        diagnostics.pop(legacy_key, None)
     diagnostics.update(
         {
             "candidate_method": method,
             "track": track_name(slot_id),
-            "note_count": note_count,
-            "pitched_note_count": len(pitched_notes),
-            "rest_count": note_count - len(pitched_notes),
+            "event_count": event_count,
+            "pitched_event_count": len(pitched_notes),
+            "rest_event_count": event_count - len(pitched_notes),
             "measure_count": measure_count,
             "duration_seconds": round(duration_seconds, 3),
             "range": candidate_range_label(pitched_notes),
             "avg_note_confidence": round(avg_note_confidence, 3),
             "range_fit_ratio": round(range_fit_ratio, 3),
             "timing_grid_ratio": round(timing_grid_ratio, 3),
-            "density_notes_per_measure": round(note_count / max(1, measure_count), 2),
+            "density_events_per_measure": round(event_count / max(1, measure_count), 2),
             "confidence_label": confidence_label(confidence),
             "review_hint": diagnostics.get("review_hint")
             or review_hint_for_candidate(
                 method=method,
-                note_count=note_count,
+                event_count=event_count,
                 range_fit_ratio=range_fit_ratio,
                 timing_grid_ratio=timing_grid_ratio,
                 avg_note_confidence=avg_note_confidence,
@@ -155,7 +162,11 @@ def candidate_review_message(
             method=method,
             confidence=0.5,
         )
-    note_count = diagnostic_int(diagnostics, "note_count", default=len(notes))
+    event_count = diagnostic_int(
+        diagnostics,
+        "event_count",
+        default=diagnostic_int(diagnostics, "note_count", default=len(notes)),
+    )
     measure_count = diagnostic_int(diagnostics, "measure_count", default=0)
     candidate_confidence_label = str(diagnostics.get("confidence_label") or "review")
     hint = str(diagnostics.get("review_hint") or "")
@@ -163,12 +174,12 @@ def candidate_review_message(
     if method.startswith("pdf_vector"):
         return (
             f"{track_name(slot_id)}: vector PDF에서 {measure_count}마디, "
-            f"{note_count}개 음표를 추출했습니다. {candidate_confidence_label}; {hint_label}"
+            f"{event_count}개 이벤트를 추출했습니다. {candidate_confidence_label}; {hint_label}"
         )
     if method.startswith("audiveris"):
         return (
             f"{track_name(slot_id)}: Audiveris MusicXML 결과에서 {measure_count}마디, "
-            f"{note_count}개 음표를 추출했습니다. {candidate_confidence_label}; 원본과 대조 후 승인하세요."
+            f"{event_count}개 이벤트를 추출했습니다. {candidate_confidence_label}; 원본과 대조 후 승인하세요."
         )
     return default_message
 
@@ -296,13 +307,13 @@ def confidence_label(confidence: float) -> str:
 def review_hint_for_candidate(
     *,
     method: str,
-    note_count: int,
+    event_count: int,
     range_fit_ratio: float,
     timing_grid_ratio: float,
     avg_note_confidence: float,
 ) -> str:
-    if note_count < 4:
-        return "few_notes"
+    if event_count < 4:
+        return "few_events"
     if avg_note_confidence < 0.52:
         return "low_note_confidence"
     if range_fit_ratio < 0.85:
@@ -316,7 +327,8 @@ def review_hint_for_candidate(
 
 def review_hint_label(hint: str) -> str:
     return {
-        "few_notes": "음표 수가 적어 파트 판독을 꼭 확인하세요.",
+        "few_events": "이벤트 수가 적어 파트 판독을 꼭 확인하세요.",
+        "few_notes": "이벤트 수가 적어 파트 판독을 꼭 확인하세요.",
         "low_note_confidence": "음표별 신뢰도가 낮아 원본 대조가 필요합니다.",
         "range_outliers": "파트 음역 밖 음이 있어 트랙 배정을 확인하세요.",
         "rhythm_grid_review": "리듬 격자가 불안정해 박자 판독을 확인하세요.",

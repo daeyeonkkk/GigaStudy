@@ -1315,9 +1315,10 @@ def test_upload_pdf_queues_omr_job_and_creates_omr_candidate(tmp_path: Path, mon
     assert candidate["method"] == "audiveris_omr_review"
     assert candidate["diagnostics"]["candidate_method"] == "audiveris_omr_review"
     assert candidate["diagnostics"]["track"] == "Soprano"
-    assert candidate["diagnostics"]["note_count"] == 2
+    assert candidate["diagnostics"]["event_count"] == 2
+    assert "note_count" not in candidate["diagnostics"]
     assert candidate["diagnostics"]["measure_count"] == 1
-    assert candidate["diagnostics"]["review_hint"] == "few_notes"
+    assert candidate["diagnostics"]["review_hint"] == "few_events"
     candidate_notes = _candidate_notes(candidate)
     assert candidate_notes[0]["source"] == "omr"
     assert candidate_notes[0]["extraction_method"] == "audiveris_omr_v0"
@@ -1453,9 +1454,10 @@ def test_upload_pdf_falls_back_to_vector_omr_and_attempts_all_vocal_tracks(
     first_candidate = payload["candidates"][0]
     assert first_candidate["diagnostics"]["candidate_method"] == "pdf_vector_omr_review"
     assert first_candidate["diagnostics"]["track"] == "Soprano"
-    assert first_candidate["diagnostics"]["note_count"] == 1
+    assert first_candidate["diagnostics"]["event_count"] == 1
+    assert "note_count" not in first_candidate["diagnostics"]
     assert first_candidate["diagnostics"]["measure_count"] == 1
-    assert first_candidate["diagnostics"]["review_hint"] == "few_notes"
+    assert first_candidate["diagnostics"]["review_hint"] == "few_events"
     assert first_candidate["confidence"] > 0.46
     assert "Soprano" in first_candidate["message"]
     assert [track["status"] for track in payload["tracks"][:5]] == ["needs_review"] * 5

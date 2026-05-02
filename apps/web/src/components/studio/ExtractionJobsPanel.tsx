@@ -174,9 +174,12 @@ function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: Track
       const track = tracks.find((item) => item.slot_id === candidate.suggested_slot_id)
       const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
       const measureCount = getCandidateDiagnosticNumber(candidate, 'measure_count')
-      const noteCount = getCandidateDiagnosticNumber(candidate, 'note_count') ?? candidate.region.pitch_events.length
+      const eventCount =
+        getCandidateDiagnosticNumber(candidate, 'event_count') ??
+        getCandidateDiagnosticNumber(candidate, 'note_count') ??
+        candidate.region.pitch_events.length
       const measureLabel = measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'
-      return `${track?.name ?? `Track ${candidate.suggested_slot_id}`} ${confidence} / ${measureLabel} / ${noteCount}개`
+      return `${track?.name ?? `Track ${candidate.suggested_slot_id}`} ${confidence} / ${measureLabel} / ${eventCount}개`
     })
     .join(' | ')
 }

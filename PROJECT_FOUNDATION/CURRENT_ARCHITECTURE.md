@@ -14,11 +14,11 @@ Canonical user-facing flow:
 
 Compatibility flow:
 
-`TrackNote` now lives in `gigastudy_api.domain.track_events` as an internal
-extraction/scoring adapter while old engines are being migrated. API schemas do
-not export it as a public contract. Internal notes are converted to
-`PitchEvent`/`ArrangementRegion` for the product UI, API response, and submitted
-scoring event input.
+`TrackPitchEvent` lives in `gigastudy_api.domain.track_events` as an internal
+extraction, registration, storage, and scoring adapter while persistent regions
+are being migrated. API schemas do not export it as a public contract. Internal
+event records are converted to `PitchEvent`/`ArrangementRegion` for the product
+UI, API response, and submitted scoring event input.
 
 ## Runtime Shape
 
@@ -39,8 +39,8 @@ scoring event input.
   - a selected-region piano roll,
   - a waterfall practice preview.
 - `apps/web/src/lib/studio/regions.ts`
-  Region utility helpers only. The web client does not model `TrackNote` and
-  must not rebuild product regions from legacy note arrays.
+  Region utility helpers only. The web client consumes region payloads and must
+  not rebuild product regions from internal storage event arrays.
 
 ### API
 
@@ -60,8 +60,8 @@ scoring event input.
   measure position, and quality warnings so consumers do not need legacy note
   arrays for product behavior.
 - `apps/api/src/gigastudy_api/domain/track_events.py`
-  Internal legacy event adapters for extraction, registration, and scoring.
-  `TrackNote` belongs here instead of the API schema module.
+  Internal pitch-event adapter for extraction, registration, persistence, and
+  scoring. `TrackPitchEvent` belongs here instead of the API schema module.
 - `apps/api/src/gigastudy_api/services/engine/event_normalization.py`
   Internal pitch-event preparation helpers for timing quantization, range
   metadata, spelling, and measure positions.
@@ -157,7 +157,7 @@ flowchart TD
 ### Scoring
 
 1. Browser submits recorded audio or `performance_events`.
-2. API converts submitted performance events to the internal scoring adapter.
+2. API converts submitted performance events to the internal pitch-event adapter.
 3. Scoring compares those events with registered arrangement regions.
 4. Reports return region/event IDs that can focus the piano roll.
 
@@ -206,19 +206,20 @@ flowchart TD
 
 ## Next Internal Migration
 
-The remaining compatibility layer is mostly naming and storage shape:
+The remaining compatibility layer is now mostly storage shape:
 
-- `TrackNote` is no longer modeled by the web client or exported by the studio
-  API schema module. It remains only as an internal import/scoring adapter.
+- `TrackPitchEvent` is no longer exposed by the studio API schema module. It is
+  the internal adapter until persistent studio state stores explicit regions and
+  events.
 - The old notation registration layer has been renamed around event
-  normalization, event quality, and registration review. Remaining work should
-  remove legacy storage field names, not reintroduce staff rendering.
+  normalization, event quality, and registration review. Legacy storage aliases
+  exist only for reading old data, not as active product fields.
 - Studio API responses now use `StudioResponse` to prevent `TrackSlot.notes`
   and `ExtractionCandidate.notes` from leaking back into product clients.
 - Score requests accept `performance_events`; `performance_notes` is no longer
-  part of the route input contract.
+  part of the route input contract or the internal scoring pipeline.
 - Persistent studio state should eventually store explicit regions/events.
-- Candidate note arrays should remain internal compatibility state only;
+- Candidate pitch-event arrays should remain internal compatibility state only;
   candidate review must use `ExtractionCandidateResponse.region`.
 - Report focus currently targets persisted answer regions. Performance-take
   focus should be expanded after recorded takes become explicit persisted

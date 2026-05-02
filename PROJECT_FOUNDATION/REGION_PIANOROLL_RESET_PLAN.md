@@ -24,9 +24,9 @@ New center:
 
 `Studio -> Track -> Region -> PitchEvent/AudioClip -> practice playback`
 
-`TrackNote` should stop being the canonical product truth. It may survive only
-as a compatibility adapter while old studios are readable, or as a temporary
-internal import result that is immediately converted into region events.
+`TrackNote` is no longer the canonical product truth or internal type name.
+The temporary internal adapter is `TrackPitchEvent`, and public clients consume
+`ArrangementRegion`/`PitchEvent` only.
 
 ## Assets To Preserve
 
@@ -38,7 +38,7 @@ internal import result that is immediately converted into region events.
 - Health/readiness endpoints.
 - Upload size, CORS, owner-token, and admin configuration concepts.
 - `StudioStore` abstraction in `studio_store.py`, but the stored document shape
-  must change from tracks-with-TrackNotes to tracks-with-regions.
+  must change from track-level pitch-event arrays to explicit regions.
 - `AssetStorage`, `AssetRegistry`, and `StudioAssetService` concepts:
   direct upload, staged upload, asset registry, local/S3 backend, cleanup, and
   retained audio asset resolution remain valuable.
@@ -239,7 +239,7 @@ select references + target
 - Current tests will mostly fail after the schema cut; the test suite should be
   replaced in phases instead of kept red for long.
 - Route contracts, TypeScript types, and API schemas all change together.
-- Candidate review becomes region review, not track-note registration.
+- Candidate review becomes region review, not hidden track-event registration.
 - Sync becomes region/event movement. Avoid keeping both old track sync offsets
   and new region offsets as active truth.
 - Export scope changes. PDF score export should be replaced by project JSON,
@@ -249,8 +249,9 @@ select references + target
 
 ## Collision Risks
 
-- Dual-truth risk: keeping `TrackNote` and `PitchEvent` as parallel canonical
-  models would recreate the current complexity.
+- Dual-truth risk: keeping internal `TrackPitchEvent` arrays and public
+  `PitchEvent` regions as parallel canonical models would recreate the current
+  complexity.
 - Audio alignment risk: retained audio and pitch events must share one region
   origin. Do not add hidden per-event or per-audio offsets without exposing
   them in the region model.

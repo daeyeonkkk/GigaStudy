@@ -101,8 +101,8 @@ beat coordinates, and answer-side issues can deep-link back into the studio with
 the matching region and piano-roll event focused.
 
 Scoring requests submit recorded audio or `performance_events`. The route no
-longer accepts `performance_notes`; any remaining note-shaped data is internal
-adapter state inside extraction and scoring engines.
+longer accepts `performance_notes`; remaining track-level event arrays are
+internal adapter state inside extraction, persistence, and scoring engines.
 
 The web client treats `Studio.regions` and `ExtractionCandidate.region` as the
 only product event contract. Studio routes return a public response model that

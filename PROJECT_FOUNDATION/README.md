@@ -100,6 +100,11 @@ sync, missing, and extra-note data. Each issue carries region/event IDs and
 beat coordinates, and answer-side issues can deep-link back into the studio with
 the matching region and piano-roll event focused.
 
+The web client treats `Studio.regions` and `ExtractionCandidate.region` as the
+only product event contract. Legacy note arrays may still exist behind the API
+boundary for import and scoring adapters, but new UI code must not model or
+rebuild from them.
+
 ## Support Layers
 
 The following are supporting capabilities only when they directly serve the

@@ -37,9 +37,8 @@ for the product UI and API response.
   - a selected-region piano roll,
   - a waterfall practice preview.
 - `apps/web/src/lib/studio/regions.ts`
-  Frontend fallback adapter from legacy `TrackSlot.notes` to
-  `ArrangementRegion` and `PitchEvent`. Normal rendering and playback prefer
-  `studio.regions` from the API.
+  Region utility helpers only. The web client does not model `TrackNote` and
+  must not rebuild product regions from legacy note arrays.
 
 ### API
 
@@ -181,7 +180,8 @@ flowchart TD
 
 The remaining compatibility layer is mostly naming and storage shape:
 
-- `TrackNote` should become an internal import/scoring adapter.
+- `TrackNote` is no longer modeled by the web client. It should continue moving
+  inward until it is only an internal import/scoring adapter.
 - Persistent studio state should eventually store explicit regions/events.
 - Candidate note arrays should remain compatibility payload only; candidate
   review must use `ExtractionCandidate.region`.

@@ -25,7 +25,11 @@ export type PitchEvent = {
   duration_beats: number
   confidence: number
   source: PitchEventSource
+  extraction_method: string
   is_rest: boolean
+  measure_index: number | null
+  beat_in_measure: number | null
+  quality_warnings: string[]
 }
 
 export type ArrangementRegion = {

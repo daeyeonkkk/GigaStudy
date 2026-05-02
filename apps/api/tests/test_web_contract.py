@@ -80,6 +80,10 @@ def test_studio_response_includes_arrangement_regions() -> None:
                         pitch_midi=60,
                         beat=1,
                         duration_beats=1,
+                        measure_index=1,
+                        beat_in_measure=1,
+                        extraction_method="contract_fixture",
+                        notation_warnings=["range_checked"],
                         source="midi",
                     )
                 ],
@@ -95,6 +99,10 @@ def test_studio_response_includes_arrangement_regions() -> None:
 
     assert payload["regions"][0]["region_id"] == "track-1-region-1"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
+    assert payload["regions"][0]["pitch_events"][0]["measure_index"] == 1
+    assert payload["regions"][0]["pitch_events"][0]["beat_in_measure"] == 1
+    assert payload["regions"][0]["pitch_events"][0]["extraction_method"] == "contract_fixture"
+    assert payload["regions"][0]["pitch_events"][0]["quality_warnings"] == ["range_checked"]
 
 
 def test_candidate_response_includes_region_candidate() -> None:
@@ -112,6 +120,8 @@ def test_candidate_response_includes_region_candidate() -> None:
                 duration_beats=1,
                 onset_seconds=0,
                 duration_seconds=0.5,
+                extraction_method="candidate_fixture",
+                notation_warnings=["candidate_checked"],
                 source="ai",
             )
         ],
@@ -124,6 +134,8 @@ def test_candidate_response_includes_region_candidate() -> None:
     assert payload["region"]["region_id"] == "candidate-candidate-region-contract-region-1"
     assert payload["region"]["suggested_slot_id"] == 2
     assert payload["region"]["pitch_events"][0]["label"] == "E4"
+    assert payload["region"]["pitch_events"][0]["extraction_method"] == "candidate_fixture"
+    assert payload["region"]["pitch_events"][0]["quality_warnings"] == ["candidate_checked"]
 
 
 def _extract_ts_type_fields(source: str, type_name: str) -> set[str]:

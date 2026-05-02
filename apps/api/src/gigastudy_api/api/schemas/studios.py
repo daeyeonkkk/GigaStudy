@@ -75,7 +75,11 @@ class PitchEvent(BaseModel):
     duration_beats: float
     confidence: float = Field(default=1, ge=0, le=1)
     source: NoteSource
+    extraction_method: str = "unknown"
     is_rest: bool = False
+    measure_index: int | None = None
+    beat_in_measure: float | None = None
+    quality_warnings: list[str] = Field(default_factory=list)
 
 
 class ArrangementRegion(SourceKindModel):
@@ -233,7 +237,11 @@ def _pitch_event_from_note(
         duration_beats=note.duration_beats,
         confidence=note.confidence,
         source=note.source,
+        extraction_method=note.extraction_method,
         is_rest=note.is_rest,
+        measure_index=note.measure_index,
+        beat_in_measure=note.beat_in_measure,
+        quality_warnings=note.notation_warnings,
     )
 
 
@@ -295,7 +303,11 @@ def _candidate_pitch_event_from_note(
         duration_beats=note.duration_beats,
         confidence=note.confidence,
         source=note.source,
+        extraction_method=note.extraction_method,
         is_rest=note.is_rest,
+        measure_index=note.measure_index,
+        beat_in_measure=note.beat_in_measure,
+        quality_warnings=note.notation_warnings,
     )
 
 

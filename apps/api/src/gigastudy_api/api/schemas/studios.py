@@ -310,10 +310,16 @@ class ReportIssue(BaseModel):
     severity: Literal["info", "warn", "error"] = "warn"
     answer_note_id: str | None = None
     performance_note_id: str | None = None
+    answer_region_id: str | None = None
+    answer_event_id: str | None = None
+    performance_region_id: str | None = None
+    performance_event_id: str | None = None
     answer_label: str | None = None
     performance_label: str | None = None
     expected_at_seconds: float | None = None
     actual_at_seconds: float | None = None
+    expected_beat: float | None = None
+    actual_beat: float | None = None
     timing_error_seconds: float | None = None
     pitch_error_semitones: float | None = None
     message: str | None = None

@@ -164,10 +164,16 @@ export type ReportIssue = {
   severity: 'info' | 'warn' | 'error'
   answer_note_id: string | null
   performance_note_id: string | null
+  answer_region_id: string | null
+  answer_event_id: string | null
+  performance_region_id: string | null
+  performance_event_id: string | null
   answer_label: string | null
   performance_label: string | null
   expected_at_seconds: number | null
   actual_at_seconds: number | null
+  expected_beat: number | null
+  actual_beat: number | null
   timing_error_seconds: number | null
   pitch_error_semitones: number | null
   message: string | null

@@ -71,6 +71,7 @@ def build_scoring_report(
     created_at: str,
     answer_notes: list[TrackNote],
     performance_notes: list[TrackNote],
+    bpm: int = 120,
 ) -> ScoringReport:
     answer = _pitched_notes(answer_notes)
     performance = _pitched_notes(performance_notes)
@@ -114,7 +115,14 @@ def build_scoring_report(
         mean_abs_timing_error_seconds=mean_timing_error,
         pitch_summary=_metric_summary("pitch", pitch_score, mean_pitch_error),
         rhythm_summary=_metric_summary("rhythm", rhythm_score, mean_timing_error),
-        issues=_build_issues(matches, missing, extra, alignment_offset),
+        issues=_with_region_event_coordinates(
+            _build_issues(matches, missing, extra, alignment_offset),
+            target_slot_id=target_slot_id,
+            answer_notes=answer,
+            performance_notes=performance,
+            alignment_offset_seconds=alignment_offset,
+            bpm=bpm,
+        ),
     )
 
 
@@ -224,6 +232,14 @@ def build_harmony_scoring_report(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
         reference_count=sum(len(notes) for notes in references.values()),
+    )
+    issues = _with_region_event_coordinates(
+        issues,
+        target_slot_id=target_slot_id,
+        answer_notes=[],
+        performance_notes=performance,
+        alignment_offset_seconds=alignment_offset,
+        bpm=bpm,
     )
     return ScoringReport(
         report_id=uuid4().hex,
@@ -1086,6 +1102,48 @@ def _score_rhythm(mean_error: float | None, missing_ratio: float, extra_ratio: f
 def _metric_summary(metric: str, score: float, error: float | None) -> str:
     error_text = "none" if error is None else f"{error:.4f}"
     return f"{metric}_score={score:.2f};mean_abs_error={error_text}"
+
+
+def _with_region_event_coordinates(
+    issues: list[ReportIssue],
+    *,
+    target_slot_id: int,
+    answer_notes: list[TrackNote],
+    performance_notes: list[TrackNote],
+    alignment_offset_seconds: float,
+    bpm: int,
+) -> list[ReportIssue]:
+    answer_by_id = {note.id: note for note in answer_notes}
+    performance_by_id = {note.id: note for note in performance_notes}
+    answer_region_id = _track_region_id(target_slot_id)
+    performance_region_id = _performance_region_id(target_slot_id)
+    beat_offset = alignment_offset_seconds / seconds_per_beat(bpm)
+
+    annotated: list[ReportIssue] = []
+    for issue in issues:
+        updates: dict[str, object] = {}
+        if issue.answer_note_id and (answer_note := answer_by_id.get(issue.answer_note_id)):
+            updates["answer_region_id"] = answer_region_id
+            updates["answer_event_id"] = _event_id(answer_region_id, answer_note.id)
+            updates["expected_beat"] = round(answer_note.beat, 4)
+        if issue.performance_note_id and (performance_note := performance_by_id.get(issue.performance_note_id)):
+            updates["performance_region_id"] = performance_region_id
+            updates["performance_event_id"] = _event_id(performance_region_id, performance_note.id)
+            updates["actual_beat"] = round(max(1.0, performance_note.beat - beat_offset), 4)
+        annotated.append(issue.model_copy(update=updates))
+    return annotated
+
+
+def _track_region_id(slot_id: int) -> str:
+    return f"track-{slot_id}-region-1"
+
+
+def _performance_region_id(slot_id: int) -> str:
+    return f"performance-{slot_id}-region-1"
+
+
+def _event_id(region_id: str, note_id: str) -> str:
+    return f"{region_id}-{note_id}"
 
 
 def _build_harmony_issues(

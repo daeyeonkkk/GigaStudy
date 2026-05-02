@@ -29,6 +29,7 @@ def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
         created_at="2026-04-20T00:00:00+00:00",
         answer_notes=answer_notes,
         performance_notes=performance_notes,
+        bpm=100,
     )
 
     assert report.alignment_offset_seconds == 0.37
@@ -79,6 +80,14 @@ def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
     assert report.pitch_score < 100
     assert report.rhythm_score < 100
     assert {issue.issue_type for issue in report.issues} == {"pitch", "rhythm"}
+    assert all(issue.answer_region_id == "track-1-region-1" for issue in report.issues)
+    assert all(issue.performance_region_id == "performance-1-region-1" for issue in report.issues)
+    assert all(issue.answer_event_id == f"track-1-region-1-{issue.answer_note_id}" for issue in report.issues)
+    assert all(
+        issue.performance_event_id == f"performance-1-region-1-{issue.performance_note_id}"
+        for issue in report.issues
+    )
+    assert {issue.expected_beat for issue in report.issues} == {1, 2}
 
 
 def test_harmony_scoring_rates_consonant_added_part_without_answer_track() -> None:

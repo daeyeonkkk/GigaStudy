@@ -66,6 +66,7 @@ function buildMetricCards(report: ScoringReport): MetricCard[] {
 }
 
 function getIssueDetail(issue: ReportIssue): string {
+  const coordinate = getIssueCoordinate(issue)
   if (
     issue.message &&
     [
@@ -81,14 +82,23 @@ function getIssueDetail(issue: ReportIssue): string {
       'chord_coverage',
     ].includes(issue.issue_type)
   ) {
-    return issue.message
+    return coordinate ? `${issue.message} / ${coordinate}` : issue.message
   }
 
   const expected = issue.answer_label ?? '-'
   const actual = issue.performance_label ?? '-'
-  return `expected ${expected} / actual ${actual} / time ${formatNullableSeconds(
+  const detail = `expected ${expected} / actual ${actual} / time ${formatNullableSeconds(
     issue.timing_error_seconds,
   )} / pitch ${formatNullableSemitones(issue.pitch_error_semitones)}`
+  return coordinate ? `${detail} / ${coordinate}` : detail
+}
+
+function getIssueCoordinate(issue: ReportIssue): string {
+  const expectedBeat = issue.expected_beat !== null ? `expected beat ${issue.expected_beat}` : null
+  const actualBeat = issue.actual_beat !== null ? `actual beat ${issue.actual_beat}` : null
+  const eventId = issue.answer_event_id ?? issue.performance_event_id
+  const eventText = eventId ? `event ${eventId}` : null
+  return [expectedBeat, actualBeat, eventText].filter(Boolean).join(' / ')
 }
 
 function ReportRouteState({

@@ -110,4 +110,5 @@ def build_score_track_report(
         created_at=created_at,
         answer_notes=answer_notes,
         performance_notes=performance_notes,
+        bpm=studio.bpm,
     )

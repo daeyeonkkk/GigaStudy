@@ -10,35 +10,7 @@ type TrackStatus =
 
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'document' | 'music' | 'ai'
 export type PitchEventSource = 'musicxml' | 'midi' | 'omr' | 'voice' | 'ai' | 'recording' | 'audio'
-type NoteSource = PitchEventSource
 export type ScoreMode = 'answer' | 'harmony'
-
-export type TrackNote = {
-  id: string
-  pitch_midi: number | null
-  pitch_hz: number | null
-  label: string
-  spelled_label?: string | null
-  accidental?: string | null
-  clef?: string | null
-  key_signature?: string | null
-  display_octave_shift?: number
-  onset_seconds: number
-  duration_seconds: number
-  beat: number
-  duration_beats: number
-  measure_index: number | null
-  beat_in_measure: number | null
-  confidence: number
-  source: NoteSource
-  extraction_method: string
-  is_rest: boolean
-  is_tied: boolean
-  voice_index: number | null
-  staff_index: number | null
-  quantization_grid?: number | null
-  notation_warnings?: string[]
-}
 
 export type PitchEvent = {
   event_id: string
@@ -114,7 +86,6 @@ export type ExtractionCandidate = {
   variant_label: string | null
   confidence: number
   status: 'pending' | 'approved' | 'rejected'
-  notes: TrackNote[]
   audio_source_path: string | null
   audio_source_label: string | null
   audio_mime_type: string | null
@@ -138,7 +109,6 @@ export type TrackSlot = {
   audio_source_label: string | null
   audio_mime_type: string | null
   duration_seconds: number
-  notes: TrackNote[]
   diagnostics: Record<string, unknown>
   updated_at: string
 }

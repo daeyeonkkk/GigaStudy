@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import get_settings
 from gigastudy_api.main import create_app
 from gigastudy_api.services import studio_repository
@@ -262,7 +262,7 @@ def test_upload_target_creation_cleans_expired_staged_assets(tmp_path: Path, mon
 def test_admin_can_list_and_delete_individual_studio_asset(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=72,
                 pitch_hz=261.63,
                 label="C5",
@@ -367,7 +367,7 @@ def test_asset_hard_limit_blocks_new_upload(tmp_path: Path, monkeypatch) -> None
 def test_admin_can_delete_studio_and_its_assets(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=69,
                 pitch_hz=440,
                 label="A4",
@@ -402,7 +402,7 @@ def test_admin_can_delete_studio_and_its_assets(tmp_path: Path, monkeypatch) -> 
 def test_admin_can_delete_studio_with_background_asset_cleanup(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=69,
                 pitch_hz=440,
                 label="A4",
@@ -437,7 +437,7 @@ def test_admin_can_delete_studio_with_background_asset_cleanup(tmp_path: Path, m
 def test_scoring_audio_is_temporary_and_not_listed_as_admin_asset(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=69,
                 pitch_hz=440,
                 label="A4",

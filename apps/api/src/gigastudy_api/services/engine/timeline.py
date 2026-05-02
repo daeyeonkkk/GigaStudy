@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from gigastudy_api.api.schemas.studios import TrackSlot
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import seconds_per_beat
 
 
 def notes_with_sync_offset(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     sync_offset_seconds: float,
     bpm: int,
     *,
     voice_index: int | None = None,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     beat_offset = sync_offset_seconds / seconds_per_beat(bpm)
     return [
         note.model_copy(
@@ -30,7 +30,7 @@ def registered_sync_resolved_tracks_by_slot(
     *,
     bpm: int,
     exclude_slot_id: int | None = None,
-) -> dict[int, list[TrackNote]]:
+) -> dict[int, list[TrackPitchEvent]]:
     return {
         track.slot_id: notes_with_sync_offset(
             track.notes,
@@ -50,7 +50,7 @@ def registered_sync_resolved_tracks(
     *,
     bpm: int,
     exclude_slot_id: int | None = None,
-) -> list[list[TrackNote]]:
+) -> list[list[TrackPitchEvent]]:
     return list(
         registered_sync_resolved_tracks_by_slot(
             tracks,

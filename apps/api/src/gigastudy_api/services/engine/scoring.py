@@ -5,7 +5,7 @@ from statistics import mean, median
 from uuid import uuid4
 
 from gigastudy_api.api.schemas.studios import ReportIssue, ScoringReport
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     quarter_beats_per_measure,
@@ -15,17 +15,17 @@ from gigastudy_api.services.engine.music_theory import (
 
 @dataclass(frozen=True)
 class NoteMatch:
-    answer: TrackNote
-    performance: TrackNote
+    answer: TrackPitchEvent
+    performance: TrackPitchEvent
     timing_error_seconds: float
     pitch_error_semitones: float
 
 
 @dataclass(frozen=True)
 class HarmonyNoteEvaluation:
-    performance: TrackNote
+    performance: TrackPitchEvent
     adjusted_beat: float
-    context_notes: tuple[TrackNote, ...]
+    context_notes: tuple[TrackPitchEvent, ...]
     harmony_score: float
     chord_fit_score: float
     rhythm_score: float
@@ -70,8 +70,8 @@ def build_scoring_report(
     reference_slot_ids: list[int],
     include_metronome: bool,
     created_at: str,
-    answer_notes: list[TrackNote],
-    performance_notes: list[TrackNote],
+    answer_notes: list[TrackPitchEvent],
+    performance_notes: list[TrackPitchEvent],
     bpm: int = 120,
 ) -> ScoringReport:
     answer = _pitched_notes(answer_notes)
@@ -134,8 +134,8 @@ def build_harmony_scoring_report(
     reference_slot_ids: list[int],
     include_metronome: bool,
     created_at: str,
-    reference_tracks_by_slot: dict[int, list[TrackNote]],
-    performance_notes: list[TrackNote],
+    reference_tracks_by_slot: dict[int, list[TrackPitchEvent]],
+    performance_notes: list[TrackPitchEvent],
     bpm: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
@@ -278,7 +278,7 @@ def build_harmony_scoring_report(
     )
 
 
-def estimate_alignment_offset(answer: list[TrackNote], performance: list[TrackNote]) -> float:
+def estimate_alignment_offset(answer: list[TrackPitchEvent], performance: list[TrackPitchEvent]) -> float:
     if not answer or not performance:
         return 0
 
@@ -299,8 +299,8 @@ def estimate_alignment_offset(answer: list[TrackNote], performance: list[TrackNo
 
 
 def estimate_harmony_alignment_offset(
-    references: dict[int, list[TrackNote]],
-    performance: list[TrackNote],
+    references: dict[int, list[TrackPitchEvent]],
+    performance: list[TrackPitchEvent],
     *,
     bpm: int,
     include_metronome: bool,
@@ -338,14 +338,14 @@ def estimate_harmony_alignment_offset(
 
 
 def match_notes(
-    answer: list[TrackNote],
-    performance: list[TrackNote],
+    answer: list[TrackPitchEvent],
+    performance: list[TrackPitchEvent],
     *,
     alignment_offset_seconds: float,
-) -> tuple[list[NoteMatch], list[TrackNote], list[TrackNote]]:
+) -> tuple[list[NoteMatch], list[TrackPitchEvent], list[TrackPitchEvent]]:
     used_performance_ids: set[str] = set()
     matches: list[NoteMatch] = []
-    missing: list[TrackNote] = []
+    missing: list[TrackPitchEvent] = []
 
     for answer_note in answer:
         candidate = _best_candidate(
@@ -374,14 +374,14 @@ def match_notes(
     return matches, missing, extra
 
 
-def _pitched_notes(notes: list[TrackNote]) -> list[TrackNote]:
+def _pitched_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     return sorted(
         (note for note in notes if not note.is_rest and note.pitch_midi is not None),
         key=lambda note: (note.onset_seconds, note.beat),
     )
 
 
-def _notes_with_voice_index(notes: list[TrackNote], slot_id: int) -> list[TrackNote]:
+def _notes_with_voice_index(notes: list[TrackPitchEvent], slot_id: int) -> list[TrackPitchEvent]:
     return [
         note if note.voice_index is not None else note.model_copy(update={"voice_index": slot_id})
         for note in notes
@@ -389,10 +389,10 @@ def _notes_with_voice_index(notes: list[TrackNote], slot_id: int) -> list[TrackN
 
 
 def _evaluate_harmony_note(
-    note: TrackNote,
+    note: TrackPitchEvent,
     *,
     target_slot_id: int,
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     alignment_offset_seconds: float,
     bpm: int,
     include_metronome: bool,
@@ -443,13 +443,13 @@ def _evaluate_harmony_note(
 
 
 def _best_candidate(
-    answer_note: TrackNote,
-    performance: list[TrackNote],
+    answer_note: TrackPitchEvent,
+    performance: list[TrackPitchEvent],
     used_performance_ids: set[str],
     alignment_offset_seconds: float,
-) -> TrackNote | None:
+) -> TrackPitchEvent | None:
     tolerance_seconds = max(0.18, answer_note.duration_seconds * 0.65)
-    candidates: list[tuple[float, TrackNote]] = []
+    candidates: list[tuple[float, TrackPitchEvent]] = []
     for performance_note in performance:
         if performance_note.id in used_performance_ids:
             continue
@@ -463,29 +463,29 @@ def _best_candidate(
     return min(candidates, key=lambda candidate: candidate[0])[1]
 
 
-def _alignment_cost(answer: list[TrackNote], performance: list[TrackNote], offset: float) -> float:
+def _alignment_cost(answer: list[TrackPitchEvent], performance: list[TrackPitchEvent], offset: float) -> float:
     matches, missing, extra = match_notes(answer, performance, alignment_offset_seconds=offset)
     timing_cost = sum(abs(match.timing_error_seconds) for match in matches)
     pitch_cost = sum(abs(match.pitch_error_semitones) * 0.035 for match in matches)
     return timing_cost + pitch_cost + len(missing) * 1.5 + len(extra) * 0.6
 
 
-def _timing_error(answer_note: TrackNote, performance_note: TrackNote, offset: float) -> float:
+def _timing_error(answer_note: TrackPitchEvent, performance_note: TrackPitchEvent, offset: float) -> float:
     return performance_note.onset_seconds - offset - answer_note.onset_seconds
 
 
-def _signed_pitch_error(answer_note: TrackNote, performance_note: TrackNote) -> float:
+def _signed_pitch_error(answer_note: TrackPitchEvent, performance_note: TrackPitchEvent) -> float:
     if answer_note.pitch_midi is None or performance_note.pitch_midi is None:
         return 0
     return float(performance_note.pitch_midi - answer_note.pitch_midi)
 
 
-def _pitch_error(answer_note: TrackNote, performance_note: TrackNote) -> float:
+def _pitch_error(answer_note: TrackPitchEvent, performance_note: TrackPitchEvent) -> float:
     return abs(_signed_pitch_error(answer_note, performance_note))
 
 
 def _reference_anchor_seconds(
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     *,
     bpm: int,
     include_metronome: bool,
@@ -510,10 +510,10 @@ def _reference_anchor_seconds(
 
 
 def _active_reference_notes_at(
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     beat: float,
-) -> list[TrackNote]:
-    active: list[TrackNote] = []
+) -> list[TrackPitchEvent]:
+    active: list[TrackPitchEvent] = []
     for notes in references.values():
         candidates = [
             note
@@ -526,10 +526,10 @@ def _active_reference_notes_at(
 
 
 def _nearest_reference_notes_at(
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     beat: float,
-) -> list[TrackNote]:
-    nearest: list[TrackNote] = []
+) -> list[TrackPitchEvent]:
+    nearest: list[TrackPitchEvent] = []
     for notes in references.values():
         if not notes:
             continue
@@ -540,8 +540,8 @@ def _nearest_reference_notes_at(
 
 
 def _score_harmonic_fit(
-    note: TrackNote,
-    context_notes: tuple[TrackNote, ...],
+    note: TrackPitchEvent,
+    context_notes: tuple[TrackPitchEvent, ...],
     *,
     adjusted_beat: float,
     time_signature_numerator: int,
@@ -576,8 +576,8 @@ def _score_harmonic_fit(
 
 
 def _score_chord_fit(
-    note: TrackNote,
-    context_notes: tuple[TrackNote, ...],
+    note: TrackPitchEvent,
+    context_notes: tuple[TrackPitchEvent, ...],
     *,
     adjusted_beat: float,
     time_signature_numerator: int,
@@ -703,7 +703,7 @@ def _is_strong_beat(
 
 
 def _is_passing_dissonance(
-    note: TrackNote,
+    note: TrackPitchEvent,
     *,
     adjusted_beat: float,
     time_signature_numerator: int,
@@ -717,10 +717,10 @@ def _is_passing_dissonance(
 
 
 def _score_spacing_fit(
-    note: TrackNote,
+    note: TrackPitchEvent,
     *,
     target_slot_id: int,
-    context_notes: tuple[TrackNote, ...],
+    context_notes: tuple[TrackPitchEvent, ...],
 ) -> float:
     if note.pitch_midi is None:
         return 0
@@ -746,10 +746,10 @@ def _score_spacing_fit(
 
 
 def _vertical_voice_stack(
-    note: TrackNote,
+    note: TrackPitchEvent,
     *,
     target_slot_id: int,
-    context_notes: tuple[TrackNote, ...],
+    context_notes: tuple[TrackPitchEvent, ...],
 ) -> list[tuple[int, int]]:
     entries: list[tuple[int, int]] = []
     if note.pitch_midi is not None:
@@ -762,10 +762,10 @@ def _vertical_voice_stack(
 
 
 def _score_harmony_rhythm(
-    note: TrackNote,
+    note: TrackPitchEvent,
     *,
     adjusted_beat: float,
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     bpm: int,
     include_metronome: bool,
     time_signature_numerator: int,
@@ -785,7 +785,7 @@ def _score_harmony_rhythm(
     return round(max(0, min(100, 100 - nearest_error * 150)), 2)
 
 
-def _score_range_fit(note: TrackNote, target_slot_id: int) -> float:
+def _score_range_fit(note: TrackPitchEvent, target_slot_id: int) -> float:
     if note.pitch_midi is None:
         return 0
     low, high = SLOT_RANGES.get(target_slot_id, (0, 127))
@@ -796,10 +796,10 @@ def _score_range_fit(note: TrackNote, target_slot_id: int) -> float:
 
 
 def _has_voice_crossing(
-    note: TrackNote,
+    note: TrackPitchEvent,
     *,
     target_slot_id: int,
-    context_notes: tuple[TrackNote, ...],
+    context_notes: tuple[TrackPitchEvent, ...],
 ) -> bool:
     if note.pitch_midi is None:
         return False
@@ -814,10 +814,10 @@ def _has_voice_crossing(
 
 
 def _score_voice_leading(
-    performance: list[TrackNote],
+    performance: list[TrackPitchEvent],
     *,
     target_slot_id: int,
-    references: dict[int, list[TrackNote]] | None = None,
+    references: dict[int, list[TrackPitchEvent]] | None = None,
     alignment_offset_seconds: float = 0,
     bpm: int | None = None,
 ) -> float:
@@ -846,9 +846,9 @@ def _score_voice_leading(
 
 
 def _parallel_motion_count(
-    performance: list[TrackNote],
+    performance: list[TrackPitchEvent],
     *,
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     alignment_offset_seconds: float,
     bpm: int,
 ) -> int:
@@ -884,7 +884,7 @@ def _parallel_motion_count(
     return count
 
 
-def _reference_note_from_track_at(notes: list[TrackNote], beat: float) -> TrackNote | None:
+def _reference_note_from_track_at(notes: list[TrackPitchEvent], beat: float) -> TrackPitchEvent | None:
     active = [
         note
         for note in notes
@@ -903,10 +903,10 @@ def _motion_direction(value: int) -> int:
 
 
 def _is_structural_parallel_motion(
-    previous: TrackNote,
-    current: TrackNote,
-    previous_reference: TrackNote,
-    current_reference: TrackNote,
+    previous: TrackPitchEvent,
+    current: TrackPitchEvent,
+    previous_reference: TrackPitchEvent,
+    current_reference: TrackPitchEvent,
 ) -> bool:
     return min(
         previous.duration_beats,
@@ -916,7 +916,7 @@ def _is_structural_parallel_motion(
     ) >= 0.75
 
 
-def _weighted_average(values: list[float], notes: list[TrackNote]) -> float:
+def _weighted_average(values: list[float], notes: list[TrackPitchEvent]) -> float:
     if not values:
         return 0
     weights = [max(0.25, note.duration_beats) * max(0.35, note.confidence) for note in notes[: len(values)]]
@@ -937,7 +937,7 @@ def _mean_harmony_rhythm_error(evaluations: list[HarmonyNoteEvaluation], *, bpm:
 
 def _score_structural_arrangement_penalty(
     evaluations: list[HarmonyNoteEvaluation],
-    performance: list[TrackNote],
+    performance: list[TrackPitchEvent],
     *,
     target_slot_id: int,
     time_signature_numerator: int,
@@ -970,7 +970,7 @@ def _score_structural_arrangement_penalty(
 
 def _has_unresolved_structural_tension(
     evaluation: HarmonyNoteEvaluation,
-    performance: list[TrackNote],
+    performance: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -1053,7 +1053,7 @@ def _is_structural_harmony_position(
     )
 
 
-def _pitch_classes_for_notes(notes: tuple[TrackNote, ...]) -> set[int]:
+def _pitch_classes_for_notes(notes: tuple[TrackPitchEvent, ...]) -> set[int]:
     return {
         note.pitch_midi % 12
         for note in notes
@@ -1062,8 +1062,8 @@ def _pitch_classes_for_notes(notes: tuple[TrackNote, ...]) -> set[int]:
 
 
 def _resolves_stepwise_to_chord_tone(
-    note: TrackNote,
-    performance: list[TrackNote],
+    note: TrackPitchEvent,
+    performance: list[TrackPitchEvent],
     chord: ChordFitResult,
 ) -> bool:
     following_notes = [
@@ -1109,8 +1109,8 @@ def _with_region_event_coordinates(
     issues: list[ReportIssue],
     *,
     target_slot_id: int,
-    answer_notes: list[TrackNote],
-    performance_notes: list[TrackNote],
+    answer_notes: list[TrackPitchEvent],
+    performance_notes: list[TrackPitchEvent],
     alignment_offset_seconds: float,
     bpm: int,
 ) -> list[ReportIssue]:
@@ -1149,9 +1149,9 @@ def _event_id(region_id: str, note_id: str) -> str:
 
 def _build_harmony_issues(
     evaluations: list[HarmonyNoteEvaluation],
-    performance: list[TrackNote],
+    performance: list[TrackPitchEvent],
     *,
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     target_slot_id: int,
     alignment_offset_seconds: float,
     bpm: int,
@@ -1347,14 +1347,14 @@ def _chord_fit_issue_threshold(evaluation: HarmonyNoteEvaluation) -> float:
     return 64
 
 
-def _harmony_issue_message(note: TrackNote, context_notes: tuple[TrackNote, ...]) -> str:
+def _harmony_issue_message(note: TrackPitchEvent, context_notes: tuple[TrackPitchEvent, ...]) -> str:
     if not context_notes:
         return f"{note.label} 음 주변에 동시에 비교할 기준음이 부족합니다."
     context = ", ".join(context_note.label for context_note in context_notes[:5])
     return f"{note.label} 음이 기준 화음({context})과 강하게 부딪힐 가능성이 있습니다."
 
 
-def _chord_fit_issue_message(note: TrackNote, context_notes: tuple[TrackNote, ...]) -> str:
+def _chord_fit_issue_message(note: TrackPitchEvent, context_notes: tuple[TrackPitchEvent, ...]) -> str:
     if not context_notes:
         return f"{note.label} 음을 판단할 기준 화음이 부족합니다."
     context = ", ".join(context_note.label for context_note in context_notes[:5])
@@ -1364,7 +1364,7 @@ def _chord_fit_issue_message(note: TrackNote, context_notes: tuple[TrackNote, ..
     return f"{note.label} 음을 포함한 세로 화음({context})이 일반적인 아카펠라 코드 톤으로 정리되기 어렵습니다."
 
 
-def _best_chord_label(notes: tuple[TrackNote, ...]) -> str | None:
+def _best_chord_label(notes: tuple[TrackPitchEvent, ...]) -> str | None:
     pitch_classes = {
         note.pitch_midi % 12
         for note in notes
@@ -1387,9 +1387,9 @@ def _best_chord_label(notes: tuple[TrackNote, ...]) -> str | None:
 
 
 def _build_parallel_motion_issues(
-    performance: list[TrackNote],
+    performance: list[TrackPitchEvent],
     *,
-    references: dict[int, list[TrackNote]],
+    references: dict[int, list[TrackPitchEvent]],
     alignment_offset_seconds: float,
     bpm: int,
 ) -> list[ReportIssue]:
@@ -1441,8 +1441,8 @@ def _build_parallel_motion_issues(
 
 def _build_issues(
     matches: list[NoteMatch],
-    missing: list[TrackNote],
-    extra: list[TrackNote],
+    missing: list[TrackPitchEvent],
+    extra: list[TrackPitchEvent],
     alignment_offset: float,
 ) -> list[ReportIssue]:
     issues: list[ReportIssue] = []

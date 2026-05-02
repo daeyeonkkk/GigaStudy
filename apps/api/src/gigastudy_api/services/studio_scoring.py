@@ -6,7 +6,7 @@ from gigastudy_api.api.schemas.studios import (
     Studio,
     TrackSlot,
 )
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.scoring import (
     build_harmony_scoring_report,
     build_scoring_report,
@@ -68,7 +68,7 @@ def build_score_track_report(
     target_track: TrackSlot,
     request: ScoreTrackRequest,
     reference_slot_ids: list[int],
-    performance_notes: list[TrackNote],
+    performance_notes: list[TrackPitchEvent],
     created_at: str,
 ) -> ScoringReport:
     if request.score_mode == "harmony":

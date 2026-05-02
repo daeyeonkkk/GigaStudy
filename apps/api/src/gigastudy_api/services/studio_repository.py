@@ -34,7 +34,7 @@ from gigastudy_api.api.schemas.studios import (
     VolumeTrackRequest,
 )
 from gigastudy_api.config import get_settings
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.asset_storage import (
     AssetStorageError,
     build_asset_storage,
@@ -642,7 +642,7 @@ class StudioRepository:
         bpm: int,
         time_signature_numerator: int,
         time_signature_denominator: int,
-    ) -> list[TrackNote]:
+    ) -> list[TrackPitchEvent]:
         studio = self.get_studio(studio_id)
         target_track = self._find_track(studio, slot_id)
         return self._scoring.extract_scoring_audio(
@@ -664,7 +664,7 @@ class StudioRepository:
         *,
         source_kind: SourceKind,
         source_label: str,
-        notes: list[TrackNote],
+        notes: list[TrackPitchEvent],
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
         audio_mime_type: str | None = None,
@@ -704,7 +704,7 @@ class StudioRepository:
     def _apply_extracted_tracks(
         self,
         studio_id: str,
-        mapped_notes: dict[int, list[TrackNote]],
+        mapped_notes: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
         source_label: str,
@@ -741,7 +741,7 @@ class StudioRepository:
         slot_id: int,
         *,
         source_kind: SourceKind,
-        notes: list[TrackNote],
+        notes: list[TrackPitchEvent],
     ) -> RegistrationQualityResult:
         return self._registration_preparer.prepare_notes(
             studio,
@@ -753,7 +753,7 @@ class StudioRepository:
     def _prepare_registration_batch(
         self,
         studio: Studio,
-        mapped_notes: dict[int, list[TrackNote]],
+        mapped_notes: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
     ) -> dict[int, RegistrationQualityResult]:
@@ -806,7 +806,7 @@ class StudioRepository:
         source_label: str,
         method: str,
         confidence: float,
-        notes: list[TrackNote],
+        notes: list[TrackPitchEvent],
         message: str,
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
@@ -930,7 +930,7 @@ class StudioRepository:
     def _add_extraction_candidates(
         self,
         studio_id: str,
-        mapped_notes: dict[int, list[TrackNote]],
+        mapped_notes: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
         source_label: str,
@@ -971,7 +971,7 @@ class StudioRepository:
         self,
         studio_id: str,
         slot_id: int,
-        candidate_notes: list[list[TrackNote]],
+        candidate_notes: list[list[TrackPitchEvent]],
         *,
         source_label: str,
         method: str,
@@ -1064,7 +1064,7 @@ class StudioRepository:
     def _mapped_notes_would_overwrite(
         self,
         studio: Studio,
-        mapped_notes: dict[int, list[TrackNote]],
+        mapped_notes: dict[int, list[TrackPitchEvent]],
     ) -> bool:
         return any(_track_has_content(self._find_track(studio, slot_id)) for slot_id in mapped_notes)
 
@@ -1077,7 +1077,7 @@ class StudioRepository:
         time_signature_numerator: int,
         time_signature_denominator: int,
         extraction_plan: Any | None = None,
-    ) -> list[TrackNote]:
+    ) -> list[TrackPitchEvent]:
         with _engine_execution_lock:
             return transcribe_voice_file(
                 source_path,

@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 from pydantic import ValidationError
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.harmony_plan import (
     ALLOWED_PROFILE_NAMES,
@@ -28,7 +28,7 @@ def plan_harmony_with_deepseek(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackNote]],
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
 ) -> DeepSeekHarmonyPlan | None:
     if not settings.deepseek_harmony_enabled or not settings.deepseek_api_key:
@@ -117,7 +117,7 @@ def _revise_plan_with_deepseek(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackNote]],
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
 ) -> DeepSeekHarmonyPlan:
     plan = draft_plan
@@ -157,12 +157,12 @@ def _build_chat_completion_payload(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackNote]],
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
 ) -> dict[str, Any]:
     context = {
         "product_rule": (
-            "The model plans harmony only. It must not output TrackNote arrays, MIDI pitch sequences, "
+            "The model plans harmony only. It must not output pitch-event arrays, MIDI pitch sequences, "
             "exact beats, or final pitch-event lists."
         ),
         "studio": {
@@ -259,14 +259,14 @@ def _build_plan_revision_payload(
     time_signature_numerator: int,
     time_signature_denominator: int,
     target_slot_id: int,
-    context_notes_by_slot: dict[int, list[TrackNote]],
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
     candidate_count: int,
     draft_plan: DeepSeekHarmonyPlan,
     cycle_index: int,
 ) -> dict[str, Any]:
     context = {
         "product_rule": (
-            "Revise the harmony plan only. Do not output TrackNote arrays, exact MIDI sequences, "
+            "Revise the harmony plan only. Do not output pitch-event arrays, exact MIDI sequences, "
             "exact beats, prose, or markdown."
         ),
         "revision_cycle": cycle_index,
@@ -361,7 +361,7 @@ def _chat_completion_headers(settings: Settings) -> dict[str, str]:
     return headers
 
 
-def _summarize_track(slot_id: int, notes: list[TrackNote]) -> dict[str, Any]:
+def _summarize_track(slot_id: int, notes: list[TrackPitchEvent]) -> dict[str, Any]:
     pitched_notes = [note for note in notes if note.pitch_midi is not None and not note.is_rest]
     pitches = [note.pitch_midi for note in pitched_notes if note.pitch_midi is not None]
     return {
@@ -384,7 +384,7 @@ def _summarize_track(slot_id: int, notes: list[TrackNote]) -> dict[str, Any]:
 
 
 def _summarize_measures(
-    context_notes_by_slot: dict[int, list[TrackNote]],
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,

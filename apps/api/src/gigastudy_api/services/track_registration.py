@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from gigastudy_api.api.schemas.studios import SourceKind, Studio
 from gigastudy_api.config import get_settings
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.arrangement import prepare_ensemble_registration
 from gigastudy_api.services.engine.event_quality import (
     RegistrationQualityResult,
@@ -22,7 +22,7 @@ LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS: set[str] = {"ai"}
 
 
 class TrackRegistrationPreparer:
-    """Single cleanup gate before imported TrackNotes become registered pitch-event regions."""
+    """Single cleanup gate before imported material becomes registered pitch-event regions."""
 
     def prepare_notes(
         self,
@@ -30,7 +30,7 @@ class TrackRegistrationPreparer:
         slot_id: int,
         *,
         source_kind: SourceKind,
-        notes: list[TrackNote],
+        notes: list[TrackPitchEvent],
     ) -> RegistrationQualityResult:
         registration = self._prepare_single_track_events(
             studio,
@@ -48,7 +48,7 @@ class TrackRegistrationPreparer:
     def prepare_batch(
         self,
         studio: Studio,
-        mapped_notes: dict[int, list[TrackNote]],
+        mapped_notes: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
     ) -> dict[int, RegistrationQualityResult]:
@@ -82,7 +82,7 @@ class TrackRegistrationPreparer:
         slot_id: int,
         *,
         source_kind: SourceKind,
-        notes: list[TrackNote],
+        notes: list[TrackPitchEvent],
     ) -> RegistrationQualityResult:
         reference_tracks = self._reference_tracks(studio, exclude_slot_id=slot_id)
         reference_tracks_by_slot = self._reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
@@ -135,7 +135,7 @@ class TrackRegistrationPreparer:
         registration: RegistrationQualityResult,
         *,
         source_kind: SourceKind,
-        proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
+        proposed_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
     ) -> RegistrationQualityResult:
         existing_tracks_by_slot = self._reference_tracks_by_slot(studio, exclude_slot_id=slot_id)
         if proposed_tracks_by_slot:
@@ -219,7 +219,7 @@ class TrackRegistrationPreparer:
         studio: Studio,
         *,
         exclude_slot_id: int,
-    ) -> list[list[TrackNote]]:
+    ) -> list[list[TrackPitchEvent]]:
         return registered_sync_resolved_tracks(
             studio.tracks,
             bpm=studio.bpm,
@@ -231,7 +231,7 @@ class TrackRegistrationPreparer:
         studio: Studio,
         *,
         exclude_slot_id: int,
-    ) -> dict[int, list[TrackNote]]:
+    ) -> dict[int, list[TrackPitchEvent]]:
         return registered_sync_resolved_tracks_by_slot(
             studio.tracks,
             bpm=studio.bpm,

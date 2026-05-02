@@ -7,7 +7,7 @@ from typing import Any
 
 from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.config import get_settings
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionResult
 from gigastudy_api.services.engine_queue import EngineQueueJob
@@ -16,7 +16,7 @@ from gigastudy_api.services.llm.extraction_plan import plan_voice_extraction_wit
 
 @dataclass(frozen=True)
 class VoicePipelineResult:
-    notes: list[TrackNote]
+    notes: list[TrackPitchEvent]
     relative_audio_path: str
     source_label: str
     audio_mime_type: str

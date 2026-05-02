@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from gigastudy_api.domain.track_events import NoteSource as EventSource, TrackNote as _TrackNote
+from gigastudy_api.domain.track_events import PitchEventSource as EventSource, TrackPitchEvent as _TrackPitchEvent
 
 TrackStatus = Literal[
     "empty",
@@ -114,7 +114,7 @@ class ExtractionCandidate(SourceKindModel):
     variant_label: str | None = None
     confidence: float = Field(default=0.5, ge=0, le=1)
     status: ExtractionCandidateStatus = "pending"
-    notes: list[_TrackNote] = Field(default_factory=list)
+    notes: list[_TrackPitchEvent] = Field(default_factory=list)
     audio_source_path: str | None = None
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
@@ -142,7 +142,7 @@ class TrackSlot(SourceKindModel):
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
     duration_seconds: float = 0
-    notes: list[_TrackNote] = Field(default_factory=list)
+    notes: list[_TrackPitchEvent] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     updated_at: str
 
@@ -192,7 +192,7 @@ def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
 
 
 def _pitch_event_from_note(
-    note: _TrackNote,
+    note: _TrackPitchEvent,
     *,
     track: TrackSlot,
     region_id: str,
@@ -219,13 +219,13 @@ def _pitch_event_from_note(
     )
 
 
-def _note_start_seconds(note: _TrackNote, bpm: int) -> float:
+def _note_start_seconds(note: _TrackPitchEvent, bpm: int) -> float:
     if isfinite(note.onset_seconds) and note.onset_seconds > 0:
         return note.onset_seconds
     return max(0.0, (note.beat - 1) * _beat_seconds(bpm))
 
 
-def _note_duration_seconds(note: _TrackNote, bpm: int) -> float:
+def _note_duration_seconds(note: _TrackPitchEvent, bpm: int) -> float:
     if isfinite(note.duration_seconds) and note.duration_seconds > 0:
         return note.duration_seconds
     return max(0.08, note.duration_beats * _beat_seconds(bpm))
@@ -259,7 +259,7 @@ def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
 
 
 def _candidate_pitch_event_from_note(
-    note: _TrackNote,
+    note: _TrackPitchEvent,
     *,
     candidate: ExtractionCandidate,
     region_id: str,

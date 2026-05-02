@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from uuid import uuid4
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 
 TRACKS: tuple[tuple[int, str], ...] = (
     (1, "Soprano"),
@@ -144,7 +144,7 @@ def quantize(value: float, step: float = 0.25) -> float:
     return round(round(value / step) * step, 4)
 
 
-def infer_slot_id(name: str | None, notes: list[TrackNote] | None = None, fallback: int = 1) -> int:
+def infer_slot_id(name: str | None, notes: list[TrackPitchEvent] | None = None, fallback: int = 1) -> int:
     ranked = rank_slot_candidates(name, notes or [], fallback=fallback)
     return ranked[0].slot_id if ranked else fallback
 
@@ -169,7 +169,7 @@ def slot_id_from_name(name: str | None) -> int | None:
 
 def rank_slot_candidates(
     name: str | None,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     fallback: int = 1,
     allowed_slots: tuple[int, ...] = (1, 2, 3, 4, 5, 6),
@@ -242,7 +242,7 @@ def rank_slot_candidates(
 
 def slot_assignment_diagnostics(
     name: str | None,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     assigned_slot_id: int,
     fallback: int = 1,
@@ -268,7 +268,7 @@ def _normalize_assignment_name(name: str | None) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", (name or "").strip().lower())).strip()
 
 
-def _has_percussion_label_hint(name: str | None, notes: list[TrackNote]) -> bool:
+def _has_percussion_label_hint(name: str | None, notes: list[TrackPitchEvent]) -> bool:
     normalized_name = _normalize_assignment_name(name)
     if any(hint in normalized_name for hint in PERCUSSION_LABEL_HINTS):
         return True
@@ -279,11 +279,11 @@ def _has_percussion_label_hint(name: str | None, notes: list[TrackNote]) -> bool
     return False
 
 
-def _weighted_note_value(note: TrackNote) -> float:
+def _weighted_note_value(note: TrackPitchEvent) -> float:
     return max(0.05, note.duration_beats) * max(0.15, min(1.0, note.confidence))
 
 
-def _weighted_average_pitch(notes: list[TrackNote]) -> float | None:
+def _weighted_average_pitch(notes: list[TrackPitchEvent]) -> float | None:
     weighted = [
         (float(note.pitch_midi), _weighted_note_value(note))
         for note in notes
@@ -295,7 +295,7 @@ def _weighted_average_pitch(notes: list[TrackNote]) -> float | None:
     return sum(pitch * weight for pitch, weight in weighted) / total_weight
 
 
-def _weighted_pitch_percentile(notes: list[TrackNote], percentile: float) -> float | None:
+def _weighted_pitch_percentile(notes: list[TrackPitchEvent], percentile: float) -> float | None:
     weighted = sorted(
         (float(note.pitch_midi), _weighted_note_value(note))
         for note in notes
@@ -313,7 +313,7 @@ def _weighted_pitch_percentile(notes: list[TrackNote], percentile: float) -> flo
     return weighted[-1][0]
 
 
-def _slot_range_fit_ratio(slot_id: int, notes: list[TrackNote]) -> float:
+def _slot_range_fit_ratio(slot_id: int, notes: list[TrackPitchEvent]) -> float:
     if not notes:
         return 0.0
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
@@ -328,7 +328,7 @@ def _slot_range_fit_ratio(slot_id: int, notes: list[TrackNote]) -> float:
     return in_range_weight / total_weight
 
 
-def _slot_percentile_overlap_bonus(slot_id: int, notes: list[TrackNote]) -> float:
+def _slot_percentile_overlap_bonus(slot_id: int, notes: list[TrackPitchEvent]) -> float:
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
     low_percentile = _weighted_pitch_percentile(notes, 0.1)
     high_percentile = _weighted_pitch_percentile(notes, 0.9)
@@ -373,7 +373,7 @@ def note_from_pitch(
     pitch_label_octave_shift: int = 0,
     quantization_grid: float | None = None,
     quality_warnings: list[str] | None = None,
-) -> TrackNote:
+) -> TrackPitchEvent:
     resolved_label = label
     if not resolved_label and pitch_midi is not None:
         resolved_label = midi_to_label(pitch_midi)
@@ -405,7 +405,7 @@ def note_from_pitch(
         )
 
     pitch_hz = midi_to_frequency(pitch_midi) if pitch_midi is not None else None
-    return TrackNote(
+    return TrackPitchEvent(
         id=uuid4().hex,
         pitch_midi=pitch_midi,
         pitch_hz=pitch_hz,

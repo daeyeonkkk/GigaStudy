@@ -6,7 +6,7 @@ from math import ceil, floor
 from typing import Any, Mapping
 
 from gigastudy_api.api.schemas.studios import SourceKind
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     beat_in_measure_from_beat,
@@ -67,21 +67,21 @@ REFERENCE_ALIGNMENT_MIN_IMPROVEMENT = 0.12
 
 @dataclass(frozen=True)
 class RegistrationQualityResult:
-    notes: list[TrackNote]
+    notes: list[TrackPitchEvent]
     diagnostics: dict[str, Any]
 
 
 def prepare_notes_for_track_registration(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
     source_kind: SourceKind,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
-    reference_tracks: list[list[TrackNote]] | None = None,
+    reference_tracks: list[list[TrackPitchEvent]] | None = None,
 ) -> RegistrationQualityResult:
-    """Prepare TrackNote material for final region-event registration.
+    """Prepare pitch-event material for final region-event registration.
 
     This is the single cleanup gate for user-visible track registration. Audio
     and generated material is rewritten onto the studio's fixed BPM grid;
@@ -229,7 +229,7 @@ def prepare_notes_for_track_registration(
 
 
 def apply_registration_review_instruction(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     instruction: Mapping[str, Any],
     bpm: int,
@@ -238,11 +238,11 @@ def apply_registration_review_instruction(
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
     baseline_result: RegistrationQualityResult | None = None,
-    reference_tracks: list[list[TrackNote]] | None = None,
+    reference_tracks: list[list[TrackPitchEvent]] | None = None,
 ) -> RegistrationQualityResult:
     """Apply a bounded LLM registration cleanup plan through deterministic code.
 
-    The LLM never writes TrackNotes. It can only request a small set of repairs
+    The LLM never writes pitch-event records. It can only request a small set of repairs
     such as coarser quantization, sustain merging, dense-measure simplification,
     voice-noise filtering, and key-spelling preference. This function validates
     those requests and re-runs the local registration engine against the studio's
@@ -465,19 +465,19 @@ def apply_registration_review_instruction(
     return RegistrationQualityResult(notes=prepared_notes, diagnostics=diagnostics)
 
 
-def _requires_grid_rewrite(source_kind: SourceKind, notes: list[TrackNote]) -> bool:
+def _requires_grid_rewrite(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
     if source_kind in VOICE_LIKE_SOURCE_KINDS or source_kind in NOTE_GENERATION_SOURCE_KINDS:
         return True
     return any(note.source in VOICE_LIKE_NOTE_SOURCES or note.source == "ai" for note in notes)
 
 
-def _requires_noise_filter(source_kind: SourceKind, notes: list[TrackNote]) -> bool:
+def _requires_noise_filter(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
     if source_kind in NOTE_GENERATION_SOURCE_KINDS:
         return False
     return source_kind in VOICE_LIKE_SOURCE_KINDS or any(note.source in VOICE_LIKE_NOTE_SOURCES for note in notes)
 
 
-def _filter_voice_noise(notes: list[TrackNote]) -> tuple[list[TrackNote], list[str]]:
+def _filter_voice_noise(notes: list[TrackPitchEvent]) -> tuple[list[TrackPitchEvent], list[str]]:
     pitched_notes = [note for note in notes if not note.is_rest and _resolve_pitch_midi(note) is not None]
     if not pitched_notes:
         return notes, []
@@ -487,7 +487,7 @@ def _filter_voice_noise(notes: list[TrackNote]) -> tuple[list[TrackNote], list[s
     if len(strong_notes) < 2:
         keep_threshold = min(0.22, min(note.confidence for note in pitched_notes))
 
-    filtered: list[TrackNote] = []
+    filtered: list[TrackPitchEvent] = []
     removed_count = 0
     for note in notes:
         if note.is_rest:
@@ -516,7 +516,7 @@ def _filter_voice_noise(notes: list[TrackNote]) -> tuple[list[TrackNote], list[s
 
 
 def _has_dense_voice_measures(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -533,24 +533,24 @@ def _has_dense_voice_measures(
 
 
 def _simplify_dense_voice_measures(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     max_events = _max_voice_events_per_measure(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    simplified: list[TrackNote] = []
+    simplified: list[TrackPitchEvent] = []
     for measure_index, measure_notes in sorted(_notes_by_measure(notes).items()):
         pitched_notes = [note for note in measure_notes if not note.is_rest]
         if len(pitched_notes) <= max_events:
             simplified.extend(measure_notes)
             continue
 
-        cells: dict[int, TrackNote] = {}
+        cells: dict[int, TrackPitchEvent] = {}
         measure_start = _measure_start_beat(
             measure_index,
             time_signature_numerator=time_signature_numerator,
@@ -575,7 +575,7 @@ def _simplify_dense_voice_measures(
 
 
 def _polish_voice_events(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
@@ -588,8 +588,8 @@ def _polish_voice_events(
     bridge_measure_tail_gaps: bool = True,
     collapse_short_note_clusters: bool = True,
     sustain_repetitions: bool = True,
-) -> tuple[list[TrackNote], list[str]]:
-    """Make voice-like TrackNotes behave like sung pitch events, not frame artifacts."""
+) -> tuple[list[TrackPitchEvent], list[str]]:
+    """Make voice-like event records behave like sung pitch events, not frame artifacts."""
 
     if len(notes) < 2:
         return notes, []
@@ -646,20 +646,20 @@ def _polish_voice_events(
     return normalized, actions
 
 
-def count_isolated_short_voice_artifacts(notes: list[TrackNote]) -> int:
+def count_isolated_short_voice_artifacts(notes: list[TrackPitchEvent]) -> int:
     """Count short, low-confidence notes that are isolated from nearby singing."""
 
     return len(_isolated_short_artifact_indices(_deduplicate_and_sort(notes)))
 
 
-def count_short_voice_phrase_gaps(notes: list[TrackNote]) -> int:
+def count_short_voice_phrase_gaps(notes: list[TrackPitchEvent]) -> int:
     """Count tiny detector dropouts between confident adjacent sung notes."""
 
     return len(_short_voice_phrase_gap_targets(_deduplicate_and_sort(notes)))
 
 
 def count_measure_tail_gaps(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -676,7 +676,7 @@ def count_measure_tail_gaps(
 
 
 def count_short_note_clusters(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -701,7 +701,7 @@ def count_short_note_clusters(
     return cluster_count
 
 
-def _remove_isolated_short_artifacts(notes: list[TrackNote]) -> tuple[list[TrackNote], int]:
+def _remove_isolated_short_artifacts(notes: list[TrackPitchEvent]) -> tuple[list[TrackPitchEvent], int]:
     ordered_notes = _deduplicate_and_sort(notes)
     remove_indices = _isolated_short_artifact_indices(ordered_notes)
     if not remove_indices:
@@ -719,7 +719,7 @@ def _remove_isolated_short_artifacts(notes: list[TrackNote]) -> tuple[list[Track
     return filtered_notes, len(remove_indices)
 
 
-def _isolated_short_artifact_indices(ordered_notes: list[TrackNote]) -> set[int]:
+def _isolated_short_artifact_indices(ordered_notes: list[TrackPitchEvent]) -> set[int]:
     pitched_indices = [
         index
         for index, note in enumerate(ordered_notes)
@@ -749,13 +749,13 @@ def _isolated_short_artifact_indices(ordered_notes: list[TrackNote]) -> set[int]
     return artifact_indices
 
 
-def _bridge_short_voice_phrase_gaps(notes: list[TrackNote], *, bpm: int) -> tuple[list[TrackNote], int]:
+def _bridge_short_voice_phrase_gaps(notes: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
     ordered_notes = _deduplicate_and_sort(notes)
     bridge_targets = _short_voice_phrase_gap_targets(ordered_notes)
     if not bridge_targets:
         return ordered_notes, 0
 
-    bridged_notes: list[TrackNote] = []
+    bridged_notes: list[TrackPitchEvent] = []
     for index, note in enumerate(ordered_notes):
         next_note = bridge_targets.get(index)
         if next_note is None:
@@ -772,7 +772,7 @@ def _bridge_short_voice_phrase_gaps(notes: list[TrackNote], *, bpm: int) -> tupl
     return bridged_notes, len(bridge_targets)
 
 
-def _short_voice_phrase_gap_targets(ordered_notes: list[TrackNote]) -> dict[int, TrackNote]:
+def _short_voice_phrase_gap_targets(ordered_notes: list[TrackPitchEvent]) -> dict[int, TrackPitchEvent]:
     pitched_indices = [
         index
         for index, note in enumerate(ordered_notes)
@@ -781,7 +781,7 @@ def _short_voice_phrase_gap_targets(ordered_notes: list[TrackNote]) -> dict[int,
     if len(pitched_indices) < 2:
         return {}
 
-    bridge_targets: dict[int, TrackNote] = {}
+    bridge_targets: dict[int, TrackPitchEvent] = {}
     for left_index, right_index in zip(pitched_indices, pitched_indices[1:], strict=False):
         left_note = ordered_notes[left_index]
         right_note = ordered_notes[right_index]
@@ -809,12 +809,12 @@ def _short_voice_phrase_gap_targets(ordered_notes: list[TrackNote]) -> dict[int,
 
 
 def _bridge_measure_tail_gaps(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> tuple[list[TrackNote], int]:
+) -> tuple[list[TrackPitchEvent], int]:
     ordered_notes = _deduplicate_and_sort(notes)
     bridge_targets = _measure_tail_gap_targets(
         ordered_notes,
@@ -824,7 +824,7 @@ def _bridge_measure_tail_gaps(
     if not bridge_targets:
         return ordered_notes, 0
 
-    bridged_notes: list[TrackNote] = []
+    bridged_notes: list[TrackPitchEvent] = []
     for index, note in enumerate(ordered_notes):
         measure_end = bridge_targets.get(index)
         if measure_end is None:
@@ -842,7 +842,7 @@ def _bridge_measure_tail_gaps(
 
 
 def _measure_tail_gap_targets(
-    ordered_notes: list[TrackNote],
+    ordered_notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -890,14 +890,14 @@ def _measure_tail_gap_targets(
 
 
 def _collapse_short_note_clusters(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> tuple[list[TrackNote], int]:
+) -> tuple[list[TrackPitchEvent], int]:
     ordered_notes = _deduplicate_and_sort(notes)
-    collapsed_notes: list[TrackNote] = []
+    collapsed_notes: list[TrackPitchEvent] = []
     collapse_count = 0
     index = 0
     while index < len(ordered_notes):
@@ -936,7 +936,7 @@ def _collapse_short_note_clusters(
 
 
 def _short_note_cluster_at(
-    ordered_notes: list[TrackNote],
+    ordered_notes: list[TrackPitchEvent],
     *,
     start_index: int,
     time_signature_numerator: int,
@@ -997,9 +997,9 @@ def _short_note_cluster_at(
     return cluster_indices
 
 
-def _collapse_neighbor_pitch_blips(notes: list[TrackNote], *, bpm: int) -> tuple[list[TrackNote], int]:
+def _collapse_neighbor_pitch_blips(notes: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
     ordered_notes = _deduplicate_and_sort(notes)
-    collapsed: list[TrackNote] = []
+    collapsed: list[TrackPitchEvent] = []
     collapse_count = 0
     index = 0
     while index < len(ordered_notes):
@@ -1039,12 +1039,12 @@ def _collapse_neighbor_pitch_blips(notes: list[TrackNote], *, bpm: int) -> tuple
     return collapsed, collapse_count
 
 
-def _merge_voice_sustain_repetitions(notes: list[TrackNote], *, bpm: int) -> tuple[list[TrackNote], int]:
+def _merge_voice_sustain_repetitions(notes: list[TrackPitchEvent], *, bpm: int) -> tuple[list[TrackPitchEvent], int]:
     ordered_notes = _deduplicate_and_sort(notes)
     if len(ordered_notes) < 2:
         return ordered_notes, 0
 
-    merged: list[TrackNote] = []
+    merged: list[TrackPitchEvent] = []
     merge_count = 0
     current = ordered_notes[0]
     for next_note in ordered_notes[1:]:
@@ -1074,14 +1074,14 @@ def _merge_voice_sustain_repetitions(notes: list[TrackNote], *, bpm: int) -> tup
 
 
 def _choose_readable_voice_candidate(
-    source_notes: list[TrackNote],
+    source_notes: list[TrackPitchEvent],
     *,
-    current_notes: list[TrackNote],
+    current_notes: list[TrackPitchEvent],
     bpm: int,
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> tuple[list[TrackNote], list[str]]:
+) -> tuple[list[TrackPitchEvent], list[str]]:
     if not current_notes:
         return current_notes, []
 
@@ -1122,7 +1122,7 @@ def _choose_readable_voice_candidate(
 
 
 def _voice_readability_score(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     slot_id: int,
     time_signature_numerator: int,
@@ -1174,19 +1174,19 @@ def _voice_readability_score(
     )
 
 
-def _gap_between(left: TrackNote, right: TrackNote) -> float:
+def _gap_between(left: TrackPitchEvent, right: TrackPitchEvent) -> float:
     return round(right.beat - (left.beat + left.duration_beats), 4)
 
 
 def _merge_note_span(
-    first_note: TrackNote,
-    last_note: TrackNote,
+    first_note: TrackPitchEvent,
+    last_note: TrackPitchEvent,
     *,
     bpm: int,
     pitch_midi: int,
     warning: str,
     confidence: float,
-) -> TrackNote:
+) -> TrackPitchEvent:
     start_beat = first_note.beat
     end_beat = max(start_beat + MIN_EVENT_DURATION_BEATS, last_note.beat + last_note.duration_beats)
     duration_beats = round(end_beat - start_beat, 4)
@@ -1207,7 +1207,7 @@ def _merge_note_span(
     )
 
 
-def _extend_note_to_beat(note: TrackNote, *, end_beat: float, bpm: int, warning: str) -> TrackNote:
+def _extend_note_to_beat(note: TrackPitchEvent, *, end_beat: float, bpm: int, warning: str) -> TrackPitchEvent:
     duration_beats = round(max(note.duration_beats, end_beat - note.beat), 4)
     return note.model_copy(
         update={
@@ -1219,14 +1219,14 @@ def _extend_note_to_beat(note: TrackNote, *, end_beat: float, bpm: int, warning:
 
 
 def _repair_symbolic_timing_metadata(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     beat_seconds = seconds_per_beat(max(1, bpm))
-    repaired: list[TrackNote] = []
+    repaired: list[TrackPitchEvent] = []
     for note in notes:
         beat = max(1.0, round(note.beat, 4))
         duration_beats = max(0.0625, round(note.duration_beats, 4))
@@ -1261,14 +1261,14 @@ def _repair_symbolic_timing_metadata(
 
 
 def _enforce_registration_event_contract(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> tuple[list[TrackNote], list[str], dict[str, Any]]:
-    """Force final TrackNotes onto the studio region-event clock.
+) -> tuple[list[TrackPitchEvent], list[str], dict[str, Any]]:
+    """Force final pitch events onto the studio region-event clock.
 
     Earlier stages may transcribe, import, simplify, align, or review notes.
     Registration must end with one canonical event contract: the studio BPM and
@@ -1322,7 +1322,7 @@ def _enforce_registration_event_contract(
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
     beat_seconds = seconds_per_beat(max(1, bpm))
 
-    enforced: list[TrackNote] = []
+    enforced: list[TrackPitchEvent] = []
     changed_count = 0
     for note in annotated_notes:
         beat = max(1.0, round(note.beat, 4))
@@ -1379,7 +1379,7 @@ def _enforce_registration_event_contract(
     )
 
 
-def _shared_key_signature(notes: list[TrackNote]) -> str | None:
+def _shared_key_signature(notes: list[TrackPitchEvent]) -> str | None:
     key_counts = Counter(note.key_signature for note in notes if note.key_signature in KEY_FIFTHS)
     if not key_counts:
         return None
@@ -1387,7 +1387,7 @@ def _shared_key_signature(notes: list[TrackNote]) -> str | None:
 
 
 def _event_contract_diagnostics(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
@@ -1450,8 +1450,8 @@ def _event_contract_diagnostics(
 
 
 def _align_to_reference_tracks(
-    notes: list[TrackNote],
-    reference_tracks: list[list[TrackNote]],
+    notes: list[TrackPitchEvent],
+    reference_tracks: list[list[TrackPitchEvent]],
     *,
     bpm: int,
     slot_id: int,
@@ -1546,7 +1546,7 @@ def _align_to_reference_tracks(
     }
 
 
-def _is_reference_alignable(source_kind: SourceKind, notes: list[TrackNote]) -> bool:
+def _is_reference_alignable(source_kind: SourceKind, notes: list[TrackPitchEvent]) -> bool:
     if source_kind in VOICE_LIKE_SOURCE_KINDS:
         return True
     return any(note.source in {"voice", "recording", "audio", "omr"} for note in notes)
@@ -1584,16 +1584,16 @@ def _reference_alignment_score(
 
 
 def _shift_notes_to_reference_grid(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     offset_beats: float,
     bpm: int,
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     beat_seconds = seconds_per_beat(max(1, bpm))
-    shifted: list[TrackNote] = []
+    shifted: list[TrackPitchEvent] = []
     for note in notes:
         beat = round(max(1.0, note.beat + offset_beats), 4)
         shifted.append(
@@ -1659,7 +1659,7 @@ def _shift_notes_to_reference_grid(
 
 
 def _has_measure_crossing_notes(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -1679,8 +1679,8 @@ def _has_measure_crossing_notes(
     return False
 
 
-def _deduplicate_and_sort(notes: list[TrackNote]) -> list[TrackNote]:
-    selected: dict[tuple[float, float, int | None, bool], TrackNote] = {}
+def _deduplicate_and_sort(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
+    selected: dict[tuple[float, float, int | None, bool], TrackPitchEvent] = {}
     for note in notes:
         key = (
             round(note.beat, 4),
@@ -1695,7 +1695,7 @@ def _deduplicate_and_sort(notes: list[TrackNote]) -> list[TrackNote]:
 
 
 def _registration_diagnostics(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     slot_id: int,
     original_count: int,
@@ -1758,7 +1758,7 @@ def _registration_diagnostics(
     }
 
 
-def _attach_quality_warnings(notes: list[TrackNote], diagnostics: dict[str, Any]) -> list[TrackNote]:
+def _attach_quality_warnings(notes: list[TrackPitchEvent], diagnostics: dict[str, Any]) -> list[TrackPitchEvent]:
     warnings: list[str] = []
     if diagnostics["range_fit_ratio"] < 0.8:
         warnings.append("registration_range_review")
@@ -1782,8 +1782,8 @@ def _attach_quality_warnings(notes: list[TrackNote], diagnostics: dict[str, Any]
     ]
 
 
-def _notes_by_measure(notes: list[TrackNote]) -> dict[int, list[TrackNote]]:
-    groups: dict[int, list[TrackNote]] = defaultdict(list)
+def _notes_by_measure(notes: list[TrackPitchEvent]) -> dict[int, list[TrackPitchEvent]]:
+    groups: dict[int, list[TrackPitchEvent]] = defaultdict(list)
     for note in notes:
         measure_index = note.measure_index or 1
         groups[measure_index].append(note)
@@ -1809,11 +1809,11 @@ def _max_voice_events_per_measure(
     return max(4, ceil(beats_per_measure * MAX_VOICE_EVENTS_PER_MEASURE_FACTOR))
 
 
-def _note_weight(note: TrackNote) -> float:
+def _note_weight(note: TrackPitchEvent) -> float:
     return max(0.05, note.duration_beats) * max(0.1, note.confidence)
 
 
-def _resolve_pitch_midi(note: TrackNote) -> int | None:
+def _resolve_pitch_midi(note: TrackPitchEvent) -> int | None:
     if note.pitch_midi is not None:
         return int(round(note.pitch_midi))
     if note.is_rest:
@@ -1893,7 +1893,7 @@ def _has_review_directive(instruction: Mapping[str, Any]) -> bool:
 
 
 def _should_simplify_after_review(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     instruction: Mapping[str, Any],
     *,
     time_signature_numerator: int,
@@ -1910,11 +1910,11 @@ def _should_simplify_after_review(
     )
 
 
-def _force_key_signature(notes: list[TrackNote], *, slot_id: int, key_signature: str) -> list[TrackNote]:
+def _force_key_signature(notes: list[TrackPitchEvent], *, slot_id: int, key_signature: str) -> list[TrackPitchEvent]:
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
     pitch_register = pitch_register_for_slot(slot_id)
     pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
-    forced: list[TrackNote] = []
+    forced: list[TrackPitchEvent] = []
     for note in notes:
         pitch_midi = _resolve_pitch_midi(note)
         spelled_label = note.spelled_label

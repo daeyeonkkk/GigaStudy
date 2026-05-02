@@ -11,7 +11,7 @@ from gigastudy_api.api.schemas.studios import (
     SourceKind,
     Studio,
 )
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
     candidate_review_message,
@@ -240,7 +240,7 @@ class StudioCandidateCommands:
         source_label: str,
         method: str,
         confidence: float,
-        notes: list[TrackNote],
+        notes: list[TrackPitchEvent],
         message: str,
         audio_source_path: str | None = None,
         audio_source_label: str | None = None,
@@ -293,7 +293,7 @@ class StudioCandidateCommands:
     def add_extraction_candidates(
         self,
         studio_id: str,
-        mapped_notes: dict[int, list[TrackNote]],
+        mapped_notes: dict[int, list[TrackPitchEvent]],
         *,
         source_kind: SourceKind,
         source_label: str,
@@ -401,7 +401,7 @@ class StudioCandidateCommands:
         self,
         studio_id: str,
         slot_id: int,
-        candidate_notes: list[list[TrackNote]],
+        candidate_notes: list[list[TrackPitchEvent]],
         *,
         source_label: str,
         method: str,

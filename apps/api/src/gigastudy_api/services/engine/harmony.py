@@ -5,7 +5,7 @@ import math
 from collections import Counter
 from dataclasses import dataclass
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     note_from_pitch,
@@ -92,9 +92,9 @@ class ChordCandidate:
 class HarmonyEvent:
     beat: float
     duration_beats: float
-    reference: TrackNote
-    active_by_slot: dict[int, TrackNote]
-    active_notes: tuple[TrackNote, ...]
+    reference: TrackPitchEvent
+    active_by_slot: dict[int, TrackPitchEvent]
+    active_notes: tuple[TrackPitchEvent, ...]
     strength: float
 
 
@@ -166,13 +166,13 @@ VOICE_LEADING_PROFILES: tuple[VoiceLeadingProfile, ...] = (
 def generate_rule_based_harmony(
     *,
     target_slot_id: int,
-    context_tracks: list[TrackNote],
+    context_tracks: list[TrackPitchEvent],
     bpm: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
-    context_notes_by_slot: dict[int, list[TrackNote]] | None = None,
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
     harmony_plan: DeepSeekHarmonyPlan | None = None,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     if target_slot_id == 6:
         return normalize_track_notes(
             _generate_percussion(
@@ -206,15 +206,15 @@ def generate_rule_based_harmony(
 def generate_rule_based_harmony_candidates(
     *,
     target_slot_id: int,
-    context_tracks: list[TrackNote],
+    context_tracks: list[TrackPitchEvent],
     bpm: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
-    context_notes_by_slot: dict[int, list[TrackNote]] | None = None,
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
     candidate_count: int = 3,
     profile_names: list[str] | None = None,
     harmony_plan: DeepSeekHarmonyPlan | None = None,
-) -> list[list[TrackNote]]:
+) -> list[list[TrackPitchEvent]]:
     resolved_candidate_count = max(1, min(5, candidate_count))
     if target_slot_id == 6:
         return [
@@ -284,9 +284,9 @@ def generate_rule_based_harmony_candidates(
 
 
 def _normalize_context_map(
-    context_tracks: list[TrackNote],
-    context_notes_by_slot: dict[int, list[TrackNote]] | None,
-) -> dict[int, list[TrackNote]]:
+    context_tracks: list[TrackPitchEvent],
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]] | None,
+) -> dict[int, list[TrackPitchEvent]]:
     if context_notes_by_slot:
         normalized = {
             slot_id: _pitched_notes(notes)
@@ -298,7 +298,7 @@ def _normalize_context_map(
     return {0: _pitched_notes(context_tracks)}
 
 
-def _pitched_notes(notes: list[TrackNote]) -> list[TrackNote]:
+def _pitched_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     return sorted(
         [note for note in notes if note.pitch_midi is not None and not note.is_rest],
         key=lambda note: (note.beat, note.pitch_midi or 0),
@@ -306,7 +306,7 @@ def _pitched_notes(notes: list[TrackNote]) -> list[TrackNote]:
 
 
 def _build_harmony_events(
-    context_by_slot: dict[int, list[TrackNote]],
+    context_by_slot: dict[int, list[TrackPitchEvent]],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -367,7 +367,7 @@ def _notes_from_harmony_path(
     time_signature_numerator: int,
     time_signature_denominator: int,
     candidate_goal: DeepSeekCandidateDirection | None,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     notes = [
         note_from_pitch(
             beat=event.beat,
@@ -388,9 +388,9 @@ def _notes_from_harmony_path(
 
 
 def _apply_candidate_rhythm_policy(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     candidate_goal: DeepSeekCandidateDirection | None,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     if candidate_goal is None or candidate_goal.rhythm_policy in {"follow_context", "answer_melody"}:
         return notes
     if candidate_goal.rhythm_policy == "simplify":
@@ -400,8 +400,8 @@ def _apply_candidate_rhythm_policy(
     return notes
 
 
-def _merge_weak_repeated_notes(notes: list[TrackNote]) -> list[TrackNote]:
-    merged: list[TrackNote] = []
+def _merge_weak_repeated_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
+    merged: list[TrackPitchEvent] = []
     for note in notes:
         if (
             merged
@@ -416,10 +416,10 @@ def _merge_weak_repeated_notes(notes: list[TrackNote]) -> list[TrackNote]:
     return merged
 
 
-def _sustain_support_notes(notes: list[TrackNote]) -> list[TrackNote]:
+def _sustain_support_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     if len(notes) < 3:
         return notes
-    sustained: list[TrackNote] = []
+    sustained: list[TrackPitchEvent] = []
     for note in notes:
         if not sustained:
             sustained.append(note)
@@ -440,7 +440,7 @@ def _sustain_support_notes(notes: list[TrackNote]) -> list[TrackNote]:
     return sustained
 
 
-def _copy_note_duration(note: TrackNote, duration_beats: float) -> TrackNote:
+def _copy_note_duration(note: TrackPitchEvent, duration_beats: float) -> TrackPitchEvent:
     duration_beats = round(max(0.25, duration_beats), 4)
     duration_seconds = duration_beats * (note.duration_seconds / max(0.0001, note.duration_beats))
     return note.model_copy(
@@ -452,10 +452,10 @@ def _copy_note_duration(note: TrackNote, duration_beats: float) -> TrackNote:
 
 
 def _active_notes_at_beat(
-    context_by_slot: dict[int, list[TrackNote]],
+    context_by_slot: dict[int, list[TrackPitchEvent]],
     beat: float,
-) -> dict[int, TrackNote]:
-    active_by_slot: dict[int, TrackNote] = {}
+) -> dict[int, TrackPitchEvent]:
+    active_by_slot: dict[int, TrackPitchEvent] = {}
     for slot_id, notes in context_by_slot.items():
         candidates = [
             note
@@ -468,7 +468,7 @@ def _active_notes_at_beat(
 
 
 def _event_strength(
-    note: TrackNote,
+    note: TrackPitchEvent,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> float:
@@ -1441,12 +1441,12 @@ def _generation_confidence(total_cost: float, event_count: int, key_confidence: 
 
 def _generate_percussion(
     *,
-    context_tracks: list[TrackNote],
+    context_tracks: list[TrackPitchEvent],
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
     variant_index: int = 0,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     max_beat = max(
         (note.beat + max(0.25, note.duration_beats) - 1 for note in context_tracks),
         default=8,
@@ -1459,7 +1459,7 @@ def _generate_percussion(
     pulses_per_measure = max(1, round(beats_per_measure / pulse_quarter_beats))
     measure_count = max(1, math.floor((max_beat - 1) / beats_per_measure) + 1)
     total_pulses = max(1, round((measure_count * beats_per_measure) / pulse_quarter_beats))
-    generated: list[TrackNote] = []
+    generated: list[TrackPitchEvent] = []
 
     for pulse_index in range(total_pulses):
         measure_pulse_index = pulse_index % pulses_per_measure

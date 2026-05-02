@@ -5,7 +5,7 @@ import fitz
 from fastapi.testclient import TestClient
 
 from gigastudy_api.config import get_settings
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.omr import OmrUnavailableError
 from gigastudy_api.services.engine.music_theory import note_from_pitch
@@ -144,7 +144,7 @@ def fake_pdf_vector_omr(
     time_signature_denominator: int = 4,
     max_slot_id: int = 5,
 ) -> ParsedSymbolicFile:
-    mapped_notes: dict[int, list[TrackNote]] = {}
+    mapped_notes: dict[int, list[TrackPitchEvent]] = {}
     tracks: list[ParsedTrack] = []
     for slot_id, label, pitch_midi in [
         (1, "C5", 72),
@@ -154,7 +154,7 @@ def fake_pdf_vector_omr(
         (5, "C3", 48),
     ][:max_slot_id]:
         notes = [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=pitch_midi,
                 label=label,
                 onset_seconds=0,
@@ -266,8 +266,8 @@ def _note_from_pitch_event(event: dict) -> dict:
     }
 
 
-def _performance_event_from_note(note: TrackNote | dict) -> dict:
-    payload = note.model_dump(mode="json") if isinstance(note, TrackNote) else dict(note)
+def _performance_event_from_note(note: TrackPitchEvent | dict) -> dict:
+    payload = note.model_dump(mode="json") if isinstance(note, TrackPitchEvent) else dict(note)
     return {
         "event_id": payload.get("id"),
         "track_slot_id": payload.get("voice_index"),
@@ -731,7 +731,7 @@ def test_scoring_audio_extraction_uses_context_aware_plan(tmp_path: Path, monkey
     def fake_transcribe_voice_file(*args, **kwargs):
         captured["plan"] = kwargs.get("extraction_plan")
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=72,
                 label="C5",
                 onset_seconds=0,
@@ -1081,7 +1081,7 @@ def test_upload_start_can_use_staged_direct_uploaded_pdf_for_omr(
 def test_audio_upload_keeps_source_file_for_track_playback(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=72,
                 pitch_hz=261.63,
                 label="C5",
@@ -1702,7 +1702,7 @@ def test_voice_retry_rehydrates_direct_register_mode_without_queue_record(
 
     def pass_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=72,
                 label="C5",
                 onset_seconds=0,
@@ -1773,7 +1773,7 @@ def test_studio_poll_does_not_wake_queued_engine_job(
 ) -> None:
     def pass_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=72,
                 label="C5",
                 onset_seconds=0,
@@ -1834,7 +1834,7 @@ def test_engine_queue_rehydrates_studio_job_lost_to_concurrent_save(
 ) -> None:
     def pass_transcribe_voice_file(*args, **kwargs):
         return [
-            TrackNote(
+            TrackPitchEvent(
                 pitch_midi=43,
                 label="G2",
                 onset_seconds=0,

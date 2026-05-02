@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from gigastudy_api.api.schemas.studios import SourceKind
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.music_theory import label_to_midi, quarter_beats_per_measure, track_name
 from gigastudy_api.services.engine.event_normalization import KEY_FIFTHS, normalize_track_notes
@@ -36,7 +36,7 @@ AllowedKeySignature = Literal["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G",
 class RegistrationReviewInstruction(BaseModel):
     """Bounded registration cleanup plan returned by the LLM.
 
-    The LLM is intentionally not allowed to write TrackNotes. It may only pick
+    The LLM is intentionally not allowed to write pitch-event records. It may only pick
     small, deterministic post-processing directives that the local registration
     engine can validate and apply before the notes become pitch events.
     """
@@ -136,10 +136,10 @@ def review_track_registration_with_deepseek(
     time_signature_denominator: int,
     slot_id: int,
     source_kind: SourceKind,
-    original_notes: list[TrackNote],
-    prepared_notes: list[TrackNote],
+    original_notes: list[TrackPitchEvent],
+    prepared_notes: list[TrackPitchEvent],
     diagnostics: dict[str, Any],
-    context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
+    context_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
 ) -> RegistrationReviewInstruction | None:
     if not settings.deepseek_registration_review_enabled or not settings.deepseek_api_key:
         return None
@@ -191,11 +191,11 @@ def review_ensemble_registration_with_deepseek(
     time_signature_denominator: int,
     slot_id: int,
     source_kind: SourceKind,
-    original_notes: list[TrackNote],
-    prepared_notes: list[TrackNote],
+    original_notes: list[TrackPitchEvent],
+    prepared_notes: list[TrackPitchEvent],
     diagnostics: dict[str, Any],
-    context_tracks_by_slot: dict[int, list[TrackNote]],
-    proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
+    context_tracks_by_slot: dict[int, list[TrackPitchEvent]],
+    proposed_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
 ) -> RegistrationReviewInstruction | None:
     if not settings.deepseek_ensemble_review_enabled or not settings.deepseek_api_key:
         return None
@@ -272,12 +272,12 @@ def _build_registration_review_payload(
     time_signature_denominator: int,
     slot_id: int,
     source_kind: SourceKind,
-    original_notes: list[TrackNote],
-    prepared_notes: list[TrackNote],
+    original_notes: list[TrackPitchEvent],
+    prepared_notes: list[TrackPitchEvent],
     diagnostics: dict[str, Any],
     review_scope: str = "single_track_registration_plan",
-    context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
-    proposed_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
+    context_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
+    proposed_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
 ) -> dict[str, Any]:
     review_checklist = [
         "BPM and time signature are immutable.",
@@ -312,7 +312,7 @@ def _build_registration_review_payload(
         )
     context = {
         "product_rule": (
-            "The LLM must not generate TrackNote arrays or change BPM/meter. "
+            "The LLM must not generate pitch-event arrays or change BPM/meter. "
             "It may only choose bounded registration-plan directives for the deterministic region-event engine."
         ),
         "review_scope": review_scope,
@@ -380,7 +380,7 @@ def _build_registration_review_payload(
             "role": "system",
             "content": (
                 "You are GigaStudy's region-event registration reviewer. Return JSON only. "
-                "You plan whether extracted TrackNotes will become stable pitch events at registration time, then choose "
+                "You plan whether extracted material will become stable pitch events at registration time, then choose "
                 "bounded repair directives for the deterministic engine. Never output notes, melodies, markdown, or prose. "
                 "Do not change BPM or meter. Write reasons and warnings in Korean."
             ),
@@ -416,8 +416,8 @@ def _parse_deepseek_registration_response(
 
 def _build_ensemble_context(
     *,
-    context_tracks_by_slot: dict[int, list[TrackNote]],
-    proposed_tracks_by_slot: dict[int, list[TrackNote]],
+    context_tracks_by_slot: dict[int, list[TrackPitchEvent]],
+    proposed_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     target_slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -462,7 +462,7 @@ def _build_ensemble_context(
 
 def _slot_summary(
     slot_id: int,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -480,7 +480,7 @@ def _slot_summary(
 
 
 def _vertical_snapshots(
-    tracks_by_slot: dict[int, list[TrackNote]],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -523,7 +523,7 @@ def _vertical_snapshots(
     return snapshots[:48]
 
 
-def _active_note_at(notes: list[TrackNote], beat: float) -> TrackNote | None:
+def _active_note_at(notes: list[TrackPitchEvent], beat: float) -> TrackPitchEvent | None:
     candidates = [
         note
         for note in notes
@@ -538,7 +538,7 @@ def _active_note_at(notes: list[TrackNote], beat: float) -> TrackNote | None:
 
 
 def _summarize_notes(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -580,8 +580,8 @@ def _summarize_notes(
 
 def _build_quality_options(
     *,
-    original_notes: list[TrackNote],
-    prepared_notes: list[TrackNote],
+    original_notes: list[TrackPitchEvent],
+    prepared_notes: list[TrackPitchEvent],
     bpm: int,
     slot_id: int,
     source_kind: SourceKind,
@@ -619,7 +619,7 @@ def _build_quality_options(
 
 def _quality_option_summary(
     option_name: str,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -661,13 +661,13 @@ def _quality_option_summary(
 
 
 def _summarize_measures(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> list[dict[str, Any]]:
     beats_per_measure = quarter_beats_per_measure(time_signature_numerator, time_signature_denominator)
-    groups: dict[int, list[TrackNote]] = defaultdict(list)
+    groups: dict[int, list[TrackPitchEvent]] = defaultdict(list)
     for note in notes:
         measure_index = note.measure_index
         if measure_index is None:
@@ -709,7 +709,7 @@ def _range_label(pitches: list[int]) -> str:
     return f"{min(pitches)}-{max(pitches)}"
 
 
-def _resolve_pitch_midi(note: TrackNote) -> int | None:
+def _resolve_pitch_midi(note: TrackPitchEvent) -> int | None:
     if note.pitch_midi is not None:
         return int(round(note.pitch_midi))
     if note.is_rest:

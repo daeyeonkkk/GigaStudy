@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-NoteSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
+PitchEventSource = Literal["musicxml", "midi", "omr", "voice", "ai", "recording", "audio"]
 _LEGACY_PITCH_REGISTER_ALIASES = {
     "treble": "upper_voice",
     "treble_8vb": "tenor_voice",
@@ -11,7 +11,7 @@ _LEGACY_PITCH_REGISTER_ALIASES = {
 }
 
 
-class TrackNote(BaseModel):
+class TrackPitchEvent(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(default_factory=lambda: uuid4().hex)
@@ -36,7 +36,7 @@ class TrackNote(BaseModel):
     measure_index: int | None = None
     beat_in_measure: float | None = None
     confidence: float = Field(default=1, ge=0, le=1)
-    source: NoteSource
+    source: PitchEventSource
     extraction_method: str = "unknown"
     is_rest: bool = False
     is_tied: bool = False

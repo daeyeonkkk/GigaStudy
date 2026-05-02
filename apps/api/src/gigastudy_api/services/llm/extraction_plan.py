@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.extraction_plan import (
     VoiceExtractionPlan,
@@ -32,8 +32,8 @@ class VoiceExtractionPlanInstruction(BaseModel):
     """Bounded LLM instruction for pre-transcription voice extraction.
 
     The LLM can choose extraction rules, never final notes. Deterministic DSP and
-    event extraction code remains responsible for pitch frames, quantization, and TrackNote
-    output.
+    event extraction code remains responsible for pitch frames, quantization, and
+    pitch-event output.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -109,8 +109,8 @@ def plan_voice_extraction_with_deepseek(
     time_signature_denominator: int,
     source_kind: str,
     source_label: str,
-    context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
-    expected_track_notes: list[TrackNote] | None = None,
+    context_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
+    expected_track_notes: list[TrackPitchEvent] | None = None,
 ) -> VoiceExtractionPlan | None:
     if not settings.deepseek_extraction_plan_enabled or not settings.deepseek_api_key:
         return None
@@ -202,13 +202,13 @@ def _build_extraction_plan_payload(
     time_signature_denominator: int,
     source_kind: str,
     source_label: str,
-    context_tracks_by_slot: dict[int, list[TrackNote]],
-    expected_track_notes: list[TrackNote],
+    context_tracks_by_slot: dict[int, list[TrackPitchEvent]],
+    expected_track_notes: list[TrackPitchEvent],
 ) -> dict[str, Any]:
     low, high = SLOT_RANGES.get(base_plan.slot_id, (base_plan.low_midi, base_plan.high_midi))
     context = {
         "product_rule": (
-            "Plan extraction parameters only. Do not output TrackNotes, MIDI sequences, beats, "
+            "Plan extraction parameters only. Do not output pitch-event arrays, MIDI sequences, beats, "
             "durations, prose, or markdown. The studio BPM and meter are absolute."
         ),
         "studio": {
@@ -274,7 +274,7 @@ def _build_extraction_plan_payload(
     return _build_json_chat_payload(settings=settings, messages=messages)
 
 
-def _summarize_track(slot_id: int, notes: list[TrackNote]) -> dict[str, Any]:
+def _summarize_track(slot_id: int, notes: list[TrackPitchEvent]) -> dict[str, Any]:
     pitched = [note for note in notes if note.pitch_midi is not None and not note.is_rest]
     pitches = [note.pitch_midi for note in pitched if note.pitch_midi is not None]
     return {

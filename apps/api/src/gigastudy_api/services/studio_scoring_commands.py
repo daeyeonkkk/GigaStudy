@@ -12,7 +12,7 @@ from gigastudy_api.api.schemas.studios import (
     TrackSlot,
 )
 from gigastudy_api.config import get_settings
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.engine.timeline import notes_with_sync_offset
@@ -123,7 +123,7 @@ class StudioScoringCommands:
         target_track: TrackSlot | None = None,
         score_mode: str = "answer",
         reference_slot_ids: list[int] | None = None,
-    ) -> list[TrackNote]:
+    ) -> list[TrackPitchEvent]:
         source_path = self._assets.save_temp_upload(
             studio_id=studio_id,
             slot_id=slot_id,
@@ -175,7 +175,7 @@ class StudioScoringCommands:
             for track in studio.tracks
             if track.slot_id in reference_slot_set and track.notes
         }
-        expected_notes: list[TrackNote] = []
+        expected_notes: list[TrackPitchEvent] = []
         if score_mode == "answer" and target_track.notes:
             expected_notes = notes_with_sync_offset(
                 target_track.notes,
@@ -206,7 +206,7 @@ class StudioScoringCommands:
         return llm_plan or extraction_plan
 
 
-def _track_note_from_performance_event(event: PerformanceEvent) -> TrackNote:
+def _track_note_from_performance_event(event: PerformanceEvent) -> TrackPitchEvent:
     payload = {
         "label": event.label,
         "pitch_midi": event.pitch_midi,
@@ -225,4 +225,4 @@ def _track_note_from_performance_event(event: PerformanceEvent) -> TrackNote:
     }
     if event.event_id:
         payload["id"] = event.event_id
-    return TrackNote(**payload)
+    return TrackPitchEvent(**payload)

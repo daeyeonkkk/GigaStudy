@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import SLOT_RANGES, midi_to_label, track_name
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 
 
-def track_duration_seconds(notes: list[TrackNote]) -> float:
+def track_duration_seconds(notes: list[TrackPitchEvent]) -> float:
     if not notes:
         return 0
     return round(max(note.onset_seconds + note.duration_seconds for note in notes), 4)
@@ -33,7 +33,7 @@ def parsed_track_diagnostics_by_slot(
 
 def candidate_diagnostics(
     slot_id: int,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     method: str,
     confidence: float,
@@ -88,7 +88,7 @@ def candidate_diagnostics(
 
 def estimate_candidate_confidence(
     slot_id: int,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     method: str,
     fallback_confidence: float,
@@ -140,7 +140,7 @@ def estimate_candidate_confidence(
 
 def candidate_review_message(
     slot_id: int,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     method: str,
     diagnostics: dict[str, Any] | None,
@@ -173,7 +173,7 @@ def candidate_review_message(
     return default_message
 
 
-def generation_variant_label(index: int, slot_id: int, notes: list[TrackNote]) -> str:
+def generation_variant_label(index: int, slot_id: int, notes: list[TrackPitchEvent]) -> str:
     if slot_id == 6:
         return percussion_variant_label(index, notes)
 
@@ -221,7 +221,7 @@ def generation_variant_label(index: int, slot_id: int, notes: list[TrackNote]) -
     return f"{register_label} {motion_label} - {contour_label} - avg {average_label}"
 
 
-def percussion_variant_label(index: int, notes: list[TrackNote]) -> str:
+def percussion_variant_label(index: int, notes: list[TrackPitchEvent]) -> str:
     labels = [note.label for note in notes[:8]]
     kick_count = labels.count("Kick")
     snare_count = labels.count("Snare")
@@ -248,7 +248,7 @@ def diagnostic_int(diagnostics: dict[str, Any] | None, key: str, *, default: int
     return int(value) if isinstance(value, (int, float)) else default
 
 
-def candidate_range_fit_ratio(slot_id: int, notes: list[TrackNote]) -> float:
+def candidate_range_fit_ratio(slot_id: int, notes: list[TrackPitchEvent]) -> float:
     pitched = [note for note in notes if note.pitch_midi is not None]
     if not pitched:
         return 0
@@ -261,7 +261,7 @@ def candidate_range_fit_ratio(slot_id: int, notes: list[TrackNote]) -> float:
     return len(in_range) / len(pitched)
 
 
-def candidate_timing_grid_ratio(notes: list[TrackNote]) -> float:
+def candidate_timing_grid_ratio(notes: list[TrackPitchEvent]) -> float:
     if not notes:
         return 0
     aligned = 0
@@ -273,7 +273,7 @@ def candidate_timing_grid_ratio(notes: list[TrackNote]) -> float:
     return aligned / len(notes)
 
 
-def candidate_range_label(notes: list[TrackNote]) -> str:
+def candidate_range_label(notes: list[TrackPitchEvent]) -> str:
     midi_notes = [
         note
         for note in notes

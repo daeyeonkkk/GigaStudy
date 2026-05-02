@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     beat_in_measure_from_beat,
@@ -33,15 +33,15 @@ BASS_HIGH_FOUNDATION_PITCH = 55
 
 @dataclass(frozen=True)
 class EnsembleValidationResult:
-    notes: list[TrackNote]
+    notes: list[TrackPitchEvent]
     diagnostics: dict[str, Any]
 
 
 def prepare_ensemble_registration(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackNote],
-    existing_tracks_by_slot: dict[int, list[TrackNote]],
+    candidate_notes: list[TrackPitchEvent],
+    existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     bpm: int,
     source_kind: str,
     time_signature_numerator: int = 4,
@@ -84,8 +84,8 @@ def prepare_ensemble_registration(
 def validate_ensemble_registration(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackNote],
-    existing_tracks_by_slot: dict[int, list[TrackNote]],
+    candidate_notes: list[TrackPitchEvent],
+    existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     bpm: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
@@ -182,13 +182,13 @@ def validate_ensemble_registration(
 def _repair_contextual_octaves(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackNote],
-    existing_tracks_by_slot: dict[int, list[TrackNote]],
+    candidate_notes: list[TrackPitchEvent],
+    existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     bpm: int,
     source_kind: str,
     time_signature_numerator: int,
     time_signature_denominator: int,
-) -> tuple[list[TrackNote], dict[str, Any]]:
+) -> tuple[list[TrackPitchEvent], dict[str, Any]]:
     diagnostics: dict[str, Any] = {
         "version": ENSEMBLE_REPAIR_VERSION,
         "evaluated": True,
@@ -219,7 +219,7 @@ def _repair_contextual_octaves(
         diagnostics["reason"] = "no_vocal_context"
         return candidate_notes, diagnostics
 
-    repaired: list[TrackNote] = []
+    repaired: list[TrackPitchEvent] = []
     changed: list[dict[str, Any]] = []
     previous_pitch: int | None = None
     pitched_notes = _pitched_notes(candidate_notes)
@@ -298,7 +298,7 @@ def _empty_diagnostics(target_slot_id: int, *, reason: str) -> dict[str, Any]:
 
 def _percussion_diagnostics(
     target_slot_id: int,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     time_signature_numerator: int,
@@ -331,7 +331,7 @@ def _percussion_diagnostics(
 def _context_bounds_at(
     *,
     target_slot_id: int,
-    context_tracks: dict[int, list[TrackNote]],
+    context_tracks: dict[int, list[TrackPitchEvent]],
     beat: float,
 ) -> dict[str, Any]:
     active = _active_vocal_notes_at(context_tracks, beat)
@@ -368,7 +368,7 @@ def _context_reason(higher_neighbor: int | None, lower_neighbor: int | None) -> 
 def _choose_contextual_octave(
     *,
     target_slot_id: int,
-    note: TrackNote,
+    note: TrackPitchEvent,
     context: dict[str, Any],
     previous_pitch: int | None,
     next_pitch: int | None,
@@ -522,7 +522,7 @@ def _melodic_gap_cost(interval: int) -> float:
     return 4.0 + (interval - 12) * 0.4
 
 
-def _next_pitch_by_note_id(notes: list[TrackNote]) -> dict[str, int]:
+def _next_pitch_by_note_id(notes: list[TrackPitchEvent]) -> dict[str, int]:
     ordered = sorted(notes, key=lambda note: (note.beat, note.id))
     result: dict[str, int] = {}
     for index, note in enumerate(ordered[:-1]):
@@ -533,14 +533,14 @@ def _next_pitch_by_note_id(notes: list[TrackNote]) -> dict[str, int]:
 
 
 def _copy_note_pitch(
-    note: TrackNote,
+    note: TrackPitchEvent,
     pitch_midi: int,
     *,
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
     warning: str,
-) -> TrackNote:
+) -> TrackPitchEvent:
     label = midi_to_label(pitch_midi)
     key_signature = note.key_signature or "C"
     spelling_mode = "flat" if "b" in key_signature and "#" not in key_signature else "sharp"
@@ -572,7 +572,7 @@ def _copy_note_pitch(
     )
 
 
-def _range_issues(target_slot_id: int, notes: list[TrackNote]) -> list[dict[str, Any]]:
+def _range_issues(target_slot_id: int, notes: list[TrackPitchEvent]) -> list[dict[str, Any]]:
     low, high = SLOT_RANGES[target_slot_id]
     issues: list[dict[str, Any]] = []
     for note in notes:
@@ -594,9 +594,9 @@ def _range_issues(target_slot_id: int, notes: list[TrackNote]) -> list[dict[str,
 
 
 def _snapshot_beats(
-    tracks_by_slot: dict[int, list[TrackNote]],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
     *,
-    target_notes: list[TrackNote],
+    target_notes: list[TrackPitchEvent],
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> list[float]:
@@ -620,7 +620,7 @@ def _snapshot_beats(
 
 def _vertical_snapshot_issues(
     target_slot_id: int,
-    tracks_by_slot: dict[int, list[TrackNote]],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
     snapshot_beats: list[float],
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
@@ -696,8 +696,8 @@ def _vertical_snapshot_issues(
 
 def _parallel_perfect_issues(
     target_slot_id: int,
-    tracks_by_slot: dict[int, list[TrackNote]],
-    target_notes: list[TrackNote],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
+    target_notes: list[TrackPitchEvent],
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     ordered_target = sorted(target_notes, key=lambda note: note.beat)
@@ -738,7 +738,7 @@ def _parallel_perfect_issues(
 
 def _thin_chord_issues(
     target_slot_id: int,
-    tracks_by_slot: dict[int, list[TrackNote]],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
     snapshot_beats: list[float],
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
@@ -768,7 +768,7 @@ def _thin_chord_issues(
 
 def _melodic_singability_issues(
     target_slot_id: int,
-    target_notes: list[TrackNote],
+    target_notes: list[TrackPitchEvent],
     *,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -824,7 +824,7 @@ def _melodic_singability_issues(
         previous_interval = interval
         previous_direction = direction
 
-    notes_by_measure: dict[int, list[TrackNote]] = defaultdict(list)
+    notes_by_measure: dict[int, list[TrackPitchEvent]] = defaultdict(list)
     for note in target_notes:
         measure_index = note.measure_index or measure_index_from_beat(
             note.beat,
@@ -852,7 +852,7 @@ def _melodic_singability_issues(
 
 def _ensemble_tendency_issues(
     target_slot_id: int,
-    tracks_by_slot: dict[int, list[TrackNote]],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
     snapshot_beats: list[float],
     *,
     time_signature_numerator: int,
@@ -889,7 +889,7 @@ def _ensemble_tendency_issues(
 
 def _bass_foundation_issues(
     target_slot_id: int,
-    tracks_by_slot: dict[int, list[TrackNote]],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
     snapshot_beats: list[float],
     *,
     time_signature_numerator: int,
@@ -919,7 +919,7 @@ def _bass_foundation_issues(
     return issues
 
 
-def _estimate_major_tonic(tracks_by_slot: dict[int, list[TrackNote]]) -> int:
+def _estimate_major_tonic(tracks_by_slot: dict[int, list[TrackPitchEvent]]) -> int:
     weights = [0.0] * 12
     for notes in tracks_by_slot.values():
         for note in notes:
@@ -955,8 +955,8 @@ def _beat_strength(
 def _build_diagnostics(
     *,
     target_slot_id: int,
-    candidate_notes: list[TrackNote],
-    existing_tracks_by_slot: dict[int, list[TrackNote]],
+    candidate_notes: list[TrackPitchEvent],
+    existing_tracks_by_slot: dict[int, list[TrackPitchEvent]],
     issues: list[dict[str, Any]],
     snapshot_count: int,
     bpm: int,
@@ -991,7 +991,7 @@ def _build_diagnostics(
     }
 
 
-def _attach_ensemble_warnings(notes: list[TrackNote], issues: list[dict[str, Any]]) -> list[TrackNote]:
+def _attach_ensemble_warnings(notes: list[TrackPitchEvent], issues: list[dict[str, Any]]) -> list[TrackPitchEvent]:
     warnings_by_note_id: dict[str, set[str]] = defaultdict(set)
     for issue in issues:
         note_id = issue.get("target_note_id")
@@ -1017,9 +1017,9 @@ def _attach_ensemble_warnings(notes: list[TrackNote], issues: list[dict[str, Any
 
 
 def _active_vocal_notes_at(
-    tracks_by_slot: dict[int, list[TrackNote]],
+    tracks_by_slot: dict[int, list[TrackPitchEvent]],
     beat: float,
-) -> dict[int, TrackNote]:
+) -> dict[int, TrackPitchEvent]:
     return {
         slot_id: note
         for slot_id, notes in tracks_by_slot.items()
@@ -1029,7 +1029,7 @@ def _active_vocal_notes_at(
     }
 
 
-def _active_note_at(notes: list[TrackNote], beat: float) -> TrackNote | None:
+def _active_note_at(notes: list[TrackPitchEvent], beat: float) -> TrackPitchEvent | None:
     candidates = [
         note
         for note in notes
@@ -1043,7 +1043,7 @@ def _active_note_at(notes: list[TrackNote], beat: float) -> TrackNote | None:
     return max(candidates, key=lambda note: (note.confidence, note.duration_beats))
 
 
-def _pitched_notes(notes: list[TrackNote]) -> list[TrackNote]:
+def _pitched_notes(notes: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
     return [
         note
         for note in notes
@@ -1051,7 +1051,7 @@ def _pitched_notes(notes: list[TrackNote]) -> list[TrackNote]:
     ]
 
 
-def _range_fit_ratio(slot_id: int, notes: list[TrackNote]) -> float:
+def _range_fit_ratio(slot_id: int, notes: list[TrackPitchEvent]) -> float:
     if not notes:
         return 1.0
     low, high = SLOT_RANGES.get(slot_id, (0, 127))

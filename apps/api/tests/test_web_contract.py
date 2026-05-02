@@ -34,7 +34,7 @@ from gigastudy_api.api.schemas.studios import (
     TrackSlotResponse,
     build_studio_response,
 )
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.main import create_app
 
 
@@ -83,7 +83,7 @@ def test_studio_response_includes_arrangement_regions() -> None:
                 source_label="seed.mid",
                 duration_seconds=0,
                 notes=[
-                    TrackNote(
+                    TrackPitchEvent(
                         label="C4",
                         pitch_midi=60,
                         beat=1,
@@ -122,7 +122,7 @@ def test_candidate_response_includes_region_candidate() -> None:
         source_label="AI harmony",
         method="rule_based",
         notes=[
-            TrackNote(
+            TrackPitchEvent(
                 label="E4",
                 pitch_midi=64,
                 beat=1,
@@ -170,13 +170,16 @@ def test_public_openapi_does_not_expose_legacy_note_contracts() -> None:
     serialized = json.dumps(openapi)
 
     assert not hasattr(studio_schemas, "NoteSource")
+    assert not hasattr(studio_schemas, "PitchEventSource")
     assert not hasattr(studio_schemas, "TrackNote")
+    assert not hasattr(studio_schemas, "TrackPitchEvent")
     assert "TrackNote" not in schemas
+    assert "TrackPitchEvent" not in schemas
     assert "performance_notes" not in serialized
 
 
-def test_track_note_reads_legacy_warning_field_but_dumps_quality_warnings() -> None:
-    note = TrackNote.model_validate(
+def test_track_pitch_event_reads_legacy_warning_field_but_dumps_quality_warnings() -> None:
+    note = TrackPitchEvent.model_validate(
         {
             "label": "C4",
             "pitch_midi": 60,
@@ -193,8 +196,8 @@ def test_track_note_reads_legacy_warning_field_but_dumps_quality_warnings() -> N
     assert "notation_warnings" not in payload
 
 
-def test_track_note_reads_legacy_staff_index_but_dumps_source_staff_index() -> None:
-    note = TrackNote.model_validate(
+def test_track_pitch_event_reads_legacy_staff_index_but_dumps_source_staff_index() -> None:
+    note = TrackPitchEvent.model_validate(
         {
             "label": "C4",
             "pitch_midi": 60,
@@ -211,8 +214,8 @@ def test_track_note_reads_legacy_staff_index_but_dumps_source_staff_index() -> N
     assert "staff_index" not in payload
 
 
-def test_track_note_reads_legacy_display_policy_but_dumps_pitch_policy() -> None:
-    note = TrackNote.model_validate(
+def test_track_pitch_event_reads_legacy_display_policy_but_dumps_pitch_policy() -> None:
+    note = TrackPitchEvent.model_validate(
         {
             "label": "G3",
             "pitch_midi": 55,

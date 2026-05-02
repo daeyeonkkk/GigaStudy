@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from gigastudy_api.api.schemas.studios import SourceKind, Studio, StudioListItem, TrackSlot
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import TRACKS
 
 
@@ -31,7 +31,7 @@ def register_track_material(
     timestamp: str,
     source_kind: SourceKind,
     source_label: str,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     duration_seconds: float,
     registration_diagnostics: dict[str, Any],
     audio_source_path: str | None = None,

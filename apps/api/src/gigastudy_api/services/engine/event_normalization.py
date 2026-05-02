@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
     SLOT_RANGES,
     label_to_midi,
@@ -64,7 +64,7 @@ FLAT_ORDER = ("B", "E", "A", "D", "G", "C", "F")
 
 @dataclass
 class _NoteInterval:
-    note: TrackNote
+    note: TrackPitchEvent
     start_beat: float
     end_beat: float
     pitch_midi: int | None
@@ -86,7 +86,7 @@ def pitch_label_octave_shift_for_slot(slot_id: int) -> int:
 
 
 def normalize_track_notes(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     bpm: int,
     slot_id: int,
@@ -94,7 +94,7 @@ def normalize_track_notes(
     time_signature_denominator: int = 4,
     quantization_grid: float = VOICE_QUANTIZATION_GRID_BEATS,
     merge_adjacent_same_pitch: bool = True,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     """Convert extracted note material into a measure-owned event timeline.
 
     The studio BPM and meter are the fixed grid. This function never estimates or
@@ -121,7 +121,7 @@ def normalize_track_notes(
         merge_adjacent_same_pitch=merge_adjacent_same_pitch,
     )
 
-    normalized: list[TrackNote] = []
+    normalized: list[TrackPitchEvent] = []
     for interval in intervals:
         normalized.extend(
             _split_interval_at_measure_boundaries(
@@ -142,11 +142,11 @@ def normalize_track_notes(
 
 
 def annotate_track_notes_for_slot(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     slot_id: int,
     key_signature: str | None = None,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     """Attach event display metadata without rewriting imported rhythm.
 
     Symbolic imports and OMR exports often already contain trustworthy beat and
@@ -163,7 +163,7 @@ def annotate_track_notes_for_slot(
     pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
 
-    annotated: list[TrackNote] = []
+    annotated: list[TrackPitchEvent] = []
     for note in notes:
         pitch_midi = _resolve_pitch_midi(note)
         spelled_label = note.spelled_label
@@ -192,7 +192,7 @@ def annotate_track_notes_for_slot(
     return annotated
 
 
-def estimate_key_signature(notes: list[TrackNote]) -> str:
+def estimate_key_signature(notes: list[TrackPitchEvent]) -> str:
     pitch_weights = [0.0] * 12
     for note in notes:
         if note.is_rest:
@@ -245,7 +245,7 @@ def accidental_for_key(spelled_label: str, key_signature: str) -> str | None:
     return accidental or None
 
 
-def _normalize_intervals(notes: list[TrackNote], quantization_grid: float) -> list[_NoteInterval]:
+def _normalize_intervals(notes: list[TrackPitchEvent], quantization_grid: float) -> list[_NoteInterval]:
     intervals: list[_NoteInterval] = []
     minimum_duration = max(MIN_EVENT_DURATION_BEATS, quantization_grid)
     for note in notes:
@@ -336,7 +336,7 @@ def _split_interval_at_measure_boundaries(
     pitch_register: TrackPitchRegister,
     pitch_label_octave_shift: int,
     quantization_grid: float,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     source_note = interval.note
     pieces: list[tuple[float, float]] = []
     cursor = interval.start_beat
@@ -356,7 +356,7 @@ def _split_interval_at_measure_boundaries(
         return []
 
     split_tie = source_note.is_tied or len(pieces) > 1
-    normalized: list[TrackNote] = []
+    normalized: list[TrackPitchEvent] = []
     for index, (piece_start, piece_duration) in enumerate(pieces):
         pitch_midi = interval.pitch_midi
         spelled_label = spell_midi_label(pitch_midi, spelling_mode=spelling_mode) if pitch_midi is not None else source_note.label
@@ -424,7 +424,7 @@ def _parse_spelled_label(label: str) -> tuple[str, str | None, int] | None:
     return letter, accidental, octave
 
 
-def _resolve_pitch_midi(note: TrackNote) -> int | None:
+def _resolve_pitch_midi(note: TrackPitchEvent) -> int | None:
     if note.pitch_midi is not None:
         return round(note.pitch_midi)
     if note.is_rest:
@@ -440,7 +440,7 @@ def _same_pitch(left: _NoteInterval, right: _NoteInterval) -> bool:
     return left.note.label == right.note.label
 
 
-def _quality_warnings(note: TrackNote, pitch_register: TrackPitchRegister, is_split_tie: bool) -> list[str]:
+def _quality_warnings(note: TrackPitchEvent, pitch_register: TrackPitchRegister, is_split_tie: bool) -> list[str]:
     warnings = list(note.quality_warnings)
     if is_split_tie:
         warnings.append("measure_boundary_tie")

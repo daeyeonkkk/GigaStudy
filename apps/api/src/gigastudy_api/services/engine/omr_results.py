@@ -3,16 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.event_normalization import annotate_track_notes_for_slot
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile
 
 
 def mark_notes_as_omr(
-    mapped_notes: dict[int, list[TrackNote]],
+    mapped_notes: dict[int, list[TrackPitchEvent]],
     *,
     extraction_method: str = "audiveris_omr_v0",
-) -> dict[int, list[TrackNote]]:
+) -> dict[int, list[TrackPitchEvent]]:
     return {
         slot_id: annotate_track_notes_for_slot(
             [

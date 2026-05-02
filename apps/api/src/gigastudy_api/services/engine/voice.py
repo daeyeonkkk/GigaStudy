@@ -8,7 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from statistics import median
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.music_theory import (
     frequency_to_midi,
@@ -52,7 +52,7 @@ class MetronomeAlignment:
 
 @dataclass(frozen=True)
 class VoiceTranscriptionResult:
-    notes: list[TrackNote]
+    notes: list[TrackPitchEvent]
     alignment: MetronomeAlignment
     diagnostics: dict[str, object] | None = None
 
@@ -76,7 +76,7 @@ def transcribe_voice_file(
     time_signature_denominator: int = 4,
     backend: str | None = None,
     extraction_plan: VoiceExtractionPlan | None = None,
-) -> list[TrackNote]:
+) -> list[TrackPitchEvent]:
     return transcribe_voice_file_with_alignment(
         path,
         bpm=bpm,
@@ -268,7 +268,7 @@ def _transcribe_with_basic_pitch(
         [(onset, duration, confidence) for onset, duration, _midi, confidence in parsed_events],
         bpm=bpm,
     )
-    notes: list[TrackNote] = []
+    notes: list[TrackPitchEvent] = []
     for onset_seconds, duration_seconds, midi_note, amplitude in parsed_events:
         aligned_onset_seconds = max(0, onset_seconds + alignment.offset_seconds) if alignment.applied else onset_seconds
         warnings = ["metronome_phase_aligned"] if alignment.applied else []
@@ -729,7 +729,7 @@ def _frames_to_notes(
         ],
         bpm=bpm,
     )
-    notes: list[TrackNote] = []
+    notes: list[TrackPitchEvent] = []
     for segment in segments:
         midi_note = round(segment.midi_float)
         aligned_onset_seconds = max(0, segment.onset_seconds + alignment.offset_seconds) if alignment.applied else segment.onset_seconds

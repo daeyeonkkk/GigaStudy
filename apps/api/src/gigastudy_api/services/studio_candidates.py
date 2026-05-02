@@ -4,7 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 from gigastudy_api.api.schemas.studios import ExtractionCandidate, SourceKind, Studio, TrackSlot
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 
 
 def build_pending_candidate(
@@ -19,7 +19,7 @@ def build_pending_candidate(
     job_id: str | None = None,
     message: str | None = None,
     method: str,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     source_kind: SourceKind,
     source_label: str,
     suggested_slot_id: int,
@@ -60,7 +60,7 @@ def diagnostics_with_registration_quality(
 def mark_candidate_approved(
     candidate: ExtractionCandidate,
     *,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     registration_diagnostics: dict[str, Any],
     timestamp: str,
 ) -> None:

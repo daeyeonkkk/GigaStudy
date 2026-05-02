@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from gigastudy_api.api.schemas.studios import GenerateTrackRequest, Studio
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
@@ -20,7 +20,7 @@ DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 6.0
 
 @dataclass(frozen=True)
 class GeneratedTrackMaterial:
-    candidate_notes: list[list[TrackNote]]
+    candidate_notes: list[list[TrackPitchEvent]]
     source_label: str
     method: str
     message: str
@@ -39,7 +39,7 @@ def build_generation_context_notes_by_slot(
     *,
     target_slot_id: int,
     requested_context_slot_ids: list[int] | None,
-) -> dict[int, list[TrackNote]]:
+) -> dict[int, list[TrackPitchEvent]]:
     registered_tracks = [track for track in studio.tracks if track.status == "registered"]
     context_slot_ids = requested_context_slot_ids or [
         track.slot_id for track in registered_tracks
@@ -57,8 +57,8 @@ def build_generation_context_notes_by_slot(
 
 
 def flattened_generation_context_notes(
-    context_notes_by_slot: dict[int, list[TrackNote]],
-) -> list[TrackNote]:
+    context_notes_by_slot: dict[int, list[TrackPitchEvent]],
+) -> list[TrackPitchEvent]:
     return [note for notes in context_notes_by_slot.values() for note in notes]
 
 
@@ -128,7 +128,7 @@ def generate_track_material(
     )
     message = (
         "DeepSeek V4 Flash planned candidate directions; deterministic engine generated valid "
-        "TrackNote candidates."
+        "pitch-event candidates."
         if llm_plan is not None
         else "Deterministic voice-leading generated multiple candidates. Approve one candidate to register it."
     )
@@ -159,7 +159,7 @@ def _generation_planning_settings(settings: Settings, *, context_note_count: int
 def generation_candidate_review_metadata(
     *,
     slot_id: int,
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     method: str,
     confidence: float,
     candidate_index: int,

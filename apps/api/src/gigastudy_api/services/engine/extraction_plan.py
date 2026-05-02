@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from typing import Any, Literal
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import SLOT_RANGES, track_name
 
 ExtractionGrid = Literal[0.25, 0.5]
@@ -51,7 +51,7 @@ def default_voice_extraction_plan(
     slot_id: int,
     bpm: int,
     source_kind: str = "audio",
-    context_tracks_by_slot: dict[int, list[TrackNote]] | None = None,
+    context_tracks_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
 ) -> VoiceExtractionPlan:
     low, high = SLOT_RANGES.get(slot_id, (40, 81))
     track = track_name(slot_id)

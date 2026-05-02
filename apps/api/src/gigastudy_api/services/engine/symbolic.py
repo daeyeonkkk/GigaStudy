@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
-from gigastudy_api.domain.track_events import TrackNote
+from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
     DEFAULT_TIME_SIGNATURE,
     infer_slot_id,
@@ -24,7 +24,7 @@ from gigastudy_api.services.engine.event_normalization import annotate_track_not
 @dataclass
 class ParsedTrack:
     name: str
-    notes: list[TrackNote] = field(default_factory=list)
+    notes: list[TrackPitchEvent] = field(default_factory=list)
     slot_id: int | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
@@ -32,7 +32,7 @@ class ParsedTrack:
 @dataclass
 class ParsedSymbolicFile:
     tracks: list[ParsedTrack]
-    mapped_notes: dict[int, list[TrackNote]]
+    mapped_notes: dict[int, list[TrackPitchEvent]]
     time_signature_numerator: int = DEFAULT_TIME_SIGNATURE[0]
     time_signature_denominator: int = DEFAULT_TIME_SIGNATURE[1]
     has_time_signature: bool = False
@@ -42,7 +42,7 @@ class SymbolicParseError(ValueError):
     pass
 
 
-def parse_symbolic_file(path: Path, *, bpm: int, target_slot_id: int | None = None) -> dict[int, list[TrackNote]]:
+def parse_symbolic_file(path: Path, *, bpm: int, target_slot_id: int | None = None) -> dict[int, list[TrackPitchEvent]]:
     return parse_symbolic_file_with_metadata(path, bpm=bpm, target_slot_id=target_slot_id).mapped_notes
 
 
@@ -74,7 +74,7 @@ def map_tracks_to_slots(
     parsed_tracks: list[ParsedTrack],
     *,
     target_slot_id: int | None = None,
-) -> dict[int, list[TrackNote]]:
+) -> dict[int, list[TrackPitchEvent]]:
     non_empty_tracks = [track for track in parsed_tracks if track.notes]
     if not non_empty_tracks:
         raise SymbolicParseError("No notes were found in the symbolic file.")
@@ -94,7 +94,7 @@ def map_tracks_to_slots(
         return {target_slot_id: annotate_track_notes_for_slot(selected.notes, slot_id=target_slot_id)}
 
     assignments = _assign_tracks_by_name_and_range(non_empty_tracks)
-    mapped: dict[int, list[TrackNote]] = {}
+    mapped: dict[int, list[TrackPitchEvent]] = {}
     for track, slot_id in assignments:
         if 1 <= slot_id <= 6:
             track.slot_id = slot_id
@@ -159,7 +159,7 @@ def parse_musicxml_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
     for part in _children(root, "part"):
         part_id = part.attrib.get("id", "")
         part_name = part_names.get(part_id, part_id or "MusicXML part")
-        notes: list[TrackNote] = []
+        notes: list[TrackPitchEvent] = []
         divisions = 1
         current_time_signature = score_time_signature
         quarter_cursor = 0.0
@@ -282,7 +282,7 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         position = 0
         absolute_tick = 0
         active_notes: dict[tuple[int, int], int] = {}
-        notes: list[TrackNote] = []
+        notes: list[TrackPitchEvent] = []
         channels_seen: set[int] = set()
         current_time_signature = score_time_signature
 
@@ -379,7 +379,7 @@ def parse_midi_score(path: Path, *, bpm: int) -> ParsedSymbolicFile:
 
 
 def _append_midi_note(
-    notes: list[TrackNote],
+    notes: list[TrackPitchEvent],
     *,
     key: tuple[int, int],
     start_tick: int,

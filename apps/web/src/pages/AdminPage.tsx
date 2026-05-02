@@ -32,7 +32,7 @@ export function AdminPage() {
   const [studioOffset, setStudioOffset] = useState(0)
   const [status, setStatus] = useState<AdminStatus>({
     phase: 'idle',
-    message: 'Log in to manage studios and stored files.',
+    message: '스튜디오와 저장 파일을 관리하려면 로그인하세요.',
   })
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [expandedStudios, setExpandedStudios] = useState<Set<string>>(() => new Set())
@@ -55,7 +55,7 @@ export function AdminPage() {
   }
 
   async function loadSummary(nextCredentials: AdminCredentials, nextOffset = studioOffset) {
-    setStatus({ phase: 'loading', message: 'Loading storage summary.' })
+    setStatus({ phase: 'loading', message: '저장소 요약을 불러오는 중입니다.' })
     const nextSummary = await getAdminStorage(nextCredentials, {
       studioLimit: ADMIN_STUDIO_PAGE_SIZE,
       studioOffset: nextOffset,
@@ -65,7 +65,7 @@ export function AdminPage() {
     setSummary(nextSummary)
     setCredentials(nextCredentials)
     setStudioOffset(nextSummary.studio_offset)
-    setStatus({ phase: 'success', message: 'Storage summary refreshed.' })
+    setStatus({ phase: 'success', message: '저장소 요약을 새로 불러왔습니다.' })
   }
 
   async function login() {
@@ -74,7 +74,7 @@ export function AdminPage() {
       password,
     }
     if (!nextCredentials.username || !nextCredentials.password) {
-      setStatus({ phase: 'error', message: 'Enter both admin ID and password.' })
+      setStatus({ phase: 'error', message: '관리자 ID와 비밀번호를 모두 입력하세요.' })
       return
     }
 
@@ -86,7 +86,7 @@ export function AdminPage() {
       setSummary(null)
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Login failed.',
+        message: error instanceof Error ? error.message : '로그인에 실패했습니다.',
       })
     }
   }
@@ -102,7 +102,7 @@ export function AdminPage() {
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Storage summary could not be loaded.',
+        message: error instanceof Error ? error.message : '저장소 요약을 불러오지 못했습니다.',
       })
     }
   }
@@ -117,7 +117,7 @@ export function AdminPage() {
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Studio page could not be loaded.',
+        message: error instanceof Error ? error.message : '스튜디오 페이지를 불러오지 못했습니다.',
       })
     }
   }
@@ -128,7 +128,7 @@ export function AdminPage() {
     setPassword('')
     setStudioOffset(0)
     setExpandedStudios(new Set())
-    setStatus({ phase: 'idle', message: 'Logged out.' })
+    setStatus({ phase: 'idle', message: '로그아웃했습니다.' })
   }
 
   function toggleStudio(studioId: string) {
@@ -145,7 +145,7 @@ export function AdminPage() {
 
   async function runDeletion(key: string, action: () => Promise<{ cleanup_queued?: boolean; message?: string }>) {
     setBusyKey(key)
-    setStatus({ phase: 'loading', message: 'Processing deletion.' })
+    setStatus({ phase: 'loading', message: '삭제를 처리하는 중입니다.' })
     try {
       const result = await action()
       const nextOffset =
@@ -156,13 +156,13 @@ export function AdminPage() {
       setStatus({
         phase: 'success',
         message: result.cleanup_queued
-          ? 'Removed from the admin list. Stored file cleanup is continuing in the background.'
-          : (result.message ?? 'Deletion completed.'),
+          ? '관리 목록에서 제거했습니다. 저장 파일 정리는 백그라운드에서 계속됩니다.'
+          : (result.message ?? '삭제를 완료했습니다.'),
       })
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Deletion failed.',
+        message: error instanceof Error ? error.message : '삭제에 실패했습니다.',
       })
     } finally {
       setBusyKey(null)
@@ -170,7 +170,7 @@ export function AdminPage() {
   }
 
   function handleDeleteAsset(asset: AdminAssetSummary) {
-    if (!window.confirm(`Delete ${asset.filename}? Pitch-event and report data will remain.`)) {
+    if (!window.confirm(`${asset.filename} 파일을 삭제할까요? 피치 이벤트와 리포트 데이터는 유지됩니다.`)) {
       return
     }
     void runDeletion(`asset:${asset.asset_id}`, () =>
@@ -181,7 +181,7 @@ export function AdminPage() {
   function handleDeleteStudioAssets(studio: AdminStudioSummary) {
     if (
       !window.confirm(
-        `Delete stored file(s) for ${studio.title}? Normalized pitch-event data will remain. File counts may be incomplete until a storage scan runs.`,
+        `${studio.title}의 저장 파일을 삭제할까요? 정규화된 피치 이벤트 데이터는 유지됩니다. 저장소 스캔 전까지 파일 수가 일시적으로 맞지 않을 수 있습니다.`,
       )
     ) {
       return
@@ -192,7 +192,7 @@ export function AdminPage() {
   }
 
   function handleDeleteStudio(studio: AdminStudioSummary) {
-    if (!window.confirm(`Delete studio ${studio.title} and all stored files?`)) {
+    if (!window.confirm(`${studio.title} 스튜디오와 모든 저장 파일을 삭제할까요?`)) {
       return
     }
     void runDeletion(`studio:${studio.studio_id}`, () =>
@@ -201,14 +201,14 @@ export function AdminPage() {
   }
 
   function handleDeleteStagedAssets() {
-    if (!window.confirm('Delete abandoned staged upload files? Active studio files will remain.')) {
+    if (!window.confirm('버려진 임시 업로드 파일을 삭제할까요? 활성 스튜디오 파일은 유지됩니다.')) {
       return
     }
     void runDeletion('staged-assets', () => deleteAdminStagedAssets(activeCredentials))
   }
 
   function handleDeleteExpiredStagedAssets() {
-    if (!window.confirm('Delete only expired staged upload files? Active studio files will remain.')) {
+    if (!window.confirm('만료된 임시 업로드 파일만 삭제할까요? 활성 스튜디오 파일은 유지됩니다.')) {
       return
     }
     void runDeletion('expired-staged-assets', () => deleteAdminExpiredStagedAssets(activeCredentials))
@@ -219,20 +219,20 @@ export function AdminPage() {
       return
     }
     setBusyKey('engine-drain')
-    setStatus({ phase: 'loading', message: 'Processing one engine queue lane.' })
+    setStatus({ phase: 'loading', message: '엔진 대기열을 처리하는 중입니다.' })
     try {
       const result = await drainAdminEngineQueue(activeCredentials, 3)
       await loadSummary(activeCredentials, studioOffset)
       setStatus({
         phase: 'success',
-        message: `Engine queue processed ${result.processed_jobs}/${result.max_jobs} job(s).${
-          result.remaining_runnable ? ' More jobs are waiting.' : ''
+        message: `엔진 대기열 ${result.processed_jobs}/${result.max_jobs}개를 처리했습니다.${
+          result.remaining_runnable ? ' 아직 대기 중인 작업이 있습니다.' : ''
         }`,
       })
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : 'Engine queue could not be processed.',
+        message: error instanceof Error ? error.message : '엔진 대기열을 처리하지 못했습니다.',
       })
     } finally {
       setBusyKey(null)
@@ -241,22 +241,22 @@ export function AdminPage() {
 
   return (
     <main className="app-shell admin-page">
-      <section className="admin-window" aria-label="GigaStudy admin">
+      <section className="admin-window" aria-label="GigaStudy 관리자">
         <header className="admin-titlebar">
-          <Link to="/" className="admin-mark" aria-label="Go home">
+          <Link to="/" className="admin-mark" aria-label="홈으로 이동">
             GS
           </Link>
-          <span>GigaStudy - Admin</span>
+          <span>GigaStudy - 관리자</span>
         </header>
 
-        <nav className="admin-menubar" aria-label="Admin menu">
-          <span>Storage</span>
-          <span>Studios</span>
-          <span>Assets</span>
-          <span>Cleanup</span>
+        <nav className="admin-menubar" aria-label="관리자 메뉴">
+          <span>저장소</span>
+          <span>스튜디오</span>
+          <span>파일</span>
+          <span>정리</span>
         </nav>
 
-        <section className="admin-auth" aria-label="Admin login">
+        <section className="admin-auth" aria-label="관리자 로그인">
           <label>
             <span>ID</span>
             <input
@@ -272,7 +272,7 @@ export function AdminPage() {
             />
           </label>
           <label>
-            <span>Password</span>
+            <span>비밀번호</span>
             <input
               type="password"
               value={password}
@@ -288,15 +288,15 @@ export function AdminPage() {
           </label>
           {credentials === null ? (
             <button className="app-button" type="button" disabled={isBusy} onClick={() => void login()}>
-              Login
+              로그인
             </button>
           ) : (
             <div className="admin-auth-actions">
               <button className="app-button" type="button" disabled={isBusy} onClick={() => void refreshSummary()}>
-                Refresh
+                새로고침
               </button>
               <button type="button" disabled={isBusy} onClick={logout}>
-                Logout
+                로그아웃
               </button>
             </div>
           )}
@@ -307,34 +307,34 @@ export function AdminPage() {
 
         {credentials !== null ? (
           <>
-            <section className="admin-overview" aria-label="Storage overview">
-              <AdminMetric label="Studios" value={summary?.studio_count ?? 0} />
-              <AdminMetric label="Files" value={summary?.asset_count ?? 0} />
-              <AdminMetric label="Storage" value={formatBytes(summary?.total_bytes ?? 0)} />
-              <AdminMetric label="Metadata" value={formatBytes(summary?.metadata_bytes ?? 0)} />
-              <AdminMetric label="Upload Max" value={formatBytes(summary?.limits.max_upload_bytes ?? 0)} />
-              <AdminMetric label="Page Tracks" value={totalRegisteredTracks} />
+            <section className="admin-overview" aria-label="저장소 개요">
+              <AdminMetric label="스튜디오" value={summary?.studio_count ?? 0} />
+              <AdminMetric label="파일" value={summary?.asset_count ?? 0} />
+              <AdminMetric label="저장 용량" value={formatBytes(summary?.total_bytes ?? 0)} />
+              <AdminMetric label="메타데이터" value={formatBytes(summary?.metadata_bytes ?? 0)} />
+              <AdminMetric label="업로드 한도" value={formatBytes(summary?.limits.max_upload_bytes ?? 0)} />
+              <AdminMetric label="현재 페이지 트랙" value={totalRegisteredTracks} />
             </section>
 
-            <section className="admin-storage-path" aria-label="Storage backend">
-              <span>Storage backend</span>
+            <section className="admin-storage-path" aria-label="저장소 백엔드">
+              <span>저장소 백엔드</span>
               <strong>{summary?.storage_root ?? '-'}</strong>
             </section>
 
             {summary ? <AdminLimits summary={summary} /> : null}
 
-            <section className="admin-cleanup" aria-label="Cleanup operations">
+            <section className="admin-cleanup" aria-label="정리 작업">
               <div>
-                <span>Cleanup</span>
-                <strong>Abandoned staged uploads</strong>
-                <p>Expired staged files are also cleaned automatically when new upload targets are created.</p>
+                <span>정리</span>
+                <strong>남은 임시 업로드</strong>
+                <p>만료된 임시 파일은 새 업로드 준비 정보를 만들 때도 자동으로 정리됩니다.</p>
               </div>
               <button
                 type="button"
                 disabled={isBusy}
                 onClick={handleDeleteExpiredStagedAssets}
               >
-                Delete Expired
+                만료 파일 삭제
               </button>
               <button
                 className="admin-danger"
@@ -342,15 +342,15 @@ export function AdminPage() {
                 disabled={isBusy}
                 onClick={handleDeleteStagedAssets}
               >
-                Delete Staged Files
+                임시 파일 삭제
               </button>
             </section>
 
-            <section className="admin-queue" aria-label="Engine queue operations">
+            <section className="admin-queue" aria-label="엔진 대기열 작업">
               <div>
-                <span>Engine queue</span>
-                <strong>Document and voice extraction lane</strong>
-                <p>Runs up to 3 queued or expired jobs now. Use this after a failed wake-up or a quiet period.</p>
+                <span>엔진 대기열</span>
+                <strong>문서/음성 추출 처리</strong>
+                <p>대기 중이거나 만료된 작업을 최대 3개까지 즉시 처리합니다.</p>
               </div>
               <button
                 className="app-button"
@@ -358,39 +358,39 @@ export function AdminPage() {
                 disabled={isBusy}
                 onClick={() => void handleDrainEngineQueue()}
               >
-                Run Queue
+                대기열 실행
               </button>
             </section>
 
-            <section className="admin-studios" aria-label="Studio list">
+            <section className="admin-studios" aria-label="스튜디오 목록">
               <header className="admin-section-header">
                 <div>
-                  <p className="eyebrow">Operations</p>
-                  <h1>Studio Management</h1>
+                  <p className="eyebrow">운영</p>
+                  <h1>스튜디오 관리</h1>
                 </div>
-                <div className="admin-pager" aria-label="Studio pagination">
+                <div className="admin-pager" aria-label="스튜디오 페이지 이동">
                   <span>
-                    {summary ? `${pageStart}-${pageEnd} / ${summary.studio_count}` : 'No data'}
+                    {summary ? `${pageStart}-${pageEnd} / ${summary.studio_count}` : '데이터 없음'}
                   </span>
                   <button
                     type="button"
                     disabled={isBusy || !summary || summary.studio_offset === 0}
                     onClick={() => void goToOffset(studioOffset - ADMIN_STUDIO_PAGE_SIZE)}
                   >
-                    Prev
+                    이전
                   </button>
                   <button
                     type="button"
                     disabled={isBusy || !summary?.has_more_studios}
                     onClick={() => void goToOffset(studioOffset + ADMIN_STUDIO_PAGE_SIZE)}
                   >
-                    Next
+                    다음
                   </button>
                 </div>
               </header>
 
               {summary?.studios.length === 0 ? (
-                <p className="admin-empty">No studios on this page.</p>
+                <p className="admin-empty">이 페이지에 스튜디오가 없습니다.</p>
               ) : null}
 
               <div className="admin-studio-list">
@@ -409,23 +409,23 @@ export function AdminPage() {
                       <div className="admin-studio-meta">
                         <span>{maskId(studio.studio_id)}</span>
                         <span>{studio.bpm} BPM</span>
-                        <span>tracks {studio.registered_track_count}/6</span>
-                        <span>reports {studio.report_count}</span>
-                        <span>candidates {studio.candidate_count}</span>
-                        <span>files {studio.asset_count}</span>
+                        <span>트랙 {studio.registered_track_count}/6</span>
+                        <span>리포트 {studio.report_count}</span>
+                        <span>후보 {studio.candidate_count}</span>
+                        <span>파일 {studio.asset_count}</span>
                         <span>{formatBytes(studio.asset_bytes)}</span>
                       </div>
                     </div>
                     <div className="admin-row-actions">
                       <Link className="admin-link-button" to={`/studios/${studio.studio_id}`}>
-                        Open
+                        열기
                       </Link>
                       <button
                         type="button"
                         disabled={isBusy}
                         onClick={() => handleDeleteStudioAssets(studio)}
                       >
-                        Delete Files
+                        파일 삭제
                       </button>
                       <button
                         className="admin-danger"
@@ -433,7 +433,7 @@ export function AdminPage() {
                         disabled={isBusy}
                         onClick={() => handleDeleteStudio(studio)}
                       >
-                        Delete Studio
+                        스튜디오 삭제
                       </button>
                     </div>
 
@@ -451,15 +451,15 @@ export function AdminPage() {
             </section>
           </>
         ) : (
-          <section className="admin-login-empty" aria-label="Login prompt">
-            <h1>Admin</h1>
-            <p>Log in to delete studios, uploads, recordings, generated files, and document outputs.</p>
+          <section className="admin-login-empty" aria-label="로그인 안내">
+            <h1>관리자</h1>
+            <p>스튜디오, 업로드, 녹음, 생성 파일, 문서 출력물을 삭제하려면 로그인하세요.</p>
           </section>
         )}
 
         <footer className="admin-statusbar">
-          <span>Ready</span>
-          <span>{credentials === null ? 'Login required' : 'Admin session active'}</span>
+          <span>준비 완료</span>
+          <span>{credentials === null ? '로그인 필요' : '관리자 세션 활성'}</span>
         </footer>
       </section>
     </main>
@@ -479,17 +479,17 @@ function AdminLimits({ summary }: { summary: AdminStorageSummary }) {
   const limits = summary.limits
   const hasWarning = limits.warnings.length > 0
   return (
-    <section className={`admin-limits${hasWarning ? ' admin-limits--warning' : ''}`} aria-label="Alpha limits">
+    <section className={`admin-limits${hasWarning ? ' admin-limits--warning' : ''}`} aria-label="알파 운영 한도">
       <div>
-        <span>Alpha operating limits</span>
+        <span>알파 운영 한도</span>
         <strong>
-          Studios {summary.studio_count}/{limits.studio_hard_limit} · Assets{' '}
-          {formatBytes(summary.total_asset_bytes)}/{formatBytes(limits.asset_hard_bytes)} · Engine jobs{' '}
+          스튜디오 {summary.studio_count}/{limits.studio_hard_limit} · 파일{' '}
+          {formatBytes(summary.total_asset_bytes)}/{formatBytes(limits.asset_hard_bytes)} · 엔진 작업{' '}
           {limits.max_active_engine_jobs}
         </strong>
       </div>
       <p>
-        Soft line {limits.studio_soft_limit} studios · warning at {formatBytes(limits.asset_warning_bytes)}.
+        권장선 {limits.studio_soft_limit}개 스튜디오 · {formatBytes(limits.asset_warning_bytes)}부터 경고.
       </p>
       {hasWarning ? (
         <ul>
@@ -514,19 +514,19 @@ function AssetTable({
   onDeleteAsset: (asset: AdminAssetSummary) => void
 }) {
   if (assets.length === 0) {
-    return <p className="admin-empty admin-empty--inline">No stored files for this studio.</p>
+    return <p className="admin-empty admin-empty--inline">이 스튜디오에 저장 파일이 없습니다.</p>
   }
 
   return (
     <>
-      <div className="admin-asset-table" role="table" aria-label="Stored files">
+      <div className="admin-asset-table" role="table" aria-label="저장 파일">
         <div className="admin-asset-row admin-asset-row--head" role="row">
-          <span role="columnheader">File</span>
-          <span role="columnheader">Kind</span>
-          <span role="columnheader">Size</span>
-          <span role="columnheader">Ref</span>
-          <span role="columnheader">Updated</span>
-          <span role="columnheader">Action</span>
+          <span role="columnheader">파일</span>
+          <span role="columnheader">종류</span>
+          <span role="columnheader">크기</span>
+          <span role="columnheader">참조</span>
+          <span role="columnheader">수정</span>
+          <span role="columnheader">작업</span>
         </div>
         {assets.map((asset) => (
           <div className="admin-asset-row" role="row" key={asset.asset_id}>
@@ -535,7 +535,7 @@ function AssetTable({
             </span>
             <span role="cell">{asset.kind}</span>
             <span role="cell">{formatBytes(asset.size_bytes)}</span>
-            <span role="cell">{asset.referenced ? 'in use' : 'orphan'}</span>
+            <span role="cell">{asset.referenced ? '사용 중' : '미사용'}</span>
             <span role="cell">{formatDate(asset.updated_at)}</span>
             <span role="cell">
               <button
@@ -543,7 +543,7 @@ function AssetTable({
                 disabled={busyKey === `asset:${asset.asset_id}`}
                 onClick={() => onDeleteAsset(asset)}
               >
-                Delete
+                삭제
               </button>
             </span>
           </div>
@@ -551,7 +551,7 @@ function AssetTable({
       </div>
       {totalAssetCount > assets.length ? (
         <p className="admin-empty admin-empty--inline">
-          Showing first {assets.length} of {totalAssetCount} files for this studio.
+          이 스튜디오의 파일 {totalAssetCount}개 중 처음 {assets.length}개를 표시합니다.
         </p>
       ) : null}
     </>

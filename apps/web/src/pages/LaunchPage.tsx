@@ -240,23 +240,23 @@ export function LaunchPage() {
 
   return (
     <main className="app-shell launch-page">
-      <section className="launch-composer" aria-label="GigaStudy studio launcher">
+      <section className="launch-composer" aria-label="GigaStudy 스튜디오 시작">
         <header className="launch-titlebar">
           <span className="launch-app-mark">GS</span>
-          <span>GigaStudy - New Studio</span>
+          <span>GigaStudy - 새 스튜디오</span>
         </header>
 
         <nav className="launch-menubar" aria-label="상단 메뉴">
-          <span>File</span>
-          <span>View</span>
-          <span>Play</span>
-          <span>Tools</span>
-          <span>Help</span>
+          <span>파일</span>
+          <span>보기</span>
+          <span>재생</span>
+          <span>도구</span>
+          <span>도움말</span>
         </nav>
 
         <div className="launch-toolbar" aria-label="스튜디오 생성 도구">
           <button className="launch-tool" type="button" onClick={() => sourceInputRef.current?.click()}>
-            <span aria-hidden="true">Upload</span>
+            <span aria-hidden="true">업로드</span>
           </button>
           <button
             className="launch-tool"
@@ -264,18 +264,18 @@ export function LaunchPage() {
             disabled={Boolean(sourceFile) || submitState.phase === 'submitting'}
             onClick={() => void startBlank()}
           >
-            <span aria-hidden="true">New</span>
+            <span aria-hidden="true">새로</span>
           </button>
-          <span className="launch-tool launch-tool--status">6 tracks | 0.01s sync</span>
+          <span className="launch-tool launch-tool--status">6트랙 | 0.01초 싱크</span>
         </div>
 
         <div className="launch-document">
           <section className="launch-arrange-preview" aria-label="빈 6트랙 리전 미리보기">
             <div className="launch-arrange-title">
               <strong>GigaStudy</strong>
-              <span>Six-track a cappella studio</span>
+              <span>6트랙 아카펠라 스튜디오</span>
             </div>
-            {['Soprano', 'Alto', 'Tenor', 'Baritone', 'Bass', 'Percussion'].map((track) => (
+            {['소프라노', '알토', '테너', '바리톤', '베이스', '퍼커션'].map((track) => (
               <div className="launch-region-row" key={track}>
                 <span>{track}</span>
                 <div aria-hidden="true">
@@ -290,7 +290,7 @@ export function LaunchPage() {
 
           <section className="launch-create" aria-label="새 스튜디오 만들기" aria-busy={submitState.phase === 'submitting'}>
             <div className="launch-create__header">
-              <p className="eyebrow">Document setup</p>
+              <p className="eyebrow">스튜디오 설정</p>
               <h1>새 스튜디오</h1>
             </div>
 
@@ -313,7 +313,7 @@ export function LaunchPage() {
               {sourceFile === null ? (
                 <>
                   <label className="launch-field">
-                    <span>BPM</span>
+                    <span>템포</span>
                     <input
                       data-testid="studio-bpm-input"
                       inputMode="numeric"
@@ -328,9 +328,9 @@ export function LaunchPage() {
                   </label>
 
                   <div className="launch-field launch-field--time-signature">
-                    <span>Time Signature</span>
+                    <span>박자표</span>
                     <input
-                      aria-label="time signature numerator"
+                      aria-label="박자표 분자"
                       data-testid="studio-time-signature-numerator"
                       inputMode="numeric"
                       value={timeSignatureNumerator}
@@ -342,7 +342,7 @@ export function LaunchPage() {
                       }}
                     />
                     <select
-                      aria-label="time signature denominator"
+                      aria-label="박자표 분모"
                       data-testid="studio-time-signature-denominator"
                       value={timeSignatureDenominator}
                       onChange={(event) => {
@@ -446,9 +446,9 @@ export function LaunchPage() {
         </div>
 
         <footer className="launch-statusbar">
-          <span>Ready</span>
-          <span>Tracks 1-6</span>
-          <span>Region / Music / Blank</span>
+          <span>준비 완료</span>
+          <span>트랙 1-6</span>
+          <span>리전 / 악보 / 빈 스튜디오</span>
         </footer>
       </section>
 

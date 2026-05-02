@@ -92,8 +92,12 @@ def test_vocal_generation_uses_known_slots_to_avoid_voice_crossing() -> None:
         time_signature_denominator=4,
     )
 
-    assert [note.extraction_method for note in notes] == ["rule_based_voice_leading_v1"] * 4
-    for generated, upper, lower in zip(notes, soprano, tenor, strict=True):
+    assert notes
+    assert all(note.extraction_method == "rule_based_voice_leading_v1" for note in notes)
+    assert max(note.beat + note.duration_beats for note in notes) >= 5
+    for generated in notes:
+        upper = next(note for note in soprano if note.beat == generated.beat)
+        lower = next(note for note in tenor if note.beat == generated.beat)
         assert lower.pitch_midi < generated.pitch_midi < upper.pitch_midi
 
 

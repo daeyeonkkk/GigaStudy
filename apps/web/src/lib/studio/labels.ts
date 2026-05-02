@@ -20,6 +20,15 @@ export const sourceLabels: Record<SourceKind, string> = {
   ai: 'AI 생성',
 }
 
+const trackNameLabels: Record<string, string> = {
+  Alto: '알토',
+  Baritone: '바리톤',
+  Bass: '베이스',
+  Percussion: '퍼커션',
+  Soprano: '소프라노',
+  Tenor: '테너',
+}
+
 export function getJobStatusLabel(status: TrackExtractionJob['status']): string {
   const labels: Record<TrackExtractionJob['status'], string> = {
     queued: '대기 중',
@@ -29,6 +38,17 @@ export function getJobStatusLabel(status: TrackExtractionJob['status']): string 
     failed: '실패',
   }
   return labels[status]
+}
+
+export function formatTrackName(name: string | null | undefined): string {
+  if (!name) {
+    return '트랙'
+  }
+  const genericTrackMatch = /^Track\s+(\d+)$/i.exec(name.trim())
+  if (genericTrackMatch) {
+    return `트랙 ${genericTrackMatch[1]}`
+  }
+  return trackNameLabels[name] ?? name
 }
 
 export function getTrackSourceLabel(track: TrackSlot): string {

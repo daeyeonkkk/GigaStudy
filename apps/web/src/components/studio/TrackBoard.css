@@ -579,51 +579,58 @@
 
 .practice-waterfall__stage {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
   min-height: 250px;
   border: 1px solid #8e9aa4;
   background:
-    linear-gradient(#dce3e8 0 1px, transparent 1px) 0 0 / 100% 48px,
+    linear-gradient(#dce3e8 0 1px, transparent 1px) 0 0 / 100% calc(100% / var(--waterfall-row-count, 1)),
+    linear-gradient(90deg, rgba(84, 97, 108, 0.18) 0 1px, transparent 1px) 0 0 / 48px 100%,
     #ffffff;
   overflow: hidden;
 }
 
 .practice-waterfall__lane {
-  display: flex;
-  justify-content: center;
-  border-left: 1px solid #d0d7de;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((100% / var(--waterfall-row-count, 1)) * var(--waterfall-row-index));
+  height: calc(100% / var(--waterfall-row-count, 1));
+  border-top: 1px solid #d0d7de;
   color: #5b6873;
   font-size: 0.68rem;
   font-weight: 900;
 }
 
 .practice-waterfall__lane:first-child {
-  border-left: 0;
+  border-top: 0;
 }
 
 .practice-waterfall__lane span {
-  align-self: end;
-  margin-bottom: 6px;
-  writing-mode: vertical-rl;
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .practice-waterfall__playhead {
   position: absolute;
   z-index: 3;
-  top: var(--playhead-left);
-  left: 0;
-  right: 0;
-  height: 2px;
+  top: 0;
+  bottom: 0;
+  left: var(--playhead-left);
+  width: 2px;
   background: #c2362d;
 }
 
 .practice-waterfall__note {
   position: absolute;
-  left: calc(var(--waterfall-left) + 3%);
-  top: var(--waterfall-top);
-  width: 10%;
-  height: var(--waterfall-height);
+  left: var(--waterfall-left);
+  top: calc((100% / var(--waterfall-row-count, 1)) * var(--waterfall-row-index) + 26px);
+  width: var(--waterfall-width);
+  height: calc((100% / var(--waterfall-row-count, 1)) - 34px);
+  min-width: 18px;
   min-height: 10px;
   border: 1px solid #16424e;
   border-radius: 4px;

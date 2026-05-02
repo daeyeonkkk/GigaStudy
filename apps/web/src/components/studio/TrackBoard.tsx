@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
   TRACK_UPLOAD_ACCEPT,
+  formatTrackName,
   formatDurationSeconds,
   formatSeconds,
   getArrangementRegionDurationSeconds,
@@ -196,9 +197,9 @@ function TrackVolumeControl({
 
   return (
     <label className="track-volume-control">
-      <span>Vol</span>
+      <span>음량</span>
       <input
-        aria-label={`${track.name} volume`}
+        aria-label={`${formatTrackName(track.name)} 음량`}
         data-testid={`track-volume-range-${track.slot_id}`}
         max="100"
         min="0"
@@ -223,7 +224,7 @@ function TrackVolumeControl({
         onPointerUp={(event) => commitVolume(event.currentTarget.value)}
       />
       <input
-        aria-label={`${track.name} volume percent`}
+        aria-label={`${formatTrackName(track.name)} 음량 퍼센트`}
         data-testid={`track-volume-input-${track.slot_id}`}
         inputMode="numeric"
         max="100"
@@ -267,7 +268,7 @@ function RegionTools({
   onSplitRegion: (region: ArrangementRegion, splitSeconds: number) => void
 }) {
   if (!region) {
-    return <p className="piano-roll-panel__hint">Select a region to edit arrangement blocks.</p>
+    return <p className="piano-roll-panel__hint">편집할 리전을 선택하세요.</p>
   }
 
   const canMoveUp = region.track_slot_id > Math.min(...tracks.map((track) => track.slot_id))
@@ -275,48 +276,48 @@ function RegionTools({
   const midpoint = region.start_seconds + region.duration_seconds / 2
 
   return (
-    <div className="region-tools" aria-label="Region editing tools">
+    <div className="region-tools" aria-label="리전 편집 도구">
       {disabled && disabledReason ? <p className="region-tools__hint">{disabledReason}</p> : null}
       <button
         disabled={disabled}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds - gridSeconds))}
       >
-        Move left
+        왼쪽 이동
       </button>
       <button
         disabled={disabled}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds + gridSeconds))}
       >
-        Move right
+        오른쪽 이동
       </button>
       <button disabled={disabled} type="button" onClick={() => onSplitRegion(region, midpoint)}>
-        Split
+        자르기
       </button>
       <button
         disabled={disabled}
         type="button"
         onClick={() => onCopyRegion(region, region.track_slot_id, region.start_seconds + region.duration_seconds)}
       >
-        Copy
+        복사
       </button>
       <button
         disabled={disabled || !canMoveUp}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id - 1, region.start_seconds)}
       >
-        Track up
+        위 트랙
       </button>
       <button
         disabled={disabled || !canMoveDown}
         type="button"
         onClick={() => onMoveRegion(region, region.track_slot_id + 1, region.start_seconds)}
       >
-        Track down
+        아래 트랙
       </button>
       <button className="region-tools__danger" disabled={disabled} type="button" onClick={() => onDeleteRegion(region)}>
-        Delete
+        삭제
       </button>
     </div>
   )
@@ -363,13 +364,13 @@ function PianoRollPanel({
   }
 
   return (
-    <section className="piano-roll-panel" aria-label="Piano roll editor">
+    <section className="piano-roll-panel" aria-label="피아노 롤 편집기">
       <header>
         <div>
-          <p className="eyebrow">Micro editor</p>
-          <h3>{region ? `${region.track_name} Piano Roll` : 'Piano Roll'}</h3>
+          <p className="eyebrow">세부 편집</p>
+          <h3>{region ? `${formatTrackName(region.track_name)} 피아노 롤` : '피아노 롤'}</h3>
         </div>
-        <div className="piano-roll-panel__tools" aria-label="Piano roll tools">
+        <div className="piano-roll-panel__tools" aria-label="피아노 롤 도구">
           {disabled && disabledReason ? <span className="piano-roll-panel__lock">{disabledReason}</span> : null}
           <button
             disabled={disabled || !selectedEvent}
@@ -380,7 +381,7 @@ function PianoRollPanel({
               }
             }}
           >
-            Pitch -
+            음정 -
           </button>
           <button
             disabled={disabled || !selectedEvent}
@@ -391,7 +392,7 @@ function PianoRollPanel({
               }
             }}
           >
-            Pitch +
+            음정 +
           </button>
           <button
             disabled={disabled || !selectedEvent}
@@ -404,7 +405,7 @@ function PianoRollPanel({
                 : undefined
             }
           >
-            Nudge -
+            당기기
           </button>
           <button
             disabled={disabled || !selectedEvent}
@@ -417,7 +418,7 @@ function PianoRollPanel({
                 : undefined
             }
           >
-            Nudge +
+            밀기
           </button>
           <button
             disabled={disabled || !selectedEvent}
@@ -430,7 +431,7 @@ function PianoRollPanel({
                 : undefined
             }
           >
-            Shorter
+            짧게
           </button>
           <button
             disabled={disabled || !selectedEvent}
@@ -443,7 +444,7 @@ function PianoRollPanel({
                 : undefined
             }
           >
-            Longer
+            길게
           </button>
           <button
             disabled={disabled || !selectedEvent}
@@ -457,7 +458,7 @@ function PianoRollPanel({
                 : undefined
             }
           >
-            Snap
+            스냅
           </button>
         </div>
       </header>
@@ -495,7 +496,7 @@ function PianoRollPanel({
               </button>
             ))
           ) : (
-            <p>Select a region with pitch events.</p>
+            <p>음정 이벤트가 있는 리전을 선택하세요.</p>
           )}
         </div>
       </div>
@@ -515,36 +516,53 @@ function PracticeWaterfall({
   const events = regions.flatMap((region) =>
     getPitchedEvents(region.pitch_events).map((event) => ({ event, region })),
   )
+  const laneSlotIds = Array.from(new Set(regions.map((region) => region.track_slot_id))).sort((left, right) => left - right)
+  const rowCount = Math.max(1, laneSlotIds.length)
 
   return (
-    <section className="practice-waterfall" aria-label="Practice preview">
+    <section className="practice-waterfall" aria-label="연습 미리보기">
       <header>
         <div>
-          <p className="eyebrow">Practice mode</p>
-          <h3>Waterfall</h3>
+          <p className="eyebrow">연습 모드</p>
+          <h3>타임라인</h3>
         </div>
-        <span>{events.length} events</span>
+        <span>{events.length}개 이벤트</span>
       </header>
-      <div className="practice-waterfall__stage" style={getPlayheadStyle(playheadSeconds, timelineSeconds)}>
+      <div
+        className="practice-waterfall__stage"
+        style={
+          {
+            ...getPlayheadStyle(playheadSeconds, timelineSeconds),
+            '--waterfall-row-count': rowCount,
+          } as CSSProperties
+        }
+      >
         <i className="practice-waterfall__playhead" aria-hidden="true" />
-        {regions.map((region) => (
-          <div className="practice-waterfall__lane" key={region.region_id}>
-            <span>{region.track_name}</span>
-          </div>
-        ))}
+        {laneSlotIds.map((slotId, index) => {
+          const region = regions.find((item) => item.track_slot_id === slotId)
+          return (
+            <div
+              className="practice-waterfall__lane"
+              key={slotId}
+              style={{ '--waterfall-row-index': index } as CSSProperties}
+            >
+              <span>{formatTrackName(region?.track_name)}</span>
+            </div>
+          )
+        })}
         {events.map(({ event, region }) => (
           <i
-            aria-label={`${region.track_name} ${event.label}`}
+            aria-label={`${formatTrackName(region.track_name)} ${event.label}`}
             className="practice-waterfall__note"
             key={`${region.region_id}-${event.event_id}`}
             style={
               {
-                '--waterfall-left': `${getTimelinePercent(region.track_slot_id - 1, 6)}%`,
-                '--waterfall-top': `${getTimelinePercent(event.start_seconds, timelineSeconds)}%`,
-                '--waterfall-height': `${Math.max(1.2, getTimelinePercent(event.duration_seconds, timelineSeconds))}%`,
+                '--waterfall-left': `${getTimelinePercent(event.start_seconds, timelineSeconds)}%`,
+                '--waterfall-row-index': laneSlotIds.indexOf(region.track_slot_id),
+                '--waterfall-width': `${Math.max(1.8, getTimelinePercent(event.duration_seconds, timelineSeconds))}%`,
               } as CSSProperties
             }
-            title={`${region.track_name} - ${event.label}`}
+            title={`${formatTrackName(region.track_name)} - ${event.label}`}
           />
         ))}
       </div>
@@ -639,21 +657,21 @@ export function TrackBoard({
   const selectedRegionJobLocked = selectedRegion ? activeJobSlotIds.has(selectedRegion.track_slot_id) : false
   const selectedRegionEditDisabled = editDisabled || selectedRegionJobLocked
   const selectedRegionDisabledReason = selectedRegionJobLocked
-    ? `${selectedRegion?.track_name ?? '선택한 트랙'} 추출 작업이 끝난 뒤 편집할 수 있습니다.`
+    ? `${formatTrackName(selectedRegion?.track_name)} 추출 작업이 끝난 뒤 편집할 수 있습니다.`
     : editDisabledReason
 
   return (
-    <section className="studio-tracks" aria-label="Six-track region editor">
+    <section className="studio-tracks" aria-label="6트랙 리전 편집기">
       <div className="studio-tracks__header">
         <div>
-          <p className="eyebrow">Arrangement</p>
-          <h2>Region View + Piano Roll</h2>
+          <p className="eyebrow">편곡</p>
+          <h2>리전 뷰 + 피아노 롤</h2>
         </div>
         <div className="studio-tracks__summary">
-          <span>{registeredTracks.length} registered</span>
-          <span>{regions.length} regions</span>
-          <span>{pendingCandidateCount} review</span>
-          <span>{playingSlots.size} playing</span>
+          <span>등록 {registeredTracks.length}</span>
+          <span>리전 {regions.length}</span>
+          <span>검토 {pendingCandidateCount}</span>
+          <span>재생 {playingSlots.size}</span>
         </div>
       </div>
 
@@ -680,7 +698,7 @@ export function TrackBoard({
           const isRecordToggleAvailable = isRecording || isCountingIn
           const trackEditDisabled = editDisabled || activeJobLocked
           const trackEditDisabledReason = activeJobLocked
-            ? `${track.name} 트랙은 추출 작업이 끝난 뒤 편집할 수 있습니다.`
+            ? `${formatTrackName(track.name)} 트랙은 추출 작업이 끝난 뒤 편집할 수 있습니다.`
             : editDisabledReason
           const trackRegions = regionsByTrack.get(track.slot_id) ?? []
           const canGenerateTrack = registeredTracks.some(
@@ -705,7 +723,7 @@ export function TrackBoard({
                 <div className="track-card__identity">
                   <span>{String(track.slot_id).padStart(2, '0')}</span>
                   <div>
-                    <h3>{track.name}</h3>
+                    <h3>{formatTrackName(track.name)}</h3>
                     <p>{getTrackSourceLabel(track)}</p>
                   </div>
                 </div>
@@ -716,14 +734,14 @@ export function TrackBoard({
                       {getJobStatusLabel(activeJob.status)}
                     </span>
                   ) : null}
-                  <span>sync {formatSeconds(track.sync_offset_seconds)}</span>
-                  <span>vol {getTrackVolumePercent(track)}%</span>
+                  <span>싱크 {formatSeconds(track.sync_offset_seconds)}</span>
+                  <span>음량 {getTrackVolumePercent(track)}%</span>
                 </div>
               </header>
 
               <div
                 className="track-card__timeline track-card__region-lane"
-                aria-label={`${track.name} region lane`}
+                aria-label={`${formatTrackName(track.name)} 리전 레인`}
                 style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineSeconds, trackRegions.length)}
               >
                 <div className="track-card__measure-grid" aria-hidden="true">
@@ -740,7 +758,7 @@ export function TrackBoard({
                 {trackRegions.length > 0 ? (
                   trackRegions.map((region, index) => (
                     <button
-                      aria-label={`${track.name} region ${index + 1}`}
+                      aria-label={`${formatTrackName(track.name)} 리전 ${index + 1}`}
                       aria-pressed={selectedRegion?.region_id === region.region_id}
                       className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
                       data-region-id={region.region_id}
@@ -757,8 +775,8 @@ export function TrackBoard({
                         setSelectedEventId(region.pitch_events[0]?.event_id ?? null)
                       }}
                     >
-                      <span>{region.source_label ?? track.name}</span>
-                      <strong>{getPitchedEvents(region.pitch_events).length} events</strong>
+                      <span>{region.source_label ?? formatTrackName(track.name)}</span>
+                      <strong>{getPitchedEvents(region.pitch_events).length}개 이벤트</strong>
                       <em>
                         {formatDurationSeconds(region.start_seconds)} -{' '}
                         {formatDurationSeconds(region.start_seconds + region.duration_seconds)}
@@ -766,7 +784,7 @@ export function TrackBoard({
                     </button>
                   ))
                 ) : (
-                  <p>{needsReview ? 'Review pending for this track' : 'Empty track'}</p>
+                  <p>{needsReview ? '검토할 후보가 있습니다' : '빈 트랙'}</p>
                 )}
               </div>
 
@@ -780,15 +798,15 @@ export function TrackBoard({
                     title={!isRecordToggleAvailable ? trackEditDisabledReason ?? undefined : undefined}
                     onClick={() => onRecord(track)}
                   >
-                    <span aria-hidden="true">{isRecording || isCountingIn ? 'Stop' : 'Rec'}</span>
-                    {isRecording ? 'Recording' : isCountingIn ? 'Cancel' : 'Record'}
+                    <span aria-hidden="true">{isRecording || isCountingIn ? '중지' : '녹음'}</span>
+                    {isRecording ? '녹음 중' : isCountingIn ? '취소' : '녹음'}
                   </button>
                   <label className={`app-button app-button--secondary track-upload ${trackEditDisabled ? 'is-disabled' : ''}`}>
-                    <span aria-hidden="true">Up</span>
-                    Upload
+                    <span aria-hidden="true">업</span>
+                    업로드
                     <input
                       accept={TRACK_UPLOAD_ACCEPT}
-                      aria-label={`${track.name} upload`}
+                      aria-label={`${formatTrackName(track.name)} 업로드`}
                       disabled={trackEditDisabled}
                       type="file"
                       onChange={(event) => {
@@ -807,13 +825,13 @@ export function TrackBoard({
                     onClick={() => onGenerate(track)}
                   >
                     <span aria-hidden="true">AI</span>
-                    Generate
+                    생성
                   </button>
                 </div>
 
                 <div className="track-card__secondary-actions">
                   <button
-                    aria-label={`${track.name} sync ${formatSyncStep(syncStepSeconds)} seconds earlier`}
+                    aria-label={`${formatTrackName(track.name)} 싱크를 ${formatSyncStep(syncStepSeconds)}초 앞으로 이동`}
                     className="studio-step-button"
                     data-testid={`track-sync-earlier-${track.slot_id}`}
                     disabled={trackEditDisabled || !isRegistered}
@@ -823,7 +841,7 @@ export function TrackBoard({
                     -{formatSyncStep(syncStepSeconds)}
                   </button>
                   <button
-                    aria-label={`${track.name} sync ${formatSyncStep(syncStepSeconds)} seconds later`}
+                    aria-label={`${formatTrackName(track.name)} 싱크를 ${formatSyncStep(syncStepSeconds)}초 뒤로 이동`}
                     className="studio-step-button"
                     data-testid={`track-sync-later-${track.slot_id}`}
                     disabled={trackEditDisabled || !isRegistered}
@@ -834,24 +852,24 @@ export function TrackBoard({
                   </button>
                   <TrackVolumeControl disabled={trackEditDisabled} track={track} onVolumeChange={onVolumeChange} />
                   <button
-                    aria-label={isPlaying ? `${track.name} pause` : `${track.name} play`}
+                    aria-label={isPlaying ? `${formatTrackName(track.name)} 일시정지` : `${formatTrackName(track.name)} 재생`}
                     className="studio-icon-button"
                     data-testid={`track-play-${track.slot_id}`}
                     disabled={!isRegistered || (editDisabled && !isPlaying)}
                     type="button"
                     onClick={() => onTogglePlayback(track)}
                   >
-                    <span aria-hidden="true">{isPlaying ? 'II' : 'Play'}</span>
+                    <span aria-hidden="true">{isPlaying ? '일시정지' : '재생'}</span>
                   </button>
                   <button
-                    aria-label={`${track.name} stop`}
+                    aria-label={`${formatTrackName(track.name)} 중지`}
                     className="studio-icon-button"
                     data-testid={`track-stop-${track.slot_id}`}
                     disabled={!isRegistered || !isPlaying}
                     type="button"
                     onClick={() => onStopPlayback(track)}
                   >
-                    <span aria-hidden="true">Stop</span>
+                    <span aria-hidden="true">중지</span>
                   </button>
                   <button
                     className="app-button app-button--secondary"
@@ -861,7 +879,7 @@ export function TrackBoard({
                     title={trackEditDisabledReason ?? undefined}
                     onClick={() => onOpenScore(track)}
                   >
-                    Score
+                    채점
                   </button>
                 </div>
                 {isCountingIn ? (
@@ -870,10 +888,10 @@ export function TrackBoard({
                     data-testid={`track-count-in-${track.slot_id}`}
                     style={recordingMeterStyle}
                   >
-                    <span>One-bar count-in</span>
+                    <span>1마디 카운트인</span>
                     <strong>{trackCountIn.pulsesRemaining}</strong>
                     <i aria-hidden="true" />
-                    <em>{metronomeEnabled ? 'metronome on' : 'silent clock'}</em>
+                    <em>{metronomeEnabled ? '메트로놈 켜짐' : '무음 카운트'}</em>
                   </div>
                 ) : isRecording ? (
                   <div
@@ -883,7 +901,7 @@ export function TrackBoard({
                   >
                     <span>{formatDurationSeconds(trackRecordingMeter.durationSeconds)}</span>
                     <i aria-hidden="true" />
-                    <em>{metronomeEnabled ? 'metronome on' : 'metronome off'}</em>
+                    <em>{metronomeEnabled ? '메트로놈 켜짐' : '메트로놈 꺼짐'}</em>
                   </div>
                 ) : null}
               </div>

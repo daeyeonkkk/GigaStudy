@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import type { PlaybackSourceMode } from '../../lib/studio'
+import { formatTrackName, type PlaybackSourceMode } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
 
 type ActionState =
@@ -148,25 +148,25 @@ export function StudioToolbar({
       </header>
 
       <nav className="composer-menubar" aria-label="스튜디오 메뉴">
-        <span>File</span>
-        <span>Track</span>
-        <span>Play</span>
-        <span>Practice</span>
-        <span>Tools</span>
-        <span>Help</span>
+        <span>파일</span>
+        <span>트랙</span>
+        <span>재생</span>
+        <span>연습</span>
+        <span>도구</span>
+        <span>도움말</span>
       </nav>
 
       <div className="composer-toolbar" aria-label="전체 트랙 재생 제어">
         <Link className="composer-tool composer-tool--home" to="/" aria-label="홈으로">
           <span aria-hidden="true">H</span>
-          <span>Home</span>
+          <span>홈</span>
         </Link>
         <Link
           className="composer-tool composer-tool--text"
           data-testid="practice-mode-link"
           to={`/studios/${studioId}/practice`}
         >
-          Practice
+          연습
         </Link>
         <button
           aria-label={globalPlaying ? '선택 재생 일시정지' : '트랙 선택 재생'}
@@ -177,7 +177,7 @@ export function StudioToolbar({
           type="button"
           onClick={globalPlaying ? onToggleGlobalPlayback : onTogglePlaybackPicker}
         >
-          <span aria-hidden="true">{globalPlaying ? 'II' : 'Play'}</span>
+          <span aria-hidden="true">{globalPlaying ? '일시정지' : '재생'}</span>
         </button>
         <button
           aria-label="전체 중지"
@@ -187,7 +187,7 @@ export function StudioToolbar({
           type="button"
           onClick={onStopGlobalPlayback}
         >
-          <span aria-hidden="true">Stop</span>
+          <span aria-hidden="true">중지</span>
         </button>
         <button className="composer-tool" type="button" aria-label="확대">
           <span aria-hidden="true">+</span>
@@ -196,7 +196,7 @@ export function StudioToolbar({
           <span aria-hidden="true">-</span>
         </button>
         <label className="composer-sync-step">
-          <span>Sync</span>
+          <span>싱크</span>
           <input
             aria-label="싱크 조정 단위"
             data-testid="sync-step-input"
@@ -209,7 +209,7 @@ export function StudioToolbar({
             onBlur={restoreSyncStepInput}
             onChange={(event) => updateSyncStep(event.target.value)}
           />
-          <span>s</span>
+          <span>초</span>
         </label>
         <div className="composer-sync-all" role="group" aria-label="등록된 전체 트랙 싱크 이동">
           <button
@@ -240,7 +240,7 @@ export function StudioToolbar({
             type="checkbox"
             onChange={(event) => onMetronomeChange(event.target.checked)}
           />
-          <span aria-hidden="true">Met</span>
+          <span aria-hidden="true">박</span>
           메트로놈
         </label>
         <div className="composer-source-toggle" role="group" aria-label="재생 소스">
@@ -282,7 +282,7 @@ export function StudioToolbar({
                     type="checkbox"
                     onChange={() => onTogglePlaybackSelection(track.slot_id)}
                   />
-                  <span>{track.name}</span>
+                  <span>{formatTrackName(track.name)}</span>
                 </label>
               ))
             )}
@@ -344,7 +344,7 @@ export function StudioToolbar({
         <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
         <p>
           {actionState.phase === 'idle'
-            ? `트랙을 녹음, 업로드, AI 생성으로 채운 뒤 ${formatStepInput(syncStepSeconds)}s 단위로 맞춰보세요.`
+            ? `트랙을 녹음, 업로드, AI 생성으로 채운 뒤 ${formatStepInput(syncStepSeconds)}초 단위로 맞춰보세요.`
             : actionState.message}
         </p>
       </section>

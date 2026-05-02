@@ -187,18 +187,18 @@ def generation_variant_label(index: int, slot_id: int, events: list[TrackPitchEv
         if event.pitch_midi is not None and not event.is_rest
     ]
     if not pitched_events:
-        return f"Candidate {index}"
+        return f"후보 {index}"
 
     midi_values = [event.pitch_midi for event in pitched_events if event.pitch_midi is not None]
     average_midi = sum(midi_values) / len(midi_values)
     low, high = SLOT_RANGES.get(slot_id, (min(midi_values), max(midi_values)))
     slot_center = (low + high) / 2
     if average_midi < slot_center - 2:
-        register_label = "Lower support"
+        register_label = "저역 보강"
     elif average_midi > slot_center + 2:
-        register_label = "Upper blend"
+        register_label = "상성부 블렌드"
     else:
-        register_label = "Balanced"
+        register_label = "균형형"
 
     intervals = [
         abs(midi_values[index] - midi_values[index - 1])
@@ -207,22 +207,22 @@ def generation_variant_label(index: int, slot_id: int, events: list[TrackPitchEv
     average_step = sum(intervals) / len(intervals) if intervals else 0
     leap_count = sum(1 for interval in intervals if interval >= 5)
     if average_step <= 1.25:
-        motion_label = "stepwise"
+        motion_label = "순차 진행"
     elif leap_count >= 2:
-        motion_label = "active leaps"
+        motion_label = "도약 진행"
     else:
-        motion_label = "gentle motion"
+        motion_label = "완만한 진행"
 
     contour_delta = midi_values[-1] - midi_values[0]
     if contour_delta >= 3:
-        contour_label = "rising"
+        contour_label = "상행"
     elif contour_delta <= -3:
-        contour_label = "falling"
+        contour_label = "하행"
     else:
-        contour_label = "level"
+        contour_label = "수평"
 
     average_label = midi_to_label(round(average_midi))
-    return f"{register_label} {motion_label} - {contour_label} - avg {average_label}"
+    return f"{register_label} {motion_label} - {contour_label} - 중심 {average_label}"
 
 
 def percussion_variant_label(index: int, events: list[TrackPitchEvent]) -> str:
@@ -230,12 +230,12 @@ def percussion_variant_label(index: int, events: list[TrackPitchEvent]) -> str:
     kick_count = labels.count("Kick")
     snare_count = labels.count("Snare")
     if kick_count > snare_count:
-        feel = "kick-led"
+        feel = "킥 중심"
     elif snare_count > kick_count:
-        feel = "snare-led"
+        feel = "스네어 중심"
     else:
-        feel = "balanced"
-    return f"Groove {index} - {feel}"
+        feel = "균형형"
+    return f"그루브 {index} - {feel}"
 
 
 def diagnostic_float(diagnostics: dict[str, Any] | None, key: str, *, default: float) -> float:

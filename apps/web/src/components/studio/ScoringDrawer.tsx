@@ -1,3 +1,4 @@
+import { formatTrackName } from '../../lib/studio'
 import type { ScoreMode, TrackSlot } from '../../types/studio'
 import './ScoringDrawer.css'
 
@@ -59,7 +60,7 @@ export function ScoringDrawer({
   ).length
   const modeSummary = isHarmonyMode
     ? `현재 모드: 화음 채점. ${selectedReferenceCount}개 기준 트랙을 기준으로 내 파트의 안정감과 충돌을 평가하고, ${playbackReferenceCount}개 트랙을 들려줍니다.`
-    : `현재 모드: 정답 채점. ${targetTrack.name} 이벤트를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 맥락으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
+    : `현재 모드: 정답 채점. ${formatTrackName(targetTrack.name)} 이벤트를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 맥락으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
   const phaseLocked = scoreSession.phase !== 'ready'
 
   return (
@@ -67,8 +68,8 @@ export function ScoringDrawer({
       <div className="score-drawer__panel">
         <header>
           <div>
-            <p className="eyebrow">Scoring checklist</p>
-            <h2>{targetTrack.name} 채점</h2>
+            <p className="eyebrow">채점 체크리스트</p>
+            <h2>{formatTrackName(targetTrack.name)} 채점</h2>
           </div>
           <button
             aria-label="채점 체크리스트 닫기"
@@ -126,7 +127,7 @@ export function ScoringDrawer({
               >
                 <div className="score-checklist__track">
                   <span>트랙 {track.slot_id}</span>
-                  <strong>{track.name}</strong>
+                  <strong>{formatTrackName(track.name)}</strong>
                 </div>
                 <label>
                   <input
@@ -194,7 +195,7 @@ export function ScoringDrawer({
           <div className="score-drawer__count-in" data-testid="score-count-in">
             <span>1마디 준비</span>
             <strong>{scoreSession.countIn.pulsesRemaining}</strong>
-            <em>{scoreSession.includeMetronome ? 'metronome count-in' : 'silent count-in'}</em>
+            <em>{scoreSession.includeMetronome ? '메트로놈 카운트' : '무음 카운트'}</em>
           </div>
         ) : null}
 

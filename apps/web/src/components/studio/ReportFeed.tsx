@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-import { describeReferences, formatDate } from '../../lib/studio'
+import { describeReferences, formatDate, formatTrackName } from '../../lib/studio'
 import type { ScoringReport, TrackSlot } from '../../types/studio'
 import './ReportFeed.css'
 
@@ -11,14 +11,14 @@ type ReportFeedProps = {
 }
 
 function reportTitle(report: ScoringReport): string {
-  return `${report.target_track_name} ${report.score_mode === 'harmony' ? '화음 채점' : '정답 채점'}`
+  return `${formatTrackName(report.target_track_name)} ${report.score_mode === 'harmony' ? '화음 채점' : '정답 채점'}`
 }
 
 export function ReportFeed({ reports, studioId, tracks }: ReportFeedProps) {
   return (
     <section className="report-feed" data-testid="report-feed" aria-label="채점 리포트">
       <div className="report-feed__header">
-        <p className="eyebrow">Report feed</p>
+        <p className="eyebrow">리포트 목록</p>
         <h2>채점 리포트</h2>
       </div>
 

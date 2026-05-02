@@ -496,13 +496,13 @@ export function StudioPage() {
         </section>
 
         <footer className="composer-statusbar">
-          <span>{globalPlaying || playingSlots.size > 0 ? 'Playing' : 'Ready'}</span>
-          <span>Bar 1</span>
+          <span>{globalPlaying || playingSlots.size > 0 ? '재생 중' : '준비 완료'}</span>
+          <span>1마디</span>
           <span>
             {playheadSeconds === null ? '0:00' : formatDurationSeconds(playheadSeconds)} /{' '}
             {playbackTimeline ? formatDurationSeconds(playbackTimeline.maxSeconds) : '0:00'}
           </span>
-          <span>Sync step {formatSeconds(syncStepSeconds).replace(/^\+/, '')}</span>
+          <span>싱크 단위 {formatSeconds(syncStepSeconds).replace(/^\+/, '')}</span>
         </footer>
       </section>
 

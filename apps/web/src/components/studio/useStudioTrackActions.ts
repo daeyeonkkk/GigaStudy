@@ -12,6 +12,7 @@ import { prepareAudioFileForUpload } from '../../lib/audio'
 import {
   detectUploadKind,
   formatSeconds,
+  formatTrackName,
   isDocumentImageUpload,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
@@ -55,7 +56,7 @@ export function useStudioTrackActions({
     }
     setActionState({
       phase: 'error',
-      message: `${track.name} 트랙은 추출 작업이 진행 중입니다. 작업이 끝난 뒤 다시 시도해 주세요.`,
+      message: `${formatTrackName(track.name)} 트랙은 추출 작업이 진행 중입니다. 작업이 끝난 뒤 다시 시도해 주세요.`,
     })
     return true
   }
@@ -67,6 +68,7 @@ export function useStudioTrackActions({
     stopPlaybackBeforeEditing()
 
     const sourceKind = detectUploadKind(file)
+    const trackLabel = formatTrackName(track.name)
     if (!sourceKind) {
       setActionState({ phase: 'error', message: '지원하지 않는 파일 형식입니다.' })
       return
@@ -111,11 +113,11 @@ export function useStudioTrackActions({
           review_before_register: true,
         })
       },
-      `${track.name} 파일을 업로드하고 추출 대기열에 등록하는 중입니다.`,
-      `${track.name} 트랙에 ${file.name} 추출 후보를 준비했습니다.`,
+      `${trackLabel} 파일을 업로드하고 추출 대기열에 등록하는 중입니다.`,
+      `${trackLabel} 트랙에 ${file.name} 추출 후보를 준비했습니다.`,
       [
-        `${track.name} 파일을 서버에 올리는 중입니다.`,
-        `${track.name} 추출 작업을 대기열에 배치하는 중입니다.`,
+        `${trackLabel} 파일을 서버에 올리는 중입니다.`,
+        `${trackLabel} 추출 작업을 대기열에 배치하는 중입니다.`,
         '작업이 끝나면 후보 검토 목록에 표시됩니다.',
       ],
     )
@@ -127,12 +129,12 @@ export function useStudioTrackActions({
     if (isDocumentImageUpload(file)) {
       setActionState({
         phase: 'success',
-        message: `${track.name} 문서 분석 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
+        message: `${trackLabel} 문서 분석 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
       })
     } else if (sourceKind === 'audio') {
       setActionState({
         phase: 'success',
-        message: `${track.name} 오디오 추출 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
+        message: `${trackLabel} 오디오 추출 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
       })
     }
   }
@@ -149,16 +151,17 @@ export function useStudioTrackActions({
 
     const otherRegisteredSlotIds = registeredSlotIds.filter((slotId) => slotId !== track.slot_id)
     const contextSlotIds = otherRegisteredSlotIds.length > 0 ? otherRegisteredSlotIds : registeredSlotIds
+    const trackLabel = formatTrackName(track.name)
 
     await runStudioAction(
       () => generateTrack(studio.studio_id, track.slot_id, contextSlotIds, false, 3),
-      `${track.name} 파트 후보를 생성하는 중입니다.`,
+      `${trackLabel} 파트 후보를 생성하는 중입니다.`,
       track.slot_id === 6
         ? '퍼커션 트랙에 BPM 기반 비트 후보 3개를 만들었습니다.'
-        : `${track.name} 트랙에 참고 트랙 기반 이벤트 후보 3개를 만들었습니다.`,
+        : `${trackLabel} 트랙에 참고 트랙 기반 이벤트 후보 3개를 만들었습니다.`,
       [
         'DeepSeek가 참고 트랙의 화성 방향을 훑는 중입니다.',
-        `${track.name} 음역과 성부 진행 규칙을 맞추는 중입니다.`,
+        `${trackLabel} 음역과 성부 진행 규칙을 맞추는 중입니다.`,
         '후보 리전을 검토 가능한 블록으로 정리하는 중입니다.',
       ],
     )
@@ -170,10 +173,11 @@ export function useStudioTrackActions({
     }
     stopPlaybackBeforeEditing()
     const roundedOffset = Math.round(nextOffset * 1000) / 1000
+    const trackLabel = formatTrackName(track.name)
     await runStudioAction(
       () => updateTrackSync(studio.studio_id, track.slot_id, roundedOffset),
-      `${track.name} 싱크를 저장하는 중입니다.`,
-      `${track.name} 싱크를 ${formatSeconds(roundedOffset)}로 맞췄습니다.`,
+      `${trackLabel} 싱크를 저장하는 중입니다.`,
+      `${trackLabel} 싱크를 ${formatSeconds(roundedOffset)}로 맞췄습니다.`,
     )
   }
 
@@ -197,11 +201,12 @@ export function useStudioTrackActions({
       return
     }
     const volumePercent = Math.max(0, Math.min(100, Math.round(nextVolumePercent)))
+    const trackLabel = formatTrackName(track.name)
     setActiveTrackVolume(track.slot_id, volumePercent)
     await runStudioAction(
       () => updateTrackVolume(studio.studio_id, track.slot_id, volumePercent),
-      `${track.name} 볼륨을 저장하는 중입니다.`,
-      `${track.name} 볼륨을 ${volumePercent}%로 맞췄습니다.`,
+      `${trackLabel} 음량을 저장하는 중입니다.`,
+      `${trackLabel} 음량을 ${volumePercent}%로 맞췄습니다.`,
     )
   }
 

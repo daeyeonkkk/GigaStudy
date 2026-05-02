@@ -16,6 +16,7 @@ import {
   getCountInStartOffsetPulses,
   getCountInTotalPulses,
   getBeatSeconds,
+  formatTrackName,
   startLoopingMetronomeSession,
   type MeterContext,
   type PlaybackSession,
@@ -245,9 +246,10 @@ export function useStudioRecording({
       }
       setRecordingSlotId(track.slot_id)
       setTrackRecordingMeter({ durationSeconds: 0, level: recorder.rmsLevel })
+      const trackLabel = formatTrackName(track.name)
       setActionState({
         phase: 'success',
-        message: `${track.name} 녹음을 시작했습니다. 메트로놈 기준으로 피치 이벤트를 기록합니다.`,
+        message: `${trackLabel} 녹음을 시작했습니다. 메트로놈 기준으로 피치 이벤트를 기록합니다.`,
       })
       const hideZeroTimeoutId = window.setTimeout(() => {
         if (trackCountInRunIdRef.current !== runId) {
@@ -279,7 +281,8 @@ export function useStudioRecording({
       recordingMetronomeSessionRef.current = null
       setRecordingSlotId(null)
       setTrackRecordingMeter({ durationSeconds: 0, level: 0 })
-      setActionState({ phase: 'busy', message: `${track.name} 녹음을 정리하는 중입니다.` })
+      const trackLabel = formatTrackName(track.name)
+      setActionState({ phase: 'busy', message: `${trackLabel} 녹음을 정리하는 중입니다.` })
       try {
         const recordedAudioBase64 = await stopMicrophoneRecorder(recorder)
         if (!recordedAudioBase64) {
@@ -295,7 +298,7 @@ export function useStudioRecording({
         })
         setActionState({
           phase: 'success',
-          message: `${track.name} 녹음을 보류했습니다. 들어본 뒤 트랙에 등록하거나 폐기하세요.`,
+          message: `${trackLabel} 녹음을 보류했습니다. 들어본 뒤 트랙에 등록하거나 폐기하세요.`,
         })
       } catch (error) {
         setActionState({
@@ -340,7 +343,7 @@ export function useStudioRecording({
       track.status === 'registered' ||
       Boolean(existingRegion && (existingRegion.pitch_events.length > 0 || existingRegion.audio_source_path))
     const allowOverwrite =
-      !wouldOverwrite || window.confirm(`${track.name} 트랙의 기존 피치 이벤트를 새 녹음으로 덮어쓸까요?`)
+      !wouldOverwrite || window.confirm(`${formatTrackName(track.name)} 트랙의 기존 피치 이벤트를 새 녹음으로 덮어쓸까요?`)
     if (!allowOverwrite) {
       setActionState({ phase: 'idle' })
       return
@@ -361,7 +364,7 @@ export function useStudioRecording({
     startTrackCountIn(track, recorder)
     setActionState({
       phase: 'success',
-      message: `${track.name} 녹음 준비 중입니다. 1마디 count-in 뒤 메트로놈 기준으로 기록합니다.`,
+      message: `${formatTrackName(track.name)} 녹음 준비 중입니다. 1마디 카운트인 뒤 메트로놈 기준으로 기록합니다.`,
     })
   }
 
@@ -371,6 +374,7 @@ export function useStudioRecording({
     }
 
     const pendingRecording = pendingTrackRecording
+    const trackLabel = formatTrackName(pendingRecording.trackName)
     const succeeded = await runStudioAction(
       () =>
         uploadTrack(studio.studio_id, pendingRecording.slotId, {
@@ -380,10 +384,10 @@ export function useStudioRecording({
           review_before_register: false,
           allow_overwrite: pendingRecording.allowOverwrite,
         }),
-      `${pendingRecording.trackName} 녹음 파일을 서버에 올리고 추출 대기열에 등록하는 중입니다.`,
-      `${pendingRecording.trackName} 녹음을 대기열에 등록했습니다. 앞선 작업이 끝나면 자동으로 음성 추출을 시작합니다.`,
+      `${trackLabel} 녹음 파일을 서버에 올리고 추출 대기열에 등록하는 중입니다.`,
+      `${trackLabel} 녹음을 대기열에 등록했습니다. 앞선 작업이 끝나면 자동으로 음성 추출을 시작합니다.`,
       [
-        `${pendingRecording.trackName} 녹음 파일을 저장하는 중입니다.`,
+        `${trackLabel} 녹음 파일을 저장하는 중입니다.`,
         '음성 추출 작업을 대기열에 배치하는 중입니다.',
         '후보가 준비되면 검토 목록에 표시됩니다.',
       ],
@@ -400,7 +404,7 @@ export function useStudioRecording({
 
     setActionState({
       phase: 'success',
-      message: `${pendingTrackRecording.trackName} 녹음을 폐기했습니다. 트랙에는 아무 작업도 등록하지 않았습니다.`,
+      message: `${formatTrackName(pendingTrackRecording.trackName)} 녹음을 폐기했습니다. 트랙에는 아무 작업도 등록하지 않았습니다.`,
     })
     setPendingTrackRecording(null)
   }

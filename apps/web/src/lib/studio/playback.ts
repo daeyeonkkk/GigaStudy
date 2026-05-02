@@ -68,16 +68,16 @@ function createPianoTone(
 ): PlaybackNode {
   const filter = context.createBiquadFilter()
   const masterGain = context.createGain()
-  const attackTime = Math.min(0.012, duration / 4)
-  const decayTime = Math.min(duration * 0.42, 0.18)
-  const sustainLevel = Math.max(0.0001, volume * 0.12)
-  const releaseTime = Math.max(0.04, Math.min(0.12, duration * 0.22))
+  const attackTime = Math.min(0.01, duration / 5)
+  const decayTime = Math.min(duration * 0.55, 0.28)
+  const sustainLevel = Math.max(0.0001, volume * 0.28)
+  const releaseTime = Math.max(0.12, Math.min(0.34, duration * 0.35))
   const oscillators: OscillatorNode[] = []
   const gains: GainNode[] = [masterGain]
 
   filter.type = 'lowpass'
-  filter.frequency.setValueAtTime(Math.min(4200, Math.max(1200, frequency * 7.8)), startTime)
-  filter.Q.setValueAtTime(0.8, startTime)
+  filter.frequency.setValueAtTime(Math.min(5200, Math.max(1500, frequency * 8.5)), startTime)
+  filter.Q.setValueAtTime(0.72, startTime)
 
   masterGain.gain.setValueAtTime(0.0001, startTime)
   masterGain.gain.linearRampToValueAtTime(volume, startTime + attackTime)
@@ -91,9 +91,10 @@ function createPianoTone(
   masterGain.connect(destination)
 
   const partials: Array<{ ratio: number; type: OscillatorType; gain: number; releaseScale: number }> = [
-    { ratio: 1, type: 'triangle', gain: 0.9, releaseScale: 1 },
-    { ratio: 2, type: 'sine', gain: 0.22, releaseScale: 0.68 },
-    { ratio: 3, type: 'sine', gain: 0.08, releaseScale: 0.52 },
+    { ratio: 1, type: 'triangle', gain: 0.86, releaseScale: 1 },
+    { ratio: 1.003, type: 'sine', gain: 0.26, releaseScale: 0.9 },
+    { ratio: 2, type: 'sine', gain: 0.2, releaseScale: 0.68 },
+    { ratio: 3, type: 'sine', gain: 0.07, releaseScale: 0.52 },
   ]
 
   partials.forEach((partial, index) => {
@@ -249,18 +250,18 @@ export function getPlaybackPreparationMessage(
       regionsHavePlayableEvents(regionsBySlot.get(track.slot_id)),
   ).length
   const parts = [
-    audioCount > 0 ? `audio ${audioCount}` : null,
-    eventCount > 0 ? `pitch events ${eventCount}` : null,
-    includeMetronome ? 'metronome' : null,
+    audioCount > 0 ? `녹음 ${audioCount}개` : null,
+    eventCount > 0 ? `음정 이벤트 ${eventCount}개` : null,
+    includeMetronome ? '메트로놈' : null,
   ].filter(Boolean)
 
   if (parts.length === 0) {
-    return 'Checking for playable audio or pitch events.'
+    return '재생 가능한 녹음과 음정 이벤트를 확인하는 중입니다.'
   }
   if (parts.length === 1 && audioCount === 1) {
-    return 'Loading the recorded audio. Playback will start almost immediately if no reference tracks are needed.'
+    return '녹음 파일을 불러오는 중입니다. 기준 트랙이 없으면 곧바로 재생됩니다.'
   }
-  return `${parts.join(', ')} will start together from one timeline point.`
+  return `${parts.join(', ')}를 같은 타임라인 기준으로 준비합니다.`
 }
 
 export function getTrackVolumeScale(track: TrackSlot): number {
@@ -419,7 +420,7 @@ export function scheduleMetronomeClicksFromTimeline(
 export async function fetchAudioArrayBuffer(audioUrl: string): Promise<ArrayBuffer> {
   const response = await fetch(audioUrl)
   if (!response.ok) {
-    throw new Error('Could not load the recorded audio file.')
+    throw new Error('녹음 파일을 불러오지 못했습니다.')
   }
   return response.arrayBuffer()
 }

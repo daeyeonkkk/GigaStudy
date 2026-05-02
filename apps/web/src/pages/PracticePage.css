@@ -68,59 +68,60 @@
 
 .practice-stage {
   display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
   min-height: 0;
   padding: 16px;
   background: #eceff2;
+  overflow: auto;
 }
 
 .practice-stage__labels {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  padding: 8px 10px 8px 0;
+  padding: 0;
   color: #46535e;
   font-size: 0.76rem;
   font-weight: 900;
-  text-align: right;
+  text-align: left;
 }
 
 .practice-stage__labels span:nth-child(2) {
-  writing-mode: vertical-rl;
-  justify-self: end;
-  text-orientation: mixed;
+  justify-self: center;
 }
 
 .practice-stage__grid {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(82px, 1fr));
-  min-width: 620px;
-  min-height: 620px;
+  min-width: 720px;
+  min-height: 420px;
   border: 1px solid #7f8e9a;
   background:
-    linear-gradient(#d7dee4 0 1px, transparent 1px) 0 0 / 100% 44px,
-    linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / 44px 100%,
+    linear-gradient(#d7dee4 0 1px, transparent 1px) 0 0 / 100% calc(100% / 6),
+    linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / 48px 100%,
     #ffffff;
   overflow: hidden;
 }
 
 .practice-stage__lane {
-  position: relative;
-  min-width: 0;
-  border-left: 1px solid #cbd3da;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((100% / 6) * var(--track-lane-index));
+  height: calc(100% / 6);
+  border-top: 1px solid #cbd3da;
   background: rgba(247, 249, 250, 0.56);
 }
 
 .practice-stage__lane:first-of-type {
-  border-left: 0;
+  border-top: 0;
 }
 
 .practice-stage__lane span {
   position: absolute;
   left: 8px;
-  right: 8px;
-  bottom: 8px;
+  top: 6px;
+  max-width: 88px;
   overflow: hidden;
   color: #53616c;
   font-size: 0.72rem;
@@ -132,10 +133,10 @@
 .practice-stage__playhead {
   position: absolute;
   z-index: 5;
-  top: var(--playhead-top);
-  left: 0;
-  right: 0;
-  height: 2px;
+  top: 0;
+  bottom: 0;
+  left: var(--playhead-left);
+  width: 2px;
   background: #c2362d;
   box-shadow: 0 0 0 1px rgba(194, 54, 45, 0.14);
 }
@@ -143,13 +144,14 @@
 .practice-stage__event {
   position: absolute;
   z-index: 3;
-  top: var(--event-top);
-  left: calc((100% / 6) * var(--event-lane-index) + 12px);
+  top: calc((100% / 6) * var(--event-lane-index) + 28px);
+  left: var(--event-left);
   display: flex;
   align-items: center;
-  width: calc((100% / 6) - 24px);
-  height: var(--event-height);
+  width: var(--event-width);
+  height: calc((100% / 6) - 38px);
   min-height: 16px;
+  min-width: 26px;
   padding: 0 7px;
   border: 1px solid hsl(var(--event-hue) 64% 30%);
   border-radius: 4px;
@@ -183,25 +185,16 @@
   }
 
   .practice-stage {
-    grid-template-columns: 1fr;
     padding: 10px;
-    overflow: auto;
   }
 
   .practice-stage__labels {
-    grid-template-columns: auto 1fr auto;
-    grid-template-rows: auto;
-    padding: 0 0 8px;
-    text-align: left;
-  }
-
-  .practice-stage__labels span:nth-child(2) {
-    justify-self: center;
-    writing-mode: horizontal-tb;
+    font-size: 0.7rem;
   }
 
   .practice-stage__grid {
-    min-height: 540px;
+    min-width: 660px;
+    min-height: 360px;
   }
 
   .practice-toolbar {

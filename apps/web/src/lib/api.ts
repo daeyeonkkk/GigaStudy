@@ -41,10 +41,10 @@ export function readFileAsDataUrl(file: File): Promise<string> {
       if (typeof reader.result === 'string') {
         resolve(reader.result)
       } else {
-        reject(new Error('Could not read the file.'))
+        reject(new Error('파일을 읽지 못했습니다.'))
       }
     })
-    reader.addEventListener('error', () => reject(new Error('Could not read the file.')))
+    reader.addEventListener('error', () => reject(new Error('파일을 읽지 못했습니다.')))
     reader.readAsDataURL(file)
   })
 }
@@ -88,7 +88,7 @@ async function requestJson<T>(
     return await readJson<T>(response, fallbackMessage)
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error('Could not connect to the API server.')
+      throw new Error('API 서버에 연결하지 못했습니다.')
     }
     throw error
   }
@@ -102,7 +102,7 @@ export function listStudios(limit = 12, offset = 0): Promise<StudioListItem[]> {
   return requestJson<StudioListItem[]>(
     `/api/studios?${params.toString()}`,
     {},
-    'Could not load the studio list.',
+    '스튜디오 목록을 불러오지 못했습니다.',
   )
 }
 
@@ -113,7 +113,7 @@ export function createStudio(payload: CreateStudioRequest): Promise<Studio> {
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    'Could not create the studio.',
+    '스튜디오를 만들지 못했습니다.',
   )
 }
 
@@ -129,12 +129,12 @@ export function createStudioUploadTarget(payload: {
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    'Upload target could not be created.',
+    '업로드 준비 정보를 만들지 못했습니다.',
   )
 }
 
 export function getStudio(studioId: string): Promise<Studio> {
-  return requestJson<Studio>(`/api/studios/${studioId}`, {}, 'Could not load the studio.')
+  return requestJson<Studio>(`/api/studios/${studioId}`, {}, '스튜디오를 불러오지 못했습니다.')
 }
 
 export function getTrackAudioUrl(studioId: string, slotId: number): string {
@@ -166,7 +166,7 @@ export function createTrackUploadTarget(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    'Upload target could not be created.',
+    '업로드 준비 정보를 만들지 못했습니다.',
   )
 }
 
@@ -177,7 +177,7 @@ export async function putDirectUpload(target: DirectUploadTarget, blob: Blob): P
     body: blob,
   })
   if (!response.ok) {
-    throw new Error('Direct upload failed.')
+    throw new Error('파일 업로드에 실패했습니다.')
   }
 }
 
@@ -199,7 +199,7 @@ export function uploadTrack(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    'Could not register the track upload.',
+    '트랙 업로드를 등록하지 못했습니다.',
   )
 }
 
@@ -218,7 +218,7 @@ export function approveCandidate(
         allow_overwrite: allowOverwrite,
       }),
     },
-    'Could not approve the extraction candidate.',
+    '추출 후보를 승인하지 못했습니다.',
   )
 }
 
@@ -226,7 +226,7 @@ export function rejectCandidate(studioId: string, candidateId: string): Promise<
   return requestJson<Studio>(
     `/api/studios/${studioId}/candidates/${candidateId}/reject`,
     { method: 'POST' },
-    'Could not reject the extraction candidate.',
+    '추출 후보를 제외하지 못했습니다.',
   )
 }
 
@@ -243,7 +243,7 @@ export function approveJobCandidates(
         allow_overwrite: allowOverwrite,
       }),
     },
-    'Could not register the document analysis result to tracks.',
+    '문서 분석 결과를 트랙에 등록하지 못했습니다.',
   )
 }
 
@@ -251,7 +251,7 @@ export function retryExtractionJob(studioId: string, jobId: string): Promise<Stu
   return requestJson<Studio>(
     `/api/studios/${studioId}/jobs/${jobId}/retry`,
     { method: 'POST' },
-    'Could not restart the extraction job.',
+    '추출 작업을 다시 시작하지 못했습니다.',
   )
 }
 
@@ -273,7 +273,7 @@ export function generateTrack(
         candidate_count: candidateCount,
       }),
     },
-    'AI generation failed.',
+    'AI 생성에 실패했습니다.',
   )
 }
 
@@ -288,7 +288,7 @@ export function updateTrackSync(
       method: 'PATCH',
       body: JSON.stringify({ sync_offset_seconds: syncOffsetSeconds }),
     },
-    'Could not save sync.',
+    '싱크를 저장하지 못했습니다.',
   )
 }
 
@@ -302,7 +302,7 @@ export function shiftRegisteredTrackSyncs(
       method: 'PATCH',
       body: JSON.stringify({ delta_seconds: deltaSeconds }),
     },
-    'Could not save all track sync offsets.',
+    '전체 트랙 싱크를 저장하지 못했습니다.',
   )
 }
 
@@ -317,7 +317,7 @@ export function updateTrackVolume(
       method: 'PATCH',
       body: JSON.stringify({ volume_percent: volumePercent }),
     },
-    'Could not save track volume.',
+    '트랙 음량을 저장하지 못했습니다.',
   )
 }
 
@@ -332,7 +332,7 @@ export function updateRegion(
       method: 'PATCH',
       body: JSON.stringify(payload),
     },
-    'Could not save the region.',
+    '리전을 저장하지 못했습니다.',
   )
 }
 
@@ -347,7 +347,7 @@ export function copyRegion(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    'Could not copy the region.',
+    '리전을 복사하지 못했습니다.',
   )
 }
 
@@ -362,7 +362,7 @@ export function splitRegion(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    'Could not split the region.',
+    '리전을 자르지 못했습니다.',
   )
 }
 
@@ -370,7 +370,7 @@ export function deleteRegion(studioId: string, regionId: string): Promise<Studio
   return requestJson<Studio>(
     `/api/studios/${studioId}/regions/${regionId}`,
     { method: 'DELETE' },
-    'Could not delete the region.',
+    '리전을 삭제하지 못했습니다.',
   )
 }
 
@@ -386,7 +386,7 @@ export function updatePitchEvent(
       method: 'PATCH',
       body: JSON.stringify(payload),
     },
-    'Could not save the piano-roll event.',
+    '피아노 롤 이벤트를 저장하지 못했습니다.',
   )
 }
 
@@ -408,7 +408,7 @@ export function scoreTrack(
       method: 'POST',
       body: JSON.stringify(payload),
     },
-    'Could not create the scoring report.',
+    '채점 리포트를 만들지 못했습니다.',
   )
 }
 
@@ -462,7 +462,7 @@ export function getAdminStorage(
     {
       headers: adminHeaders(credentials),
     },
-    'Admin storage summary could not be loaded.',
+    '관리자 저장소 요약을 불러오지 못했습니다.',
   )
 }
 
@@ -497,7 +497,7 @@ export function deleteAdminStudio(
       method: 'DELETE',
       headers: adminHeaders(credentials),
     },
-    'Studio could not be deleted.',
+    '스튜디오를 삭제하지 못했습니다.',
   )
 }
 
@@ -511,7 +511,7 @@ export function deleteAdminStudioAssets(
       method: 'DELETE',
       headers: adminHeaders(credentials),
     },
-    'Studio assets could not be deleted.',
+    '스튜디오 파일을 삭제하지 못했습니다.',
   )
 }
 
@@ -525,7 +525,7 @@ export function deleteAdminAsset(
       method: 'DELETE',
       headers: adminHeaders(credentials),
     },
-    'Asset could not be deleted.',
+    '파일을 삭제하지 못했습니다.',
   )
 }
 
@@ -538,7 +538,7 @@ export function deleteAdminStagedAssets(
       method: 'DELETE',
       headers: adminHeaders(credentials),
     },
-    'Staged uploads could not be deleted.',
+    '임시 업로드 파일을 삭제하지 못했습니다.',
   )
 }
 
@@ -551,7 +551,7 @@ export function deleteAdminExpiredStagedAssets(
       method: 'DELETE',
       headers: adminHeaders(credentials),
     },
-    'Expired staged uploads could not be deleted.',
+    '만료된 임시 업로드 파일을 삭제하지 못했습니다.',
   )
 }
 
@@ -566,6 +566,6 @@ export function drainAdminEngineQueue(
       method: 'POST',
       headers: adminHeaders(credentials),
     },
-    'Engine queue could not be drained.',
+    '엔진 대기열을 처리하지 못했습니다.',
   )
 }

@@ -6,6 +6,7 @@ import {
   rejectCandidate,
   retryExtractionJob,
 } from '../../lib/api'
+import { formatTrackName } from '../../lib/studio'
 import type { ExtractionCandidate, Studio, TrackSlot } from '../../types/studio'
 import type { RunStudioAction } from './studioActionState'
 
@@ -99,13 +100,14 @@ export function useCandidateReviewState({
     const targetTrack = getSelectedCandidateTrack(candidate)
     const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
     if (candidateWouldOverwrite(candidate) && !allowOverwrite) {
-      setActionError(`${targetTrack?.name ?? '선택한 트랙'}에 이미 등록된 내용이 있습니다. 덮어쓰기 확인을 체크해 주세요.`)
+      setActionError(`${formatTrackName(targetTrack?.name ?? '선택한 트랙')}에 이미 등록된 내용이 있습니다. 덮어쓰기 확인을 체크해 주세요.`)
       return
     }
+    const targetTrackLabel = formatTrackName(targetTrack?.name ?? '선택한 트랙')
     await runStudioAction(
       () => approveCandidate(studio.studio_id, candidate.candidate_id, targetSlotId, allowOverwrite),
-      `${targetTrack?.name ?? 'Track'} 후보를 등록하는 중입니다.`,
-      `${targetTrack?.name ?? 'Track'} 트랙에 선택한 후보를 등록했습니다.`,
+      `${targetTrackLabel} 후보를 등록하는 중입니다.`,
+      `${targetTrackLabel} 트랙에 선택한 후보를 등록했습니다.`,
     )
   }
 
@@ -114,10 +116,11 @@ export function useCandidateReviewState({
       return
     }
     const targetTrack = studio.tracks.find((track) => track.slot_id === candidate.suggested_slot_id)
+    const targetTrackLabel = formatTrackName(targetTrack?.name ?? '선택한 트랙')
     await runStudioAction(
       () => rejectCandidate(studio.studio_id, candidate.candidate_id),
-      `${targetTrack?.name ?? 'Track'} 후보를 거절하는 중입니다.`,
-      `${targetTrack?.name ?? 'Track'} 후보를 거절했습니다.`,
+      `${targetTrackLabel} 후보를 거절하는 중입니다.`,
+      `${targetTrackLabel} 후보를 거절했습니다.`,
     )
   }
 

@@ -1,4 +1,4 @@
-import { formatDurationSeconds } from '../../lib/studio'
+import { formatDurationSeconds, formatTrackName } from '../../lib/studio'
 import './PendingRecordingDialog.css'
 import type { PendingTrackRecording } from './useStudioRecording'
 
@@ -15,6 +15,7 @@ export function PendingRecordingDialog({
   onDiscard,
   onRegister,
 }: PendingRecordingDialogProps) {
+  const trackLabel = formatTrackName(recording.trackName)
   return (
     <section
       aria-labelledby="pending-recording-title"
@@ -24,15 +25,15 @@ export function PendingRecordingDialog({
       role="dialog"
     >
       <div className="recording-review-panel">
-        <p className="eyebrow">Recording review</p>
-        <h2 id="pending-recording-title">{recording.trackName} 녹음 확인</h2>
+        <p className="eyebrow">녹음 확인</p>
+        <h2 id="pending-recording-title">{trackLabel} 녹음 확인</h2>
         <p>
           아직 트랙에 등록하지 않았습니다. 원음을 확인한 뒤 피치 이벤트 추출을 시작하거나 녹음을 삭제하세요.
         </p>
         <dl>
           <div>
             <dt>대상 트랙</dt>
-            <dd>{recording.trackName}</dd>
+            <dd>{trackLabel}</dd>
           </div>
           <div>
             <dt>녹음 길이</dt>

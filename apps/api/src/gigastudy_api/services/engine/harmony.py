@@ -277,7 +277,7 @@ def generate_rule_based_harmony_candidates(
             slot_id=target_slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            merge_adjacent_same_pitch=False,
+            merge_adjacent_same_pitch=True,
         )
         for candidate_events in generated_candidates
     ]

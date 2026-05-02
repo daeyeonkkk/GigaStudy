@@ -33,7 +33,7 @@ async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.getByTestId('start-blank-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
   await expect(page.getByRole('heading', { name: title })).toBeVisible()
-  await expect(page.getByText('Region View + Piano Roll')).toBeVisible()
+  await expect(page.getByText('리전 뷰 + 피아노 롤')).toBeVisible()
   await expect(page.getByTestId('track-card-1')).toBeVisible()
 }
 
@@ -43,7 +43,7 @@ async function uploadSopranoMusicXml(page: Page, slotId = 1) {
     mimeType: 'application/vnd.recordare.musicxml+xml',
     buffer: Buffer.from(sopranoMusicXml, 'utf-8'),
   })
-  await expect(page.getByTestId('candidate-review')).toContainText('Soprano')
+  await expect(page.getByTestId('candidate-review')).toContainText('소프라노')
 }
 
 async function approveFirstCandidate(page: Page) {
@@ -54,7 +54,7 @@ async function approveFirstCandidate(page: Page) {
 async function expectRegisteredRegion(page: Page, slotId: number, labels: string[]) {
   const region = page.getByTestId(`track-region-${slotId}`)
   await expect(region).toBeVisible()
-  await expect(region).toContainText(`${labels.length} events`)
+  await expect(region).toContainText(`${labels.length}개 이벤트`)
   await region.click()
   for (const label of labels) {
     await expect(page.locator('.piano-roll__event', { hasText: label })).toBeVisible()
@@ -67,10 +67,10 @@ test('blank studio opens the region editor and independent practice route', asyn
   await page.getByTestId('practice-mode-link').click()
 
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)
-  await expect(page.getByText('GigaStudy Practice - Region blank session')).toBeVisible()
+  await expect(page.getByText('GigaStudy 연습 - Region blank session')).toBeVisible()
   await expect(page.getByTestId('practice-waterfall-stage')).toBeVisible()
-  await expect(page.getByText('No registered tracks yet.')).toBeVisible()
-  await expect(page.getByText('No registered pitch events yet.')).toBeVisible()
+  await expect(page.getByText('등록된 트랙이 아직 없습니다.')).toBeVisible()
+  await expect(page.getByText('등록된 음정 이벤트가 아직 없습니다.')).toBeVisible()
 })
 
 test('document upload becomes a region, piano-roll events, and practice waterfall notes', async ({ page }) => {
@@ -92,7 +92,7 @@ test('document upload becomes a region, piano-roll events, and practice waterfal
   await page.getByTestId('practice-mode-link').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)
   await expect(page.getByTestId('practice-track-checkbox-1')).toBeChecked()
-  await expect(page.getByTestId('practice-waterfall-stage')).toContainText('Soprano')
+  await expect(page.getByTestId('practice-waterfall-stage')).toContainText('소프라노')
   await expect(page.getByTestId('practice-waterfall-stage').locator('text=C5')).toBeVisible()
   await expect(page.getByTestId('practice-waterfall-stage').locator('text=G5')).toBeVisible()
 })
@@ -104,10 +104,10 @@ test('AI generation registers a second editable region', async ({ page }) => {
 
   await expect(page.getByTestId('track-generate-2')).toBeEnabled()
   await page.getByTestId('track-generate-2').click()
-  await expect(page.getByTestId('candidate-review')).toContainText('Balanced')
+  await expect(page.getByTestId('candidate-review')).toContainText('후보')
   await expect(page.locator('[data-testid^="candidate-region-"]').first()).toContainText('E4')
   await approveFirstCandidate(page)
 
   await expectRegisteredRegion(page, 2, ['E4', 'G4'])
-  await expect(page.locator('.studio-tracks__summary')).toContainText('2 registered')
+  await expect(page.locator('.studio-tracks__summary')).toContainText('등록 2')
 })

@@ -338,7 +338,7 @@ export function useStudioScoring({
       })
       setActionState({
         phase: 'success',
-        message: '박자 count-in 후 기준 트랙과 마이크 입력이 0박에서 시작합니다.',
+        message: '박자 카운트인 후 기준 트랙과 마이크 입력이 0박에서 시작합니다.',
       })
 
       for (let pulseIndex = 1; pulseIndex < totalPulses - 1; pulseIndex += 1) {
@@ -366,7 +366,7 @@ export function useStudioScoring({
     }
 
     if (referenceTracks.length > 0) {
-      setActionState({ phase: 'busy', message: '기준 트랙을 count-in 다운비트에 맞춰 준비합니다.' })
+      setActionState({ phase: 'busy', message: '기준 트랙을 카운트인 첫 박에 맞춰 준비합니다.' })
       if (!(await startPlaybackSession(referenceTracks, session.includeMetronome, {
         onStartScheduled: scheduleVisibleCountIn,
         onScheduledStart: () => finishScoreCountIn(referenceTracks.map((track) => track.slot_id), false),
@@ -406,7 +406,7 @@ export function useStudioScoring({
       setScoreSession({ ...session, phase: 'ready', countIn: null })
       setActionState({
         phase: 'success',
-        message: '채점 count-in을 취소했습니다.',
+        message: '채점 카운트인을 취소했습니다.',
       })
       return
     }
@@ -433,7 +433,7 @@ export function useStudioScoring({
       message:
         session.scoreMode === 'harmony'
           ? '내 파트가 기준 트랙들과 어울리는지 분석하는 중입니다.'
-          : '0.01s 단위로 박자와 음정을 채점하는 중입니다.',
+          : '0.01초 단위로 박자와 음정을 채점하는 중입니다.',
     })
     try {
       scoreRunIdRef.current += 1

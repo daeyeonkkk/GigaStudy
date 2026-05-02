@@ -9,6 +9,7 @@ import { useStudioResource } from '../components/studio/useStudioResource'
 import {
   DEFAULT_METER,
   formatDurationSeconds,
+  formatTrackName,
   getPitchEventRange,
   getPitchedEvents,
   getStudioMeter,
@@ -80,15 +81,8 @@ function getEventStyle(
   return {
     '--event-hue': getEventHue(event),
     '--event-lane-index': region.track_slot_id - 1,
-    '--event-top': `${getTimelinePercent(event.start_seconds, minSeconds, maxSeconds)}%`,
-    '--event-height': `${Math.max(
-      1.3,
-      getTimelinePercent(
-        event.start_seconds + event.duration_seconds,
-        event.start_seconds,
-        event.start_seconds + Math.max(0.25, maxSeconds - minSeconds),
-      ),
-    )}%`,
+    '--event-left': `${getTimelinePercent(event.start_seconds, minSeconds, maxSeconds)}%`,
+    '--event-width': `${Math.max(1.4, (event.duration_seconds / Math.max(0.25, maxSeconds - minSeconds)) * 100)}%`,
   } as CSSProperties
 }
 
@@ -98,7 +92,7 @@ function getPlayheadStyle(
   maxSeconds: number,
 ): CSSProperties {
   return {
-    '--playhead-top': `${getTimelinePercent(playheadSeconds ?? minSeconds, minSeconds, maxSeconds)}%`,
+    '--playhead-left': `${getTimelinePercent(playheadSeconds ?? minSeconds, minSeconds, maxSeconds)}%`,
   } as CSSProperties
 }
 
@@ -108,7 +102,7 @@ function PracticeStatus({ actionState }: { actionState: StudioActionState }) {
       <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
       <p>
         {actionState.phase === 'idle'
-          ? 'Practice ready.'
+          ? '연습 준비 완료'
           : actionState.message}
       </p>
     </section>
@@ -135,11 +129,11 @@ function PracticeWaterfallStage({
   )
 
   return (
-    <section className="practice-stage" aria-label="Waterfall practice timing view">
+    <section className="practice-stage" aria-label="연습 타이밍 타임라인">
       <div className="practice-stage__labels" aria-hidden="true">
         <span>{formatDurationSeconds(minSeconds)}</span>
         <span>
-          M{pitchRange.maxMidi} - M{pitchRange.minMidi}
+          음역 M{pitchRange.maxMidi} - M{pitchRange.minMidi}
         </span>
         <span>{formatDurationSeconds(maxSeconds)}</span>
       </div>
@@ -155,19 +149,19 @@ function PracticeWaterfallStage({
             key={track.slot_id}
             style={getTrackLaneStyle(track)}
           >
-            <span>{track.name}</span>
+            <span>{formatTrackName(track.name)}</span>
           </div>
         ))}
         {events.length === 0 ? (
-          <p className="practice-stage__empty">No registered pitch events yet.</p>
+          <p className="practice-stage__empty">등록된 음정 이벤트가 아직 없습니다.</p>
         ) : (
           events.map((item) => (
             <i
-              aria-label={`${item.region.track_name} ${item.event.label}`}
+              aria-label={`${formatTrackName(item.region.track_name)} ${item.event.label}`}
               className="practice-stage__event"
               key={`${item.region.region_id}-${item.event.event_id}`}
               style={getEventStyle(item, minSeconds, maxSeconds)}
-              title={`${item.region.track_name} - ${item.event.label}`}
+              title={`${formatTrackName(item.region.track_name)} - ${item.event.label}`}
             >
               <span>{item.event.label}</span>
             </i>
@@ -224,10 +218,10 @@ export function PracticePage() {
   if (!studioId) {
     return (
       <StudioRouteState
-        homeLabel="Home"
-        message="The studio address is invalid."
-        title="Practice mode cannot be opened"
-        tone="Practice error"
+        homeLabel="홈"
+        message="스튜디오 주소가 올바르지 않습니다."
+        title="연습 모드를 열 수 없습니다"
+        tone="연습 오류"
       />
     )
   }
@@ -236,8 +230,8 @@ export function PracticePage() {
     return (
       <StudioRouteState
         pulseCount={6}
-        title="Preparing the practice view"
-        tone="Practice loading"
+        title="연습 화면을 준비하는 중입니다"
+        tone="연습 로딩"
       />
     )
   }
@@ -245,22 +239,22 @@ export function PracticePage() {
   if (loadState.phase === 'error' || !studio) {
     return (
       <StudioRouteState
-        homeLabel="Home"
-        message={loadState.phase === 'error' ? loadState.message : 'An unknown error occurred.'}
-        title="Practice mode cannot be opened"
-        tone="Practice error"
+        homeLabel="홈"
+        message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
+        title="연습 모드를 열 수 없습니다"
+        tone="연습 오류"
       />
     )
   }
 
   return (
     <main className="app-shell practice-page">
-      <section className="practice-window" aria-label="GigaStudy practice mode">
+      <section className="practice-window" aria-label="GigaStudy 연습 모드">
         <header className="composer-titlebar">
-          <Link className="composer-app-mark" to="/" aria-label="Home">
+          <Link className="composer-app-mark" to="/" aria-label="홈으로">
             GS
           </Link>
-          <span>GigaStudy Practice - {studio.title}</span>
+          <span>GigaStudy 연습 - {studio.title}</span>
           <div className="composer-window-buttons" aria-hidden="true">
             <span />
             <span />
@@ -268,9 +262,9 @@ export function PracticePage() {
           </div>
         </header>
 
-        <div className="practice-toolbar" aria-label="Practice playback controls">
+        <div className="practice-toolbar" aria-label="연습 재생 제어">
           <Link className="composer-tool composer-tool--text" to={`/studios/${studio.studio_id}`}>
-            Edit
+            편집
           </Link>
           <button
             className="composer-tool composer-tool--primary"
@@ -279,7 +273,7 @@ export function PracticePage() {
             type="button"
             onClick={() => void startSelectedPlayback()}
           >
-            {globalPlaying ? 'Restart' : 'Play'}
+            {globalPlaying ? '처음부터' : '재생'}
           </button>
           <button
             className="composer-tool"
@@ -287,7 +281,7 @@ export function PracticePage() {
             type="button"
             onClick={stopGlobalPlayback}
           >
-            Stop
+            중지
           </button>
           <button
             className="composer-tool composer-tool--text"
@@ -295,7 +289,7 @@ export function PracticePage() {
             type="button"
             onClick={selectAllPlaybackTracks}
           >
-            All
+            전체
           </button>
           <label className="composer-metronome">
             <input
@@ -303,16 +297,16 @@ export function PracticePage() {
               type="checkbox"
               onChange={(event) => setMetronomeEnabled(event.target.checked)}
             />
-            Metronome
+            메트로놈
           </label>
-          <div className="composer-source-toggle" role="group" aria-label="Playback source">
+          <div className="composer-source-toggle" role="group" aria-label="재생 소스">
             <button
               aria-pressed={playbackSource === 'audio'}
               className={playbackSource === 'audio' ? 'is-active' : ''}
               type="button"
               onClick={() => changePlaybackSource('audio')}
             >
-              Audio
+              녹음
             </button>
             <button
               aria-pressed={playbackSource === 'events'}
@@ -320,14 +314,14 @@ export function PracticePage() {
               type="button"
               onClick={() => changePlaybackSource('events')}
             >
-              Events
+              이벤트
             </button>
           </div>
         </div>
 
-        <section className="practice-track-picker" aria-label="Practice track selection">
+        <section className="practice-track-picker" aria-label="연습 트랙 선택">
           {registeredTracks.length === 0 ? (
-            <p>No registered tracks yet.</p>
+            <p>등록된 트랙이 아직 없습니다.</p>
           ) : (
             registeredTracks.map((track) => (
               <label key={track.slot_id}>
@@ -337,7 +331,7 @@ export function PracticePage() {
                   type="checkbox"
                   onChange={() => togglePlaybackSelection(track.slot_id)}
                 />
-                <span>{track.name}</span>
+                <span>{formatTrackName(track.name)}</span>
               </label>
             ))
           )}
@@ -354,9 +348,9 @@ export function PracticePage() {
         />
 
         <footer className="composer-statusbar">
-          <span>{globalPlaying ? 'Playing' : 'Ready'}</span>
-          <span>{selectedTrackCount}/{registeredTracks.length} tracks</span>
-          <span>{playbackSource === 'audio' ? 'Audio source' : 'Event source'}</span>
+          <span>{globalPlaying ? '재생 중' : '준비 완료'}</span>
+          <span>{selectedTrackCount}/{registeredTracks.length} 트랙</span>
+          <span>{playbackSource === 'audio' ? '녹음 소스' : '이벤트 소스'}</span>
           <span>
             {formatDurationSeconds(playheadSeconds ?? 0)} /{' '}
             {formatDurationSeconds(playbackTimeline?.maxSeconds ?? timelineBounds.maxSeconds)}

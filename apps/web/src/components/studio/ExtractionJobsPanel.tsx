@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import { getJobStatusLabel } from '../../lib/studio'
+import { formatTrackName, getJobStatusLabel } from '../../lib/studio'
 import type { ExtractionCandidate, TrackExtractionJob, TrackSlot } from '../../types/studio'
 import './ExtractionJobsPanel.css'
 
@@ -57,10 +57,10 @@ export function ExtractionJobsPanel({
   }
 
   return (
-    <section className="extraction-jobs" data-testid="extraction-jobs" aria-label="Extraction jobs">
+    <section className="extraction-jobs" data-testid="extraction-jobs" aria-label="추출 작업">
       <div className="extraction-jobs__header">
         <div>
-          <p className="eyebrow">Engine queue</p>
+          <p className="eyebrow">엔진 대기열</p>
           <h2>추출 작업</h2>
           <p>대기, 실행, 승인 대기, 실패 작업을 한 곳에서 확인합니다.</p>
         </div>
@@ -107,7 +107,7 @@ export function ExtractionJobsPanel({
           )
           const approveDisabled = busy || lockedByAnotherJob || (wouldOverwrite && !allowOverwrite)
           const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : '문서 분석'
-          const jobTargetLabel = job.parse_all_parts ? '전체 문서' : (jobTrack?.name ?? `Track ${job.slot_id}`)
+          const jobTargetLabel = job.parse_all_parts ? '전체 문서' : formatTrackName(jobTrack?.name ?? `Track ${job.slot_id}`)
           const candidateSummary = getJobCandidateSummary(jobCandidates, tracks)
           const recoveryHint = getJobRecoveryHint(job)
           const attemptLabel =
@@ -193,7 +193,7 @@ function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: Track
         getCandidateDiagnosticNumber(candidate, 'event_count') ??
         candidate.region.pitch_events.length
       const measureLabel = measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'
-      return `${track?.name ?? `Track ${candidate.suggested_slot_id}`} ${confidence} / ${measureLabel} / ${eventCount}개`
+      return `${formatTrackName(track?.name ?? `Track ${candidate.suggested_slot_id}`)} ${confidence} / ${measureLabel} / ${eventCount}개`
     })
     .join(' | ')
 }
@@ -204,7 +204,7 @@ function getJobStateHint(job: TrackExtractionJob): string {
   }
   if (job.status === 'running') {
     return job.job_type === 'voice'
-      ? '녹음 파일을 메트로놈 기준으로 정렬하고 pitch-event 후보를 만드는 중입니다.'
+      ? '녹음 파일을 메트로놈 기준으로 정렬하고 음정 이벤트 후보를 만드는 중입니다.'
       : '문서 파트와 트랙 후보를 추출하는 중입니다. 완료되면 등록 가능한 후보가 표시됩니다.'
   }
   if (job.status === 'needs_review') {

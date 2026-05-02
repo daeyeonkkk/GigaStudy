@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getStudio } from '../lib/api'
 import {
   describeReferences,
+  formatTrackName,
   formatNullableSeconds,
   formatNullableSemitones,
   formatScore,
@@ -37,67 +38,91 @@ function formatNullableScore(value: number | null): string {
 }
 
 function reportTitle(report: ScoringReport): string {
-  return `${report.target_track_name} ${report.score_mode === 'harmony' ? '화음 채점' : '정답 채점'}`
+  return `${formatTrackName(report.target_track_name)} ${report.score_mode === 'harmony' ? '화음 채점' : '정답 채점'}`
 }
 
 function buildMetricCards(report: ScoringReport): MetricCard[] {
   if (report.score_mode === 'harmony') {
     return [
-      { label: 'Harmony', value: formatNullableScore(report.harmony_score) },
-      { label: 'Chord', value: formatNullableScore(report.chord_fit_score) },
-      { label: 'Rhythm', value: formatScore(report.rhythm_score) },
-      { label: 'Spacing', value: formatNullableScore(report.spacing_score) },
-      { label: 'Range', value: formatNullableScore(report.range_score) },
-      { label: 'Voice lead', value: formatNullableScore(report.voice_leading_score) },
-      { label: 'Arrangement', value: formatNullableScore(report.arrangement_score) },
-      { label: 'Auto Sync', value: formatSeconds(report.alignment_offset_seconds) },
-      { label: 'Events', value: String(report.performance_event_count) },
+      { label: '화음', value: formatNullableScore(report.harmony_score) },
+      { label: '코드', value: formatNullableScore(report.chord_fit_score) },
+      { label: '박자', value: formatScore(report.rhythm_score) },
+      { label: '간격', value: formatNullableScore(report.spacing_score) },
+      { label: '음역', value: formatNullableScore(report.range_score) },
+      { label: '성부 진행', value: formatNullableScore(report.voice_leading_score) },
+      { label: '편곡', value: formatNullableScore(report.arrangement_score) },
+      { label: '자동 싱크', value: formatSeconds(report.alignment_offset_seconds) },
+      { label: '이벤트', value: String(report.performance_event_count) },
     ]
   }
 
   return [
-    { label: 'Pitch', value: formatScore(report.pitch_score) },
-    { label: 'Rhythm', value: formatScore(report.rhythm_score) },
-    { label: 'Auto Sync', value: formatSeconds(report.alignment_offset_seconds) },
-    { label: 'Matched', value: `${report.matched_event_count}/${report.answer_event_count}` },
-    { label: 'Missing', value: String(report.missing_event_count) },
-    { label: 'Extra', value: String(report.extra_event_count) },
+    { label: '음정', value: formatScore(report.pitch_score) },
+    { label: '박자', value: formatScore(report.rhythm_score) },
+    { label: '자동 싱크', value: formatSeconds(report.alignment_offset_seconds) },
+    { label: '일치', value: `${report.matched_event_count}/${report.answer_event_count}` },
+    { label: '누락', value: String(report.missing_event_count) },
+    { label: '추가', value: String(report.extra_event_count) },
   ]
+}
+
+function getReportSummary(report: ScoringReport): string {
+  if (report.score_mode === 'harmony') {
+    return [
+      `화음 ${formatNullableScore(report.harmony_score)}`,
+      `코드 ${formatNullableScore(report.chord_fit_score)}`,
+      `성부 진행 ${formatNullableScore(report.voice_leading_score)}`,
+      `기준 이벤트 ${report.performance_event_count}개`,
+    ].join(' · ')
+  }
+
+  return [
+    `음정 ${formatScore(report.pitch_score)}`,
+    `박자 ${formatScore(report.rhythm_score)}`,
+    `일치 ${report.matched_event_count}/${report.answer_event_count}`,
+  ].join(' · ')
+}
+
+function getIssueSummary(issue: ReportIssue): string {
+  const labels: Partial<Record<ReportIssue['issue_type'], string>> = {
+    chord_fit: '현재 음이 기준 화성의 명확한 코드 톤으로 들리지 않습니다.',
+    harmony: '현재 음이 기준 화성과 안정적으로 맞지 않습니다.',
+    range: '목표 트랙의 권장 음역을 벗어난 음이 있습니다.',
+    rhythm: '기준 박자와 실제 입력 타이밍이 어긋났습니다.',
+    pitch: '기준 음정과 실제 음정이 다릅니다.',
+    pitch_rhythm: '음정과 박자가 함께 어긋났습니다.',
+    spacing: '성부 사이 간격이 권장 범위를 벗어났습니다.',
+    voice_leading: '성부 진행이 자연스럽지 않은 구간입니다.',
+    crossing: '성부 교차가 발생했습니다.',
+    parallel_motion: '병행 진행 위험이 있습니다.',
+    tension_resolution: '긴장음 해결이 불안정합니다.',
+    bass_foundation: '베이스가 화성의 기반을 충분히 받치지 못합니다.',
+    chord_coverage: '코드 구성음 커버리지가 부족합니다.',
+    missing: '기준 이벤트가 빠졌습니다.',
+    extra: '기준에 없는 추가 이벤트가 감지되었습니다.',
+  }
+  return labels[issue.issue_type] ?? '확인이 필요한 구간입니다.'
 }
 
 function getIssueDetail(issue: ReportIssue): string {
   const coordinate = getIssueCoordinate(issue)
-  if (
-    issue.message &&
-    [
-      'harmony',
-      'chord_fit',
-      'range',
-      'spacing',
-      'voice_leading',
-      'crossing',
-      'parallel_motion',
-      'tension_resolution',
-      'bass_foundation',
-      'chord_coverage',
-    ].includes(issue.issue_type)
-  ) {
-    return coordinate ? `${issue.message} / ${coordinate}` : issue.message
-  }
-
-  const expected = issue.answer_label ?? '-'
-  const actual = issue.performance_label ?? '-'
-  const detail = `expected ${expected} / actual ${actual} / time ${formatNullableSeconds(
-    issue.timing_error_seconds,
-  )} / pitch ${formatNullableSemitones(issue.pitch_error_semitones)}`
-  return coordinate ? `${detail} / ${coordinate}` : detail
+  const parts = [
+    getIssueSummary(issue),
+    issue.answer_label ? `기준 ${issue.answer_label}` : null,
+    issue.performance_label ? `실제 ${issue.performance_label}` : null,
+    issue.timing_error_seconds !== null ? `시간 오차 ${formatNullableSeconds(issue.timing_error_seconds)}` : null,
+    issue.pitch_error_semitones !== null ? `음정 오차 ${formatNullableSemitones(issue.pitch_error_semitones)}` : null,
+    coordinate || null,
+    issue.correction_hint ? `힌트 ${issue.correction_hint}` : null,
+  ].filter(Boolean)
+  return parts.join(' / ')
 }
 
 function getIssueCoordinate(issue: ReportIssue): string {
-  const expectedBeat = issue.expected_beat !== null ? `expected beat ${issue.expected_beat}` : null
-  const actualBeat = issue.actual_beat !== null ? `actual beat ${issue.actual_beat}` : null
+  const expectedBeat = issue.expected_beat !== null ? `기준 박 ${issue.expected_beat}` : null
+  const actualBeat = issue.actual_beat !== null ? `실제 박 ${issue.actual_beat}` : null
   const eventId = issue.answer_event_id ?? issue.performance_event_id
-  const eventText = eventId ? `event ${eventId}` : null
+  const eventText = eventId ? `이벤트 ${eventId}` : null
   return [expectedBeat, actualBeat, eventText].filter(Boolean).join(' / ')
 }
 
@@ -186,7 +211,7 @@ export function ReportPage() {
   if (!studioId) {
     return (
       <ReportRouteState
-        eyebrow="Report error"
+        eyebrow="리포트 오류"
         title="리포트를 찾을 수 없습니다"
         body="스튜디오 주소가 올바르지 않습니다."
         to="/"
@@ -196,13 +221,13 @@ export function ReportPage() {
   }
 
   if (loadState.phase === 'loading') {
-    return <ReportRouteState eyebrow="Report loading" title="리포트를 불러오는 중입니다" />
+    return <ReportRouteState eyebrow="리포트 로딩" title="리포트를 불러오는 중입니다" />
   }
 
   if (loadState.phase === 'error' || !studio || !report) {
     return (
       <ReportRouteState
-        eyebrow="Report error"
+        eyebrow="리포트 오류"
         title="리포트를 찾을 수 없습니다"
         body={loadState.phase === 'error' ? loadState.message : '존재하지 않는 리포트입니다.'}
         to={studioId ? `/studios/${studioId}` : '/'}
@@ -221,7 +246,7 @@ export function ReportPage() {
             GS
           </Link>
           <div>
-            <p className="eyebrow">Scoring report</p>
+            <p className="eyebrow">채점 리포트</p>
             <h1>{reportTitle(report)}</h1>
           </div>
           <Link className="app-button app-button--secondary" to={`/studios/${studio.studio_id}`}>
@@ -232,11 +257,9 @@ export function ReportPage() {
         <section className="report-hero">
           <div>
             <span>{formatDateTime(report.created_at)}</span>
-            <h2>{report.target_track_name}</h2>
+            <h2>{formatTrackName(report.target_track_name)}</h2>
             <p>{describeReferences(report, studio.tracks as TrackSlot[])}</p>
-            {report.score_mode === 'harmony' && report.harmony_summary ? (
-              <p>{report.harmony_summary}</p>
-            ) : null}
+            <p>{getReportSummary(report)}</p>
           </div>
           <strong>{formatScore(report.overall_score)}</strong>
         </section>
@@ -252,7 +275,7 @@ export function ReportPage() {
 
         <section className="report-issues" data-testid="report-issues">
           <header>
-            <p className="eyebrow">Issue timeline</p>
+            <p className="eyebrow">오차 타임라인</p>
             <h2>오차 목록</h2>
           </header>
 
@@ -276,7 +299,7 @@ export function ReportPage() {
                       <p>{getIssueDetail(issue)}</p>
                       {focusPath ? (
                         <Link className="report-issue__focus" to={focusPath}>
-                          Open in piano roll
+                          피아노 롤에서 보기
                         </Link>
                       ) : null}
                     </div>

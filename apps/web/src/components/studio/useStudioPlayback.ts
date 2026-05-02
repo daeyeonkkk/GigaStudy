@@ -7,6 +7,7 @@ import {
   createTone,
   disposePlaybackSession,
   fetchAudioArrayBuffer,
+  formatTrackName,
   getPitchEventPlaybackFrequency,
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
@@ -20,7 +21,7 @@ import {
   type PlaybackSession,
   type PlaybackSourceMode,
 } from '../../lib/studio'
-import type { ArrangementRegion, Studio, TrackSlot } from '../../types/studio'
+import type { ArrangementRegion, PitchEvent, Studio, TrackSlot } from '../../types/studio'
 import type { SetStudioActionState } from './studioActionState'
 
 type PlaybackTimeline = {
@@ -38,6 +39,13 @@ type PlaybackStartOptions = {
   startSeconds?: number
 }
 
+type ScheduledPitchEvent = {
+  durationSeconds: number
+  event: PitchEvent
+  frequency: number
+  startSeconds: number
+}
+
 type UseStudioPlaybackArgs = {
   metronomeEnabled: boolean
   registeredSlotIds: number[]
@@ -45,6 +53,53 @@ type UseStudioPlaybackArgs = {
   setActionState: SetStudioActionState
   studio: Studio | null
   studioMeter: MeterContext
+}
+
+function getSustainedPitchEvents(events: PitchEvent[], isPercussion: boolean): ScheduledPitchEvent[] {
+  const scheduledEvents = events
+    .map((event) => {
+      const frequency = getPitchEventPlaybackFrequency(event)
+      return frequency === null
+        ? null
+        : {
+            durationSeconds: Math.max(isPercussion ? 0.08 : 0.18, event.duration_seconds * (isPercussion ? 1 : 1.04)),
+            event,
+            frequency,
+            startSeconds: event.start_seconds,
+          }
+    })
+    .filter((event): event is ScheduledPitchEvent => event !== null)
+    .sort((left, right) => left.startSeconds - right.startSeconds || left.event.event_id.localeCompare(right.event.event_id))
+
+  if (isPercussion) {
+    return scheduledEvents
+  }
+
+  const merged: ScheduledPitchEvent[] = []
+  for (const current of scheduledEvents) {
+    const previous = merged[merged.length - 1]
+    if (!previous) {
+      merged.push({ ...current })
+      continue
+    }
+
+    const previousEndSeconds = previous.startSeconds + previous.durationSeconds
+    const currentEndSeconds = current.startSeconds + current.durationSeconds
+    const samePitch =
+      current.event.label === previous.event.label ||
+      Math.abs(current.frequency - previous.frequency) < 0.5 ||
+      (current.event.pitch_midi !== null &&
+        current.event.pitch_midi !== undefined &&
+        current.event.pitch_midi === previous.event.pitch_midi)
+    const smallGap = current.startSeconds <= previousEndSeconds + 0.08
+    if (samePitch && smallGap) {
+      previous.durationSeconds = Math.max(previous.durationSeconds, currentEndSeconds - previous.startSeconds)
+      continue
+    }
+
+    merged.push({ ...current })
+  }
+  return merged
 }
 
 export function useStudioPlayback({
@@ -169,7 +224,7 @@ export function useStudioPlayback({
           : hasPlayableEvents(track)),
     )
     if (playableTracks.length === 0) {
-      setActionState({ phase: 'error', message: 'No registered tracks are available for playback.' })
+      setActionState({ phase: 'error', message: '재생할 수 있는 등록 트랙이 없습니다.' })
       return false
     }
 
@@ -204,7 +259,7 @@ export function useStudioPlayback({
     const AudioContextConstructor = getBrowserAudioContextConstructor()
     if (needsAudioContext) {
       if (!AudioContextConstructor) {
-        setActionState({ phase: 'error', message: 'Could not open an audio device for pitch events or metronome.' })
+        setActionState({ phase: 'error', message: '음정 이벤트나 메트로놈을 재생할 오디오 장치를 열 수 없습니다.' })
         return false
       }
       try {
@@ -212,7 +267,7 @@ export function useStudioPlayback({
         scheduledStart = context.currentTime + minimumStartDelaySeconds
         await context.resume().catch(() => undefined)
       } catch {
-        setActionState({ phase: 'error', message: 'Could not open an audio device. Check browser permissions.' })
+        setActionState({ phase: 'error', message: '오디오 장치를 열 수 없습니다. 브라우저 권한을 확인하세요.' })
         return false
       }
     }
@@ -220,7 +275,7 @@ export function useStudioPlayback({
     try {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
-      const eventToneVolume = Math.max(0.14, Math.min(0.32, 0.32 / Math.sqrt(Math.max(1, eventTracks.length))))
+      const eventToneVolume = Math.max(0.35, Math.min(0.8, 0.8 / Math.sqrt(Math.max(1, eventTracks.length))))
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
 
@@ -250,20 +305,20 @@ export function useStudioPlayback({
 
       if (audioTracks.length > 0) {
         if (!activeContext) {
-          throw new Error('Could not open an audio device for recorded audio playback.')
+          throw new Error('녹음 재생용 오디오 장치를 열 수 없습니다.')
         }
         const requiresSynchronizedStart = audioTracks.length > 1 || eventTracks.length > 0 || includeMetronome
         const synchronizedParts = [
-          `audio ${audioTracks.length}`,
-          eventTracks.length > 0 ? `pitch events ${eventTracks.length}` : null,
-          includeMetronome ? 'metronome' : null,
+          `녹음 ${audioTracks.length}개`,
+          eventTracks.length > 0 ? `음정 이벤트 ${eventTracks.length}개` : null,
+          includeMetronome ? '메트로놈' : null,
         ].filter(Boolean)
         setActionState({
           phase: 'busy',
           message:
             requiresSynchronizedStart
-              ? `${synchronizedParts.join(', ')} will be loaded for one synchronized start.`
-              : 'Loading the recorded audio for immediate playback.',
+              ? `${synchronizedParts.join(', ')}를 한 번에 맞춰 재생하도록 불러오는 중입니다.`
+              : '녹음 파일을 바로 재생할 수 있게 불러오는 중입니다.',
         })
         const decodedAudioTracks = await Promise.all(
           audioTracks.map(async (track) => {
@@ -281,7 +336,7 @@ export function useStudioPlayback({
         if (requiresSynchronizedStart && playbackRunIdRef.current === runId) {
           setActionState({
             phase: 'busy',
-            message: `${synchronizedParts.join(', ')} are being aligned to the same beat grid.`,
+            message: `${synchronizedParts.join(', ')}를 같은 박자 그리드에 정렬하는 중입니다.`,
           })
         }
       }
@@ -347,18 +402,16 @@ export function useStudioPlayback({
           return
         }
 
+        const isPercussion = track.slot_id === 6
         trackRegions.forEach((region) => {
           region.pitch_events.forEach((event) => {
-            const frequency = getPitchEventPlaybackFrequency(event)
-            if (frequency === null) {
-              return
-            }
-            const eventStartSeconds = event.start_seconds
-            const duration = Math.max(0.11, event.duration_seconds * 0.9)
+            maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
+          })
+          getSustainedPitchEvents(region.pitch_events, isPercussion).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
+            const duration = durationSeconds
             const eventEndSeconds = eventStartSeconds + duration
             timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
             if (eventEndSeconds <= startSeconds) {
-              maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
               return
             }
             const relativeStartSeconds = Math.max(0, eventStartSeconds - startSeconds)
@@ -366,8 +419,8 @@ export function useStudioPlayback({
               0.05,
               eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
             )
-            const volume = track.slot_id === 6 ? Math.min(0.14, eventToneVolume * 0.7) : eventToneVolume
-            const toneType: OscillatorType | 'piano' = track.slot_id === 6 ? 'square' : 'piano'
+            const volume = isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume
+            const toneType: OscillatorType | 'piano' = isPercussion ? 'square' : 'piano'
 
             nodes.push(
               createTone(
@@ -381,7 +434,6 @@ export function useStudioPlayback({
               ),
             )
             latestStop = Math.max(latestStop, relativeStartSeconds + remainingDuration)
-            maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
             scheduledAnyTrack = true
           })
         })
@@ -389,7 +441,7 @@ export function useStudioPlayback({
 
       if (!scheduledAnyTrack) {
         disposePlaybackSession({ context, nodes, timeoutIds })
-        setActionState({ phase: 'error', message: 'No playable recorded audio or pitch events are available.' })
+        setActionState({ phase: 'error', message: '재생 가능한 녹음이나 음정 이벤트가 없습니다.' })
         return false
       }
 
@@ -416,7 +468,7 @@ export function useStudioPlayback({
         message:
           error instanceof Error && error.message.trim()
             ? error.message
-            : 'Could not start playback.',
+            : '재생을 시작하지 못했습니다.',
       })
       return false
     }
@@ -480,12 +532,12 @@ export function useStudioPlayback({
   function openPlaybackPicker() {
     if (registeredTracks.length === 0) {
       setPlaybackPickerOpen(true)
-      setActionState({ phase: 'error', message: 'No registered tracks are available for playback.' })
+      setActionState({ phase: 'error', message: '재생할 등록 트랙이 없습니다.' })
       return
     }
     setSelectedPlaybackSlotIds(new Set(registeredSlotIds))
     setPlaybackPickerOpen(true)
-    setActionState({ phase: 'success', message: 'Choose tracks for synchronized playback.' })
+    setActionState({ phase: 'success', message: '동시에 재생할 트랙을 선택하세요.' })
   }
 
   function updateSyncStep(nextStepSeconds: number) {
@@ -508,7 +560,7 @@ export function useStudioPlayback({
     const selectedTracks = getSelectedPlaybackTracks()
     if (selectedTracks.length === 0) {
       setPlaybackPickerOpen(true)
-      setActionState({ phase: 'error', message: 'Select at least one registered track for synchronized playback.' })
+      setActionState({ phase: 'error', message: '동시 재생할 등록 트랙을 하나 이상 선택하세요.' })
       return
     }
 
@@ -529,8 +581,8 @@ export function useStudioPlayback({
         phase: 'success',
         message:
           playbackSource === 'audio'
-            ? `${selectedTracks.length} tracks will play from the same beat grid.`
-            : `${selectedTracks.length} tracks will play together from pitch events.`,
+            ? `${selectedTracks.length}개 트랙을 같은 박자 그리드에서 재생합니다.`
+            : `${selectedTracks.length}개 트랙을 음정 이벤트로 함께 재생합니다.`,
       })
     }
   }
@@ -538,18 +590,18 @@ export function useStudioPlayback({
   async function toggleGlobalPlayback() {
     if (globalPlaying) {
       stopPlaybackSession()
-      setActionState({ phase: 'success', message: 'Selected playback paused.' })
+      setActionState({ phase: 'success', message: '선택 재생을 멈췄습니다.' })
       return
     }
 
     if (registeredTracks.length === 0) {
-      setActionState({ phase: 'error', message: 'No registered tracks are available for playback.' })
+      setActionState({ phase: 'error', message: '재생할 등록 트랙이 없습니다.' })
       return
     }
 
     if (!playbackPickerOpen) {
       setPlaybackPickerOpen(true)
-      setActionState({ phase: 'success', message: 'Choose tracks for synchronized playback.' })
+      setActionState({ phase: 'success', message: '동시에 재생할 트랙을 선택하세요.' })
       return
     }
 
@@ -571,7 +623,7 @@ export function useStudioPlayback({
     stopPlaybackSession()
     setActionState({
       phase: 'success',
-      message: 'Returned selected tracks to the sync-adjusted 0s point.',
+      message: '선택 트랙을 싱크가 반영된 0초 지점으로 되돌렸습니다.',
     })
   }
 
@@ -583,19 +635,19 @@ export function useStudioPlayback({
     setPlaybackSource(nextSource)
     setActionState({
       phase: 'success',
-      message: nextSource === 'audio' ? 'Playback source switched to recorded audio.' : 'Playback source switched to pitch events.',
+      message: nextSource === 'audio' ? '재생 소스를 녹음으로 바꿨습니다.' : '재생 소스를 음정 이벤트로 바꿨습니다.',
     })
   }
 
   async function toggleTrackPlayback(track: TrackSlot) {
     if (track.status !== 'registered') {
-      setActionState({ phase: 'error', message: `${track.name} is not registered yet.` })
+      setActionState({ phase: 'error', message: `${formatTrackName(track.name)}은 아직 등록되지 않았습니다.` })
       return
     }
 
     if (playingSlots.has(track.slot_id)) {
       stopPlaybackSession()
-      setActionState({ phase: 'success', message: `${track.name} playback paused.` })
+      setActionState({ phase: 'success', message: `${formatTrackName(track.name)} 재생을 멈췄습니다.` })
       return
     }
 
@@ -610,8 +662,8 @@ export function useStudioPlayback({
         phase: 'success',
         message:
           playbackSource === 'audio' && track.audio_source_path
-            ? `${track.name} recorded audio is playing.`
-            : `${track.name} is playing from pitch events.`,
+            ? `${formatTrackName(track.name)} 녹음을 재생합니다.`
+            : `${formatTrackName(track.name)} 음정 이벤트를 재생합니다.`,
       })
     }
   }
@@ -620,7 +672,7 @@ export function useStudioPlayback({
     stopPlaybackSession()
     setActionState({
       phase: 'success',
-      message: `${track.name} returned to the sync-adjusted 0s point.`,
+      message: `${formatTrackName(track.name)}을 싱크가 반영된 0초 지점으로 되돌렸습니다.`,
     })
   }
 

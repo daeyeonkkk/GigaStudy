@@ -4,8 +4,10 @@ import {
   getCandidateContourPoints,
   getCandidateDecisionSummary,
   getCandidatePreviewText,
+  formatGeneratedLabel,
   getPitchEventRange,
   getPitchedEvents,
+  formatTrackName,
   sourceLabels,
   statusLabels,
 } from '../../lib/studio'
@@ -117,10 +119,10 @@ export function CandidateReviewPanel({
     <section className="candidate-review" data-testid="candidate-review" aria-label="후보 검토">
       <div className="candidate-review__header">
         <div>
-          <p className="eyebrow">Review queue</p>
+          <p className="eyebrow">검토 대기열</p>
           <h2>후보 선택 / 승인</h2>
         </div>
-        <strong>{candidates.length} pending</strong>
+        <strong>{candidates.length}개 대기</strong>
       </div>
 
       <div className="candidate-review__list">
@@ -146,10 +148,10 @@ export function CandidateReviewPanel({
               <div className="candidate-review__identity">
                 <span>
                   {sourceLabels[candidate.source_kind]}
-                  {candidate.variant_label ? ` · ${candidate.variant_label}` : ''}
+                  {candidate.variant_label ? ` · ${formatGeneratedLabel(candidate.variant_label)}` : ''}
                 </span>
                 <span className="candidate-review__engine">{engineLabel}</span>
-                <h3>{suggestedTrack?.name ?? `Track ${candidate.suggested_slot_id}`} 후보</h3>
+                <h3>{formatTrackName(suggestedTrack?.name ?? `Track ${candidate.suggested_slot_id}`)} 후보</h3>
                 <div className={`candidate-review__verdict candidate-review__verdict--${verdict.tone}`}>
                   <strong>{verdict.label}</strong>
                   <span>{verdict.reason}</span>
@@ -221,7 +223,7 @@ export function CandidateReviewPanel({
                   >
                     {tracks.map((track) => (
                       <option key={track.slot_id} value={track.slot_id}>
-                        {String(track.slot_id).padStart(2, '0')} {track.name} - {statusLabels[track.status]}
+                        {String(track.slot_id).padStart(2, '0')} {formatTrackName(track.name)} - {statusLabels[track.status]}
                       </option>
                     ))}
                   </select>
@@ -235,7 +237,7 @@ export function CandidateReviewPanel({
                       type="checkbox"
                       onChange={(event) => onUpdateCandidateOverwriteApproval(candidate, event.target.checked)}
                     />
-                    <span>{targetTrack?.name ?? '선택한 트랙'} 덮어쓰기 확인</span>
+                    <span>{formatTrackName(targetTrack?.name)} 덮어쓰기 확인</span>
                   </label>
                 ) : null}
               </div>
@@ -370,12 +372,12 @@ function getDiagnosticStringList(diagnostics: Record<string, unknown>, key: stri
 
 function getCandidateEngineLabel(candidate: ExtractionCandidate): string {
   if (candidate.method.includes('deepseek')) {
-    return 'Engine: DeepSeek plan + voice-leading'
+    return '엔진: DeepSeek 편성 계획 + 성부 진행'
   }
   if (candidate.method.includes('rule_based')) {
-    return 'Engine: rule-based voice-leading'
+    return '엔진: 규칙 기반 성부 진행'
   }
-  return `Engine: ${candidate.method}`
+  return `엔진: ${candidate.method}`
 }
 
 function shouldShowSourcePreview(candidate: ExtractionCandidate): boolean {

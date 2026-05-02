@@ -362,16 +362,12 @@ class Studio(BaseModel):
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
     time_signature_denominator: TimeSignatureDenominator = 4
     tracks: list[TrackSlot]
+    regions: list[ArrangementRegion] = Field(default_factory=list)
     reports: list[ScoringReport]
     jobs: list[TrackExtractionJob] = Field(default_factory=list)
     candidates: list[ExtractionCandidate] = Field(default_factory=list)
     created_at: str
     updated_at: str
-
-    @computed_field(return_type=list[ArrangementRegion])
-    @property
-    def regions(self) -> list[ArrangementRegion]:
-        return build_arrangement_regions(self.tracks, self.bpm)
 
 
 class TrackSlotResponse(SourceKindModel):
@@ -426,6 +422,15 @@ class StudioResponse(BaseModel):
     updated_at: str
 
 
+def studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
+    return studio.regions or build_arrangement_regions(studio.tracks, studio.bpm)
+
+
+def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
+    studio.regions = build_arrangement_regions(studio.tracks, studio.bpm)
+    return studio.regions
+
+
 def build_studio_response(studio: Studio) -> StudioResponse:
     return StudioResponse(
         studio_id=studio.studio_id,
@@ -437,7 +442,7 @@ def build_studio_response(studio: Studio) -> StudioResponse:
             TrackSlotResponse.model_validate(track.model_dump(mode="json", exclude={"notes"}))
             for track in studio.tracks
         ],
-        regions=studio.regions,
+        regions=studio_arrangement_regions(studio),
         reports=studio.reports,
         jobs=studio.jobs,
         candidates=[

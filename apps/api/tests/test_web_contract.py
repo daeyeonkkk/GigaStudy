@@ -36,6 +36,7 @@ from gigastudy_api.api.schemas.studios import (
 )
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.main import create_app
+from gigastudy_api.services.studio_documents import encode_studio_payload
 
 
 WEB_TYPES_PATH = Path(__file__).resolve().parents[3] / "apps" / "web" / "src" / "types" / "studio.ts"
@@ -112,6 +113,44 @@ def test_studio_response_includes_arrangement_regions() -> None:
     assert payload["regions"][0]["pitch_events"][0]["beat_in_measure"] == 1
     assert payload["regions"][0]["pitch_events"][0]["extraction_method"] == "contract_fixture"
     assert payload["regions"][0]["pitch_events"][0]["quality_warnings"] == ["range_checked"]
+
+
+def test_studio_payload_persists_explicit_regions_from_internal_events() -> None:
+    studio = Studio(
+        studio_id="studio-persisted-region-contract",
+        title="Persisted region contract",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="registered",
+                source_kind="midi",
+                source_label="seed.mid",
+                duration_seconds=0,
+                notes=[
+                    TrackPitchEvent(
+                        label="C4",
+                        pitch_midi=60,
+                        beat=1,
+                        duration_beats=1,
+                        extraction_method="contract_fixture",
+                        source="midi",
+                    )
+                ],
+                updated_at="2026-01-01T00:00:00Z",
+            )
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = encode_studio_payload(studio)
+
+    assert payload["regions"][0]["region_id"] == "track-1-region-1"
+    assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
+    assert studio.regions[0].pitch_events[0].label == "C4"
 
 
 def test_candidate_response_includes_region_candidate() -> None:

@@ -561,6 +561,7 @@ def _merge_concurrent_studio_payload(existing: Any, incoming: Any) -> Any:
     merged.update(incoming)
     for key, id_key in (
         ("tracks", "slot_id"),
+        ("regions", "region_id"),
         ("jobs", "job_id"),
         ("reports", "report_id"),
         ("candidates", "candidate_id"),

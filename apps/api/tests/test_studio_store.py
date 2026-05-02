@@ -113,6 +113,34 @@ def test_merge_concurrent_studio_payload_preserves_newer_jobs_and_tracks() -> No
     assert jobs["bass"]["status"] == "queued"
 
 
+def test_merge_concurrent_studio_payload_preserves_region_list() -> None:
+    existing = {
+        "updated_at": "2026-04-30T12:00:37+00:00",
+        "tracks": [],
+        "regions": [
+            {"region_id": "track-1-region-1", "track_slot_id": 1, "updated_at": "2026-04-30T12:00:37+00:00"}
+        ],
+        "jobs": [],
+        "reports": [],
+        "candidates": [],
+    }
+    incoming = {
+        "updated_at": "2026-04-30T12:00:40+00:00",
+        "tracks": [],
+        "regions": [
+            {"region_id": "track-2-region-1", "track_slot_id": 2, "updated_at": "2026-04-30T12:00:40+00:00"}
+        ],
+        "jobs": [],
+        "reports": [],
+        "candidates": [],
+    }
+
+    merged = _merge_concurrent_studio_payload(existing, incoming)
+
+    regions = {region["region_id"]: region for region in merged["regions"]}
+    assert set(regions) == {"track-1-region-1", "track-2-region-1"}
+
+
 def test_merge_concurrent_studio_payload_keeps_newer_existing_item_update() -> None:
     existing = {
         "updated_at": "2026-04-30T12:00:50+00:00",

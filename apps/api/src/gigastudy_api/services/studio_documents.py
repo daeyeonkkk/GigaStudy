@@ -4,7 +4,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from gigastudy_api.api.schemas.studios import SourceKind, Studio, StudioListItem, TrackSlot
+from gigastudy_api.api.schemas.studios import (
+    SourceKind,
+    Studio,
+    StudioListItem,
+    TrackSlot,
+    sync_studio_arrangement_regions,
+)
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import TRACKS
 
@@ -51,6 +57,7 @@ def register_track_material(
 
 
 def encode_studio_payload(studio: Studio) -> dict[str, Any]:
+    sync_studio_arrangement_regions(studio)
     payload = studio.model_dump(mode="json")
     if studio.owner_token_hash is not None:
         payload["owner_token_hash"] = studio.owner_token_hash

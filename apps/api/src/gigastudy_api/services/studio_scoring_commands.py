@@ -63,13 +63,13 @@ class StudioScoringCommands:
         except ScoringRequestError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
 
-        performance_notes = [
+        performance_events = [
             _track_note_from_performance_event(event)
             for event in request.performance_events
         ]
         has_submitted_performance = score_track_request_has_performance(request)
         if request.performance_audio_base64 is not None:
-            performance_notes = self.extract_scoring_audio(
+            performance_events = self.extract_scoring_audio(
                 studio_id=studio_id,
                 slot_id=slot_id,
                 filename=request.performance_filename or "scoring-take.wav",
@@ -96,7 +96,7 @@ class StudioScoringCommands:
             target_track=target_track,
             request=request,
             reference_slot_ids=reference_slot_ids,
-            performance_notes=performance_notes,
+            performance_events=performance_events,
             created_at=timestamp,
         )
 

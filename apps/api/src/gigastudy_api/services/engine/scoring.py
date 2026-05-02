@@ -70,12 +70,12 @@ def build_scoring_report(
     reference_slot_ids: list[int],
     include_metronome: bool,
     created_at: str,
-    answer_notes: list[TrackPitchEvent],
-    performance_notes: list[TrackPitchEvent],
+    answer_events: list[TrackPitchEvent],
+    performance_events: list[TrackPitchEvent],
     bpm: int = 120,
 ) -> ScoringReport:
-    answer = _pitched_notes(answer_notes)
-    performance = _pitched_notes(performance_notes)
+    answer = _pitched_notes(answer_events)
+    performance = _pitched_notes(performance_events)
     alignment_offset = estimate_alignment_offset(answer, performance)
     matches, missing, extra = match_notes(
         answer,
@@ -119,8 +119,8 @@ def build_scoring_report(
         issues=_with_region_event_coordinates(
             _build_issues(matches, missing, extra, alignment_offset),
             target_slot_id=target_slot_id,
-            answer_notes=answer,
-            performance_notes=performance,
+            answer_events=answer,
+            performance_events=performance,
             alignment_offset_seconds=alignment_offset,
             bpm=bpm,
         ),
@@ -135,7 +135,7 @@ def build_harmony_scoring_report(
     include_metronome: bool,
     created_at: str,
     reference_tracks_by_slot: dict[int, list[TrackPitchEvent]],
-    performance_notes: list[TrackPitchEvent],
+    performance_events: list[TrackPitchEvent],
     bpm: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
@@ -145,7 +145,7 @@ def build_harmony_scoring_report(
         for slot_id, notes in reference_tracks_by_slot.items()
         if slot_id in reference_slot_ids
     }
-    performance = _pitched_notes(performance_notes)
+    performance = _pitched_notes(performance_events)
     alignment_offset = estimate_harmony_alignment_offset(
         references,
         performance,
@@ -237,8 +237,8 @@ def build_harmony_scoring_report(
     issues = _with_region_event_coordinates(
         issues,
         target_slot_id=target_slot_id,
-        answer_notes=[],
-        performance_notes=performance,
+        answer_events=[],
+        performance_events=performance,
         alignment_offset_seconds=alignment_offset,
         bpm=bpm,
     )
@@ -1109,13 +1109,13 @@ def _with_region_event_coordinates(
     issues: list[ReportIssue],
     *,
     target_slot_id: int,
-    answer_notes: list[TrackPitchEvent],
-    performance_notes: list[TrackPitchEvent],
+    answer_events: list[TrackPitchEvent],
+    performance_events: list[TrackPitchEvent],
     alignment_offset_seconds: float,
     bpm: int,
 ) -> list[ReportIssue]:
-    answer_by_id = {note.id: note for note in answer_notes}
-    performance_by_id = {note.id: note for note in performance_notes}
+    answer_by_id = {note.id: note for note in answer_events}
+    performance_by_id = {note.id: note for note in performance_events}
     answer_region_id = _track_region_id(target_slot_id)
     performance_region_id = _performance_region_id(target_slot_id)
     beat_offset = alignment_offset_seconds / seconds_per_beat(bpm)

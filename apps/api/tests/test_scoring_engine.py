@@ -3,12 +3,12 @@ from gigastudy_api.services.engine.scoring import build_harmony_scoring_report, 
 
 
 def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
-    answer_notes = [
+    answer_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=72),
         note_from_pitch(beat=2, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=74),
         note_from_pitch(beat=3, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=76),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(
             beat=note.beat,
             duration_beats=note.duration_beats,
@@ -18,7 +18,7 @@ def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
             pitch_midi=note.pitch_midi,
             onset_seconds=note.onset_seconds + 0.37,
         )
-        for note in answer_notes
+        for note in answer_events
     ]
 
     report = build_scoring_report(
@@ -27,8 +27,8 @@ def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
         reference_slot_ids=[2],
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
-        answer_notes=answer_notes,
-        performance_notes=performance_notes,
+        answer_events=answer_events,
+        performance_events=performance_events,
         bpm=100,
     )
 
@@ -41,11 +41,11 @@ def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
 
 
 def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
-    answer_notes = [
+    answer_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=72),
         note_from_pitch(beat=2, duration_beats=1, bpm=100, source="musicxml", extraction_method="test", pitch_midi=74),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(
             beat=1,
             duration_beats=1,
@@ -72,8 +72,8 @@ def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
         reference_slot_ids=[],
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
-        answer_notes=answer_notes,
-        performance_notes=performance_notes,
+        answer_events=answer_events,
+        performance_events=performance_events,
     )
 
     assert report.matched_note_count == 2
@@ -95,7 +95,7 @@ def test_harmony_scoring_rates_consonant_added_part_without_answer_track() -> No
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
         note_from_pitch(beat=2, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=65),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=64),
         note_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=69),
     ]
@@ -107,7 +107,7 @@ def test_harmony_scoring_rates_consonant_added_part_without_answer_track() -> No
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={1: reference_notes},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -124,7 +124,7 @@ def test_harmony_scoring_flags_strong_dissonance_against_reference_tracks() -> N
     reference_notes = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=60),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=61),
     ]
 
@@ -135,7 +135,7 @@ def test_harmony_scoring_flags_strong_dissonance_against_reference_tracks() -> N
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={1: reference_notes},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -158,7 +158,7 @@ def test_harmony_scoring_tolerates_short_weak_beat_passing_tone() -> None:
             voice_index=3,
         ),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(
             beat=1.5,
             duration_beats=0.25,
@@ -176,7 +176,7 @@ def test_harmony_scoring_tolerates_short_weak_beat_passing_tone() -> None:
         include_metronome=False,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={3: reference_notes},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -217,7 +217,7 @@ def test_harmony_scoring_accepts_color_tone_over_clear_triad() -> None:
             voice_index=5,
         ),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=74),
     ]
 
@@ -228,7 +228,7 @@ def test_harmony_scoring_accepts_color_tone_over_clear_triad() -> None:
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={2: [reference_notes[0]], 3: [reference_notes[1]], 5: [reference_notes[2]]},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -245,7 +245,7 @@ def test_harmony_scoring_flags_unresolved_structural_tension() -> None:
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
     ]
 
@@ -256,7 +256,7 @@ def test_harmony_scoring_flags_unresolved_structural_tension() -> None:
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={1: [reference_notes[2]], 3: [reference_notes[1]], 5: [reference_notes[0]]},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -271,7 +271,7 @@ def test_harmony_scoring_accepts_stepwise_resolved_structural_tension() -> None:
         note_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
         note_from_pitch(beat=1, duration_beats=2, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
         note_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=67),
     ]
@@ -283,7 +283,7 @@ def test_harmony_scoring_accepts_stepwise_resolved_structural_tension() -> None:
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={1: [reference_notes[2]], 3: [reference_notes[1]], 5: [reference_notes[0]]},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -311,7 +311,7 @@ def test_harmony_scoring_flags_thin_structural_chord_coverage() -> None:
             voice_index=3,
         ),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=72),
     ]
 
@@ -322,7 +322,7 @@ def test_harmony_scoring_flags_thin_structural_chord_coverage() -> None:
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={3: [reference_notes[1]], 5: [reference_notes[0]]},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -334,7 +334,7 @@ def test_harmony_scoring_flags_high_bass_foundation_on_structural_beat() -> None
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=64),
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="musicxml", extraction_method="test", pitch_midi=67),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=57),
     ]
 
@@ -345,7 +345,7 @@ def test_harmony_scoring_flags_high_bass_foundation_on_structural_beat() -> None
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={2: [reference_notes[1]], 3: [reference_notes[0]]},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -374,7 +374,7 @@ def test_harmony_scoring_flags_parallel_fifths_like_arranger_review() -> None:
             voice_index=5,
         ),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55),
         note_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=57),
     ]
@@ -386,7 +386,7 @@ def test_harmony_scoring_flags_parallel_fifths_like_arranger_review() -> None:
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={5: reference_notes},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -409,7 +409,7 @@ def test_harmony_scoring_flags_wide_upper_voice_spacing() -> None:
             voice_index=2,
         ),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=84),
     ]
 
@@ -420,7 +420,7 @@ def test_harmony_scoring_flags_wide_upper_voice_spacing() -> None:
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={2: reference_notes},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -450,7 +450,7 @@ def test_harmony_scoring_does_not_flag_short_parallel_motion_as_structural() -> 
             voice_index=5,
         ),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=0.25, bpm=120, source="voice", extraction_method="test", pitch_midi=55),
         note_from_pitch(
             beat=1.25,
@@ -469,7 +469,7 @@ def test_harmony_scoring_does_not_flag_short_parallel_motion_as_structural() -> 
         include_metronome=False,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={5: reference_notes},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 
@@ -506,7 +506,7 @@ def test_harmony_scoring_separates_chord_fit_from_simple_interval_check() -> Non
             voice_index=1,
         ),
     ]
-    performance_notes = [
+    performance_events = [
         note_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=66),
     ]
 
@@ -517,7 +517,7 @@ def test_harmony_scoring_separates_chord_fit_from_simple_interval_check() -> Non
         include_metronome=True,
         created_at="2026-04-20T00:00:00+00:00",
         reference_tracks_by_slot={1: [reference_notes[2]], 3: [reference_notes[1]], 5: [reference_notes[0]]},
-        performance_notes=performance_notes,
+        performance_events=performance_events,
         bpm=120,
     )
 

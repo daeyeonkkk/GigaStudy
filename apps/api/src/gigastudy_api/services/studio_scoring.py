@@ -68,7 +68,7 @@ def build_score_track_report(
     target_track: TrackSlot,
     request: ScoreTrackRequest,
     reference_slot_ids: list[int],
-    performance_notes: list[TrackPitchEvent],
+    performance_events: list[TrackPitchEvent],
     created_at: str,
 ) -> ScoringReport:
     if request.score_mode == "harmony":
@@ -90,13 +90,13 @@ def build_score_track_report(
             include_metronome=request.include_metronome,
             created_at=created_at,
             reference_tracks_by_slot=reference_tracks_by_slot,
-            performance_notes=performance_notes,
+            performance_events=performance_events,
             bpm=studio.bpm,
             time_signature_numerator=studio.time_signature_numerator,
             time_signature_denominator=studio.time_signature_denominator,
         )
 
-    answer_notes = notes_with_sync_offset(
+    answer_events = notes_with_sync_offset(
         target_track.notes,
         target_track.sync_offset_seconds,
         studio.bpm,
@@ -108,7 +108,7 @@ def build_score_track_report(
         reference_slot_ids=reference_slot_ids,
         include_metronome=request.include_metronome,
         created_at=created_at,
-        answer_notes=answer_notes,
-        performance_notes=performance_notes,
+        answer_events=answer_events,
+        performance_events=performance_events,
         bpm=studio.bpm,
     )

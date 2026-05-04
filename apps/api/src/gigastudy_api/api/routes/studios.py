@@ -10,6 +10,7 @@ from gigastudy_api.api.schemas.studios import (
     DirectUploadTarget,
     GenerateTrackRequest,
     ScoreTrackRequest,
+    SaveRegionRevisionRequest,
     ShiftTrackSyncRequest,
     Studio,
     StudioListItem,
@@ -258,6 +259,37 @@ def update_region(
 ) -> StudioResponse:
     return _studio_response(
         repository.update_region(studio_id, region_id, request, owner_token=owner_token)
+    )
+
+
+@router.patch("/{studio_id}/regions/{region_id}/revision", response_model=StudioResponse)
+def save_region_revision(
+    studio_id: str,
+    region_id: str,
+    request: SaveRegionRevisionRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.save_region_revision(studio_id, region_id, request, owner_token=owner_token)
+    )
+
+
+@router.post("/{studio_id}/regions/{region_id}/revision-history/{revision_id}/restore", response_model=StudioResponse)
+def restore_region_revision(
+    studio_id: str,
+    region_id: str,
+    revision_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.restore_region_revision(
+            studio_id,
+            region_id,
+            revision_id,
+            owner_token=owner_token,
+        )
     )
 
 

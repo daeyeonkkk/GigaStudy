@@ -649,6 +649,47 @@ class UpdatePitchEventRequest(BaseModel):
         return self
 
 
+class SaveRegionEventPatch(BaseModel):
+    event_id: str = Field(min_length=1, max_length=180)
+    label: str | None = Field(default=None, min_length=1, max_length=32)
+    pitch_midi: int | None = Field(default=None, ge=0, le=127)
+    start_seconds: float | None = Field(default=None, ge=-30, le=3600)
+    duration_seconds: float | None = Field(default=None, gt=0, le=3600)
+    start_beat: float | None = Field(default=None, ge=0)
+    duration_beats: float | None = Field(default=None, gt=0)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    is_rest: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_update_fields(self) -> "SaveRegionEventPatch":
+        if self.model_fields_set <= {"event_id"}:
+            raise ValueError("Region event save requires at least one editable field.")
+        return self
+
+
+class SaveRegionRevisionRequest(BaseModel):
+    target_track_slot_id: int | None = Field(default=None, ge=1, le=6)
+    start_seconds: float | None = Field(default=None, ge=-30, le=3600)
+    duration_seconds: float | None = Field(default=None, gt=0, le=3600)
+    volume_percent: int | None = Field(default=None, ge=0, le=100)
+    source_label: str | None = Field(default=None, max_length=180)
+    events: list[SaveRegionEventPatch] = Field(default_factory=list)
+    revision_label: str | None = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_update_fields(self) -> "SaveRegionRevisionRequest":
+        region_fields = {
+            "target_track_slot_id",
+            "start_seconds",
+            "duration_seconds",
+            "volume_percent",
+            "source_label",
+        }
+        if not (self.model_fields_set & region_fields) and not self.events:
+            raise ValueError("Region revision save requires region fields or event patches.")
+        return self
+
+
 class PerformanceEvent(BaseModel):
     event_id: str | None = None
     track_slot_id: int | None = None

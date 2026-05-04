@@ -612,6 +612,80 @@ def test_region_and_piano_roll_mutation_api_uses_explicit_regions(tmp_path: Path
     assert delete_payload["tracks"][0]["status"] == "registered"
 
 
+def test_region_revision_save_batches_precise_edits_and_can_restore(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Region revision",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_payload = upload_musicxml_track(client, studio_id).json()
+    source_region = upload_payload["regions"][0]
+    first_event = source_region["pitch_events"][0]
+    second_event = source_region["pitch_events"][1]
+
+    save_response = client.patch(
+        f"/api/studios/{studio_id}/regions/{source_region['region_id']}/revision",
+        json={
+            "target_track_slot_id": 2,
+            "start_seconds": 1.25,
+            "duration_seconds": 3.5,
+            "revision_label": "before detailed edit",
+            "events": [
+                {
+                    "event_id": first_event["event_id"],
+                    "pitch_midi": 73,
+                    "start_seconds": 1.25,
+                    "duration_seconds": 0.75,
+                },
+                {
+                    "event_id": second_event["event_id"],
+                    "start_seconds": 2.0,
+                    "duration_seconds": 0.5,
+                },
+            ],
+        },
+    )
+
+    assert save_response.status_code == 200
+    saved_payload = save_response.json()
+    saved_region = next(region for region in saved_payload["regions"] if region["region_id"] == source_region["region_id"])
+    assert saved_region["track_slot_id"] == 2
+    assert saved_region["track_name"] == "Alto"
+    assert saved_region["start_seconds"] == 1.25
+    assert saved_region["duration_seconds"] == 3.5
+    assert saved_region["pitch_events"][0]["label"] == "C#5"
+    assert saved_region["pitch_events"][0]["start_seconds"] == 1.25
+    assert saved_region["pitch_events"][0]["duration_seconds"] == 0.75
+    assert saved_payload["tracks"][0]["status"] == "empty"
+    assert saved_payload["tracks"][1]["status"] == "registered"
+    revision_history = saved_region["diagnostics"]["region_editor"]["revision_history"]
+    assert len(revision_history) == 1
+    assert revision_history[0]["label"] == "before detailed edit"
+    assert revision_history[0]["region"]["track_slot_id"] == 1
+    assert revision_history[0]["region"]["pitch_events"][0]["label"] == "C5"
+
+    restore_response = client.post(
+        f"/api/studios/{studio_id}/regions/{saved_region['region_id']}/revision-history/{revision_history[0]['revision_id']}/restore"
+    )
+
+    assert restore_response.status_code == 200
+    restored_region = next(
+        region
+        for region in restore_response.json()["regions"]
+        if region["region_id"] == source_region["region_id"]
+    )
+    assert restored_region["track_slot_id"] == 1
+    assert restored_region["track_name"] == "Soprano"
+    assert restored_region["start_seconds"] == source_region["start_seconds"]
+    assert [event["label"] for event in restored_region["pitch_events"]] == ["C5", "G5"]
+    assert len(restored_region["diagnostics"]["region_editor"]["revision_history"]) == 2
+
+
 def test_active_extraction_job_blocks_conflicting_track_mutations(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         studio_repository.StudioRepository,

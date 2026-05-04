@@ -23,6 +23,7 @@ from gigastudy_api.api.schemas.studios import (
     ExtractionCandidate,
     GenerateTrackRequest,
     ScoreTrackRequest,
+    SaveRegionRevisionRequest,
     SeedSourceKind,
     ShiftTrackSyncRequest,
     SourceKind,
@@ -575,6 +576,36 @@ class StudioRepository:
             studio_id,
             region_id,
             request,
+            owner_token=owner_token,
+        )
+
+    def save_region_revision(
+        self,
+        studio_id: str,
+        region_id: str,
+        request: SaveRegionRevisionRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        return self._regions.save_region_revision(
+            studio_id,
+            region_id,
+            request,
+            owner_token=owner_token,
+        )
+
+    def restore_region_revision(
+        self,
+        studio_id: str,
+        region_id: str,
+        revision_id: str,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        return self._regions.restore_region_revision(
+            studio_id,
+            region_id,
+            revision_id,
             owner_token=owner_token,
         )
 

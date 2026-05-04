@@ -1090,6 +1090,52 @@ def test_region_revision_save_batches_precise_edits_and_can_restore(tmp_path: Pa
     assert len(restored_region["diagnostics"]["region_editor"]["revision_history"]) == 2
 
 
+def test_region_editor_preserves_adjacent_same_pitch_fragments(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Region editor fragments",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_payload = upload_musicxml_track(client, studio_id).json()
+    source_region = upload_payload["regions"][0]
+    first_event = source_region["pitch_events"][0]
+    second_event = source_region["pitch_events"][1]
+
+    save_response = client.patch(
+        f"/api/studios/{studio_id}/regions/{source_region['region_id']}/revision",
+        json={
+            "revision_label": "keep adjacent fragments",
+            "events": [
+                {
+                    "event_id": second_event["event_id"],
+                    "pitch_midi": first_event["pitch_midi"],
+                    "start_seconds": round(first_event["start_seconds"] + first_event["duration_seconds"], 4),
+                    "duration_seconds": second_event["duration_seconds"],
+                    "start_beat": round(first_event["start_beat"] + first_event["duration_beats"], 4),
+                    "duration_beats": second_event["duration_beats"],
+                },
+            ],
+        },
+    )
+
+    assert save_response.status_code == 200
+    saved_region = next(
+        region
+        for region in save_response.json()["regions"]
+        if region["region_id"] == source_region["region_id"]
+    )
+    assert [event["label"] for event in saved_region["pitch_events"]] == ["C5", "C5"]
+    assert [event["event_id"] for event in saved_region["pitch_events"]] == [
+        first_event["event_id"],
+        second_event["event_id"],
+    ]
+
+
 def test_active_extraction_job_blocks_conflicting_track_mutations(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         studio_repository.StudioRepository,

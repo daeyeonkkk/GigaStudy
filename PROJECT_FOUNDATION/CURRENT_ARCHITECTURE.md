@@ -129,6 +129,10 @@ is excluded from persistence and remains an adapter detail.
   metadata, spelling, measure positions, and same-pitch contiguous fragment
   merging. Same-pitch merge only consumes touching or overlapping fragments;
   positive gaps remain empty timeline space.
+- `apps/api/src/gigastudy_api/services/studio_region_commands.py`
+  Manual region editing, split/copy, save, and revision restore preserve the
+  user's explicit event fragments. They normalize IDs and timing fields but do
+  not apply registration-only same-pitch merging.
 - `apps/api/src/gigastudy_api/services/engine/event_quality.py`
   The registration quality gate before extracted material becomes product
   regions. It replaces the old notation quality layer.

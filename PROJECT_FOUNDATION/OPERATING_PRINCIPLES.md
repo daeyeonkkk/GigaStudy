@@ -79,6 +79,9 @@ the same change.
   continuous event. Real gaps must remain empty time; normalization must not
   silently stretch an event across a positive gap just to make the lane look
   continuous.
+- Manual region editing is exempt from automatic same-pitch merging. If a user
+  deliberately splits adjacent notes during editing, save/restore must preserve
+  those fragments.
 - Voice extraction may use a conservative rescue pass for short, weak, but
   stable sung contours. The rescue pass must still reject tonal clicks and room
   noise, and it must mark rescued events in diagnostics rather than hiding that

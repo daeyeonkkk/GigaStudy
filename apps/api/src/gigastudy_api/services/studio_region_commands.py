@@ -314,8 +314,8 @@ class StudioRegionCommands:
                         )
                     )
                 else:
-                    left_duration = max(0.08, split_seconds - event_start)
-                    right_duration = max(0.08, event_end - split_seconds)
+                    left_duration = max(0.0001, split_seconds - event_start)
+                    right_duration = max(0.0001, event_end - split_seconds)
                     left_events.append(
                         event.model_copy(
                             update={
@@ -426,7 +426,7 @@ class StudioRegionCommands:
                         "track_slot_id": region.track_slot_id,
                         "region_id": region.region_id,
                         "start_seconds": round(event.start_seconds, 4),
-                        "duration_seconds": round(max(0.08, event.duration_seconds), 4),
+                        "duration_seconds": round(max(0.0001, event.duration_seconds), 4),
                         "start_beat": round(max(0.0, event.start_beat), 4),
                         "duration_beats": round(max(0.01, event.duration_beats), 4),
                     }

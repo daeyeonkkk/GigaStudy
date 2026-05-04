@@ -70,7 +70,7 @@ def guess_audio_mime_type(filename: str) -> str:
 def should_route_seed_upload_to_document_extraction(source_kind: str, filename: str | None) -> bool:
     if source_kind != "document" or filename is None:
         return False
-    return Path(filename).suffix.lower() in DOCUMENT_IMAGE_SOURCE_SUFFIXES
+    return Path(filename).suffix.lower() in DOCUMENT_IMAGE_SOURCE_SUFFIXES | SYMBOLIC_SOURCE_SUFFIXES
 
 
 def guess_content_type(filename: str) -> str | None:

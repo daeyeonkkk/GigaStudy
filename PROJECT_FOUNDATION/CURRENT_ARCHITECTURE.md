@@ -71,8 +71,10 @@ is excluded from persistence and remains an adapter detail.
   belongs to `PracticePage`.
 - `apps/web/src/components/studio/eventMiniLayout.ts`
   Shared event-mini presentation helper for filtering renderable events,
-  positioning minis by pitch, and generating hover/accessibility labels with
-  pitch name, start, and duration.
+  positioning minis by pitch, sizing dense lanes by pitch span, and generating
+  hover/accessibility labels with pitch name, start, and duration. Track-board,
+  region editor, and practice waterfall views use the same thin-bar contract so
+  short MIDI events do not become oversized overlapping pills.
 - `apps/web/src/components/studio/TrackBoardTimeline.tsx` and
   `apps/web/src/components/studio/TrackBoardTimelineLayout.ts`
   Waterfall practice preview rendering plus shared track-board timeline math
@@ -138,6 +140,15 @@ is excluded from persistence and remains an adapter detail.
   runs. When a retained audio clip was decoded or aligned, `studio_assets`
   writes a normalized WAV asset and exposes that path/MIME to playback instead
   of pointing a track at mismatched original bytes.
+- `apps/api/src/gigastudy_api/services/document_extraction_pipeline.py` and
+  `apps/api/src/gigastudy_api/services/studio_engine_job_handlers.py`
+  Shared queued import path for studio-start score files. PDF/image inputs run
+  Audiveris or vector fallback and produce review candidates. MIDI, MusicXML,
+  MXL, and XML inputs are parsed directly in the same engine queue; clear
+  singer-line results register to regions, while ambiguous symbolic material
+  becomes review candidates. `TrackExtractionJob.use_source_tempo` lets queued
+  MIDI seeding update the studio BPM/tempo map before registration without
+  making the create-studio HTTP request perform the whole import.
 - `apps/api/src/gigastudy_api/services/engine/symbolic.py`
   MusicXML/MIDI parsing and track-to-slot mapping. MIDI parsing splits
   channel-packed tracks into per-channel parsed parts, records MIDI program/name

@@ -33,6 +33,7 @@ from gigastudy_api.api.schemas.studios import (
     StudioListItem,
     StudioSeedUploadRequest,
     SyncTrackRequest,
+    TempoChange,
     TrackExtractionJob,
     TrackSlot,
     UpdatePitchEventRequest,
@@ -55,6 +56,7 @@ from gigastudy_api.services.direct_upload_tokens import DirectUploadTokenCodec
 from gigastudy_api.services.studio_admin_commands import StudioAdminCommands
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_jobs import (
+    clear_unmapped_document_placeholders,
     mark_extraction_job_completed,
     mark_extraction_job_failed,
     mark_extraction_job_running,
@@ -310,6 +312,7 @@ class StudioRepository:
                     source_path=source_path,
                     background_tasks=background_tasks,
                     parse_all_parts=True,
+                    use_source_tempo=bpm is None,
                 )
             studio = self._seed_from_upload(
                 studio,
@@ -793,6 +796,46 @@ class StudioRepository:
             self._save_studio(studio)
         return studio
 
+    def _update_symbolic_seed_timing(
+        self,
+        studio_id: str,
+        *,
+        bpm: int | None,
+        tempo_changes: list[TempoChange] | None,
+        time_signature_numerator: int | None,
+        time_signature_denominator: int | None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            timestamp = _now()
+            if bpm is not None:
+                studio.bpm = bpm
+                studio.tempo_changes = normalize_tempo_changes(
+                    tempo_changes,
+                    base_bpm=bpm,
+                )
+                studio.updated_at = timestamp
+            elif tempo_changes is not None:
+                studio.tempo_changes = normalize_tempo_changes(
+                    tempo_changes,
+                    base_bpm=studio.bpm,
+                )
+                studio.updated_at = timestamp
+            if (
+                time_signature_numerator is not None
+                and time_signature_denominator is not None
+            ):
+                set_studio_time_signature(
+                    studio,
+                    numerator=time_signature_numerator,
+                    denominator=time_signature_denominator,
+                    timestamp=timestamp,
+                )
+            self._save_studio(studio)
+        return studio
+
     def approve_candidate(
         self,
         studio_id: str,
@@ -1103,6 +1146,7 @@ class StudioRepository:
         source_path: Path,
         background_tasks: BackgroundTasks | None = None,
         parse_all_parts: bool = False,
+        use_source_tempo: bool = False,
     ) -> Studio:
         return self._extraction_jobs.enqueue_document(
             studio_id,
@@ -1112,6 +1156,7 @@ class StudioRepository:
             source_path=source_path,
             background_tasks=background_tasks,
             parse_all_parts=parse_all_parts,
+            use_source_tempo=use_source_tempo,
         )
 
     def _enqueue_voice_job(
@@ -1310,6 +1355,31 @@ class StudioRepository:
                 method=method,
                 output_path=output_path,
                 timestamp=timestamp,
+            )
+            self._save_studio(studio)
+
+    def _clear_unmapped_extraction_placeholders(
+        self,
+        studio_id: str,
+        job_id: str,
+        *,
+        mapped_slot_ids: set[int],
+    ) -> None:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            job = next(
+                (candidate_job for candidate_job in studio.jobs if candidate_job.job_id == job_id),
+                None,
+            )
+            if job is None:
+                raise HTTPException(status_code=404, detail="Extraction job not found.")
+            clear_unmapped_document_placeholders(
+                studio,
+                job,
+                mapped_slot_ids=mapped_slot_ids,
+                timestamp=_now(),
             )
             self._save_studio(studio)
 

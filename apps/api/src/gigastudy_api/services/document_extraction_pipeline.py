@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from gigastudy_api.api.schemas.studios import Studio
+from gigastudy_api.api.schemas.studios import SourceKind, Studio
 from gigastudy_api.services.asset_storage import AssetStorageError
 from gigastudy_api.services.engine.audiveris_document import AudiverisDocumentError
 from gigastudy_api.services.engine.document_results import write_pdf_vector_document_summary
@@ -15,6 +15,7 @@ from gigastudy_api.services.engine.symbolic import (
     parse_symbolic_file_with_metadata,
 )
 from gigastudy_api.services.engine_queue import EngineQueueJob
+from gigastudy_api.services.upload_policy import SYMBOLIC_SOURCE_SUFFIXES
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ class DocumentExtractionPipelineResult:
     job_method: str
     confidence: float
     message: str
+    registered_source_kind: SourceKind = "document"
+    direct_register_when_clear: bool = False
 
 
 class DocumentExtractionPipelineError(RuntimeError):
@@ -49,6 +52,13 @@ def run_document_extraction_pipeline(
 ) -> DocumentExtractionPipelineResult:
     normalized_backend = backend.strip().lower()
     try:
+        if input_path.suffix.lower() in SYMBOLIC_SOURCE_SUFFIXES:
+            return _run_symbolic_seed_pipeline(
+                input_path=input_path,
+                record=record,
+                studio=studio,
+            )
+
         if normalized_backend in {"pdf_vector", "vector_pdf"}:
             parsed_symbolic, output_reference = _run_pdf_vector_fallback(
                 input_path=input_path,
@@ -126,6 +136,47 @@ def run_document_extraction_pipeline(
             raise DocumentExtractionPipelineError(message) from fallback_error
     except (PdfVectorDocumentError, AssetStorageError) as error:
         raise DocumentExtractionPipelineError(str(error)) from error
+
+
+def _run_symbolic_seed_pipeline(
+    *,
+    input_path: Path,
+    record: EngineQueueJob,
+    studio: Studio,
+) -> DocumentExtractionPipelineResult:
+    suffix = input_path.suffix.lower()
+    parsed_symbolic = parse_symbolic_file_with_metadata(input_path, bpm=studio.bpm)
+    if suffix in {".mid", ".midi"} and bool(record.payload.get("use_source_tempo")):
+        if parsed_symbolic.source_bpm is not None:
+            parsed_symbolic = parse_symbolic_file_with_metadata(
+                input_path,
+                bpm=parsed_symbolic.source_bpm,
+            )
+
+    if suffix in {".mid", ".midi"}:
+        return DocumentExtractionPipelineResult(
+            parsed_symbolic=parsed_symbolic,
+            output_reference=str(record.payload.get("input_path") or input_path.name),
+            candidate_method="midi_seed_review",
+            extraction_method="midi_seed_v1",
+            job_method="midi_seed_import",
+            confidence=0.78,
+            message="MIDI parts need review before registration.",
+            registered_source_kind="midi",
+            direct_register_when_clear=True,
+        )
+
+    return DocumentExtractionPipelineResult(
+        parsed_symbolic=parsed_symbolic,
+        output_reference=str(record.payload.get("input_path") or input_path.name),
+        candidate_method="musicxml_seed_review",
+        extraction_method="musicxml_seed_v1",
+        job_method="musicxml_seed_import",
+        confidence=0.74,
+        message="Score parts need review before registration.",
+        registered_source_kind="document",
+        direct_register_when_clear=True,
+    )
 
 
 def _run_audiveris_pipeline(

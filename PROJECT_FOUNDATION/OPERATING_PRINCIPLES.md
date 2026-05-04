@@ -146,6 +146,12 @@ the same change.
   Individual track rows expose `recording file upload` for user-recorded audio
   only. Backend adapters may still support additional import paths, but
   user-facing labels must not collapse them into one vague upload action.
+- Studio-start score files must not make the create-studio request perform the
+  full extraction/registration synchronously. Creation saves a usable studio and
+  queues PDF/MIDI/MusicXML import; the job may then directly register clear
+  singer-line material or leave review candidates when interpretation remains
+  ambiguous. A browser/network failure after upload must not create a hidden
+  half-success state that only appears after refresh.
 - Per-track recording-file upload accepts common audio containers
   (WAV/MP3/M4A/OGG/FLAC). Non-WAV input must be decoded server-side into an
   analysis WAV before voice transcription, and the retained playback asset must
@@ -279,6 +285,9 @@ the same change.
   thin duration bars positioned by pitch where MIDI pitch exists. Exact pitch
   name, start, and duration belong in hover/accessibility labels rather than
   permanent text inside each mini.
+- Event minis must not use minimum visual sizes that imply false overlaps or
+  false durations. Dense imported material should get more lane height and
+  scroll space before the UI lies about the timeline.
 - Studio and region-editing lanes should not draw region cards behind event
   minis. Regions are selectable time spans, but the visible material should be
   the individual pitch bars on the shared lane.

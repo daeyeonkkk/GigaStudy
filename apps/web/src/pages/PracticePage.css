@@ -199,10 +199,10 @@
 .practice-stage__grid {
   position: relative;
   min-width: 720px;
-  min-height: 420px;
+  min-height: calc(var(--practice-lane-height, 70px) * 6);
   border: 1px solid #7f8e9a;
   background:
-    linear-gradient(#d7dee4 0 1px, transparent 1px) 0 0 / 100% calc(100% / 6),
+    linear-gradient(#d7dee4 0 1px, transparent 1px) 0 0 / 100% var(--practice-lane-height, 70px),
     linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / 48px 100%,
     #ffffff;
   overflow: hidden;
@@ -212,8 +212,8 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: calc((100% / 6) * var(--track-lane-index));
-  height: calc(100% / 6);
+  top: calc(var(--practice-lane-height, 70px) * var(--track-lane-index));
+  height: var(--practice-lane-height, 70px);
   border-top: 1px solid #cbd3da;
   background: rgba(247, 249, 250, 0.56);
 }
@@ -252,8 +252,8 @@
   top: var(--event-top);
   left: var(--event-left);
   width: var(--event-width);
-  height: 10px;
-  min-width: 18px;
+  height: 8px;
+  min-width: 4px;
   padding: 0;
   border: 1px solid hsl(var(--event-hue) 64% 30%);
   border-radius: 999px;

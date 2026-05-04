@@ -24,6 +24,36 @@ export function getEventMiniTopPercent(event: EventMiniSource, events: EventMini
   return Math.max(12, Math.min(88, 12 + ((pitchRange.maxMidi - event.pitch_midi) / span) * 76))
 }
 
+export function getEventMiniPitchSpan(events: EventMiniSource[]): number {
+  const pitchedEvents = events.filter((event) => typeof event.pitch_midi === 'number')
+  if (pitchedEvents.length === 0) {
+    return 1
+  }
+  const pitchRange = getPitchEventRange(pitchedEvents.map(toPitchRangeEvent))
+  return Math.max(1, pitchRange.maxMidi - pitchRange.minMidi + 1)
+}
+
+export function getEventMiniLaneHeight(
+  events: EventMiniSource[],
+  options: {
+    baseHeight?: number
+    rowHeight?: number
+    verticalPadding?: number
+    maxHeight?: number
+  } = {},
+): number {
+  const {
+    baseHeight = 94,
+    rowHeight = 12,
+    verticalPadding = 44,
+    maxHeight = 240,
+  } = options
+  if (events.length === 0) {
+    return baseHeight
+  }
+  return Math.max(baseHeight, Math.min(maxHeight, getEventMiniPitchSpan(events) * rowHeight + verticalPadding))
+}
+
 export function getEventMiniTitle(
   event: EventMiniSource,
   trackName?: string | null,

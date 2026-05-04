@@ -48,6 +48,7 @@ class StudioExtractionJobCommands:
         source_path: Path,
         background_tasks: BackgroundTasks | None = None,
         parse_all_parts: bool = False,
+        use_source_tempo: bool = False,
     ) -> Studio:
         timestamp = self._now()
         settings = get_settings()
@@ -59,6 +60,7 @@ class StudioExtractionJobCommands:
             source_kind=source_kind,
             source_label=source_label,
             timestamp=timestamp,
+            use_source_tempo=use_source_tempo,
         )
 
         with self._repository._lock:

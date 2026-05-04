@@ -16,6 +16,7 @@ def create_document_extraction_job(
     source_kind: SourceKind,
     source_label: str,
     timestamp: str,
+    use_source_tempo: bool = False,
 ) -> TrackExtractionJob:
     return TrackExtractionJob(
         job_id=uuid4().hex,
@@ -28,6 +29,7 @@ def create_document_extraction_job(
         input_path=input_path,
         max_attempts=max_attempts,
         parse_all_parts=parse_all_parts,
+        use_source_tempo=use_source_tempo,
         created_at=timestamp,
         updated_at=timestamp,
     )
@@ -70,6 +72,7 @@ def document_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
         "source_kind": job.source_kind,
         "source_label": job.source_label,
         "parse_all_parts": job.parse_all_parts,
+        "use_source_tempo": job.use_source_tempo,
     }
 
 
@@ -122,6 +125,9 @@ def existing_extraction_queue_payload(
     }
     if job.job_type == "document":
         payload["parse_all_parts"] = job.parse_all_parts
+        payload["use_source_tempo"] = job.use_source_tempo
+        if existing_payload is not None and "use_source_tempo" in existing_payload:
+            payload["use_source_tempo"] = bool(existing_payload["use_source_tempo"])
         return payload
     if job.job_type == "voice":
         if existing_payload is not None:

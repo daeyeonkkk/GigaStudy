@@ -218,6 +218,11 @@ def build_client(tmp_path: Path, monkeypatch, *, studio_access_policy: str = "pu
     return TestClient(create_app())
 
 
+def _created_studio_payload(client: TestClient, response) -> dict:
+    studio_id = response.json()["studio_id"]
+    return client.get(f"/api/studios/{studio_id}").json()
+
+
 def upload_musicxml_track(
     client: TestClient,
     studio_id: str,
@@ -570,7 +575,7 @@ def test_upload_start_does_not_require_bpm_and_maps_symbolic_tracks(tmp_path: Pa
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    payload = _created_studio_payload(client, response)
     assert payload["bpm"] == 92
     assert payload["tracks"][0]["status"] == "registered"
     assert "notes" not in payload["tracks"][0]
@@ -593,9 +598,36 @@ def test_upload_start_uses_source_midi_tempo_when_bpm_is_not_provided(tmp_path: 
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    payload = _created_studio_payload(client, response)
     assert payload["bpm"] == 113
     assert _track_events(payload, 1)[0]["duration_seconds"] == 0.531
+
+
+def test_upload_start_symbolic_seed_is_queued_before_track_registration(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        studio_repository.StudioRepository,
+        "_schedule_engine_queue_processing",
+        lambda self, background_tasks: None,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_single_note_midi_bytes(bpm=113)).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "Queued MIDI seed",
+            "start_mode": "upload",
+            "source_kind": "document",
+            "source_filename": "source.mid",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["jobs"][0]["status"] == "queued"
+    assert payload["tracks"][0]["status"] == "extracting"
+    assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 0
 
 
 def test_upload_start_applies_shared_monophonic_contract_to_midi_tracks(tmp_path: Path, monkeypatch) -> None:
@@ -614,7 +646,7 @@ def test_upload_start_applies_shared_monophonic_contract_to_midi_tracks(tmp_path
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    payload = _created_studio_payload(client, response)
     events = _track_region_events(payload, 1)
     assert [event["label"] for event in events] == ["E5", "G5"]
     assert events[0]["beat"] == 1
@@ -639,7 +671,7 @@ def test_upload_start_registers_generic_midi_parts_when_register_order_is_clear(
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    payload = _created_studio_payload(client, response)
     pending_candidates = [candidate for candidate in payload["candidates"] if candidate["status"] == "pending"]
     assert pending_candidates == []
     assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 2
@@ -667,7 +699,7 @@ def test_upload_start_applies_llm_midi_role_review_when_enabled(tmp_path: Path, 
     monkeypatch.setenv("GIGASTUDY_API_DEEPSEEK_MIDI_ROLE_REVIEW_ENABLED", "true")
     monkeypatch.setenv("GIGASTUDY_API_DEEPSEEK_API_KEY", "test-key")
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_upload_commands.review_midi_roles_with_deepseek",
+        "gigastudy_api.services.studio_engine_job_handlers.review_midi_roles_with_deepseek",
         fake_midi_role_review,
     )
     client = build_client(tmp_path, monkeypatch)
@@ -685,7 +717,7 @@ def test_upload_start_applies_llm_midi_role_review_when_enabled(tmp_path: Path, 
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    payload = _created_studio_payload(client, response)
     assert calls == ["generic.mid"]
     assert _track_region_events(payload, 1) == []
     assert [event["label"] for event in _track_region_events(payload, 2)] == ["C5"]
@@ -1631,7 +1663,7 @@ def test_upload_start_can_use_staged_direct_uploaded_symbolic_asset(tmp_path: Pa
     )
 
     assert create_response.status_code == 200
-    payload = create_response.json()
+    payload = _created_studio_payload(client, create_response)
     soprano = payload["tracks"][0]
     assert soprano["status"] == "registered"
     assert [note["label"] for note in _track_region_events(payload, 1)] == ["C5", "G5"]

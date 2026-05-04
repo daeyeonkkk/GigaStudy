@@ -20,6 +20,7 @@ import type {
 } from '../../types/studio'
 import {
   getEventMiniAriaLabel,
+  getEventMiniLaneHeight,
   getEventMiniTitle,
   getEventMiniTopPercent,
   getRenderableMiniEvents,
@@ -134,12 +135,24 @@ function getTrackMiniStyle(
   timelineBounds: { durationSeconds: number; maxSeconds: number; minSeconds: number },
 ): CSSProperties {
   const trackEvents = trackMiniEvents.map((miniEvent) => miniEvent.event)
-  const rawTopPercent = getEventMiniTopPercent(item.event, trackEvents)
-  const laneTopPercent = 28 + ((rawTopPercent - 12) / 76) * 58
   return {
     '--event-left': `${getTimelinePercent(item.event.start_seconds, timelineBounds)}%`,
-    '--event-top': `${Math.max(12, Math.min(88, laneTopPercent))}%`,
-    '--event-width': `${Math.max(1.2, getDurationPercent(item.event.duration_seconds, timelineBounds.durationSeconds))}%`,
+    '--event-top': `${getEventMiniTopPercent(item.event, trackEvents)}%`,
+    '--event-width': `${Math.max(0.2, getDurationPercent(item.event.duration_seconds, timelineBounds.durationSeconds))}%`,
+  } as CSSProperties
+}
+
+function getTrackLaneStyle(
+  trackMiniEvents: TrackMiniEvent[],
+  isPlaying: boolean,
+  playheadSeconds: number | null,
+  timelineBounds: { durationSeconds: number; maxSeconds: number; minSeconds: number },
+): CSSProperties {
+  const laneStyle = getRegionLaneStyle(isPlaying, playheadSeconds, timelineBounds)
+  const laneHeight = getEventMiniLaneHeight(trackMiniEvents.map((miniEvent) => miniEvent.event))
+  return {
+    ...laneStyle,
+    '--lane-min-height': `${laneHeight}px`,
   } as CSSProperties
 }
 
@@ -414,7 +427,7 @@ export function TrackBoard({
               <div
                 className="track-card__timeline track-card__region-lane"
                 aria-label={`${formatTrackName(track.name)} 구간`}
-                style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineBounds)}
+                style={getTrackLaneStyle(trackMiniEvents, isPlaying, playheadSeconds, timelineBounds)}
               >
                 <div className="track-card__measure-grid" aria-hidden="true">
                   {measureStarts.map((measure) => (

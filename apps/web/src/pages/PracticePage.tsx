@@ -8,6 +8,7 @@ import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
 import {
   getEventMiniAriaLabel,
+  getEventMiniLaneHeight,
   getEventMiniTitle,
   getEventMiniTopPercent,
   getRenderableMiniEvents,
@@ -95,7 +96,7 @@ function getEventStyle(
     '--event-hue': getEventHue(event),
     '--event-left': `${getTimelinePercent(event.start_seconds, minSeconds, maxSeconds)}%`,
     '--event-top': `${((region.track_slot_id - 1) * laneHeightPercent) + ((pitchTopPercent / 100) * laneHeightPercent)}%`,
-    '--event-width': `${Math.max(1.4, (event.duration_seconds / Math.max(0.25, maxSeconds - minSeconds)) * 100)}%`,
+    '--event-width': `${Math.max(0.2, (event.duration_seconds / Math.max(0.25, maxSeconds - minSeconds)) * 100)}%`,
   } as CSSProperties
 }
 
@@ -103,10 +104,22 @@ function getPlayheadStyle(
   playheadSeconds: number | null,
   minSeconds: number,
   maxSeconds: number,
+  laneHeight: number,
 ): CSSProperties {
   return {
+    '--practice-lane-height': `${laneHeight}px`,
     '--playhead-left': `${getTimelinePercent(playheadSeconds ?? minSeconds, minSeconds, maxSeconds)}%`,
   } as CSSProperties
+}
+
+function getPracticeLaneHeight(eventsByTrack: Map<number, WaterfallEvent[]>): number {
+  const trackHeights = Array.from(eventsByTrack.values()).map((trackEvents) =>
+    getEventMiniLaneHeight(
+      trackEvents.map((item) => item.event),
+      { baseHeight: 70, rowHeight: 10, verticalPadding: 36, maxHeight: 260 },
+    ),
+  )
+  return Math.max(70, ...trackHeights)
 }
 
 function PracticeStatus({ actionState }: { actionState: StudioActionState }) {
@@ -149,6 +162,7 @@ function PracticeWaterfallStage({
     () => getPitchEventRange(events.map((item) => item.event)),
     [events],
   )
+  const laneHeight = useMemo(() => getPracticeLaneHeight(eventsByTrack), [eventsByTrack])
 
   return (
     <section className="practice-stage" aria-label="연습 화면">
@@ -162,7 +176,7 @@ function PracticeWaterfallStage({
       <div
         className="practice-stage__grid"
         data-testid="practice-waterfall-stage"
-        style={getPlayheadStyle(playheadSeconds, minSeconds, maxSeconds)}
+        style={getPlayheadStyle(playheadSeconds, minSeconds, maxSeconds, laneHeight)}
       >
         <i className="practice-stage__playhead" aria-hidden="true" />
         {tracks.map((track) => (

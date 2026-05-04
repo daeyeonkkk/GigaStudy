@@ -96,6 +96,7 @@ class TrackExtractionJob(SourceKindModel):
     attempt_count: int = Field(default=0, ge=0)
     max_attempts: int = Field(default=3, ge=1)
     parse_all_parts: bool = False
+    use_source_tempo: bool = False
     review_before_register: bool = False
     allow_overwrite: bool = False
     audio_mime_type: str | None = None

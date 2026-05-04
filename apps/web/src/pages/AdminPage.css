@@ -227,6 +227,67 @@
   background: #eef1f4;
 }
 
+.admin-instrument {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 260px) 110px auto auto;
+  gap: 12px;
+  align-items: end;
+  padding: 12px 18px;
+  border-bottom: 1px solid #b5bec6;
+  background: #f8fafb;
+}
+
+.admin-instrument div,
+.admin-instrument label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-instrument span {
+  color: var(--warm);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-instrument strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-instrument p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.admin-instrument input {
+  min-height: 36px;
+  border: 1px solid #a8b2bc;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #ffffff;
+}
+
+.admin-instrument input[type='file'] {
+  padding: 7px 10px;
+}
+
+.admin-instrument button:not(.app-button) {
+  min-height: 36px;
+  border: 1px solid #9eabb5;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
 .admin-cleanup div {
   display: grid;
   gap: 2px;
@@ -310,6 +371,46 @@
   align-items: end;
   padding-bottom: 12px;
   border-bottom: 1px solid #aeb8c1;
+}
+
+.admin-list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.admin-status-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #a8b2bc;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.admin-status-tabs button,
+.admin-list-controls > button {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.admin-status-tabs button.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.admin-list-controls > .admin-danger {
+  border-color: #b54840;
+  background: #ffffff;
+  color: #9c2f28;
 }
 
 .admin-section-header h1 {
@@ -530,6 +631,7 @@
   .admin-auth,
   .admin-overview,
   .admin-limits,
+  .admin-instrument,
   .admin-cleanup,
   .admin-studio-row,
   .admin-asset-row {

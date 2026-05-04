@@ -272,8 +272,9 @@ flowchart TD
 1. Toolbar or track controls choose source mode.
 2. Audio mode prefers retained audio clips when present.
 3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`
-   with the warm guide tone by default; sampled organ assets are not part of
-   the default playback path.
+   with the warm guide tone by default. If admin has uploaded a custom guide
+   sample, melodic event synthesis may use that sample transposed from its
+   configured root MIDI pitch; otherwise it falls back to the built-in synth.
 4. Sync offset and volume are applied per track. Negative sync is preserved as
    a user-visible timeline translation; barlines stay on the shared grid.
 5. Audio clips are scheduled from `TrackSlot.sync_offset_seconds`. Region pitch

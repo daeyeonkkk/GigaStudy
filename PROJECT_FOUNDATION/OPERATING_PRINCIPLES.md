@@ -50,6 +50,21 @@ the same change.
 - Every playback, scoring, generation, candidate-review, and practice surface
   should consume the same region/event timeline.
 
+## Alpha Access And Admin
+
+- Studio entry uses a lightweight alpha password. The server stores only the
+  owner-token hash derived from that password; the password itself is not part
+  of the public studio payload.
+- The public entry page lists active studios so testers can find them, but
+  entering or deleting a password-protected studio requires the matching
+  password.
+- User-facing "delete" means deactivate: the studio disappears from the public
+  list, but its metadata and assets remain available to admin recovery or
+  cleanup.
+- Admin surfaces may view active and inactive studios separately. Admin delete
+  actions must distinguish deactivation, stored-file cleanup, and permanent
+  metadata/assets deletion.
+
 ## Musical Normalization
 
 - All input routes should converge through the same musical normalization path:
@@ -190,6 +205,9 @@ the same change.
 - Default event synthesis should use a voice-friendly warm guide tone: clear
   pitch center, soft attack, restrained upper harmonics, and no vocal/organ
   character that competes with the user's recorded or live voice.
+- Admin may replace the guide tone with a custom audio file for alpha testing.
+  Playback should use that sample only as an event-synthesis source and fall
+  back to the built-in warm guide synth if the file is missing or unsupported.
 - Selected-track playback must prepare all required audio buffers, synthesized
   instruments, and metronome scheduling before starting together.
 - Single-track audio playback may be fast, but if it is part of a synchronized

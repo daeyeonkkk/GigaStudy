@@ -5,6 +5,7 @@ import type {
   CreateStudioRequest,
   DirectUploadTarget,
   CopyRegionRequest,
+  PlaybackInstrumentConfig,
   PitchEvent,
   ScoreMode,
   SaveRegionRevisionRequest,
@@ -21,6 +22,7 @@ const defaultApiBaseUrl = import.meta.env.PROD
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
 const OWNER_TOKEN_STORAGE_KEY = 'gigastudy.ownerToken.v1'
+const ADMIN_SESSION_STORAGE_KEY = 'gigastudy.adminSession.v1'
 
 export type AdminCredentials = {
   username: string
@@ -33,6 +35,7 @@ type AdminStorageQuery = {
   assetLimit?: number
   assetOffset?: number
   syncMissingAssets?: boolean
+  studioStatus?: 'active' | 'inactive' | 'all'
 }
 
 export function readFileAsDataUrl(file: File): Promise<string> {
@@ -82,6 +85,7 @@ async function requestJson<T>(
       headers: {
         'Content-Type': 'application/json',
         ...ownerHeaders(),
+        ...storedAdminHeaders(),
         ...options.headers,
       },
       ...options,
@@ -140,14 +144,20 @@ export function getStudio(studioId: string): Promise<Studio> {
 
 export function getTrackAudioUrl(studioId: string, slotId: number): string {
   const url = new URL(`/api/studios/${studioId}/tracks/${slotId}/audio`, apiBaseUrl)
-  url.searchParams.set('owner_token', getOwnerToken())
+  const ownerToken = getOwnerToken()
+  if (ownerToken) {
+    url.searchParams.set('owner_token', ownerToken)
+  }
   return url.toString()
 }
 
 export function getDocumentJobSourcePreviewUrl(studioId: string, jobId: string, pageIndex = 0): string {
   const url = new URL(`/api/studios/${studioId}/jobs/${jobId}/source-preview`, apiBaseUrl)
   url.searchParams.set('page_index', String(pageIndex))
-  url.searchParams.set('owner_token', getOwnerToken())
+  const ownerToken = getOwnerToken()
+  if (ownerToken) {
+    url.searchParams.set('owner_token', ownerToken)
+  }
   return url.toString()
 }
 
@@ -440,6 +450,14 @@ export function scoreTrack(
   )
 }
 
+export function deactivateStudio(studioId: string): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}`,
+    { method: 'DELETE' },
+    '스튜디오를 삭제하지 못했습니다.',
+  )
+}
+
 function adminHeaders(credentials: AdminCredentials): HeadersInit {
   return {
     'X-GigaStudy-Admin-User': credentials.username,
@@ -448,28 +466,44 @@ function adminHeaders(credentials: AdminCredentials): HeadersInit {
 }
 
 function ownerHeaders(): HeadersInit {
-  return {
-    'X-GigaStudy-Owner-Token': getOwnerToken(),
-  }
+  const ownerToken = getOwnerToken()
+  return ownerToken ? { 'X-GigaStudy-Owner-Token': ownerToken } : {}
 }
 
 function getOwnerToken(): string {
   if (typeof window === 'undefined') {
-    return 'server-render-disabled-owner-token'
+    return ''
   }
   const existing = window.localStorage.getItem(OWNER_TOKEN_STORAGE_KEY)
   if (existing && existing.length >= 24) {
     return existing
   }
-  const next = createOwnerToken()
-  window.localStorage.setItem(OWNER_TOKEN_STORAGE_KEY, next)
-  return next
+  return ''
 }
 
-function createOwnerToken(): string {
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+export async function setOwnerTokenFromStudioPassword(password: string): Promise<void> {
+  const normalized = password.trim()
+  if (typeof window === 'undefined' || !normalized) {
+    return
+  }
+  window.localStorage.setItem(OWNER_TOKEN_STORAGE_KEY, await deriveOwnerToken(normalized))
+}
+
+export function clearOwnerToken(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.localStorage.removeItem(OWNER_TOKEN_STORAGE_KEY)
+}
+
+async function deriveOwnerToken(password: string): Promise<string> {
+  const material = new TextEncoder().encode(`gigastudy-studio-password:${password}`)
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', material)
+    const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+    return `gigastudy-studio-password-sha256:${hex}`
+  }
+  return `gigastudy-studio-password:${encodeUtf8Base64(password)}`
 }
 
 function encodeUtf8Base64(value: string): string {
@@ -479,6 +513,39 @@ function encodeUtf8Base64(value: string): string {
     binary += String.fromCharCode(byte)
   }
   return btoa(binary)
+}
+
+function storedAdminHeaders(): HeadersInit {
+  if (typeof window === 'undefined') {
+    return {}
+  }
+  const stored = window.sessionStorage.getItem(ADMIN_SESSION_STORAGE_KEY)
+  if (!stored) {
+    return {}
+  }
+  try {
+    const credentials = JSON.parse(stored) as AdminCredentials
+    if (!credentials.username || !credentials.password) {
+      return {}
+    }
+    return adminHeaders(credentials)
+  } catch {
+    return {}
+  }
+}
+
+export function storeAdminSession(credentials: AdminCredentials): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.sessionStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify(credentials))
+}
+
+export function clearAdminSession(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
 }
 
 export function getAdminStorage(
@@ -511,8 +578,25 @@ function buildAdminStoragePath(query: AdminStorageQuery): string {
   if (query.syncMissingAssets !== undefined) {
     params.set('sync_missing_assets', String(query.syncMissingAssets))
   }
+  if (query.studioStatus !== undefined) {
+    params.set('studio_status', query.studioStatus)
+  }
   const suffix = params.toString()
   return suffix ? `/api/admin/storage?${suffix}` : '/api/admin/storage'
+}
+
+export function deactivateAdminStudio(
+  credentials: AdminCredentials,
+  studioId: string,
+): Promise<AdminDeleteResult> {
+  return requestJson<AdminDeleteResult>(
+    `/api/admin/studios/${studioId}/deactivate`,
+    {
+      method: 'POST',
+      headers: adminHeaders(credentials),
+    },
+    '스튜디오를 비활성화하지 못했습니다.',
+  )
 }
 
 export function deleteAdminStudio(
@@ -526,6 +610,19 @@ export function deleteAdminStudio(
       headers: adminHeaders(credentials),
     },
     '스튜디오를 삭제하지 못했습니다.',
+  )
+}
+
+export function deleteAdminInactiveStudios(
+  credentials: AdminCredentials,
+): Promise<AdminDeleteResult> {
+  return requestJson<AdminDeleteResult>(
+    '/api/admin/inactive-studios?background=true',
+    {
+      method: 'DELETE',
+      headers: adminHeaders(credentials),
+    },
+    '비활성화 스튜디오를 완전삭제하지 못했습니다.',
   )
 }
 
@@ -595,5 +692,45 @@ export function drainAdminEngineQueue(
       headers: adminHeaders(credentials),
     },
     '엔진 대기열을 처리하지 못했습니다.',
+  )
+}
+
+export function getPlaybackInstrument(): Promise<PlaybackInstrumentConfig> {
+  return requestJson<PlaybackInstrumentConfig>(
+    '/api/playback-instrument',
+    {},
+    '연주음 설정을 불러오지 못했습니다.',
+  )
+}
+
+export function updateAdminPlaybackInstrument(
+  credentials: AdminCredentials,
+  payload: {
+    filename: string
+    content_base64: string
+    root_midi: number
+  },
+): Promise<PlaybackInstrumentConfig> {
+  return requestJson<PlaybackInstrumentConfig>(
+    '/api/admin/playback-instrument',
+    {
+      method: 'PUT',
+      headers: adminHeaders(credentials),
+      body: JSON.stringify(payload),
+    },
+    '연주음 파일을 저장하지 못했습니다.',
+  )
+}
+
+export function resetAdminPlaybackInstrument(
+  credentials: AdminCredentials,
+): Promise<PlaybackInstrumentConfig> {
+  return requestJson<PlaybackInstrumentConfig>(
+    '/api/admin/playback-instrument',
+    {
+      method: 'DELETE',
+      headers: adminHeaders(credentials),
+    },
+    '연주음 파일을 초기화하지 못했습니다.',
   )
 }

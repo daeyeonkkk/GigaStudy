@@ -14,9 +14,11 @@ import {
   getRegionsTimelineEndSeconds,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
+  loadCustomGuideInstrument,
   scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
   type MeterContext,
+  type PlaybackInstrument,
   type PlaybackNode,
   type PlaybackSession,
   type PlaybackSourceMode,
@@ -210,6 +212,7 @@ export function useStudioPlayback({
         Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length)))) * 0.4
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
+      let melodicInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
 
       function getTrackOutput(track: TrackSlot): AudioNode | null {
         if (!activeContext) {
@@ -268,6 +271,15 @@ export function useStudioPlayback({
       if (playbackRunIdRef.current !== runId) {
         disposePlaybackSession({ context, nodes, timeoutIds })
         return false
+      }
+
+      if (eventTracks.length > 0 && activeContext) {
+        try {
+          const customInstrument = await loadCustomGuideInstrument(activeContext)
+          melodicInstrument = customInstrument ?? DEFAULT_MELODIC_INSTRUMENT
+        } catch {
+          melodicInstrument = DEFAULT_MELODIC_INSTRUMENT
+        }
       }
 
       scheduledStartDelaySeconds = Math.max(
@@ -353,7 +365,7 @@ export function useStudioPlayback({
                   destination: getTrackOutput(track) ?? activeContext.destination,
                   duration: eventSchedule.remainingDurationSeconds,
                   frequency,
-                  instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : DEFAULT_MELODIC_INSTRUMENT,
+                  instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : melodicInstrument,
                   startTime: eventSchedule.scheduledStartSeconds,
                   volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
                 },

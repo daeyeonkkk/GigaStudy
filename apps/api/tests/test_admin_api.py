@@ -154,6 +154,75 @@ def test_admin_storage_summary_is_paginated(tmp_path: Path, monkeypatch) -> None
     assert payload["limits"]["studio_hard_limit"] == 500
 
 
+def test_admin_can_view_and_purge_inactive_studios(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Inactive candidate",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+    assert create_response.status_code == 200
+    studio_id = create_response.json()["studio_id"]
+
+    deactivate_response = client.post(f"/api/admin/studios/{studio_id}/deactivate", headers=ADMIN_HEADERS)
+
+    assert deactivate_response.status_code == 200
+    assert client.get("/api/studios").json() == []
+    active_summary = client.get("/api/admin/storage", headers=ADMIN_HEADERS).json()
+    assert active_summary["studio_count"] == 0
+    assert active_summary["inactive_studio_count"] == 1
+
+    inactive_response = client.get(
+        "/api/admin/storage?studio_status=inactive",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert inactive_response.status_code == 200
+    inactive_payload = inactive_response.json()
+    assert inactive_payload["studio_count"] == 1
+    assert inactive_payload["studios"][0]["studio_id"] == studio_id
+    assert inactive_payload["studios"][0]["is_active"] is False
+
+    purge_response = client.delete("/api/admin/inactive-studios", headers=ADMIN_HEADERS)
+
+    assert purge_response.status_code == 200
+    assert client.get("/api/admin/storage?studio_status=inactive", headers=ADMIN_HEADERS).json()["studio_count"] == 0
+
+
+def test_admin_can_replace_playback_instrument_file(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    content = b"RIFF....WAVEfmt custom guide tone"
+
+    update_response = client.put(
+        "/api/admin/playback-instrument",
+        headers=ADMIN_HEADERS,
+        json={
+            "filename": "guide.wav",
+            "content_base64": base64.b64encode(content).decode("ascii"),
+            "root_midi": 69,
+        },
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["has_custom_file"] is True
+    assert payload["filename"] == "guide.wav"
+    assert payload["root_midi"] == 69
+    assert client.get("/api/playback-instrument").json()["has_custom_file"] is True
+    audio_response = client.get("/api/playback-instrument/audio")
+    assert audio_response.status_code == 200
+    assert audio_response.content == content
+
+    reset_response = client.delete("/api/admin/playback-instrument", headers=ADMIN_HEADERS)
+
+    assert reset_response.status_code == 200
+    assert reset_response.json()["has_custom_file"] is False
+    assert client.get("/api/playback-instrument/audio").status_code == 404
+
+
 def test_admin_storage_summary_skips_filesystem_asset_scan_by_default(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

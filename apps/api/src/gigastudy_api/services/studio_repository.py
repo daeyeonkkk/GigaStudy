@@ -235,6 +235,7 @@ class StudioRepository:
                 limit=limit,
                 offset=offset,
                 owner_token_hash=owner_hash,
+                active_status="active",
             )
         return [_studio_list_item_from_payload(studio_id, studio_payload) for studio_id, studio_payload in rows]
 
@@ -256,7 +257,11 @@ class StudioRepository:
         timestamp = _now()
         with self._lock:
             ensure_studio_capacity(self._count_studios())
-        owner_hash = owner_hash_for_request(owner_token)
+        owner_hash = owner_hash_for_request(
+            owner_token,
+            allow_missing=not owner_policy_enabled(),
+            honor_public_token=True,
+        )
         resolved_bpm = bpm if bpm is not None else DEFAULT_UPLOAD_BPM
         studio = Studio(
             studio_id=uuid4().hex,
@@ -315,14 +320,37 @@ class StudioRepository:
         background_tasks: BackgroundTasks | None = None,
         owner_token: str | None = None,
         enforce_owner: bool = False,
+        admin_bypass: bool = False,
     ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
         if studio is None:
             raise HTTPException(status_code=404, detail="Studio not found.")
-        if enforce_owner:
+        if not studio.is_active and not admin_bypass:
+            raise HTTPException(status_code=404, detail="Studio not found.")
+        if enforce_owner and not admin_bypass:
             require_studio_access(studio, owner_token)
         return studio
+
+    def deactivate_studio(
+        self,
+        studio_id: str,
+        *,
+        owner_token: str | None = None,
+        admin_bypass: bool = False,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            if not admin_bypass:
+                require_studio_access(studio, owner_token)
+            timestamp = _now()
+            studio.is_active = False
+            studio.deactivated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+            return studio
 
     def get_track_audio(
         self,
@@ -356,6 +384,7 @@ class StudioRepository:
         asset_limit: int = 25,
         asset_offset: int = 0,
         sync_missing_assets: bool = False,
+        studio_status: str = "active",
     ) -> AdminStorageSummary:
         return self._admin.storage_summary(
             studio_limit=studio_limit,
@@ -363,7 +392,18 @@ class StudioRepository:
             asset_limit=asset_limit,
             asset_offset=asset_offset,
             sync_missing_assets=sync_missing_assets,
+            studio_status=studio_status,
         )
+
+    def deactivate_admin_studio(self, studio_id: str) -> AdminDeleteResult:
+        return self._admin.deactivate_studio(studio_id)
+
+    def delete_admin_inactive_studios(
+        self,
+        *,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> AdminDeleteResult:
+        return self._admin.delete_inactive_studios(background_tasks=background_tasks)
 
     def delete_admin_studio(
         self,

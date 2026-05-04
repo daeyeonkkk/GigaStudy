@@ -40,6 +40,8 @@ def build_admin_studio_summary(
     return AdminStudioSummary(
         studio_id=studio.studio_id,
         title=studio.title,
+        is_active=studio.is_active,
+        deactivated_at=studio.deactivated_at,
         bpm=studio.bpm,
         registered_track_count=sum(1 for track in studio.tracks if track.status == "registered"),
         report_count=len(studio.reports),

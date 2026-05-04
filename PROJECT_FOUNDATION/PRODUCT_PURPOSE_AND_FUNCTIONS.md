@@ -124,6 +124,8 @@ AI generation은 등록된 context tracks를 바탕으로 symbolic track materia
 현재 제품 범위에 포함된다.
 
 - Studio 생성과 persistence.
+- 스튜디오 생성 시 alpha password 설정, password 기반 진입, public list에서
+  deactivated studio 숨김.
 - 6개의 visible track slot.
 - 업로드, 녹음, direct upload, extraction queue, candidate review.
 - Region lane, selected-region piano roll, practice waterfall surface.
@@ -137,6 +139,8 @@ AI generation은 등록된 context tracks를 바탕으로 symbolic track materia
 - Answer scoring, harmony scoring, report history, report deep-link.
 - 부족하거나 수정할 part를 위한 symbolic AI generation.
 - alpha testing을 운영하기 위한 admin/resource tool.
+- Admin의 active/inactive studio 관리, 개별 저장 파일 정리, 완전삭제, guide
+  tone sample 교체.
 
 현재 제품 범위에 포함되지 않는다.
 

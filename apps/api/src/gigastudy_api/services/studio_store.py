@@ -4,13 +4,14 @@ from contextlib import contextmanager
 import json
 from pathlib import Path
 from threading import RLock
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 
 SIDECAR_KEYS = ("reports", "candidates")
+ActiveStatus = Literal["active", "inactive", "all"]
 
 
 class StudioStore(Protocol):
@@ -21,7 +22,13 @@ class StudioStore(Protocol):
     def load_raw(self) -> dict[str, Any]:
         ...
 
-    def list_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+    def list_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        active_status: ActiveStatus = "all",
+    ) -> list[tuple[str, Any]]:
         ...
 
     def list_summary_raw(
@@ -30,10 +37,11 @@ class StudioStore(Protocol):
         limit: int,
         offset: int,
         owner_token_hash: str | None = None,
+        active_status: ActiveStatus = "active",
     ) -> list[tuple[str, Any]]:
         ...
 
-    def count(self) -> int:
+    def count(self, *, active_status: ActiveStatus = "all") -> int:
         ...
 
     def load_one_raw(self, studio_id: str) -> Any | None:
@@ -70,10 +78,20 @@ class FileStudioStore:
             for studio_id, studio_payload in self._read_base_raw().items()
         }
 
-    def list_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+    def list_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        active_status: ActiveStatus = "all",
+    ) -> list[tuple[str, Any]]:
         payload = self._read_base_raw()
         rows = sorted(
-            payload.items(),
+            [
+                (studio_id, studio_payload)
+                for studio_id, studio_payload in payload.items()
+                if _active_matches(studio_payload, active_status)
+            ],
             key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
             reverse=True,
         )
@@ -88,11 +106,13 @@ class FileStudioStore:
         limit: int,
         offset: int,
         owner_token_hash: str | None = None,
+        active_status: ActiveStatus = "active",
     ) -> list[tuple[str, Any]]:
         payload = {
             studio_id: studio_payload
             for studio_id, studio_payload in self._read_base_raw().items()
             if _owner_matches(studio_payload, owner_token_hash)
+            and _active_matches(studio_payload, active_status)
         }
         rows = sorted(
             payload.items(),
@@ -101,8 +121,12 @@ class FileStudioStore:
         )
         return rows[offset : offset + limit]
 
-    def count(self) -> int:
-        return len(self._read_base_raw())
+    def count(self, *, active_status: ActiveStatus = "all") -> int:
+        return sum(
+            1
+            for studio_payload in self._read_base_raw().values()
+            if _active_matches(studio_payload, active_status)
+        )
 
     def load_one_raw(self, studio_id: str) -> Any | None:
         studio_payload = self._read_base_raw().get(studio_id)
@@ -223,17 +247,25 @@ class PostgresStudioStore:
             for row in rows
         }
 
-    def list_raw(self, *, limit: int, offset: int) -> list[tuple[str, Any]]:
+    def list_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        active_status: ActiveStatus = "all",
+    ) -> list[tuple[str, Any]]:
+        active_clause, params = _active_sql_clause(active_status)
         with self._connect() as connection:
             self._ensure_schema(connection)
             rows = connection.execute(
-                """
+                f"""
                 SELECT studio_id, payload
                 FROM studio_documents
+                {active_clause}
                 ORDER BY updated_at DESC
                 LIMIT %s OFFSET %s
                 """,
-                (limit, offset),
+                (*params, limit, offset),
             ).fetchall()
             studio_ids = [str(row["studio_id"]) for row in rows]
             sidecars = self._fetch_sidecars(connection, studio_ids)
@@ -255,21 +287,26 @@ class PostgresStudioStore:
         limit: int,
         offset: int,
         owner_token_hash: str | None = None,
+        active_status: ActiveStatus = "active",
     ) -> list[tuple[str, Any]]:
-        owner_clause = ""
-        params: tuple[Any, ...]
+        where_clauses: list[str] = []
+        params_list: list[Any] = []
+        active_clause, active_params = _active_sql_clause(active_status, include_where=False)
+        if active_clause:
+            where_clauses.append(active_clause)
+            params_list.extend(active_params)
         if owner_token_hash is not None:
-            owner_clause = "WHERE payload ->> 'owner_token_hash' = %s"
-            params = (owner_token_hash, limit, offset)
-        else:
-            params = (limit, offset)
+            where_clauses.append("payload ->> 'owner_token_hash' = %s")
+            params_list.append(owner_token_hash)
+        where_clause = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        params = (*params_list, limit, offset)
         with self._connect() as connection:
             self._ensure_schema(connection)
             rows = connection.execute(
                 f"""
                 SELECT studio_id, payload
                 FROM studio_documents
-                {owner_clause}
+                {where_clause}
                 ORDER BY updated_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -277,10 +314,14 @@ class PostgresStudioStore:
             ).fetchall()
         return [(str(row["studio_id"]), row["payload"]) for row in rows]
 
-    def count(self) -> int:
+    def count(self, *, active_status: ActiveStatus = "all") -> int:
+        active_clause, params = _active_sql_clause(active_status)
         with self._connect() as connection:
             self._ensure_schema(connection)
-            row = connection.execute("SELECT count(*) AS count FROM studio_documents").fetchone()
+            row = connection.execute(
+                f"SELECT count(*) AS count FROM studio_documents {active_clause}",
+                params,
+            ).fetchone()
         return int(row["count"] if row is not None else 0)
 
     def load_one_raw(self, studio_id: str) -> Any | None:
@@ -642,6 +683,25 @@ def _owner_matches(studio_payload: Any, owner_token_hash: str | None) -> bool:
     if owner_token_hash is None:
         return True
     return isinstance(studio_payload, dict) and studio_payload.get("owner_token_hash") == owner_token_hash
+
+
+def _active_matches(studio_payload: Any, active_status: ActiveStatus) -> bool:
+    if active_status == "all":
+        return True
+    is_active = not isinstance(studio_payload, dict) or studio_payload.get("is_active", True) is not False
+    return is_active if active_status == "active" else not is_active
+
+
+def _active_sql_clause(
+    active_status: ActiveStatus,
+    *,
+    include_where: bool = True,
+) -> tuple[str, tuple[Any, ...]]:
+    if active_status == "all":
+        return "", ()
+    comparison = "true" if active_status == "active" else "false"
+    clause = f"coalesce((payload ->> 'is_active')::boolean, true) = {comparison}"
+    return (f"WHERE {clause}" if include_where else clause), ()
 
 
 def _normalize_database_url(database_url: str) -> str:

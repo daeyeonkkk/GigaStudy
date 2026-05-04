@@ -3,15 +3,28 @@ import { Link } from 'react-router-dom'
 
 import {
   type AdminCredentials,
+  clearAdminSession,
+  deactivateAdminStudio,
   deleteAdminAsset,
   deleteAdminExpiredStagedAssets,
+  deleteAdminInactiveStudios,
   deleteAdminStagedAssets,
   deleteAdminStudio,
   deleteAdminStudioAssets,
   drainAdminEngineQueue,
   getAdminStorage,
+  getPlaybackInstrument,
+  readFileAsDataUrl,
+  resetAdminPlaybackInstrument,
+  storeAdminSession,
+  updateAdminPlaybackInstrument,
 } from '../lib/api'
-import type { AdminAssetSummary, AdminStorageSummary, AdminStudioSummary } from '../types/studio'
+import type {
+  AdminAssetSummary,
+  AdminStorageSummary,
+  AdminStudioSummary,
+  PlaybackInstrumentConfig,
+} from '../types/studio'
 import './AdminPage.css'
 
 type AdminStatus =
@@ -23,6 +36,7 @@ type AdminStatus =
 const DEFAULT_LOGIN_ID = 'admin'
 const ADMIN_STUDIO_PAGE_SIZE = 50
 const ADMIN_ASSET_PAGE_SIZE = 25
+type AdminStudioStatus = 'active' | 'inactive' | 'all'
 
 export function AdminPage() {
   const [username, setUsername] = useState(DEFAULT_LOGIN_ID)
@@ -30,6 +44,10 @@ export function AdminPage() {
   const [credentials, setCredentials] = useState<AdminCredentials | null>(null)
   const [summary, setSummary] = useState<AdminStorageSummary | null>(null)
   const [studioOffset, setStudioOffset] = useState(0)
+  const [studioStatus, setStudioStatus] = useState<AdminStudioStatus>('active')
+  const [instrumentConfig, setInstrumentConfig] = useState<PlaybackInstrumentConfig | null>(null)
+  const [instrumentFile, setInstrumentFile] = useState<File | null>(null)
+  const [instrumentRootMidi, setInstrumentRootMidi] = useState('69')
   const [status, setStatus] = useState<AdminStatus>({
     phase: 'idle',
     message: '스튜디오와 저장 파일을 관리하려면 로그인하세요.',
@@ -54,17 +72,24 @@ export function AdminPage() {
     password,
   }
 
-  async function loadSummary(nextCredentials: AdminCredentials, nextOffset = studioOffset) {
+  async function loadSummary(
+    nextCredentials: AdminCredentials,
+    nextOffset = studioOffset,
+    nextStudioStatus: AdminStudioStatus = studioStatus,
+  ) {
     setStatus({ phase: 'loading', message: '저장소 요약을 불러오는 중입니다.' })
     const nextSummary = await getAdminStorage(nextCredentials, {
       studioLimit: ADMIN_STUDIO_PAGE_SIZE,
       studioOffset: nextOffset,
       assetLimit: ADMIN_ASSET_PAGE_SIZE,
       assetOffset: 0,
+      studioStatus: nextStudioStatus,
     })
     setSummary(nextSummary)
+    setInstrumentConfig(await getPlaybackInstrument().catch(() => null))
     setCredentials(nextCredentials)
     setStudioOffset(nextSummary.studio_offset)
+    setStudioStatus(nextStudioStatus)
     setStatus({ phase: 'success', message: '저장소 요약을 새로 불러왔습니다.' })
   }
 
@@ -81,6 +106,7 @@ export function AdminPage() {
     try {
       setExpandedStudios(new Set())
       await loadSummary(nextCredentials, 0)
+      storeAdminSession(nextCredentials)
     } catch (error) {
       setCredentials(null)
       setSummary(null)
@@ -122,12 +148,30 @@ export function AdminPage() {
     }
   }
 
+  async function changeStudioStatus(nextStatus: AdminStudioStatus) {
+    if (credentials === null) {
+      return
+    }
+    setExpandedStudios(new Set())
+    try {
+      await loadSummary(credentials, 0, nextStatus)
+    } catch (error) {
+      setStatus({
+        phase: 'error',
+        message: error instanceof Error ? error.message : '스튜디오 목록을 불러오지 못했습니다.',
+      })
+    }
+  }
+
   function logout() {
     setCredentials(null)
     setSummary(null)
+    setInstrumentConfig(null)
     setPassword('')
     setStudioOffset(0)
+    setStudioStatus('active')
     setExpandedStudios(new Set())
+    clearAdminSession()
     setStatus({ phase: 'idle', message: '로그아웃했습니다.' })
   }
 
@@ -152,7 +196,7 @@ export function AdminPage() {
         summary?.studios.length === 1 && studioOffset > 0
           ? Math.max(0, studioOffset - ADMIN_STUDIO_PAGE_SIZE)
           : studioOffset
-      await loadSummary(activeCredentials, nextOffset)
+      await loadSummary(activeCredentials, nextOffset, studioStatus)
       setStatus({
         phase: 'success',
         message: result.cleanup_queued
@@ -200,6 +244,73 @@ export function AdminPage() {
     )
   }
 
+  function handleDeactivateStudio(studio: AdminStudioSummary) {
+    if (!window.confirm(`${studio.title} 스튜디오를 목록에서 숨길까요? 데이터는 관리자 페이지에 남습니다.`)) {
+      return
+    }
+    void runDeletion(`deactivate-studio:${studio.studio_id}`, () =>
+      deactivateAdminStudio(activeCredentials, studio.studio_id),
+    )
+  }
+
+  function handleDeleteInactiveStudios() {
+    if (!window.confirm('비활성화 스튜디오를 모두 완전삭제할까요? 저장 파일도 함께 정리됩니다.')) {
+      return
+    }
+    void runDeletion('inactive-studios', () => deleteAdminInactiveStudios(activeCredentials))
+  }
+
+  async function handleInstrumentUpload() {
+    if (credentials === null || instrumentFile === null) {
+      return
+    }
+    const rootMidi = Number.parseInt(instrumentRootMidi, 10)
+    if (!Number.isFinite(rootMidi) || rootMidi < 21 || rootMidi > 108) {
+      setStatus({ phase: 'error', message: '기준 음높이는 MIDI 21-108 사이로 입력하세요.' })
+      return
+    }
+    setBusyKey('playback-instrument')
+    setStatus({ phase: 'loading', message: '연주음 파일을 저장하는 중입니다.' })
+    try {
+      const contentBase64 = await readFileAsDataUrl(instrumentFile)
+      const config = await updateAdminPlaybackInstrument(activeCredentials, {
+        filename: instrumentFile.name,
+        content_base64: contentBase64,
+        root_midi: rootMidi,
+      })
+      setInstrumentConfig(config)
+      setInstrumentFile(null)
+      setStatus({ phase: 'success', message: '연주음 파일을 저장했습니다.' })
+    } catch (error) {
+      setStatus({
+        phase: 'error',
+        message: error instanceof Error ? error.message : '연주음 파일을 저장하지 못했습니다.',
+      })
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  async function handleInstrumentReset() {
+    if (credentials === null) {
+      return
+    }
+    setBusyKey('playback-instrument-reset')
+    setStatus({ phase: 'loading', message: '기본 연주음으로 되돌리는 중입니다.' })
+    try {
+      const config = await resetAdminPlaybackInstrument(activeCredentials)
+      setInstrumentConfig(config)
+      setStatus({ phase: 'success', message: '기본 연주음으로 되돌렸습니다.' })
+    } catch (error) {
+      setStatus({
+        phase: 'error',
+        message: error instanceof Error ? error.message : '연주음을 초기화하지 못했습니다.',
+      })
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
   function handleDeleteStagedAssets() {
     if (!window.confirm('버려진 임시 업로드 파일을 삭제할까요? 활성 스튜디오 파일은 유지됩니다.')) {
       return
@@ -222,7 +333,7 @@ export function AdminPage() {
     setStatus({ phase: 'loading', message: '엔진 대기열을 처리하는 중입니다.' })
     try {
       const result = await drainAdminEngineQueue(activeCredentials, 3)
-      await loadSummary(activeCredentials, studioOffset)
+      await loadSummary(activeCredentials, studioOffset, studioStatus)
       setStatus({
         phase: 'success',
         message: `엔진 대기열 ${result.processed_jobs}/${result.max_jobs}개를 처리했습니다.${
@@ -308,11 +419,11 @@ export function AdminPage() {
         {credentials !== null ? (
           <>
             <section className="admin-overview" aria-label="저장소 개요">
-              <AdminMetric label="스튜디오" value={summary?.studio_count ?? 0} />
+              <AdminMetric label="활성 스튜디오" value={summary?.active_studio_count ?? summary?.studio_count ?? 0} />
+              <AdminMetric label="비활성 스튜디오" value={summary?.inactive_studio_count ?? 0} />
               <AdminMetric label="파일" value={summary?.asset_count ?? 0} />
               <AdminMetric label="저장 용량" value={formatBytes(summary?.total_bytes ?? 0)} />
               <AdminMetric label="메타데이터" value={formatBytes(summary?.metadata_bytes ?? 0)} />
-              <AdminMetric label="업로드 한도" value={formatBytes(summary?.limits.max_upload_bytes ?? 0)} />
               <AdminMetric label="현재 페이지 트랙" value={totalRegisteredTracks} />
             </section>
 
@@ -322,6 +433,43 @@ export function AdminPage() {
             </section>
 
             {summary ? <AdminLimits summary={summary} /> : null}
+
+            <section className="admin-instrument" aria-label="연주음 파일">
+              <div>
+                <span>연주음</span>
+                <strong>{instrumentConfig?.has_custom_file ? instrumentConfig.filename : '기본 연주음'}</strong>
+                <p>음표 재생에 사용할 기준 음원입니다. 업로드 파일은 입력한 기준 음높이에 맞춰 반음 단위로 변환됩니다.</p>
+              </div>
+              <label>
+                <span>파일</span>
+                <input
+                  type="file"
+                  accept=".wav,.mp3,.m4a,.ogg,.flac"
+                  disabled={isBusy}
+                  onChange={(event) => setInstrumentFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <label>
+                <span>기준 MIDI</span>
+                <input
+                  inputMode="numeric"
+                  value={instrumentRootMidi}
+                  disabled={isBusy}
+                  onChange={(event) => setInstrumentRootMidi(event.target.value)}
+                />
+              </label>
+              <button
+                className="app-button"
+                type="button"
+                disabled={isBusy || instrumentFile === null}
+                onClick={() => void handleInstrumentUpload()}
+              >
+                저장
+              </button>
+              <button type="button" disabled={isBusy} onClick={() => void handleInstrumentReset()}>
+                기본값
+              </button>
+            </section>
 
             <section className="admin-cleanup" aria-label="정리 작업">
               <div>
@@ -367,6 +515,36 @@ export function AdminPage() {
                 <div>
                   <p className="eyebrow">운영</p>
                   <h1>스튜디오 관리</h1>
+                </div>
+                <div className="admin-list-controls">
+                  <div className="admin-status-tabs" aria-label="스튜디오 상태">
+                    <button
+                      type="button"
+                      className={studioStatus === 'active' ? 'is-active' : ''}
+                      disabled={isBusy}
+                      onClick={() => void changeStudioStatus('active')}
+                    >
+                      스튜디오 목록
+                    </button>
+                    <button
+                      type="button"
+                      className={studioStatus === 'inactive' ? 'is-active' : ''}
+                      disabled={isBusy}
+                      onClick={() => void changeStudioStatus('inactive')}
+                    >
+                      비활성화 스튜디오
+                    </button>
+                  </div>
+                  {studioStatus === 'inactive' ? (
+                    <button
+                      className="admin-danger"
+                      type="button"
+                      disabled={isBusy || (summary?.inactive_studio_count ?? 0) === 0}
+                      onClick={handleDeleteInactiveStudios}
+                    >
+                      일괄 완전삭제
+                    </button>
+                  ) : null}
                 </div>
                 <div className="admin-pager" aria-label="스튜디오 페이지 이동">
                   <span>
@@ -414,27 +592,41 @@ export function AdminPage() {
                         <span>후보 {studio.candidate_count}</span>
                         <span>파일 {studio.asset_count}</span>
                         <span>{formatBytes(studio.asset_bytes)}</span>
+                        {studio.is_active === false && studio.deactivated_at ? (
+                          <span>비활성화 {formatDate(studio.deactivated_at)}</span>
+                        ) : null}
                       </div>
                     </div>
                     <div className="admin-row-actions">
                       <Link className="admin-link-button" to={`/studios/${studio.studio_id}`}>
-                        열기
+                        진입
                       </Link>
                       <button
                         type="button"
                         disabled={isBusy}
                         onClick={() => handleDeleteStudioAssets(studio)}
                       >
-                        파일 삭제
+                        저장 파일 삭제
                       </button>
-                      <button
-                        className="admin-danger"
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => handleDeleteStudio(studio)}
-                      >
-                        스튜디오 삭제
-                      </button>
+                      {studio.is_active !== false ? (
+                        <button
+                          className="admin-danger"
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleDeactivateStudio(studio)}
+                        >
+                          삭제
+                        </button>
+                      ) : (
+                        <button
+                          className="admin-danger"
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleDeleteStudio(studio)}
+                        >
+                          완전삭제
+                        </button>
+                      )}
                     </div>
 
                     {expandedStudios.has(studio.studio_id) ? (
@@ -478,12 +670,14 @@ function AdminMetric({ label, value }: { label: string; value: number | string }
 function AdminLimits({ summary }: { summary: AdminStorageSummary }) {
   const limits = summary.limits
   const hasWarning = limits.warnings.length > 0
+  const totalStudios =
+    (summary.active_studio_count ?? 0) + (summary.inactive_studio_count ?? 0) || summary.studio_count
   return (
     <section className={`admin-limits${hasWarning ? ' admin-limits--warning' : ''}`} aria-label="알파 운영 한도">
       <div>
         <span>알파 운영 한도</span>
         <strong>
-          스튜디오 {summary.studio_count}/{limits.studio_hard_limit} · 파일{' '}
+          스튜디오 {totalStudios}/{limits.studio_hard_limit} · 파일{' '}
           {formatBytes(summary.total_asset_bytes)}/{formatBytes(limits.asset_hard_bytes)} · 엔진 작업{' '}
           {limits.max_active_engine_jobs}
         </strong>

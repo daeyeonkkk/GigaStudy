@@ -1,57 +1,20 @@
-import base64
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
-import unicodedata
-
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
-
-from gigastudy_api.api.schemas.admin import AdminDeleteResult, AdminEngineDrainResult, AdminStorageSummary
-from gigastudy_api.config import get_settings
+from gigastudy_api.api.schemas.admin import (
+    AdminDeleteResult,
+    AdminEngineDrainResult,
+    AdminStorageSummary,
+    PlaybackInstrumentConfig,
+    UpdatePlaybackInstrumentRequest,
+)
+from gigastudy_api.services.admin_auth import require_admin_credentials
+from gigastudy_api.services.playback_instrument import (
+    PlaybackInstrumentService,
+    get_playback_instrument_service,
+)
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
 
 router = APIRouter()
-
-
-def require_admin_credentials(
-    x_gigastudy_admin_token: str | None = Header(default=None),
-    x_gigastudy_admin_user: str | None = Header(default=None),
-    x_gigastudy_admin_password: str | None = Header(default=None),
-    x_gigastudy_admin_password_b64: str | None = Header(default=None),
-) -> None:
-    settings = get_settings()
-    configured_token = settings.admin_token
-    if configured_token and x_gigastudy_admin_token == configured_token:
-        return
-
-    submitted_password = x_gigastudy_admin_password
-    if x_gigastudy_admin_password_b64 is not None:
-        submitted_password = _decode_admin_password(x_gigastudy_admin_password_b64)
-
-    if (
-        x_gigastudy_admin_user == settings.admin_username
-        and _is_admin_password(submitted_password, settings.admin_password)
-    ):
-        return
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid admin credentials.",
-    )
-
-
-def _decode_admin_password(encoded_password: str) -> str | None:
-    try:
-        return base64.b64decode(encoded_password, validate=True).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return None
-
-
-def _is_admin_password(submitted_password: str | None, configured_password: str) -> bool:
-    if submitted_password is None:
-        return False
-    normalized = unicodedata.normalize("NFC", submitted_password.strip())
-    configured = unicodedata.normalize("NFC", configured_password)
-    alpha_aliases = {"eodus123", "daeyeon123"}
-    return normalized == configured or normalized in alpha_aliases
 
 
 @router.get("/storage", response_model=AdminStorageSummary)
@@ -61,6 +24,7 @@ def get_admin_storage_summary(
     asset_limit: int = Query(default=25, ge=0, le=100),
     asset_offset: int = Query(default=0, ge=0),
     sync_missing_assets: bool = Query(default=False),
+    studio_status: str = Query(default="active", pattern="^(active|inactive|all)$"),
     _: None = Depends(require_admin_credentials),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> AdminStorageSummary:
@@ -70,7 +34,17 @@ def get_admin_storage_summary(
         asset_limit=asset_limit,
         asset_offset=asset_offset,
         sync_missing_assets=sync_missing_assets,
+        studio_status=studio_status,
     )
+
+
+@router.post("/studios/{studio_id}/deactivate", response_model=AdminDeleteResult)
+def deactivate_admin_studio(
+    studio_id: str,
+    _: None = Depends(require_admin_credentials),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> AdminDeleteResult:
+    return repository.deactivate_admin_studio(studio_id)
 
 
 @router.delete("/studios/{studio_id}", response_model=AdminDeleteResult)
@@ -85,6 +59,39 @@ def delete_admin_studio(
         studio_id,
         background_tasks=background_tasks if background else None,
     )
+
+
+@router.delete("/inactive-studios", response_model=AdminDeleteResult)
+def delete_admin_inactive_studios(
+    background_tasks: BackgroundTasks,
+    background: bool = Query(default=False),
+    _: None = Depends(require_admin_credentials),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> AdminDeleteResult:
+    return repository.delete_admin_inactive_studios(
+        background_tasks=background_tasks if background else None,
+    )
+
+
+@router.put("/playback-instrument", response_model=PlaybackInstrumentConfig)
+def update_admin_playback_instrument(
+    request: UpdatePlaybackInstrumentRequest,
+    _: None = Depends(require_admin_credentials),
+    service: PlaybackInstrumentService = Depends(get_playback_instrument_service),
+) -> PlaybackInstrumentConfig:
+    return service.update(
+        filename=request.filename,
+        content_base64=request.content_base64,
+        root_midi=request.root_midi,
+    )
+
+
+@router.delete("/playback-instrument", response_model=PlaybackInstrumentConfig)
+def reset_admin_playback_instrument(
+    _: None = Depends(require_admin_credentials),
+    service: PlaybackInstrumentService = Depends(get_playback_instrument_service),
+) -> PlaybackInstrumentConfig:
+    return service.reset()
 
 
 @router.delete("/studios/{studio_id}/assets", response_model=AdminDeleteResult)

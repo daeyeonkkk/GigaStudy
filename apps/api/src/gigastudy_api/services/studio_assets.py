@@ -135,7 +135,11 @@ class StudioAssetService:
         *,
         owner_token: str | None = None,
     ) -> DirectUploadTarget:
-        owner_hash = owner_hash_for_request(owner_token)
+        owner_hash = owner_hash_for_request(
+            owner_token,
+            allow_missing=not owner_policy_enabled(),
+            honor_public_token=True,
+        )
         self.cleanup_expired_staged_uploads_if_due()
         filename, _suffix = _validated_studio_seed_upload_filename(request.source_kind, request.filename)
         settings = get_settings()
@@ -238,7 +242,7 @@ class StudioAssetService:
         max_bytes = upload_target["max_bytes"]
 
         if owner_hash is not None:
-            if owner_hash_for_request(owner_token) != owner_hash:
+            if owner_hash_for_request(owner_token, honor_public_token=True) != owner_hash:
                 raise HTTPException(status_code=404, detail="Upload target not found.")
         elif owner_policy_enabled():
             raise HTTPException(status_code=404, detail="Upload target not found.")

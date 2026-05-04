@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import {
   createStudio,
   createStudioUploadTarget,
+  deactivateStudio,
   listStudios,
   putDirectUpload,
   readFileAsDataUrl,
+  setOwnerTokenFromStudioPassword,
 } from '../lib/api'
 import {
   AUDIO_UPLOAD_EXTENSIONS,
@@ -76,6 +78,7 @@ export function LaunchPage() {
   const navigate = useNavigate()
   const sourceInputRef = useRef<HTMLInputElement | null>(null)
   const [title, setTitle] = useState('')
+  const [studioPassword, setStudioPassword] = useState('')
   const [bpm, setBpm] = useState('92')
   const [timeSignatureNumerator, setTimeSignatureNumerator] = useState('4')
   const [timeSignatureDenominator, setTimeSignatureDenominator] = useState('4')
@@ -85,6 +88,9 @@ export function LaunchPage() {
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
   const [recentStudios, setRecentStudios] = useState<StudioListItem[]>([])
   const [recentMessage, setRecentMessage] = useState<string | null>(null)
+  const [selectedStudioId, setSelectedStudioId] = useState<string | null>(null)
+  const [selectedStudioPassword, setSelectedStudioPassword] = useState('')
+  const [selectedStudioMessage, setSelectedStudioMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let ignore = false
@@ -114,6 +120,7 @@ export function LaunchPage() {
     [timeSignatureDenominator],
   )
   const hasProjectTitle = normalizedTitle.length > 0
+  const hasStudioPassword = studioPassword.trim().length > 0
   const hasValidBlankSetup =
     parsedBpm !== null &&
     parsedBpm >= 40 &&
@@ -123,8 +130,9 @@ export function LaunchPage() {
     parsedNumerator <= 32 &&
     parsedDenominator !== null &&
     VALID_DENOMINATORS.has(parsedDenominator)
-  const canStartBlank = sourceFile === null && hasProjectTitle && hasValidBlankSetup
-  const canUploadStart = sourceFile !== null && hasProjectTitle
+  const canStartBlank = sourceFile === null && hasProjectTitle && hasStudioPassword && hasValidBlankSetup
+  const canUploadStart = sourceFile !== null && hasProjectTitle && hasStudioPassword
+  const selectedStudio = recentStudios.find((studio) => studio.studio_id === selectedStudioId) ?? null
 
   function clearSourceFile() {
     setSourceFile(null)
@@ -145,6 +153,10 @@ export function LaunchPage() {
       setSubmitState({ phase: 'error', message: '프로젝트명을 먼저 입력하세요.' })
       return
     }
+    if (!hasStudioPassword) {
+      setSubmitState({ phase: 'error', message: '스튜디오 비밀번호를 입력하세요.' })
+      return
+    }
     if (!hasValidBlankSetup || parsedBpm === null || parsedNumerator === null || parsedDenominator === null) {
       setSubmitState({
         phase: 'error',
@@ -155,6 +167,7 @@ export function LaunchPage() {
 
     setSubmitState({ phase: 'submitting', label: '새 스튜디오 생성 중' })
     try {
+      await setOwnerTokenFromStudioPassword(studioPassword)
       const studio = await createStudio({
         title: normalizedTitle,
         bpm: parsedBpm,
@@ -183,10 +196,15 @@ export function LaunchPage() {
       setSubmitState({ phase: 'error', message: '프로젝트명을 먼저 입력하세요.' })
       return
     }
+    if (!hasStudioPassword) {
+      setSubmitState({ phase: 'error', message: '스튜디오 비밀번호를 입력하세요.' })
+      return
+    }
 
     const sourceKind = sourceKindOverride === 'auto' ? detectSourceKind(sourceFile) : sourceKindOverride
     setSubmitState({ phase: 'submitting', label: '파일 업로드와 분석 대기열 준비 중' })
     try {
+      await setOwnerTokenFromStudioPassword(studioPassword)
       const preparedSource: PreparedLaunchSource =
         sourceKind === 'music' && isAudioUploadFile(sourceFile)
           ? await prepareAudioFileForUpload(sourceFile)
@@ -235,6 +253,48 @@ export function LaunchPage() {
         phase: 'error',
         message: error instanceof Error ? error.message : '업로드로 시작하지 못했습니다.',
       })
+    }
+  }
+
+  function selectStudioFromList(studio: StudioListItem) {
+    setSelectedStudioId(studio.studio_id)
+    setSelectedStudioPassword('')
+    setSelectedStudioMessage(null)
+  }
+
+  async function enterSelectedStudio() {
+    if (!selectedStudio) {
+      return
+    }
+    if (!selectedStudioPassword.trim()) {
+      setSelectedStudioMessage('비밀번호를 입력하세요.')
+      return
+    }
+    await setOwnerTokenFromStudioPassword(selectedStudioPassword)
+    navigate(`/studios/${selectedStudio.studio_id}`)
+  }
+
+  async function deactivateSelectedStudio() {
+    if (!selectedStudio) {
+      return
+    }
+    if (!selectedStudioPassword.trim()) {
+      setSelectedStudioMessage('비밀번호를 입력하세요.')
+      return
+    }
+    if (!window.confirm(`${selectedStudio.title} 스튜디오를 목록에서 삭제할까요?`)) {
+      return
+    }
+    try {
+      setSelectedStudioMessage('삭제 중입니다...')
+      await setOwnerTokenFromStudioPassword(selectedStudioPassword)
+      await deactivateStudio(selectedStudio.studio_id)
+      setRecentStudios((items) => items.filter((studio) => studio.studio_id !== selectedStudio.studio_id))
+      setSelectedStudioId(null)
+      setSelectedStudioPassword('')
+      setSelectedStudioMessage('목록에서 삭제했습니다.')
+    } catch (error) {
+      setSelectedStudioMessage(error instanceof Error ? error.message : '스튜디오를 삭제하지 못했습니다.')
     }
   }
 
@@ -323,6 +383,22 @@ export function LaunchPage() {
                     }
                   }}
                   placeholder="봄 공연 SATB 연습"
+                />
+              </label>
+
+              <label className="launch-field">
+                <span>비밀번호</span>
+                <input
+                  data-testid="studio-password-input"
+                  type="password"
+                  value={studioPassword}
+                  onChange={(event) => {
+                    setStudioPassword(event.target.value)
+                    if (submitState.phase === 'error') {
+                      setSubmitState({ phase: 'idle' })
+                    }
+                  }}
+                  placeholder="스튜디오 입장과 삭제에 사용"
                 />
               </label>
 
@@ -469,17 +545,17 @@ export function LaunchPage() {
       </section>
 
       {recentStudios.length > 0 || recentMessage ? (
-        <section className="launch-recent" aria-label="최근 스튜디오">
+        <section className="launch-recent" aria-label="스튜디오 목록">
           <div>
-            <p className="eyebrow">최근 스튜디오</p>
+            <p className="eyebrow">스튜디오 목록</p>
             {recentMessage ? <p>{recentMessage}</p> : null}
           </div>
           {recentStudios.map((studio) => (
             <button
               key={studio.studio_id}
-              className="launch-recent__item"
+              className={`launch-recent__item${selectedStudioId === studio.studio_id ? ' is-selected' : ''}`}
               type="button"
-              onClick={() => navigate(`/studios/${studio.studio_id}`)}
+              onClick={() => selectStudioFromList(studio)}
             >
               <strong>{studio.title}</strong>
               <span>
@@ -488,6 +564,36 @@ export function LaunchPage() {
               </span>
             </button>
           ))}
+          {selectedStudio ? (
+            <div className="launch-studio-gate" role="group" aria-label={`${selectedStudio.title} 입장 또는 삭제`}>
+              <strong>{selectedStudio.title}</strong>
+              <label>
+                <span>비밀번호</span>
+                <input
+                  type="password"
+                  value={selectedStudioPassword}
+                  onChange={(event) => {
+                    setSelectedStudioPassword(event.target.value)
+                    setSelectedStudioMessage(null)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      void enterSelectedStudio()
+                    }
+                  }}
+                />
+              </label>
+              <div className="launch-studio-gate__actions">
+                <button className="app-button" type="button" onClick={() => void enterSelectedStudio()}>
+                  진입
+                </button>
+                <button type="button" onClick={() => void deactivateSelectedStudio()}>
+                  삭제
+                </button>
+              </div>
+              {selectedStudioMessage ? <p>{selectedStudioMessage}</p> : null}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </main>

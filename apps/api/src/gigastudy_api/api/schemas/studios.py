@@ -370,6 +370,8 @@ class ScoringReport(BaseModel):
 class Studio(BaseModel):
     studio_id: str
     owner_token_hash: str | None = Field(default=None, exclude=True)
+    is_active: bool = True
+    deactivated_at: str | None = None
     title: str
     bpm: int
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
@@ -422,6 +424,8 @@ class ExtractionCandidateResponse(SourceKindModel):
 
 class StudioResponse(BaseModel):
     studio_id: str
+    is_active: bool = True
+    deactivated_at: str | None = None
     title: str
     bpm: int
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
@@ -486,6 +490,8 @@ def sync_studio_candidate_regions(studio: Studio) -> list[CandidateRegion]:
 def build_studio_response(studio: Studio) -> StudioResponse:
     return StudioResponse(
         studio_id=studio.studio_id,
+        is_active=studio.is_active,
+        deactivated_at=studio.deactivated_at,
         title=studio.title,
         bpm=studio.bpm,
         time_signature_numerator=studio.time_signature_numerator,

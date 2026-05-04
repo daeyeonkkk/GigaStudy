@@ -24,6 +24,7 @@ from gigastudy_api.api.schemas.studios import (
     VolumeTrackRequest,
     build_studio_response,
 )
+from gigastudy_api.services.admin_auth import optional_admin_bypass
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
 
 router = APIRouter()
@@ -78,6 +79,7 @@ def get_studio(
     studio_id: str,
     background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
+    admin_bypass: bool = Depends(optional_admin_bypass),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> StudioResponse:
     return _studio_response(
@@ -86,8 +88,18 @@ def get_studio(
             background_tasks=background_tasks,
             owner_token=owner_token,
             enforce_owner=True,
+            admin_bypass=admin_bypass,
         )
     )
+
+
+@router.delete("/{studio_id}", response_model=StudioResponse)
+def deactivate_studio(
+    studio_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(repository.deactivate_studio(studio_id, owner_token=owner_token))
 
 
 @router.get("/{studio_id}/tracks/{slot_id}/audio")

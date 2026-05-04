@@ -16,7 +16,15 @@ export type SynthPlaybackInstrument = {
   voice: SynthVoiceId
 }
 
-export type PlaybackInstrument = SynthPlaybackInstrument
+export type SamplePlaybackInstrument = {
+  audioBuffer: AudioBuffer
+  id: string
+  kind: 'sample'
+  label: string
+  rootFrequency: number
+}
+
+export type PlaybackInstrument = SynthPlaybackInstrument | SamplePlaybackInstrument
 
 export type InstrumentPlaybackRequest = {
   destination?: AudioNode
@@ -56,7 +64,43 @@ export function createInstrumentPlayback(
   request: InstrumentPlaybackRequest,
 ): PlaybackNode {
   const instrument = request.instrument ?? GUIDE_SUSTAIN_INSTRUMENT
+  if (instrument.kind === 'sample') {
+    return createSampleInstrumentPlayback(context, request, instrument)
+  }
   return createSynthInstrumentPlayback(context, request, instrument)
+}
+
+function createSampleInstrumentPlayback(
+  context: AudioContext,
+  request: InstrumentPlaybackRequest,
+  instrument: SamplePlaybackInstrument,
+): PlaybackNode {
+  const destination = request.destination ?? context.destination
+  const source = context.createBufferSource()
+  const gain = context.createGain()
+  const duration = Math.max(0.04, request.duration)
+  const attackTime = Math.min(0.035, duration * 0.25)
+  const releaseTime = Math.max(0.08, Math.min(0.24, duration * 0.2))
+  const playbackRate = Math.max(0.25, Math.min(4, request.frequency / instrument.rootFrequency))
+
+  source.buffer = instrument.audioBuffer
+  source.playbackRate.setValueAtTime(playbackRate, request.startTime)
+  if (instrument.audioBuffer.duration > 0.18) {
+    source.loop = true
+    source.loopStart = Math.min(0.04, instrument.audioBuffer.duration * 0.2)
+    source.loopEnd = instrument.audioBuffer.duration
+  }
+
+  gain.gain.setValueAtTime(0.0001, request.startTime)
+  gain.gain.linearRampToValueAtTime(request.volume * 0.82, request.startTime + attackTime)
+  gain.gain.setValueAtTime(request.volume * 0.72, request.startTime + duration)
+  gain.gain.exponentialRampToValueAtTime(0.0001, request.startTime + duration + releaseTime)
+
+  source.connect(gain)
+  gain.connect(destination)
+  source.start(request.startTime)
+  source.stop(request.startTime + duration + releaseTime + 0.03)
+  return { gain, source }
 }
 
 function createSynthInstrumentPlayback(

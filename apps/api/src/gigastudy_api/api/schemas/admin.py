@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 AdminAssetKind = Literal["upload", "generated", "unknown"]
@@ -20,6 +20,8 @@ class AdminAssetSummary(BaseModel):
 class AdminStudioSummary(BaseModel):
     studio_id: str
     title: str
+    is_active: bool = True
+    deactivated_at: str | None = None
     bpm: int
     registered_track_count: int
     report_count: int
@@ -49,6 +51,9 @@ class AdminLimitSummary(BaseModel):
 class AdminStorageSummary(BaseModel):
     storage_root: str
     studio_count: int
+    active_studio_count: int = 0
+    inactive_studio_count: int = 0
+    studio_status: Literal["active", "inactive", "all"] = "active"
     listed_studio_count: int = 0
     studio_limit: int = 50
     studio_offset: int = 0
@@ -79,3 +84,17 @@ class AdminEngineDrainResult(BaseModel):
     remaining_runnable: bool
     max_jobs: int
     messages: list[str]
+
+
+class PlaybackInstrumentConfig(BaseModel):
+    has_custom_file: bool = False
+    filename: str | None = None
+    root_midi: int = 69
+    audio_url: str | None = None
+    updated_at: str | None = None
+
+
+class UpdatePlaybackInstrumentRequest(BaseModel):
+    filename: str
+    content_base64: str
+    root_midi: int = Field(default=69, ge=21, le=108)

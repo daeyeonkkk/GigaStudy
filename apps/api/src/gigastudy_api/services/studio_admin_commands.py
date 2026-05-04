@@ -17,7 +17,7 @@ from gigastudy_api.services.studio_admin import (
 )
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_documents import encode_studio_payload
-from gigastudy_api.services.studio_store import StudioStore
+from gigastudy_api.services.studio_store import ActiveStatus, StudioStore
 
 
 class StudioAdminCommands:
@@ -44,10 +44,19 @@ class StudioAdminCommands:
         asset_limit: int = 25,
         asset_offset: int = 0,
         sync_missing_assets: bool = False,
+        studio_status: str = "active",
     ) -> AdminStorageSummary:
+        active_status = _normalize_active_status(studio_status)
         with self._lock:
-            studio_count = self._store.count()
-            studios = self._list_studios(limit=studio_limit, offset=studio_offset)
+            studio_count = self._store.count(active_status=active_status)
+            active_studio_count = self._store.count(active_status="active")
+            inactive_studio_count = self._store.count(active_status="inactive")
+            total_studio_count = self._store.count(active_status="all")
+            studios = self._list_studios(
+                limit=studio_limit,
+                offset=studio_offset,
+                active_status=active_status,
+            )
 
         studio_summaries = [
             self._build_studio_summary(
@@ -64,6 +73,9 @@ class StudioAdminCommands:
         return AdminStorageSummary(
             storage_root=self._assets.storage_label,
             studio_count=studio_count,
+            active_studio_count=active_studio_count,
+            inactive_studio_count=inactive_studio_count,
+            studio_status=active_status,
             listed_studio_count=len(studio_summaries),
             studio_limit=studio_limit,
             studio_offset=studio_offset,
@@ -76,10 +88,64 @@ class StudioAdminCommands:
             total_bytes=metadata_bytes + asset_bytes,
             metadata_bytes=metadata_bytes,
             limits=build_admin_limit_summary(
-                studio_count=studio_count,
+                studio_count=total_studio_count,
                 asset_bytes=asset_bytes,
             ),
             studios=studio_summaries,
+        )
+
+    def deactivate_studio(self, studio_id: str) -> AdminDeleteResult:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            timestamp = self._now()
+            studio.is_active = False
+            studio.deactivated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+        return AdminDeleteResult(
+            deleted=True,
+            message="Studio deactivated and hidden from the public list.",
+            studio_id=studio_id,
+        )
+
+    def delete_inactive_studios(
+        self,
+        *,
+        background_tasks: Any | None = None,
+    ) -> AdminDeleteResult:
+        with self._lock:
+            inactive_studios = self._list_studios(limit=10_000, offset=0, active_status="inactive")
+            studio_ids = [studio.studio_id for studio in inactive_studios]
+            for studio_id in studio_ids:
+                self._store.delete_one_raw(studio_id)
+
+        for studio_id in studio_ids:
+            self._engine_queue.delete_studio_jobs(studio_id)
+
+        if background_tasks is not None:
+            for studio_id in studio_ids:
+                background_tasks.add_task(self._delete_studio_asset_prefixes, studio_id)
+            return AdminDeleteResult(
+                deleted=True,
+                message=f"{len(studio_ids)} inactive studios removed. Stored asset cleanup is running in the background.",
+                deleted_files=0,
+                deleted_bytes=0,
+                cleanup_queued=bool(studio_ids),
+            )
+
+        deleted_files = 0
+        deleted_bytes = 0
+        for studio_id in studio_ids:
+            files, bytes_deleted = self._delete_studio_asset_prefixes(studio_id)
+            deleted_files += files
+            deleted_bytes += bytes_deleted
+        return AdminDeleteResult(
+            deleted=True,
+            message=f"{len(studio_ids)} inactive studios permanently deleted.",
+            deleted_files=deleted_files,
+            deleted_bytes=deleted_bytes,
         )
 
     def delete_studio(
@@ -217,8 +283,14 @@ class StudioAdminCommands:
             assets=assets,
         )
 
-    def _list_studios(self, *, limit: int, offset: int) -> list[Studio]:
-        raw_rows = self._store.list_raw(limit=limit, offset=offset)
+    def _list_studios(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        active_status: ActiveStatus = "all",
+    ) -> list[Studio]:
+        raw_rows = self._store.list_raw(limit=limit, offset=offset, active_status=active_status)
         return [Studio.model_validate(studio_payload) for _studio_id, studio_payload in raw_rows]
 
     def _load_studio(self, studio_id: str) -> Studio | None:
@@ -234,3 +306,10 @@ class StudioAdminCommands:
         upload_files, upload_bytes = self._assets.delete_asset_prefix(f"uploads/{studio_id}/")
         job_files, job_bytes = self._assets.delete_asset_prefix(f"jobs/{studio_id}/")
         return upload_files + job_files, upload_bytes + job_bytes
+
+
+def _normalize_active_status(value: str) -> ActiveStatus:
+    normalized = value.strip().lower()
+    if normalized in {"active", "inactive", "all"}:
+        return normalized  # type: ignore[return-value]
+    raise HTTPException(status_code=422, detail="studio_status must be active, inactive, or all.")

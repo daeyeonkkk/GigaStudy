@@ -370,6 +370,38 @@ def test_owner_policy_scopes_studio_list_and_detail_access(tmp_path: Path, monke
     assert client.get(f"/api/studios/{studio_id}").status_code == 401
 
 
+def test_public_studio_password_protects_detail_and_soft_delete(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    owner_headers = {"X-GigaStudy-Owner-Token": OWNER_TOKEN_A}
+    other_headers = {"X-GigaStudy-Owner-Token": OWNER_TOKEN_B}
+
+    create_response = client.post(
+        "/api/studios",
+        headers=owner_headers,
+        json={
+            "title": "Password studio",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+
+    assert create_response.status_code == 200
+    studio_id = create_response.json()["studio_id"]
+    listed = client.get("/api/studios").json()
+    assert [studio["studio_id"] for studio in listed] == [studio_id]
+    assert client.get(f"/api/studios/{studio_id}").status_code == 404
+    assert client.get(f"/api/studios/{studio_id}", headers=other_headers).status_code == 404
+    assert client.get(f"/api/studios/{studio_id}", headers=owner_headers).status_code == 200
+    assert client.delete(f"/api/studios/{studio_id}", headers=other_headers).status_code == 404
+
+    delete_response = client.delete(f"/api/studios/{studio_id}", headers=owner_headers)
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["is_active"] is False
+    assert client.get("/api/studios").json() == []
+    assert client.get(f"/api/studios/{studio_id}", headers=owner_headers).status_code == 404
+
+
 def test_blank_studio_can_start_with_custom_time_signature(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
 

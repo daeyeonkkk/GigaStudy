@@ -224,6 +224,8 @@ export type ScoringReport = {
 
 export type Studio = {
   studio_id: string
+  is_active: boolean
+  deactivated_at: string | null
   title: string
   bpm: number
   time_signature_numerator: number
@@ -260,6 +262,14 @@ export type CreateStudioRequest = {
   source_asset_path?: string
 }
 
+export type PlaybackInstrumentConfig = {
+  has_custom_file: boolean
+  filename: string | null
+  root_midi: number
+  audio_url: string | null
+  updated_at: string | null
+}
+
 export type DirectUploadTarget = {
   asset_id: string
   asset_path: string
@@ -284,6 +294,8 @@ export type AdminAssetSummary = {
 export type AdminStudioSummary = {
   studio_id: string
   title: string
+  is_active: boolean
+  deactivated_at: string | null
   bpm: number
   registered_track_count: number
   report_count: number
@@ -313,6 +325,9 @@ type AdminLimitSummary = {
 export type AdminStorageSummary = {
   storage_root: string
   studio_count: number
+  active_studio_count: number
+  inactive_studio_count: number
+  studio_status: 'active' | 'inactive' | 'all'
   listed_studio_count: number
   studio_limit: number
   studio_offset: number

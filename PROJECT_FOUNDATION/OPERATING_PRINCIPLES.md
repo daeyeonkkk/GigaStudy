@@ -174,14 +174,17 @@ the same change.
   audio.
 - AI, MIDI, MusicXML, document, and other non-audio tracks should remain
   playable through event synthesis.
+- Default event synthesis should use a voice-friendly warm guide tone: clear
+  pitch center, soft attack, restrained upper harmonics, and no vocal/organ
+  character that competes with the user's recorded or live voice.
 - Selected-track playback must prepare all required audio buffers, synthesized
   instruments, and metronome scheduling before starting together.
 - Single-track audio playback may be fast, but if it is part of a synchronized
   session it should wait for the rest of the session and start on the shared
   scheduled time.
 - Playback status messages should say what is happening: loading original
-  audio, loading instrument samples, aligning synchronized start, or waiting
-  for selected tracks.
+  audio, preparing guide tones, aligning synchronized start, or waiting for
+  selected tracks.
 - Playhead movement should be smooth and tied to the same scheduled timeline as
   audio.
 

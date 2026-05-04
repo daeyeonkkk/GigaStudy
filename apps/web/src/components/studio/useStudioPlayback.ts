@@ -13,11 +13,9 @@ import {
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
   getTrackVolumeScale,
-  loadPercussiveOrganInstrument,
   scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
   type MeterContext,
-  type PlaybackInstrument,
   type PlaybackNode,
   type PlaybackSession,
   type PlaybackSourceMode,
@@ -209,7 +207,6 @@ export function useStudioPlayback({
         Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length)))) * 0.4
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
-      let melodicPlaybackInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
 
       function getTrackOutput(track: TrackSlot): AudioNode | null {
         if (!activeContext) {
@@ -262,19 +259,6 @@ export function useStudioPlayback({
             phase: 'busy',
             message: `${synchronizedParts.join(', ')}를 같은 박자 그리드에 정렬하는 중입니다.`,
           })
-        }
-      }
-
-      if (activeContext && eventTracks.some((track) => track.slot_id !== 6)) {
-        setActionState({
-          phase: 'busy',
-          message: '연습용 연주음 샘플을 불러오는 중입니다.',
-        })
-        try {
-          melodicPlaybackInstrument = await loadPercussiveOrganInstrument(activeContext)
-        } catch (error) {
-          console.warn('Failed to load sampled playback instrument.', error)
-          melodicPlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
         }
       }
 
@@ -361,7 +345,7 @@ export function useStudioPlayback({
                   destination: getTrackOutput(track) ?? activeContext.destination,
                   duration: remainingDuration,
                   frequency,
-                  instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : melodicPlaybackInstrument,
+                  instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : DEFAULT_MELODIC_INSTRUMENT,
                   startTime: scheduledStart + relativeStartSeconds,
                   volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
                 },

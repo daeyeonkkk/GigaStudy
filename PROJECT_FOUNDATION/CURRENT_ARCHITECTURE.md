@@ -41,6 +41,10 @@ is excluded from persistence and remains an adapter detail.
   Browser playback orchestration plus pure playback-planning helpers for
   region grouping, playable track selection, sustained event merging, and
   metronome beat coverage.
+- `apps/web/src/lib/studio/instruments.ts`
+  Browser event synthesis. The default melodic event voice is a warm guide
+  synth tuned to sit beside human singing instead of a sampled organ or choir
+  soundfont.
 - `apps/web/src/components/studio/TrackBoard.tsx`
   Main arrangement surface and track command composer. It renders:
   - macro region lanes for all six tracks,
@@ -208,7 +212,9 @@ flowchart TD
 
 1. Toolbar or track controls choose source mode.
 2. Audio mode prefers retained audio clips when present.
-3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`.
+3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`
+   with the warm guide tone by default; sampled organ assets are not part of
+   the default playback path.
 4. Sync offset and volume are applied per track. Negative sync is preserved as
    a user-visible timeline translation; barlines stay on the shared grid.
 5. Playhead state drives region lane and waterfall visual timing.

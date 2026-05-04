@@ -1,5 +1,4 @@
 export * from './instruments'
-export * from './sampleInstruments'
 export * from './playback'
 export * from './timing'
 export * from './uploadRouting'

@@ -249,7 +249,7 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ filters, oscillator, oscillators, panners, source, sources, gain, gains }) => {
+  session.nodes.forEach(({ filters, oscillator, oscillators, source, gain, gains }) => {
     try {
       new Set([gain, ...(gains ?? [])]).forEach((currentGain) => {
         currentGain?.gain.cancelScheduledValues(0)
@@ -263,13 +263,8 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
       })
       source?.stop()
       source?.disconnect()
-      sources?.forEach((currentSource) => {
-        currentSource.stop()
-        currentSource.disconnect()
-      })
       gain?.disconnect()
       gains?.forEach((currentGain) => currentGain.disconnect())
-      panners?.forEach((panner) => panner.disconnect())
       filters?.forEach((filter) => filter.disconnect())
     } catch {
       return

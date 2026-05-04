@@ -37,10 +37,19 @@ is excluded from persistence and remains an adapter detail.
   playback controls. Playback source is now audio clips or region events, not
   notation rendering.
 - `apps/web/src/components/studio/TrackBoard.tsx`
-  Main arrangement surface. It renders:
+  Main arrangement surface and track command composer. It renders:
   - macro region lanes for all six tracks,
   - a selected-region piano roll,
   - a waterfall practice preview.
+- `apps/web/src/components/studio/TrackBoardTimeline.tsx` and
+  `apps/web/src/components/studio/TrackBoardTimelineLayout.ts`
+  Waterfall practice preview rendering plus shared track-board timeline math
+  and region lane positioning. TrackBoard uses these instead of owning timeline
+  layout details inline.
+- `apps/web/src/components/studio/TrackBoardEditor.tsx` and
+  `apps/web/src/components/studio/TrackBoardEditorGrid.ts`
+  Region and pitch-event editing controls for the selected arrangement region,
+  including piano-roll event positioning and beat-grid snap helpers.
 - `apps/web/src/lib/studio/regions.ts`
   Region utility helpers only. The web client consumes region payloads and must
   not rebuild product regions from internal storage event arrays. Timeline

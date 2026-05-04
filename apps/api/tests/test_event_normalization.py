@@ -9,6 +9,23 @@ from gigastudy_api.services.engine.event_normalization import (
 from gigastudy_api.services.engine.event_quality import prepare_events_for_track_registration
 
 
+def _is_on_grid(value: float, grid: float) -> bool:
+    return abs(value - round(value / grid) * grid) <= 0.001
+
+
+def _assert_registration_rhythm_contract(events, grid: float) -> None:
+    assert events
+    assert all(_is_on_grid(event.beat, grid) for event in events)
+    assert all(_is_on_grid(event.duration_beats, grid) for event in events)
+    assert all(event.duration_beats >= grid for event in events)
+    ordered_events = sorted(events, key=lambda event: event.beat)
+    for left, right in zip(ordered_events, ordered_events[1:], strict=False):
+        gap = round(right.beat - (left.beat + left.duration_beats), 4)
+        assert gap >= -0.001
+        if gap > 0:
+            assert _is_on_grid(gap, grid)
+
+
 def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:
     note = event_from_pitch(
         beat=2.24,
@@ -178,6 +195,50 @@ def test_registration_quality_merges_symbolic_same_pitch_without_filling_gaps() 
     assert "symbolic_same_pitch_contiguous_merge" in result.diagnostics["actions"]
 
 
+def test_registration_quality_quantizes_all_automatic_sources_to_rhythm_grid() -> None:
+    for source_kind, event_source in [
+        ("recording", "voice"),
+        ("audio", "audio"),
+        ("midi", "midi"),
+        ("ai", "ai"),
+    ]:
+        notes = [
+            event_from_pitch(
+                beat=1.13,
+                duration_beats=0.38,
+                bpm=113,
+                source=event_source,
+                extraction_method=f"{source_kind}_off_grid",
+                pitch_midi=60,
+            ),
+            event_from_pitch(
+                beat=2.11,
+                duration_beats=0.62,
+                bpm=113,
+                source=event_source,
+                extraction_method=f"{source_kind}_off_grid",
+                pitch_midi=62,
+            ),
+        ]
+
+        result = prepare_events_for_track_registration(
+            notes,
+            bpm=113,
+            slot_id=2,
+            source_kind=source_kind,
+            time_signature_numerator=4,
+            time_signature_denominator=4,
+        )
+
+        grid = result.diagnostics["event_contract"]["rhythm_grid_beats"]
+        assert grid == 0.25
+        assert result.diagnostics["event_contract"]["rhythm_grid_aligned"] is True
+        assert result.diagnostics["event_contract"]["rhythm_gaps_aligned"] is True
+        assert result.diagnostics["event_contract"]["non_overlapping"] is True
+        assert result.diagnostics["rhythmic_grid_ratio"] == 1
+        _assert_registration_rhythm_contract(result.events, grid)
+
+
 def test_registration_quality_absorbs_symbolic_micro_gaps_on_sixteenth_grid() -> None:
     notes = [
         event_from_pitch(beat=1, duration_beats=0.4896, bpm=113, source="midi", extraction_method="test", pitch_midi=60),
@@ -221,7 +282,8 @@ def test_registration_quality_fills_symbolic_rests_shorter_than_sixteenth_note()
         (60, 1.0, 0.5),
         (62, 1.5, 0.5),
     ]
-    assert "event_contract_subdivision_gap_absorbed_1" in result.diagnostics["actions"]
+    assert result.diagnostics["event_contract"]["rhythm_grid_aligned"] is True
+    assert result.diagnostics["event_contract"]["rhythm_gaps_aligned"] is True
 
 
 def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() -> None:

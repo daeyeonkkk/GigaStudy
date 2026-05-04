@@ -139,9 +139,11 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/services/engine/event_quality.py`
   The registration quality gate before extracted material becomes product
   regions. It replaces the old notation quality layer. The final registration
-  contract snaps near-grid symbolic import timing to the current sixteenth-note
-  unit, merges same-pitch fragments, and absorbs import/export micro-gaps below
-  that unit while preserving real gaps and exempting manual region editing.
+  contract forces recording, audio upload, MIDI/MusicXML/document import, and
+  AI-generated material onto the current BPM/meter-derived sixteenth-note unit,
+  merges same-pitch fragments, and absorbs import/export micro-gaps below that
+  unit while preserving real gaps and exempting sync, scoring, and manual region
+  editing.
   Studio storage/edit precision remains 0.001 seconds; registration rhythm
   normalization and storage precision are separate contracts.
 - `apps/api/src/gigastudy_api/services/engine/voice.py`
@@ -321,8 +323,11 @@ flowchart TD
 3. The generator searches a slightly larger candidate pool, normalizes the
    results, selects the most distinct candidates for review, and records context
    and diversity diagnostics.
-4. Generated candidates remain reviewable until approved.
-5. Approved material becomes a region in the target track.
+4. Generated candidates pass the shared registration rhythm contract before
+   review, so candidate and approved events use the same BPM/meter-derived
+   readable grid as imported material.
+5. Generated candidates remain reviewable until approved.
+6. Approved material becomes a region in the target track.
 
 ### Playback
 

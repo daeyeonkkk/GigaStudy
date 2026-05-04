@@ -82,6 +82,10 @@ the same change.
   rests. The shortest readable registration unit is the current meter's
   sixteenth-note subdivision. Timing cleanup must use beat-derived units, never
   arbitrary fixed seconds thresholds.
+- This rhythm grid is a registration/generation contract only. User sync
+  editing, manual region/event editing, playback scheduling, and scoring read
+  the already registered material and must preserve user-visible timing at
+  studio precision unless the user explicitly asks to snap or overwrite it.
 - Same-pitch event fragments that touch or overlap should be merged into one
   continuous event. Import/export articulation gaps shorter than the dynamic
   sixteenth-note unit may be absorbed during automatic registration; gaps at or

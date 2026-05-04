@@ -148,6 +148,8 @@ constraint/search engine realize that plan.
 5. Normalize generated events.
 
    - Reuse the shared pitch-event normalization contract.
+   - Generated events must land on the same BPM/meter-derived rhythm grid used
+     for recording, audio upload, MIDI, and document registration.
    - Split long events only where the region grid needs editable boundaries.
    - Preserve fixed BPM/meter.
    - Apply track range, timing grid, density, and diagnostics policy.

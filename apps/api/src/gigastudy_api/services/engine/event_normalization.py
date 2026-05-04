@@ -97,6 +97,21 @@ def measure_sixteenth_note_beats(
     return round(max(TECHNICAL_MIN_DURATION_BEATS, beats_per_measure / sixteenth_notes_per_measure), 6)
 
 
+def quantize_beat_to_rhythm_grid(beat: float, rhythm_grid_beats: float) -> float:
+    safe_grid = max(TECHNICAL_MIN_DURATION_BEATS, rhythm_grid_beats)
+    return round(max(1.0, quantize(beat, safe_grid)), 4)
+
+
+def quantize_duration_to_rhythm_grid(duration_beats: float, rhythm_grid_beats: float) -> float:
+    safe_grid = max(TECHNICAL_MIN_DURATION_BEATS, rhythm_grid_beats)
+    return round(max(safe_grid, quantize(duration_beats, safe_grid)), 4)
+
+
+def is_on_rhythm_grid(value: float, rhythm_grid_beats: float, *, tolerance: float = 0.001) -> bool:
+    safe_grid = max(TECHNICAL_MIN_DURATION_BEATS, rhythm_grid_beats)
+    return abs(value - quantize(value, safe_grid)) <= tolerance
+
+
 def pitch_register_for_slot(slot_id: int) -> TrackPitchRegister:
     if slot_id == 3:
         return "tenor_voice"

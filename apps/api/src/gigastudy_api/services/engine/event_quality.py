@@ -15,7 +15,6 @@ from gigastudy_api.services.engine.music_theory import (
     midi_to_frequency,
     midi_to_label,
     quarter_beats_per_measure,
-    quantize,
     seconds_per_beat,
 )
 from gigastudy_api.services.engine.event_normalization import (
@@ -25,11 +24,14 @@ from gigastudy_api.services.engine.event_normalization import (
     annotate_track_events_for_slot,
     accidental_for_key,
     enforce_monophonic_vocal_events,
+    is_on_rhythm_grid,
     measure_sixteenth_note_beats,
     merge_contiguous_same_pitch_events,
     normalize_track_events,
     pitch_label_octave_shift_for_slot,
     pitch_register_for_slot,
+    quantize_beat_to_rhythm_grid,
+    quantize_duration_to_rhythm_grid,
     spell_midi_label,
 )
 
@@ -122,10 +124,9 @@ def prepare_events_for_track_registration(
 ) -> RegistrationQualityResult:
     """Prepare pitch-event material for final region-event registration.
 
-    This is the single cleanup gate for user-visible track registration. Audio
-    and generated material is rewritten onto the studio's fixed BPM grid;
-    symbolic document imports keep their timing unless extraction noise needs
-    deterministic cleanup.
+    This is the single cleanup gate for user-visible track registration. Audio,
+    generated, MIDI, and document material is rewritten onto the studio's fixed
+    BPM/meter rhythm grid before it can become registered track data.
     """
 
     original_count = len(events)
@@ -226,7 +227,7 @@ def prepare_events_for_track_registration(
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
-                quantization_grid=0.125,
+                quantization_grid=minimum_note_beats,
                 merge_adjacent_same_pitch=False,
             )
             actions.append("symbolic_measure_boundary_split")
@@ -336,7 +337,14 @@ def apply_registration_review_instruction(
         )
 
     actions = ["llm_registration_review_applied"]
-    quantization_grid = _instruction_grid(instruction_data) or VOICE_QUANTIZATION_GRID_BEATS
+    minimum_note_beats = measure_sixteenth_note_beats(
+        time_signature_numerator,
+        time_signature_denominator,
+    )
+    quantization_grid = max(
+        _instruction_grid(instruction_data) or VOICE_QUANTIZATION_GRID_BEATS,
+        minimum_note_beats,
+    )
     if _instruction_bool(instruction_data, "simplify_dense_measures"):
         quantization_grid = max(quantization_grid, VOICE_DENSITY_SIMPLIFICATION_GRID)
     merge_adjacent_same_pitch = _instruction_bool(
@@ -431,10 +439,7 @@ def apply_registration_review_instruction(
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            minimum_duration_beats=measure_sixteenth_note_beats(
-                time_signature_numerator,
-                time_signature_denominator,
-            ),
+            minimum_duration_beats=minimum_note_beats,
         )
         prepared_events = annotate_track_events_for_slot(repaired_events, slot_id=slot_id)
         actions.append("llm_symbolic_event_review_annotation")
@@ -464,7 +469,7 @@ def apply_registration_review_instruction(
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
-                quantization_grid=0.125,
+                quantization_grid=minimum_note_beats,
                 merge_adjacent_same_pitch=False,
             )
             actions.append("llm_symbolic_measure_boundary_split")
@@ -1285,11 +1290,8 @@ def _repair_symbolic_timing_metadata(
     minimum_note_beats = max(0.0001, minimum_duration_beats)
     repaired: list[TrackPitchEvent] = []
     for event in events:
-        beat = max(1.0, round(_snap_to_readable_subdivision(event.beat, minimum_note_beats), 4))
-        duration_beats = max(
-            minimum_note_beats,
-            round(_snap_to_readable_subdivision(event.duration_beats, minimum_note_beats), 4),
-        )
+        beat = quantize_beat_to_rhythm_grid(event.beat, minimum_note_beats)
+        duration_beats = quantize_duration_to_rhythm_grid(event.duration_beats, minimum_note_beats)
         pitch_midi = event.pitch_midi
         if pitch_midi is None and not event.is_rest:
             pitch_midi = label_to_midi(event.label)
@@ -1318,17 +1320,6 @@ def _repair_symbolic_timing_metadata(
             )
         )
     return repaired
-
-
-def _snap_to_readable_subdivision(value: float, subdivision_beats: float) -> float:
-    if not isinstance(value, (int, float)) or subdivision_beats <= 0:
-        return value
-    quotient = value / subdivision_beats
-    snapped = round(quotient) * subdivision_beats
-    tolerance = subdivision_beats * 0.2
-    if abs(snapped - value) <= tolerance:
-        return snapped
-    return value
 
 
 def _fill_subdivision_gaps(
@@ -1362,6 +1353,61 @@ def _fill_subdivision_gaps(
     return filled, fill_count
 
 
+def _retime_events_to_registration_grid(
+    events: list[TrackPitchEvent],
+    *,
+    bpm: int,
+    rhythm_grid_beats: float,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> tuple[list[TrackPitchEvent], int]:
+    beat_seconds = seconds_per_beat(max(1, bpm))
+    retimed: list[TrackPitchEvent] = []
+    changed_count = 0
+    for event in events:
+        beat = quantize_beat_to_rhythm_grid(event.beat, rhythm_grid_beats)
+        duration_beats = quantize_duration_to_rhythm_grid(event.duration_beats, rhythm_grid_beats)
+        quantization_grid = max(event.quantization_grid or rhythm_grid_beats, rhythm_grid_beats)
+        changed = (
+            round(event.beat, 4) != beat
+            or round(event.duration_beats, 4) != duration_beats
+            or event.quantization_grid != quantization_grid
+        )
+        warnings = (
+            _append_warning(event.quality_warnings, "registration_rhythm_grid_quantized")
+            if changed
+            else event.quality_warnings
+        )
+        if changed:
+            changed_count += 1
+        retimed.append(
+            event.model_copy(
+                update={
+                    "beat": beat,
+                    "duration_beats": duration_beats,
+                    "onset_seconds": round(max(0, (beat - 1) * beat_seconds), 4),
+                    "duration_seconds": round(duration_beats * beat_seconds, 4),
+                    "measure_index": measure_index_from_beat(
+                        beat,
+                        time_signature_numerator,
+                        time_signature_denominator,
+                    ),
+                    "beat_in_measure": round(
+                        beat_in_measure_from_beat(
+                            beat,
+                            time_signature_numerator,
+                            time_signature_denominator,
+                        ),
+                        4,
+                    ),
+                    "quantization_grid": quantization_grid,
+                    "quality_warnings": warnings,
+                }
+            )
+        )
+    return _deduplicate_and_sort(retimed), changed_count
+
+
 def _enforce_registration_event_contract(
     events: list[TrackPitchEvent],
     *,
@@ -1392,6 +1438,15 @@ def _enforce_registration_event_contract(
     )
     contract_events = events
     actions: list[str] = []
+    contract_events, rhythm_quantized_count = _retime_events_to_registration_grid(
+        contract_events,
+        bpm=bpm,
+        rhythm_grid_beats=minimum_note_beats,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+    if rhythm_quantized_count:
+        actions.append(f"event_contract_rhythm_grid_quantized_{rhythm_quantized_count}")
     monophonic_events = enforce_monophonic_vocal_events(
         contract_events,
         bpm=bpm,
@@ -1416,24 +1471,25 @@ def _enforce_registration_event_contract(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     ):
-        quantization_grid = min(
-            (
-                event.quantization_grid
-                for event in contract_events
-                if event.quantization_grid is not None and event.quantization_grid > 0
-            ),
-            default=VOICE_QUANTIZATION_GRID_BEATS,
-        )
         contract_events = normalize_track_events(
             contract_events,
             bpm=bpm,
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            quantization_grid=quantization_grid,
+            quantization_grid=minimum_note_beats,
             merge_adjacent_same_pitch=False,
         )
         actions.append("event_contract_measure_split")
+        contract_events, rhythm_quantized_count = _retime_events_to_registration_grid(
+            contract_events,
+            bpm=bpm,
+            rhythm_grid_beats=minimum_note_beats,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+        )
+        if rhythm_quantized_count:
+            actions.append(f"event_contract_rhythm_grid_quantized_{rhythm_quantized_count}")
         merged_events = merge_contiguous_same_pitch_events(
             contract_events,
             bpm=bpm,
@@ -1450,6 +1506,15 @@ def _enforce_registration_event_contract(
     if gap_fill_count:
         actions.append(f"event_contract_subdivision_gap_absorbed_{gap_fill_count}")
     contract_events = gap_filled_events
+    contract_events, rhythm_quantized_count = _retime_events_to_registration_grid(
+        contract_events,
+        bpm=bpm,
+        rhythm_grid_beats=minimum_note_beats,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+    if rhythm_quantized_count:
+        actions.append(f"event_contract_rhythm_grid_quantized_{rhythm_quantized_count}")
 
     shared_key_signature = _shared_key_signature(contract_events)
     annotated_events = annotate_track_events_for_slot(
@@ -1466,11 +1531,8 @@ def _enforce_registration_event_contract(
     enforced: list[TrackPitchEvent] = []
     changed_count = 0
     for event in annotated_events:
-        beat = max(1.0, round(_snap_to_readable_subdivision(event.beat, minimum_note_beats), 4))
-        duration_beats = max(
-            minimum_note_beats,
-            round(_snap_to_readable_subdivision(event.duration_beats, minimum_note_beats), 4),
-        )
+        beat = quantize_beat_to_rhythm_grid(event.beat, minimum_note_beats)
+        duration_beats = quantize_duration_to_rhythm_grid(event.duration_beats, minimum_note_beats)
         pitch_midi = _resolve_pitch_midi(event)
         spelled_label = event.spelled_label
         accidental = event.accidental
@@ -1559,6 +1621,10 @@ def _event_contract_diagnostics(
             "version": "event_contract_v1",
             "event_count": 0,
             "minimum_note_beats": minimum_note_beats,
+            "rhythm_grid_beats": minimum_note_beats,
+            "rhythm_grid_aligned": True,
+            "rhythm_gaps_aligned": True,
+            "non_overlapping": True,
             "single_voice_index": True,
             "single_key_signature": True,
             "seconds_follow_beat_grid": True,
@@ -1571,6 +1637,22 @@ def _event_contract_diagnostics(
     pitch_registers = {event.pitch_register for event in events}
     beat_seconds = seconds_per_beat(max(1, bpm))
     expected_pitch_register = pitch_register_for_slot(slot_id)
+    ordered_events = sorted(events, key=lambda event: (event.beat, event.id))
+    gaps = [
+        round(right.beat - (left.beat + left.duration_beats), 4)
+        for left, right in zip(ordered_events, ordered_events[1:], strict=False)
+        if right.beat - (left.beat + left.duration_beats) > 0.0001
+    ]
+    rhythm_grid_aligned = all(
+        is_on_rhythm_grid(event.beat, minimum_note_beats)
+        and is_on_rhythm_grid(event.duration_beats, minimum_note_beats)
+        for event in events
+    )
+    rhythm_gaps_aligned = all(is_on_rhythm_grid(gap, minimum_note_beats) for gap in gaps)
+    non_overlapping = all(
+        right.beat >= left.beat + left.duration_beats - 0.0001
+        for left, right in zip(ordered_events, ordered_events[1:], strict=False)
+    )
     seconds_follow_beat_grid = all(
         abs(event.onset_seconds - round(max(0, (event.beat - 1) * beat_seconds), 4)) <= 0.0001
         and abs(event.duration_seconds - round(event.duration_beats * beat_seconds, 4)) <= 0.0001
@@ -1600,6 +1682,10 @@ def _event_contract_diagnostics(
         "version": "event_contract_v1",
         "event_count": len(events),
         "minimum_note_beats": minimum_note_beats,
+        "rhythm_grid_beats": minimum_note_beats,
+        "rhythm_grid_aligned": rhythm_grid_aligned,
+        "rhythm_gaps_aligned": rhythm_gaps_aligned,
+        "non_overlapping": non_overlapping,
         "single_voice_index": len(voice_indices) == 1 and slot_id in voice_indices,
         "single_key_signature": len(key_signatures) == 1 and None not in key_signatures,
         "seconds_follow_beat_grid": seconds_follow_beat_grid,
@@ -1869,11 +1955,15 @@ def _registration_diagnostics(
     pitched_events = [event for event in events if not event.is_rest and _resolve_pitch_midi(event) is not None]
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
     in_range_count = sum(1 for event in pitched_events if low <= (_resolve_pitch_midi(event) or 0) <= high)
+    rhythm_grid_beats = measure_sixteenth_note_beats(
+        time_signature_numerator,
+        time_signature_denominator,
+    )
     grid_events = [
         event
         for event in events
-        if _is_on_grid(event.beat, VOICE_QUANTIZATION_GRID_BEATS)
-        and _is_on_grid(event.duration_beats, VOICE_QUANTIZATION_GRID_BEATS)
+        if is_on_rhythm_grid(event.beat, rhythm_grid_beats)
+        and is_on_rhythm_grid(event.duration_beats, rhythm_grid_beats)
     ]
     measure_groups = _events_by_measure(events)
     max_events_per_measure = max((sum(1 for event in group if not event.is_rest) for group in measure_groups.values()), default=0)
@@ -1907,8 +1997,10 @@ def _registration_diagnostics(
         "pitched_event_count": len(pitched_events),
         "measure_count": len(measure_groups),
         "max_events_per_measure": max_events_per_measure,
+        "rhythm_grid_beats": rhythm_grid_beats,
         "range_fit_ratio": round(in_range_count / len(pitched_events), 4) if pitched_events else 1.0,
         "timing_grid_ratio": round(len(grid_events) / len(events), 4) if events else 1.0,
+        "rhythmic_grid_ratio": round(len(grid_events) / len(events), 4) if events else 1.0,
         "cross_measure_event_count": cross_measure_count,
         "isolated_short_event_count": isolated_short_event_count,
         "short_phrase_gap_count": short_phrase_gap_count,
@@ -1983,10 +2075,6 @@ def _resolve_pitch_midi(event: TrackPitchEvent) -> int | None:
     if event.is_rest:
         return None
     return label_to_midi(event.label)
-
-
-def _is_on_grid(value: float, grid: float) -> bool:
-    return abs(value - quantize(value, grid)) <= 0.001
 
 
 def _append_warning(existing: list[str], *warnings: str) -> list[str]:

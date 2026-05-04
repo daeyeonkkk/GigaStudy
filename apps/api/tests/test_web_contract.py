@@ -153,6 +153,8 @@ def test_studio_payload_persists_explicit_regions_from_internal_events() -> None
     assert payload["regions"][0]["region_id"] == "track-1-region-1"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "C4"
     assert studio.regions[0].pitch_events[0].label == "C4"
+    assert studio.tracks[0].events == []
+    assert payload["tracks"][0]["events"] == []
 
 
 def test_track_slot_rejects_unmodelled_payload_field() -> None:
@@ -312,6 +314,68 @@ def test_studio_payload_preserves_explicit_region_without_track_notes() -> None:
 
     assert payload["regions"][0]["region_id"] == "explicit-track-1-region"
     assert payload["regions"][0]["pitch_events"][0]["label"] == "D4"
+
+
+def test_explicit_region_is_authoritative_over_stale_track_shadow() -> None:
+    studio = Studio(
+        studio_id="studio-explicit-region-wins",
+        title="Explicit region wins",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="registered",
+                source_kind="midi",
+                source_label="stale.mid",
+                duration_seconds=1,
+                events=[
+                    TrackPitchEvent(
+                        label="C4",
+                        pitch_midi=60,
+                        beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+                updated_at="2026-01-01T00:00:00Z",
+            )
+        ],
+        regions=[
+            ArrangementRegion(
+                region_id="explicit-region-wins",
+                track_slot_id=1,
+                track_name="Soprano",
+                source_kind="midi",
+                source_label="edited.mid",
+                start_seconds=0,
+                duration_seconds=1,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="explicit-region-wins-event",
+                        track_slot_id=1,
+                        region_id="explicit-region-wins",
+                        label="D4",
+                        pitch_midi=62,
+                        start_seconds=0,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+            )
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = encode_studio_payload(studio)
+
+    assert payload["regions"][0]["region_id"] == "explicit-region-wins"
+    assert payload["regions"][0]["pitch_events"][0]["label"] == "D4"
+    assert payload["tracks"][0]["events"] == []
 
 
 def test_explicit_multi_regions_are_authoritative_after_track_shadow_is_cleared() -> None:

@@ -145,13 +145,22 @@ def build_arrangement_regions(tracks: list[TrackSlot], bpm: int) -> list[Arrange
 
 
 def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
-    if track.status != "registered" or (not track.events and not track.audio_source_path):
+    return build_arrangement_region_from_track_events(track, events=track.events, bpm=bpm)
+
+
+def build_arrangement_region_from_track_events(
+    track: TrackSlot,
+    *,
+    events: list[_TrackPitchEvent],
+    bpm: int,
+) -> ArrangementRegion | None:
+    if track.status != "registered" or (not events and not track.audio_source_path):
         return None
 
     region_id = f"track-{track.slot_id}-region-1"
     pitch_events = [
         _pitch_event_from_track_event(event, track=track, region_id=region_id, bpm=bpm)
-        for event in sorted(track.events, key=lambda item: (item.beat, item.id))
+        for event in sorted(events, key=lambda item: (item.beat, item.id))
     ]
     region_start = track.sync_offset_seconds
     event_end_seconds = max(
@@ -432,22 +441,17 @@ def studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
 
 def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     studio.regions = _merged_arrangement_regions(studio)
+    _clear_track_event_shadows_for_explicit_regions(studio)
     return studio.regions
 
 
 def _merged_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     tracks_by_slot = {track.slot_id: track for track in studio.tracks}
     derived_regions = build_arrangement_regions(studio.tracks, studio.bpm)
-    derived_slot_ids = {region.track_slot_id for region in derived_regions}
     explicit_regions = [
         region
         for region in studio.regions
         if _should_preserve_explicit_region(region, tracks_by_slot.get(region.track_slot_id))
-        and _explicit_region_can_override_derived(
-            region,
-            tracks_by_slot.get(region.track_slot_id),
-            derived_slot_ids=derived_slot_ids,
-        )
     ]
     explicit_slot_ids = {region.track_slot_id for region in explicit_regions}
     derived_regions = [region for region in derived_regions if region.track_slot_id not in explicit_slot_ids]
@@ -463,15 +467,16 @@ def _should_preserve_explicit_region(region: ArrangementRegion, track: TrackSlot
     return bool(region.pitch_events or region.audio_source_path)
 
 
-def _explicit_region_can_override_derived(
-    region: ArrangementRegion,
-    track: TrackSlot | None,
-    *,
-    derived_slot_ids: set[int],
-) -> bool:
-    if region.track_slot_id not in derived_slot_ids:
-        return True
-    return track is None or not track.events
+def _clear_track_event_shadows_for_explicit_regions(studio: Studio) -> None:
+    tracks_by_slot = {track.slot_id: track for track in studio.tracks}
+    region_slot_ids = {
+        region.track_slot_id
+        for region in studio.regions
+        if _should_preserve_explicit_region(region, tracks_by_slot.get(region.track_slot_id))
+    }
+    for track in studio.tracks:
+        if track.slot_id in region_slot_ids and track.events:
+            track.events = []
 
 
 def sync_studio_candidate_regions(studio: Studio) -> list[CandidateRegion]:
@@ -606,7 +611,7 @@ class VolumeTrackRequest(BaseModel):
 
 class UpdateRegionRequest(BaseModel):
     target_track_slot_id: int | None = Field(default=None, ge=1, le=6)
-    start_seconds: float | None = Field(default=None, ge=0, le=3600)
+    start_seconds: float | None = Field(default=None, ge=-30, le=3600)
     duration_seconds: float | None = Field(default=None, gt=0, le=3600)
     volume_percent: int | None = Field(default=None, ge=0, le=100)
     source_label: str | None = Field(default=None, max_length=180)
@@ -620,17 +625,17 @@ class UpdateRegionRequest(BaseModel):
 
 class CopyRegionRequest(BaseModel):
     target_track_slot_id: int | None = Field(default=None, ge=1, le=6)
-    start_seconds: float | None = Field(default=None, ge=0, le=3600)
+    start_seconds: float | None = Field(default=None, ge=-30, le=3600)
 
 
 class SplitRegionRequest(BaseModel):
-    split_seconds: float = Field(gt=0, le=3600)
+    split_seconds: float = Field(ge=-30, le=3600)
 
 
 class UpdatePitchEventRequest(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=32)
     pitch_midi: int | None = Field(default=None, ge=0, le=127)
-    start_seconds: float | None = Field(default=None, ge=0, le=3600)
+    start_seconds: float | None = Field(default=None, ge=-30, le=3600)
     duration_seconds: float | None = Field(default=None, gt=0, le=3600)
     start_beat: float | None = Field(default=None, ge=0)
     duration_beats: float | None = Field(default=None, gt=0)

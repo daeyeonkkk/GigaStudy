@@ -18,7 +18,10 @@ Internal engine flow:
 extraction, registration, storage-shadow, and scoring event type. It is not a
 legacy adapter and is not exported as a public contract. Internal event records
 are converted to `PitchEvent`/`ArrangementRegion` for the product UI, API
-response, and submitted scoring event input.
+response, and submitted scoring event input. When a scoring path consumes
+events that were derived from `ArrangementRegion`, `TrackPitchEvent` may carry
+transient report-focus metadata for the source region/event IDs; that metadata
+is excluded from persistence and remains an adapter detail.
 
 ## Runtime Shape
 
@@ -40,7 +43,9 @@ response, and submitted scoring event input.
   - a waterfall practice preview.
 - `apps/web/src/lib/studio/regions.ts`
   Region utility helpers only. The web client consumes region payloads and must
-  not rebuild product regions from internal storage event arrays.
+  not rebuild product regions from internal storage event arrays. Timeline
+  bounds can extend before 0 seconds so user-visible sync/early entrances are
+  displayed rather than clamped onto the downbeat.
 
 ### API
 
@@ -51,11 +56,14 @@ response, and submitted scoring event input.
   and resource services.
 - `apps/api/src/gigastudy_api/api/schemas/studios.py`
   Internal storage plus public response contracts. `Studio.regions` is the
-  product arrangement truth. `TrackSlot.events` and
-  `ExtractionCandidate.events` are internal storage shadows for import,
-  registration, and scoring. They accept only the current event shape; obsolete pre-region payloads
-  are rejected with the rest of the obsolete storage shape. Studio routes return
-  `StudioResponse`, whose tracks and candidates omit internal event arrays.
+  product arrangement truth. New registration writes explicit
+  `ArrangementRegion` data and clears `TrackSlot.events`; track event shadows
+  are retained only as migration fallbacks for older payloads and as bounded
+  internal inputs before registration. `ExtractionCandidate.events` remains a
+  candidate-review shadow until approval. They accept only the current event
+  shape; obsolete pre-region payloads are rejected with the rest of the obsolete
+  storage shape. Studio routes return `StudioResponse`, whose tracks and
+  candidates omit internal event arrays.
   `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
   arrangement data flow. Document imports use `source_kind: "document"`;
   `"score"` is no longer accepted as a source-kind alias. `PitchEvent` carries
@@ -71,6 +79,13 @@ response, and submitted scoring event input.
 - `apps/api/src/gigastudy_api/services/engine/event_quality.py`
   The registration quality gate before extracted material becomes product
   regions. It replaces the old notation quality layer.
+- `apps/api/src/gigastudy_api/services/registration_context.py`
+  The single provider for region-aware registration context. Registration
+  cleanup, LLM review, and ensemble gates use this instead of reading
+  `TrackSlot.events` directly.
+- `apps/api/src/gigastudy_api/services/engine/report_focus.py`
+  Maps internal scoring events back to public region/event IDs for report
+  deep-links.
 - `apps/api/src/gigastudy_api/services/llm/registration_review.py`
   Optional bounded LLM review for registration cleanup; the model can only
   choose deterministic repair directives and cannot author canonical events.
@@ -135,7 +150,8 @@ flowchart TD
 3. API builds a `StudioResponse`, stripping internal event shadows from tracks
    and candidates.
 4. `StudioResponse.regions` uses persisted explicit regions and derives a
-   fallback region from current registered track event shadows when needed.
+   fallback region from registered track event shadows only for older payloads
+   that have not yet been saved through the explicit-region path.
 5. Web passes `studio.regions` into `TrackBoard`.
 6. `TrackBoard`, playback, candidate review, and practice waterfall consume
    pitch events from the same region payload.
@@ -148,8 +164,9 @@ flowchart TD
 4. Engine queue runs document/audio/MIDI extraction.
 5. Extracted material becomes reviewable candidates with candidate-region
    previews.
-6. User approval registers the candidate into a track.
-7. Reloaded studio response exposes the registered track as a region.
+6. User approval registers the candidate into an explicit target-track region
+   and clears the target track event shadow.
+7. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
 
@@ -162,7 +179,8 @@ flowchart TD
 
 1. Browser submits recorded audio or `performance_events`.
 2. API converts submitted performance events to the internal pitch-event adapter.
-3. Scoring compares those events with registered arrangement regions.
+3. Scoring compares those events with registered arrangement regions, preserving
+   public answer-region focus IDs through the internal adapter boundary.
 4. Reports return region/event IDs that can focus the piano roll.
 
 ### AI Generation
@@ -177,7 +195,8 @@ flowchart TD
 1. Toolbar or track controls choose source mode.
 2. Audio mode prefers retained audio clips when present.
 3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`.
-4. Sync offset and volume are applied per track.
+4. Sync offset and volume are applied per track. Negative sync is preserved as
+   a user-visible timeline translation; barlines stay on the shared grid.
 5. Playhead state drives region lane and waterfall visual timing.
 
 ### Scoring
@@ -217,7 +236,9 @@ The rebuild now follows the intended separation:
 - Product surfaces: region lanes, selected-region piano roll, waterfall
   practice, playback, and report focus consume region/event payloads only.
 - Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,
-  and scoring can use `TrackPitchEvent` internally, then publish regions.
+  and scoring can use `TrackPitchEvent` internally, then publish explicit
+  regions. Saved registered material should not keep a parallel
+  `TrackSlot.events` truth.
 - No obsolete compatibility path: obsolete pre-region storage arrays, deprecated document source aliases,
   and old report comparison IDs/counts are rejected
   rather than translated.
@@ -230,8 +251,8 @@ The rebuild now follows the intended separation:
 
 These are accepted residuals, not legacy UI anchors:
 
-- Report focus currently targets persisted answer regions. Performance-take
-  focus should be expanded after recorded takes become explicit persisted
-  regions instead of report-local comparison payloads.
+- Report focus targets persisted answer regions. Performance-take focus remains
+  report-local until recorded takes become explicit persisted performance
+  regions.
 - PDF/MusicXML/MIDI ingestion should stay behind document-extraction naming and
   never reintroduce notation rendering as a product surface.

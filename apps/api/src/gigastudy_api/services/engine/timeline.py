@@ -44,6 +44,8 @@ def events_from_region(region: ArrangementRegion, *, bpm: int) -> list[TrackPitc
             extraction_method=event.extraction_method,
             is_rest=event.is_rest,
             voice_index=event.track_slot_id,
+            region_id=region.region_id,
+            region_event_id=event.event_id,
             quality_warnings=list(event.quality_warnings),
         )
         for event in sorted(region.pitch_events, key=lambda item: (item.start_beat, item.event_id))

@@ -131,10 +131,10 @@ def _shift_explicit_regions_for_slot(
     for region in regions:
         if region.track_slot_id != slot_id:
             continue
-        region.start_seconds = round(max(0.0, region.start_seconds + delta_seconds), 4)
+        region.start_seconds = round(region.start_seconds + delta_seconds, 4)
         region.sync_offset_seconds = round(region.start_seconds, 4)
         for event in region.pitch_events:
-            event.start_seconds = round(max(0.0, event.start_seconds + delta_seconds), 4)
+            event.start_seconds = round(event.start_seconds + delta_seconds, 4)
 
 
 class StudioRepository:
@@ -812,6 +812,7 @@ class StudioRepository:
             if source_diagnostics:
                 registration_diagnostics["source_extraction"] = source_diagnostics
             _register_track_material(
+                studio,
                 track,
                 timestamp=timestamp,
                 source_kind=source_kind,
@@ -849,6 +850,7 @@ class StudioRepository:
                 track = self._find_track(studio, slot_id)
                 registration = registrations[slot_id]
                 _register_track_material(
+                    studio,
                     track,
                     timestamp=timestamp,
                     source_kind=source_kind,

@@ -9,13 +9,13 @@ from gigastudy_api.services.engine.event_quality import (
     apply_registration_review_instruction,
     prepare_events_for_track_registration,
 )
-from gigastudy_api.services.engine.timeline import (
-    registered_sync_resolved_tracks,
-    registered_sync_resolved_tracks_by_slot,
-)
 from gigastudy_api.services.llm.registration_review import (
     review_ensemble_registration_with_deepseek,
     review_track_registration_with_deepseek,
+)
+from gigastudy_api.services.registration_context import (
+    registration_context_events_by_slot,
+    registration_context_tracks,
 )
 
 LLM_REGISTRATION_REVIEW_BYPASS_SOURCE_KINDS: set[str] = {"ai"}
@@ -220,11 +220,7 @@ class TrackRegistrationPreparer:
         *,
         exclude_slot_id: int,
     ) -> list[list[TrackPitchEvent]]:
-        return registered_sync_resolved_tracks(
-            studio.tracks,
-            bpm=studio.bpm,
-            exclude_slot_id=exclude_slot_id,
-        )
+        return registration_context_tracks(studio, exclude_slot_id=exclude_slot_id)
 
     def _reference_tracks_by_slot(
         self,
@@ -232,11 +228,7 @@ class TrackRegistrationPreparer:
         *,
         exclude_slot_id: int,
     ) -> dict[int, list[TrackPitchEvent]]:
-        return registered_sync_resolved_tracks_by_slot(
-            studio.tracks,
-            bpm=studio.bpm,
-            exclude_slot_id=exclude_slot_id,
-        )
+        return registration_context_events_by_slot(studio, exclude_slot_id=exclude_slot_id)
 
 
 def _with_llm_registration_review_skip(

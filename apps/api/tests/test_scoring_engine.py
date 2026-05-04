@@ -1,5 +1,7 @@
+from gigastudy_api.api.schemas.studios import ArrangementRegion, PitchEvent, Studio, TrackSlot
 from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.engine.scoring import build_harmony_scoring_report, build_scoring_report
+from gigastudy_api.services.engine.timeline import registered_region_events_for_slot
 
 
 def test_scoring_aligns_global_recording_offset_before_comparison() -> None:
@@ -88,6 +90,72 @@ def test_scoring_reports_quantitative_pitch_and_rhythm_errors() -> None:
         for issue in report.issues
     )
     assert {issue.expected_beat for issue in report.issues} == {1, 2}
+
+
+def test_scoring_report_focus_uses_public_region_event_ids() -> None:
+    studio = Studio(
+        studio_id="studio-report-focus",
+        title="Report focus",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="registered",
+                duration_seconds=2,
+                events=[],
+                updated_at="2026-01-01T00:00:00Z",
+            )
+        ],
+        regions=[
+            ArrangementRegion(
+                region_id="custom-region-a",
+                track_slot_id=1,
+                track_name="Soprano",
+                source_kind="midi",
+                source_label="edited.mid",
+                start_seconds=0.5,
+                duration_seconds=2,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="custom-region-a-event-7",
+                        track_slot_id=1,
+                        region_id="custom-region-a",
+                        label="C4",
+                        pitch_midi=60,
+                        start_seconds=0.5,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        source="midi",
+                    )
+                ],
+            )
+        ],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    answer_events = registered_region_events_for_slot(studio, 1)
+    performance_events = [
+        event_from_pitch(beat=2, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=61)
+    ]
+
+    report = build_scoring_report(
+        target_slot_id=1,
+        target_track_name="Soprano",
+        reference_slot_ids=[],
+        include_metronome=True,
+        created_at="2026-04-20T00:00:00+00:00",
+        answer_events=answer_events,
+        performance_events=performance_events,
+        bpm=120,
+    )
+
+    issue = report.issues[0]
+    assert issue.answer_source_event_id == "custom-region-a-event-7"
+    assert issue.answer_region_id == "custom-region-a"
+    assert issue.answer_event_id == "custom-region-a-event-7"
 
 
 def test_harmony_scoring_rates_consonant_added_part_without_answer_track() -> None:

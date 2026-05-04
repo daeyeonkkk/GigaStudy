@@ -225,4 +225,7 @@ def _track_event_from_performance_event(event: PerformanceEvent) -> TrackPitchEv
     }
     if event.event_id:
         payload["id"] = event.event_id
+        payload["region_event_id"] = event.event_id
+    if event.region_id:
+        payload["region_id"] = event.region_id
     return TrackPitchEvent(**payload)

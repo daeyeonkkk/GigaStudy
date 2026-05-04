@@ -11,6 +11,7 @@ from gigastudy_api.services.engine.music_theory import (
     quarter_beats_per_measure,
     seconds_per_beat,
 )
+from gigastudy_api.services.engine.report_focus import with_region_event_coordinates
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,7 @@ def build_scoring_report(
         mean_abs_timing_error_seconds=mean_timing_error,
         pitch_summary=_metric_summary("pitch", pitch_score, mean_pitch_error),
         rhythm_summary=_metric_summary("rhythm", rhythm_score, mean_timing_error),
-        issues=_with_region_event_coordinates(
+        issues=with_region_event_coordinates(
             _build_issues(matches, missing, extra, alignment_offset),
             target_slot_id=target_slot_id,
             answer_events=answer,
@@ -234,7 +235,7 @@ def build_harmony_scoring_report(
         time_signature_denominator=time_signature_denominator,
         reference_count=sum(len(events) for events in references.values()),
     )
-    issues = _with_region_event_coordinates(
+    issues = with_region_event_coordinates(
         issues,
         target_slot_id=target_slot_id,
         answer_events=[],
@@ -1103,50 +1104,6 @@ def _score_rhythm(mean_error: float | None, missing_ratio: float, extra_ratio: f
 def _metric_summary(metric: str, score: float, error: float | None) -> str:
     error_text = "none" if error is None else f"{error:.4f}"
     return f"{metric}_score={score:.2f};mean_abs_error={error_text}"
-
-
-def _with_region_event_coordinates(
-    issues: list[ReportIssue],
-    *,
-    target_slot_id: int,
-    answer_events: list[TrackPitchEvent],
-    performance_events: list[TrackPitchEvent],
-    alignment_offset_seconds: float,
-    bpm: int,
-) -> list[ReportIssue]:
-    answer_by_id = {event.id: event for event in answer_events}
-    performance_by_id = {event.id: event for event in performance_events}
-    answer_region_id = _track_region_id(target_slot_id)
-    performance_region_id = _performance_region_id(target_slot_id)
-    beat_offset = alignment_offset_seconds / seconds_per_beat(bpm)
-
-    annotated: list[ReportIssue] = []
-    for issue in issues:
-        updates: dict[str, object] = {}
-        if issue.answer_source_event_id and (answer_event := answer_by_id.get(issue.answer_source_event_id)):
-            updates["answer_region_id"] = answer_region_id
-            updates["answer_event_id"] = _event_id(answer_region_id, answer_event.id)
-            updates["expected_beat"] = round(answer_event.beat, 4)
-        if issue.performance_source_event_id and (
-            performance_event := performance_by_id.get(issue.performance_source_event_id)
-        ):
-            updates["performance_region_id"] = performance_region_id
-            updates["performance_event_id"] = _event_id(performance_region_id, performance_event.id)
-            updates["actual_beat"] = round(max(1.0, performance_event.beat - beat_offset), 4)
-        annotated.append(issue.model_copy(update=updates))
-    return annotated
-
-
-def _track_region_id(slot_id: int) -> str:
-    return f"track-{slot_id}-region-1"
-
-
-def _performance_region_id(slot_id: int) -> str:
-    return f"performance-{slot_id}-region-1"
-
-
-def _event_id(region_id: str, event_id: str) -> str:
-    return f"{region_id}-{event_id}"
 
 
 def _build_harmony_issues(

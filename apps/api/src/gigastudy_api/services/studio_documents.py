@@ -5,10 +5,12 @@ from typing import Any
 from fastapi import HTTPException
 
 from gigastudy_api.api.schemas.studios import (
+    ArrangementRegion,
     SourceKind,
     Studio,
     StudioListItem,
     TrackSlot,
+    build_arrangement_region_from_track_events,
     sync_studio_arrangement_regions,
     sync_studio_candidate_regions,
 )
@@ -33,6 +35,7 @@ def track_has_content(track: TrackSlot) -> bool:
 
 
 def register_track_material(
+    studio: Studio,
     track: TrackSlot,
     *,
     timestamp: str,
@@ -52,9 +55,25 @@ def register_track_material(
     track.audio_source_label = audio_source_label
     track.audio_mime_type = audio_mime_type
     track.duration_seconds = duration_seconds
-    track.events = events
     track.diagnostics = {"registration_quality": registration_diagnostics}
     track.updated_at = timestamp
+    region = build_arrangement_region_from_track_events(track, events=events, bpm=studio.bpm)
+    _replace_track_region(studio, track.slot_id, region)
+    track.events = []
+
+
+def _replace_track_region(
+    studio: Studio,
+    slot_id: int,
+    region: ArrangementRegion | None,
+) -> None:
+    studio.regions = [
+        existing_region
+        for existing_region in studio.regions
+        if existing_region.track_slot_id != slot_id
+    ]
+    if region is not None:
+        studio.regions.append(region)
 
 
 def encode_studio_payload(studio: Studio) -> dict[str, Any]:

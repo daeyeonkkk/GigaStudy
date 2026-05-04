@@ -30,5 +30,7 @@ class TrackPitchEvent(BaseModel):
     is_rest: bool = False
     is_tied: bool = False
     voice_index: int | None = None
+    region_id: str | None = Field(default=None, exclude=True)
+    region_event_id: str | None = Field(default=None, exclude=True)
     quantization_grid: float | None = None
     quality_warnings: list[str] = Field(default_factory=list)

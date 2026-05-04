@@ -72,7 +72,7 @@ class StudioRegionCommands:
                 region.start_seconds = next_start
                 region.sync_offset_seconds = next_start
                 for event in region.pitch_events:
-                    event.start_seconds = round(max(0.0, event.start_seconds + delta_seconds), 4)
+                    event.start_seconds = round(event.start_seconds + delta_seconds, 4)
 
             if "duration_seconds" in request.model_fields_set and request.duration_seconds is not None:
                 region.duration_seconds = round(request.duration_seconds, 4)
@@ -132,7 +132,7 @@ class StudioRegionCommands:
                         "event_id": f"{new_region_id}-event-{index}",
                         "region_id": new_region_id,
                         "track_slot_id": target_slot_id,
-                        "start_seconds": round(max(0.0, event.start_seconds + delta_seconds), 4),
+                        "start_seconds": round(event.start_seconds + delta_seconds, 4),
                     }
                 )
                 for index, event in enumerate(source_region.pitch_events, start=1)
@@ -181,11 +181,17 @@ class StudioRegionCommands:
                 if event_end <= split_seconds:
                     left_events.append(event)
                 elif event_start >= split_seconds:
+                    right_start_beat = _start_beat_from_seconds(
+                        event.start_seconds,
+                        region_start_seconds=split_seconds,
+                        beat_seconds=beat_seconds,
+                    )
                     right_events.append(
                         event.model_copy(
                             update={
                                 "event_id": f"{right_region_id}-event-{index}",
                                 "region_id": right_region_id,
+                                "start_beat": right_start_beat,
                             }
                         )
                     )
@@ -207,10 +213,7 @@ class StudioRegionCommands:
                                 "region_id": right_region_id,
                                 "start_seconds": split_seconds,
                                 "duration_seconds": round(right_duration, 4),
-                                "start_beat": round(
-                                    event.start_beat + (split_seconds - event_start) / beat_seconds,
-                                    4,
-                                ),
+                                "start_beat": 1,
                                 "duration_beats": round(right_duration / beat_seconds, 4),
                             }
                         )
@@ -317,7 +320,7 @@ class StudioRegionCommands:
                 event.start_beat = round(request.start_beat, 4)
                 if "start_seconds" not in request.model_fields_set:
                     event.start_seconds = round(
-                        max(0.0, region.start_seconds + ((event.start_beat - 1) * beat_seconds)),
+                        region.start_seconds + ((event.start_beat - 1) * beat_seconds),
                         4,
                     )
 
@@ -350,7 +353,7 @@ class StudioRegionCommands:
 
     def _normalize_region(self, region: ArrangementRegion, *, bpm: int) -> None:
         beat_seconds = seconds_per_beat(bpm)
-        region.start_seconds = round(max(0.0, region.start_seconds), 4)
+        region.start_seconds = round(region.start_seconds, 4)
         region.duration_seconds = round(max(0.08, region.duration_seconds), 4)
         region.sync_offset_seconds = round(region.start_seconds, 4)
         region.pitch_events = sorted(
@@ -359,7 +362,7 @@ class StudioRegionCommands:
                     update={
                         "track_slot_id": region.track_slot_id,
                         "region_id": region.region_id,
-                        "start_seconds": round(max(0.0, event.start_seconds), 4),
+                        "start_seconds": round(event.start_seconds, 4),
                         "duration_seconds": round(max(0.08, event.duration_seconds), 4),
                         "start_beat": round(max(0.0, event.start_beat), 4),
                         "duration_beats": round(max(0.01, event.duration_beats), 4),
@@ -438,7 +441,20 @@ def _new_region_id(slot_id: int) -> str:
 
 
 def _start_beat_for_event(region: ArrangementRegion, event: PitchEvent, *, beat_seconds: float) -> float:
-    return round(max(0.0, 1 + ((event.start_seconds - region.start_seconds) / beat_seconds)), 4)
+    return _start_beat_from_seconds(
+        event.start_seconds,
+        region_start_seconds=region.start_seconds,
+        beat_seconds=beat_seconds,
+    )
+
+
+def _start_beat_from_seconds(
+    start_seconds: float,
+    *,
+    region_start_seconds: float,
+    beat_seconds: float,
+) -> float:
+    return round(max(0.0, 1 + ((start_seconds - region_start_seconds) / beat_seconds)), 4)
 
 
 def _region_has_content(region: ArrangementRegion) -> bool:

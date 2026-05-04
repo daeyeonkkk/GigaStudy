@@ -8,7 +8,7 @@ import {
   formatSeconds,
   formatSourceLabel,
   formatTrackName,
-  getArrangementRegionDurationSeconds,
+  getArrangementTimelineBounds,
   getJobStatusLabel,
   getPitchEventRange,
   getPitchedEvents,
@@ -23,6 +23,12 @@ import type {
   UpdatePitchEventRequest,
 } from '../../types/studio'
 import './TrackBoard.css'
+
+type TimelineBounds = {
+  minSeconds: number
+  maxSeconds: number
+  durationSeconds: number
+}
 
 type TrackRecordingMeter = {
   durationSeconds: number
@@ -70,6 +76,8 @@ type TrackBoardProps = {
   onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }
 
+const MIN_TIMELINE_SECONDS = -30
+
 function formatSyncStep(seconds: number): string {
   const rounded = Number(seconds.toFixed(3))
   return rounded.toString()
@@ -99,49 +107,56 @@ function getTrackActiveJob(track: TrackSlot, jobs: TrackExtractionJob[]): TrackE
   )
 }
 
-function getMeasureStarts(timelineSeconds: number, bpm: number, beatsPerMeasure: number): number[] {
+function getMeasureStarts(timelineBounds: TimelineBounds, bpm: number, beatsPerMeasure: number): number[] {
   const beatSeconds = 60 / Math.max(1, bpm)
   const measureSeconds = Math.max(beatSeconds, beatSeconds * Math.max(1, beatsPerMeasure))
-  const measureCount = Math.max(2, Math.ceil(timelineSeconds / measureSeconds) + 1)
+  const measureCount = Math.max(2, Math.ceil(timelineBounds.maxSeconds / measureSeconds) + 1)
   return Array.from({ length: measureCount }, (_, index) => index * measureSeconds)
 }
 
-function getTimelinePercent(seconds: number, timelineSeconds: number): number {
-  return Math.max(0, Math.min(100, (seconds / Math.max(0.25, timelineSeconds)) * 100))
+function getTimelinePercent(seconds: number, timelineBounds: TimelineBounds): number {
+  return Math.max(
+    0,
+    Math.min(100, ((seconds - timelineBounds.minSeconds) / timelineBounds.durationSeconds) * 100),
+  )
 }
 
-function getRegionStyle(region: ArrangementRegion, timelineSeconds: number, laneIndex: number): CSSProperties {
+function getDurationPercent(seconds: number, durationSeconds: number): number {
+  return Math.max(0, Math.min(100, (seconds / Math.max(0.25, durationSeconds)) * 100))
+}
+
+function getRegionStyle(region: ArrangementRegion, timelineBounds: TimelineBounds, laneIndex: number): CSSProperties {
   return {
-    '--region-left': `${getTimelinePercent(region.start_seconds, timelineSeconds)}%`,
+    '--region-left': `${getTimelinePercent(region.start_seconds, timelineBounds)}%`,
     '--region-top': `${10 + laneIndex * 36}px`,
-    '--region-width': `${Math.max(1.5, getTimelinePercent(region.duration_seconds, timelineSeconds))}%`,
+    '--region-width': `${Math.max(1.5, getDurationPercent(region.duration_seconds, timelineBounds.durationSeconds))}%`,
   } as CSSProperties
 }
 
 function getRegionLaneStyle(
   isPlaying: boolean,
   playheadSeconds: number | null,
-  timelineSeconds: number,
+  timelineBounds: TimelineBounds,
   regionCount: number,
 ): CSSProperties {
   return {
     '--lane-min-height': `${Math.max(94, 24 + regionCount * 38)}px`,
-    '--playhead-left': `${getTimelinePercent(isPlaying ? playheadSeconds ?? 0 : 0, timelineSeconds)}%`,
+    '--playhead-left': `${getTimelinePercent(isPlaying ? playheadSeconds ?? 0 : 0, timelineBounds)}%`,
   } as CSSProperties
 }
 
-function getPlayheadStyle(playheadSeconds: number | null, timelineSeconds: number): CSSProperties {
+function getPlayheadStyle(playheadSeconds: number | null, timelineBounds: TimelineBounds): CSSProperties {
   return {
-    '--playhead-left': `${getTimelinePercent(playheadSeconds ?? 0, timelineSeconds)}%`,
+    '--playhead-left': `${getTimelinePercent(playheadSeconds ?? 0, timelineBounds)}%`,
   } as CSSProperties
 }
 
 function getEventLeftPercent(event: PitchEvent, region: ArrangementRegion): number {
-  return getTimelinePercent(event.start_seconds - region.start_seconds, region.duration_seconds)
+  return getDurationPercent(event.start_seconds - region.start_seconds, region.duration_seconds)
 }
 
 function getEventWidthPercent(event: PitchEvent, region: ArrangementRegion): number {
-  return Math.max(1.4, getTimelinePercent(event.duration_seconds, region.duration_seconds))
+  return Math.max(1.4, getDurationPercent(event.duration_seconds, region.duration_seconds))
 }
 
 function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {
@@ -156,11 +171,11 @@ function getGridSeconds(bpm: number): number {
 }
 
 function roundToGrid(value: number, gridSeconds: number): number {
-  return Math.max(0, Math.round(value / gridSeconds) * gridSeconds)
+  return Math.round(value / gridSeconds) * gridSeconds
 }
 
-function clampRegionStart(value: number): number {
-  return Math.max(0, Math.round(value * 1000) / 1000)
+function clampTimelineStart(value: number): number {
+  return Math.max(MIN_TIMELINE_SECONDS, Math.round(value * 1000) / 1000)
 }
 
 function TrackVolumeControl({
@@ -282,14 +297,14 @@ function RegionTools({
       <button
         disabled={disabled}
         type="button"
-        onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds - gridSeconds))}
+        onClick={() => onMoveRegion(region, region.track_slot_id, clampTimelineStart(region.start_seconds - gridSeconds))}
       >
         왼쪽 이동
       </button>
       <button
         disabled={disabled}
         type="button"
-        onClick={() => onMoveRegion(region, region.track_slot_id, clampRegionStart(region.start_seconds + gridSeconds))}
+        onClick={() => onMoveRegion(region, region.track_slot_id, clampTimelineStart(region.start_seconds + gridSeconds))}
       >
         오른쪽 이동
       </button>
@@ -401,7 +416,7 @@ function PianoRollPanel({
             onClick={() =>
               selectedEvent
                 ? updateSelectedEvent({
-                    start_seconds: clampRegionStart(selectedEvent.start_seconds - gridSeconds),
+                    start_seconds: clampTimelineStart(selectedEvent.start_seconds - gridSeconds),
                   })
                 : undefined
             }
@@ -414,7 +429,7 @@ function PianoRollPanel({
             onClick={() =>
               selectedEvent
                 ? updateSelectedEvent({
-                    start_seconds: clampRegionStart(selectedEvent.start_seconds + gridSeconds),
+                    start_seconds: clampTimelineStart(selectedEvent.start_seconds + gridSeconds),
                   })
                 : undefined
             }
@@ -454,7 +469,7 @@ function PianoRollPanel({
               selectedEvent
                 ? updateSelectedEvent({
                     duration_seconds: Math.max(gridSeconds, roundToGrid(selectedEvent.duration_seconds, gridSeconds)),
-                    start_seconds: roundToGrid(selectedEvent.start_seconds, gridSeconds),
+                    start_seconds: clampTimelineStart(roundToGrid(selectedEvent.start_seconds, gridSeconds)),
                   })
                 : undefined
             }
@@ -508,11 +523,11 @@ function PianoRollPanel({
 function PracticeWaterfall({
   playheadSeconds,
   regions,
-  timelineSeconds,
+  timelineBounds,
 }: {
   playheadSeconds: number | null
   regions: ArrangementRegion[]
-  timelineSeconds: number
+  timelineBounds: TimelineBounds
 }) {
   const events = regions.flatMap((region) =>
     getPitchedEvents(region.pitch_events).map((event) => ({ event, region })),
@@ -533,7 +548,7 @@ function PracticeWaterfall({
         className="practice-waterfall__stage"
         style={
           {
-            ...getPlayheadStyle(playheadSeconds, timelineSeconds),
+            ...getPlayheadStyle(playheadSeconds, timelineBounds),
             '--waterfall-row-count': rowCount,
           } as CSSProperties
         }
@@ -558,9 +573,9 @@ function PracticeWaterfall({
             key={`${region.region_id}-${event.event_id}`}
             style={
               {
-                '--waterfall-left': `${getTimelinePercent(event.start_seconds, timelineSeconds)}%`,
+                '--waterfall-left': `${getTimelinePercent(event.start_seconds, timelineBounds)}%`,
                 '--waterfall-row-index': laneSlotIds.indexOf(region.track_slot_id),
-                '--waterfall-width': `${Math.max(1.8, getTimelinePercent(event.duration_seconds, timelineSeconds))}%`,
+                '--waterfall-width': `${Math.max(1.8, getDurationPercent(event.duration_seconds, timelineBounds.durationSeconds))}%`,
               } as CSSProperties
             }
             title={`${formatTrackName(region.track_name)} - ${event.label}`}
@@ -625,17 +640,22 @@ export function TrackBoard({
     }
     return next
   }, [regions])
-  const timelineSeconds = useMemo(
-    () =>
-      Math.max(
-        getArrangementRegionDurationSeconds(regions, 12),
-        playheadSeconds ?? 0,
-      ),
+  const timelineBounds = useMemo(
+    () => {
+      const regionBounds = getArrangementTimelineBounds(regions, 12)
+      const minSeconds = Math.min(regionBounds.minSeconds, playheadSeconds ?? 0, 0)
+      const maxSeconds = Math.max(regionBounds.maxSeconds, playheadSeconds ?? 0, minSeconds + 12)
+      return {
+        minSeconds,
+        maxSeconds,
+        durationSeconds: Math.max(0.25, maxSeconds - minSeconds),
+      }
+    },
     [playheadSeconds, regions],
   )
   const measureStarts = useMemo(
-    () => getMeasureStarts(timelineSeconds, bpm, beatsPerMeasure),
-    [beatsPerMeasure, bpm, timelineSeconds],
+    () => getMeasureStarts(timelineBounds, bpm, beatsPerMeasure),
+    [beatsPerMeasure, bpm, timelineBounds],
   )
   const gridSeconds = getGridSeconds(bpm)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
@@ -680,7 +700,7 @@ export function TrackBoard({
         {measureStarts.map((seconds, index) => (
           <span
             key={`measure-${seconds}`}
-            style={{ '--measure-left': `${getTimelinePercent(seconds, timelineSeconds)}%` } as CSSProperties}
+            style={{ '--measure-left': `${getTimelinePercent(seconds, timelineBounds)}%` } as CSSProperties}
           >
             {index + 1}
           </span>
@@ -743,13 +763,13 @@ export function TrackBoard({
               <div
                 className="track-card__timeline track-card__region-lane"
                 aria-label={`${formatTrackName(track.name)} 구간 타임라인`}
-                style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineSeconds, trackRegions.length)}
+                style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineBounds, trackRegions.length)}
               >
                 <div className="track-card__measure-grid" aria-hidden="true">
                   {measureStarts.map((seconds) => (
                     <i
                       key={`${track.slot_id}-${seconds}`}
-                      style={{ '--measure-left': `${getTimelinePercent(seconds, timelineSeconds)}%` } as CSSProperties}
+                      style={{ '--measure-left': `${getTimelinePercent(seconds, timelineBounds)}%` } as CSSProperties}
                     />
                   ))}
                 </div>
@@ -765,7 +785,7 @@ export function TrackBoard({
                       data-region-id={region.region_id}
                       data-testid={index === 0 ? `track-region-${track.slot_id}` : `track-region-${track.slot_id}-${index + 1}`}
                       key={region.region_id}
-                      style={getRegionStyle(region, timelineSeconds, index)}
+                      style={getRegionStyle(region, timelineBounds, index)}
                       type="button"
                       onClick={() => {
                         setSelectedRegionId(region.region_id)
@@ -938,7 +958,7 @@ export function TrackBoard({
         <PracticeWaterfall
           playheadSeconds={playheadSeconds}
           regions={regions}
-          timelineSeconds={timelineSeconds}
+          timelineBounds={timelineBounds}
         />
       </div>
     </section>

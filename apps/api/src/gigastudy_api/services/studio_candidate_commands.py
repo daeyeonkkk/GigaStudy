@@ -92,6 +92,7 @@ class StudioCandidateCommands:
                 timestamp=timestamp,
             )
             register_track_material(
+                studio,
                 track,
                 timestamp=timestamp,
                 source_kind=candidate.source_kind,
@@ -220,6 +221,7 @@ class StudioCandidateCommands:
                     timestamp=timestamp,
                 )
                 register_track_material(
+                    studio,
                     track,
                     timestamp=timestamp,
                     source_kind=candidate.source_kind,

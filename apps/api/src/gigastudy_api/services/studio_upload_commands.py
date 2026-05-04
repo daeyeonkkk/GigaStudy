@@ -255,6 +255,7 @@ class StudioUploadCommands:
                 track = self._repository._find_track(studio, slot_id)
                 registration = registrations[slot_id]
                 register_track_material(
+                    studio,
                     track,
                     timestamp=timestamp,
                     source_kind=registered_source_kind,

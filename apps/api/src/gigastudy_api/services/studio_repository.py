@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock, RLock
@@ -60,6 +61,7 @@ from gigastudy_api.services.studio_jobs import (
 from gigastudy_api.services.engine.candidate_diagnostics import (
     track_duration_seconds as _track_duration_seconds,
 )
+from gigastudy_api.services.engine.midi_export import build_studio_midi_bytes
 from gigastudy_api.services.engine.music_theory import (
     track_name,
 )
@@ -136,6 +138,11 @@ def _shift_explicit_regions_for_slot(
         region.sync_offset_seconds = round(region.start_seconds, 4)
         for event in region.pitch_events:
             event.start_seconds = round(event.start_seconds + delta_seconds, 4)
+
+
+def _safe_export_filename(title: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", title.strip()).strip("-._")
+    return normalized[:80] or "gigastudy-studio"
 
 
 class StudioRepository:
@@ -375,6 +382,15 @@ class StudioRepository:
             page_index=page_index,
             owner_token=owner_token,
         )
+
+    def export_studio_midi(
+        self,
+        studio_id: str,
+        *,
+        owner_token: str | None = None,
+    ) -> tuple[bytes, str]:
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
+        return build_studio_midi_bytes(studio), f"{_safe_export_filename(studio.title)}.mid"
 
     def get_admin_storage_summary(
         self,

@@ -151,6 +151,15 @@ export function getTrackAudioUrl(studioId: string, slotId: number): string {
   return url.toString()
 }
 
+export function getStudioMidiExportUrl(studioId: string): string {
+  const url = new URL(`/api/studios/${studioId}/exports/midi`, apiBaseUrl)
+  const ownerToken = getOwnerToken()
+  if (ownerToken) {
+    url.searchParams.set('owner_token', ownerToken)
+  }
+  return url.toString()
+}
+
 export function getDocumentJobSourcePreviewUrl(studioId: string, jobId: string, pageIndex = 0): string {
   const url = new URL(`/api/studios/${studioId}/jobs/${jobId}/source-preview`, apiBaseUrl)
   url.searchParams.set('page_index', String(pageIndex))

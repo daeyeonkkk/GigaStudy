@@ -129,14 +129,12 @@ export function useCandidateReviewState({
       return
     }
     const allowOverwrite = jobOverwriteApprovals[jobId] === true
-    if (jobWouldOverwrite(jobId) && !allowOverwrite) {
-      setActionError('문서 분석 결과가 기존 등록 트랙을 덮어씁니다. 덮어쓰기 확인을 체크해 주세요.')
-      return
-    }
     await runStudioAction(
       () => approveJobCandidates(studio.studio_id, jobId, allowOverwrite),
       '문서 분석 결과를 각 트랙에 등록하는 중입니다.',
-      '문서 분석 결과를 제안된 트랙에 등록했습니다.',
+      allowOverwrite
+        ? '문서 분석 결과를 제안된 트랙에 등록했습니다.'
+        : '처리 결과를 반영했습니다. 남은 후보가 있으면 검토 목록에서 이어서 처리할 수 있습니다.',
     )
   }
 

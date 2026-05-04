@@ -1104,6 +1104,30 @@ def test_upload_musicxml_registers_parsed_track_region_events(tmp_path: Path, mo
     assert soprano_events[0]["pitch_midi"] == 72
 
 
+def test_studio_midi_export_uses_registered_region_events(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "MIDI export",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+
+    export_response = client.get(f"/api/studios/{studio_id}/exports/midi")
+
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"] == "audio/midi"
+    assert export_response.headers["content-disposition"] == 'attachment; filename="MIDI-export.mid"'
+    assert export_response.content.startswith(b"MThd")
+    assert export_response.content.count(b"MTrk") == 7
+    assert b"Soprano" in export_response.content
+    assert bytes([0x90, 72]) in export_response.content
+
+
 def test_unsupported_source_kind_is_rejected(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     studio_id = client.post(
@@ -1752,7 +1776,7 @@ def test_vector_document_extraction_four_part_score_clears_unmapped_bass_placeho
     assert payload["tracks"][4]["status"] == "empty"
 
 
-def test_document_extraction_job_bulk_approval_requires_overwrite_confirmation(
+def test_document_extraction_job_bulk_approval_registers_open_tracks_before_overwrite(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1790,13 +1814,27 @@ def test_document_extraction_job_bulk_approval_requires_overwrite_confirmation(
         f"/api/studios/{studio_id}/jobs/{job_id}/approve-candidates",
         json={},
     )
-    assert blocked_response.status_code == 409
+    assert blocked_response.status_code == 200
+    partial_payload = blocked_response.json()
+    assert partial_payload["jobs"][0]["status"] == "needs_review"
+    assert _track_region_events(partial_payload, 1)[0]["label"] == "C5"
+    assert _track_region_events(partial_payload, 2)[0]["label"] == "A4"
+    assert _track_region_events(partial_payload, 5)[0]["label"] == "C3"
+    assert [
+        (candidate["suggested_slot_id"], candidate["status"])
+        for candidate in partial_payload["candidates"]
+    ] == [
+        (1, "pending"),
+        (2, "approved"),
+        (5, "approved"),
+    ]
 
     overwrite_response = client.post(
         f"/api/studios/{studio_id}/jobs/{job_id}/approve-candidates",
         json={"allow_overwrite": True},
     )
     assert overwrite_response.status_code == 200
+    assert overwrite_response.json()["jobs"][0]["status"] == "completed"
     assert _track_region_events(overwrite_response.json(), 1)[0]["label"] == "C5"
 
 

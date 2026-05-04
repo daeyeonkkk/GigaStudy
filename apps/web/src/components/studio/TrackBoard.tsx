@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
-  TRACK_UPLOAD_ACCEPT,
+  TRACK_RECORDING_UPLOAD_ACCEPT,
   formatDurationSeconds,
   formatSeconds,
   formatTrackName,
@@ -499,10 +499,10 @@ export function TrackBoard({
                   </button>
                   <label className={`app-button app-button--secondary track-upload ${trackEditDisabled ? 'is-disabled' : ''}`}>
                     <span aria-hidden="true">↑</span>
-                    업로드
+                    녹음파일
                     <input
-                      accept={TRACK_UPLOAD_ACCEPT}
-                      aria-label={`${formatTrackName(track.name)} 업로드`}
+                      accept={TRACK_RECORDING_UPLOAD_ACCEPT}
+                      aria-label={`${formatTrackName(track.name)} 녹음파일 업로드`}
                       disabled={trackEditDisabled}
                       type="file"
                       onChange={(event) => {

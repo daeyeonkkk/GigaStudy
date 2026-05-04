@@ -104,7 +104,7 @@ export function ExtractionJobsPanel({
           const lockedByAnotherJob = jobCandidates.some((candidate) =>
             lockedSlotIds.has(candidate.suggested_slot_id),
           )
-          const approveDisabled = busy || lockedByAnotherJob || (wouldOverwrite && !allowOverwrite)
+          const approveDisabled = busy || lockedByAnotherJob
           const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : '문서 분석'
           const jobTargetLabel = job.parse_all_parts ? '전체 문서' : formatTrackName(jobTrack?.name ?? `트랙 ${job.slot_id}`)
           const candidateSummary = getJobCandidateSummary(jobCandidates, tracks)
@@ -142,7 +142,7 @@ export function ExtractionJobsPanel({
                         type="checkbox"
                         onChange={(event) => onUpdateJobOverwriteApproval(job.job_id, event.target.checked)}
                       />
-                      이미 등록된 트랙 덮어쓰기
+                      기존 트랙도 덮어쓰기
                     </label>
                   ) : null}
                   <button
@@ -152,7 +152,7 @@ export function ExtractionJobsPanel({
                     type="button"
                     onClick={() => onApproveJobCandidates(job.job_id)}
                   >
-                    후보 등록
+                    {wouldOverwrite && !allowOverwrite ? '등록 가능한 트랙 등록' : '후보 등록'}
                   </button>
                 </div>
               ) : null}

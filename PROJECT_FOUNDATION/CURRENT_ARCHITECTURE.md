@@ -225,14 +225,18 @@ flowchart TD
 
 ### Upload / Import
 
-1. Web requests an upload target.
+1. Web requests an upload target. Studio creation exposes `PDF/MIDI/MusicXML`
+   score-file seeding, while each track row exposes recording-file upload for
+   audio extraction.
 2. Browser sends the file via direct upload or inline fallback.
 3. API creates an extraction job.
 4. Engine queue runs document/audio/MIDI extraction.
 5. Extracted material becomes reviewable candidates with candidate-region
    previews.
-6. User approval registers the candidate into an explicit target-track region
-   and clears the target track event shadow.
+6. User approval registers candidates into explicit target-track regions and
+   clears target track event shadows. Bulk document approval registers every
+   unblocked valid part it can, leaves overwrite-blocked or failed parts
+   reviewable, and records the per-track outcome on the extraction job.
 7. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
@@ -283,6 +287,16 @@ flowchart TD
 6. Playhead state drives region lane timing on the studio surface and
    waterfall visual timing on the practice surface.
 
+### Export
+
+1. Studio exports currently provide a MIDI file built from the public
+   `Studio.regions` timeline.
+2. Export creates one tempo track plus six visible track chunks so empty lanes
+   remain represented, while note events are written only for registered
+   pitch-event material.
+3. Negative effective starts are shifted together at export time so exported
+   MIDI begins at tick 0 without changing inter-track timing.
+
 ## Removed Surface
 
 - Browser VexFlow rendering.
@@ -298,6 +312,7 @@ flowchart TD
 - Audio recording and playback primitives.
 - Voice pitch extraction math.
 - MIDI/MusicXML/PDF import adapters as extraction inputs.
+- MIDI export from region/event timeline.
 - Candidate review, diagnostics, AI generation, scoring, and report history.
 
 ## Architecture Fitness Check

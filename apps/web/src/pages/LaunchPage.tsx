@@ -10,12 +10,7 @@ import {
   readFileAsDataUrl,
   setOwnerTokenFromStudioPassword,
 } from '../lib/api'
-import {
-  AUDIO_UPLOAD_EXTENSIONS,
-  getFileExtension,
-  isAudioUploadFile,
-  prepareAudioFileForUpload,
-} from '../lib/audio'
+import { getFileExtension } from '../lib/audio'
 import type { Studio, StudioListItem } from '../types/studio'
 import './LaunchPage.css'
 
@@ -38,31 +33,13 @@ const DOCUMENT_SOURCE_EXTENSIONS = new Set([
   '.pdf',
   '.mid',
   '.midi',
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.webp',
-  '.bmp',
-  '.tif',
-  '.tiff',
 ])
-const SUPPORTED_SOURCE_ACCEPT = [
-  ...DOCUMENT_SOURCE_EXTENSIONS,
-  ...AUDIO_UPLOAD_EXTENSIONS,
-].join(',')
+const SUPPORTED_SOURCE_ACCEPT = [...DOCUMENT_SOURCE_EXTENSIONS].join(',')
 const VALID_DENOMINATORS = new Set([1, 2, 4, 8, 16, 32])
 
 function isSupportedSourceFile(file: File): boolean {
   const extension = getFileExtension(file.name)
-  return DOCUMENT_SOURCE_EXTENSIONS.has(extension) || isAudioUploadFile(file)
-}
-
-function detectSourceKind(file: File): 'document' | 'music' {
-  const extension = getFileExtension(file.name)
-  if (DOCUMENT_SOURCE_EXTENSIONS.has(extension)) {
-    return 'document'
-  }
-  return 'music'
+  return DOCUMENT_SOURCE_EXTENSIONS.has(extension)
 }
 
 function parseInteger(value: string): number | null {
@@ -84,7 +61,6 @@ export function LaunchPage() {
   const [timeSignatureDenominator, setTimeSignatureDenominator] = useState('4')
   const [sourceFile, setSourceFile] = useState<File | null>(null)
   const [sourceInputKey, setSourceInputKey] = useState(0)
-  const [sourceKindOverride, setSourceKindOverride] = useState<'auto' | 'document' | 'music'>('auto')
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
   const [recentStudios, setRecentStudios] = useState<StudioListItem[]>([])
   const [recentMessage, setRecentMessage] = useState<string | null>(null)
@@ -103,7 +79,7 @@ export function LaunchPage() {
       })
       .catch(() => {
         if (!ignore) {
-          setRecentMessage('API 서버에 연결되면 최근 스튜디오가 여기에 표시됩니다.')
+          setRecentMessage('API 서버에 연결되면 스튜디오 목록이 여기에 표시됩니다.')
         }
       })
 
@@ -136,7 +112,6 @@ export function LaunchPage() {
 
   function clearSourceFile() {
     setSourceFile(null)
-    setSourceKindOverride('auto')
     setSubmitState({ phase: 'idle' })
     setSourceInputKey((currentKey) => currentKey + 1)
   }
@@ -189,7 +164,7 @@ export function LaunchPage() {
       return
     }
     if (!sourceFile) {
-      setSubmitState({ phase: 'error', message: '문서 또는 음악 파일을 선택하세요.' })
+      setSubmitState({ phase: 'error', message: 'PDF, MIDI, MusicXML 파일을 선택하세요.' })
       return
     }
     if (!hasProjectTitle) {
@@ -201,23 +176,19 @@ export function LaunchPage() {
       return
     }
 
-    const sourceKind = sourceKindOverride === 'auto' ? detectSourceKind(sourceFile) : sourceKindOverride
-    setSubmitState({ phase: 'submitting', label: '파일 업로드와 분석 대기열 준비 중' })
+    setSubmitState({ phase: 'submitting', label: '악보 파일 업로드와 분석 대기열 준비 중' })
     try {
       await setOwnerTokenFromStudioPassword(studioPassword)
-      const preparedSource: PreparedLaunchSource =
-        sourceKind === 'music' && isAudioUploadFile(sourceFile)
-          ? await prepareAudioFileForUpload(sourceFile)
-          : {
-              filename: sourceFile.name,
-              blob: sourceFile,
-              contentType: sourceFile.type || 'application/octet-stream',
-            }
+      const preparedSource: PreparedLaunchSource = {
+        filename: sourceFile.name,
+        blob: sourceFile,
+        contentType: sourceFile.type || 'application/octet-stream',
+      }
       let studio: Studio | null = null
       let uploadedAssetPath: string | null = null
       try {
         const uploadTarget = await createStudioUploadTarget({
-          source_kind: sourceKind,
+          source_kind: 'document',
           filename: preparedSource.filename,
           size_bytes: preparedSource.blob.size,
           content_type: preparedSource.contentType,
@@ -225,12 +196,12 @@ export function LaunchPage() {
         await putDirectUpload(uploadTarget, preparedSource.blob)
         uploadedAssetPath = uploadTarget.asset_path
       } catch {
-        setSubmitState({ phase: 'submitting', label: '직접 업로드가 어려워 안전 업로드 경로로 다시 보내는 중' })
+        setSubmitState({ phase: 'submitting', label: '다른 방식으로 파일을 보내는 중' })
         const contentBase64 = preparedSource.contentBase64 ?? (await readFileAsDataUrl(sourceFile))
         studio = await createStudio({
           title: normalizedTitle,
           start_mode: 'upload',
-          source_kind: sourceKind,
+          source_kind: 'document',
           source_filename: preparedSource.filename,
           source_content_base64: contentBase64,
         })
@@ -239,19 +210,19 @@ export function LaunchPage() {
         studio = await createStudio({
           title: normalizedTitle,
           start_mode: 'upload',
-          source_kind: sourceKind,
+          source_kind: 'document',
           source_filename: preparedSource.filename,
           source_asset_path: uploadedAssetPath,
         })
       }
       if (!studio) {
-        throw new Error('업로드 후 스튜디오를 시작하지 못했습니다.')
+        throw new Error('악보 파일로 스튜디오를 시작하지 못했습니다.')
       }
       navigate(`/studios/${studio.studio_id}`)
     } catch (error) {
       setSubmitState({
         phase: 'error',
-        message: error instanceof Error ? error.message : '업로드로 시작하지 못했습니다.',
+        message: error instanceof Error ? error.message : '악보 파일로 시작하지 못했습니다.',
       })
     }
   }
@@ -310,7 +281,7 @@ export function LaunchPage() {
           <button
             className="launch-menubar__item"
             disabled={submitState.phase === 'submitting'}
-            title="문서 또는 음악 파일 선택"
+            title="PDF, MIDI, MusicXML 파일 선택"
             type="button"
             onClick={() => sourceInputRef.current?.click()}
           >
@@ -332,7 +303,7 @@ export function LaunchPage() {
 
         <div className="launch-toolbar" aria-label="스튜디오 생성 도구">
           <button className="launch-tool" type="button" onClick={() => sourceInputRef.current?.click()}>
-            <span aria-hidden="true">업로드</span>
+            <span aria-hidden="true">악보 파일</span>
           </button>
           <button
             className="launch-tool"
@@ -456,7 +427,7 @@ export function LaunchPage() {
               ) : null}
 
               <label className="launch-field">
-                <span>문서 또는 음악</span>
+                <span>PDF/MIDI/MusicXML</span>
                 <input
                   key={sourceInputKey}
                   ref={sourceInputRef}
@@ -468,7 +439,7 @@ export function LaunchPage() {
                     const nextFile = event.target.files?.[0] ?? null
                     if (nextFile !== null && !isSupportedSourceFile(nextFile)) {
                       setSourceFile(null)
-                      setSubmitState({ phase: 'error', message: '지원하는 파일 형식을 선택하세요.' })
+                      setSubmitState({ phase: 'error', message: 'PDF, MIDI, MusicXML 파일을 선택하세요.' })
                       return
                     }
                     setSourceFile(nextFile)
@@ -485,20 +456,6 @@ export function LaunchPage() {
                 </div>
               ) : null}
 
-              <label className="launch-field" hidden={!sourceFile}>
-                <span>업로드 해석</span>
-                <select
-                  value={sourceKindOverride}
-                  disabled={submitState.phase === 'submitting'}
-                  onChange={(event) =>
-                    setSourceKindOverride(event.target.value as 'auto' | 'document' | 'music')
-                  }
-                >
-                  <option value="auto">자동 판단</option>
-                  <option value="document">문서/MIDI</option>
-                  <option value="music">음악</option>
-                </select>
-              </label>
             </div>
 
             <div className="launch-actions">
@@ -510,7 +467,7 @@ export function LaunchPage() {
                 disabled={submitState.phase === 'submitting' || !canUploadStart}
                 onClick={() => void uploadAndStart()}
               >
-                업로드로 시작
+                악보 파일로 시작
               </button>
               <button
                 data-testid="start-blank-button"
@@ -540,7 +497,7 @@ export function LaunchPage() {
         <footer className="launch-statusbar">
           <span>준비 완료</span>
           <span>트랙 1-6</span>
-          <span>편집 / 업로드 / 빈 스튜디오</span>
+          <span>편집 / 악보 파일 / 빈 스튜디오</span>
         </footer>
       </section>
 

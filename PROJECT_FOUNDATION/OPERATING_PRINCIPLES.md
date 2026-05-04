@@ -141,6 +141,15 @@ the same change.
   Candidate cards should explain musical role, fit, risk, and overwrite impact.
 - One failed extraction part must not block all other parts. Multi-part import
   should try every identifiable track and report per-track results.
+- Studio creation upload and per-track upload are different product contracts.
+  The start page exposes score files as `PDF/MIDI/MusicXML` seeding input.
+  Individual track rows expose `recording file upload` for user-recorded audio
+  only. Backend adapters may still support additional import paths, but
+  user-facing labels must not collapse them into one vague upload action.
+- Bulk approval should register every unblocked valid candidate it can. If some
+  parts would overwrite existing tracks or fail registration, keep those
+  candidates reviewable, report the skipped/failed tracks, and return the studio
+  to a normal usable state instead of failing the whole job.
 - Mixed choral audio is not guaranteed to split cleanly into six tracks. Expose
   diagnostics and candidates rather than pretending separation is perfect.
 
@@ -263,7 +272,8 @@ the same change.
 - Do not merge region editing and practice waterfall previews back into the
   studio assembly page unless the foundation is reopened first.
 - The home flow has two distinct starts:
-  - Upload and start appears only after a supported file is selected.
+  - PDF/MIDI/MusicXML and start appears only after a supported score file is
+    selected.
   - Start blank asks for BPM and meter and requires no upload.
 - Queue, upload, extraction, and registration states must be visible enough that
   users do not think the app froze.

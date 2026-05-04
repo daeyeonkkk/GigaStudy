@@ -10,10 +10,9 @@ import {
 } from '../../lib/api'
 import { prepareAudioFileForUpload } from '../../lib/audio'
 import {
-  detectUploadKind,
+  detectTrackRecordingUploadKind,
   formatSeconds,
   formatTrackName,
-  isDocumentImageUpload,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
 import type { RunStudioAction, SetStudioActionState } from './studioActionState'
@@ -67,24 +66,16 @@ export function useStudioTrackActions({
     }
     stopPlaybackBeforeEditing()
 
-    const sourceKind = detectUploadKind(file)
+    const sourceKind = detectTrackRecordingUploadKind(file)
     const trackLabel = formatTrackName(track.name)
     if (!sourceKind) {
-      setActionState({ phase: 'error', message: '지원하지 않는 파일 형식입니다.' })
+      setActionState({ phase: 'error', message: '녹음파일(WAV, MP3, M4A, OGG, FLAC)을 선택하세요.' })
       return
     }
 
     const uploadSucceeded = await runStudioAction(
       async () => {
-        const preparedUpload =
-          sourceKind === 'audio'
-            ? await prepareAudioFileForUpload(file)
-            : {
-                filename: file.name,
-                blob: file,
-                contentType: file.type || 'application/octet-stream',
-                contentBase64: undefined,
-              }
+        const preparedUpload = await prepareAudioFileForUpload(file)
 
         const uploadTarget = await createTrackUploadTarget(studio.studio_id, track.slot_id, {
           source_kind: sourceKind,
@@ -113,11 +104,11 @@ export function useStudioTrackActions({
           review_before_register: true,
         })
       },
-      `${trackLabel} 파일을 업로드하고 추출 대기열에 등록하는 중입니다.`,
-      `${trackLabel} 트랙에 ${file.name} 추출 후보를 준비했습니다.`,
+      `${trackLabel} 녹음파일을 분석 대기열에 등록하는 중입니다.`,
+      `${trackLabel} 녹음파일 후보를 준비했습니다.`,
       [
-        `${trackLabel} 파일을 서버에 올리는 중입니다.`,
-        `${trackLabel} 추출 작업을 대기열에 배치하는 중입니다.`,
+        `${trackLabel} 녹음파일을 서버에 올리는 중입니다.`,
+        `${trackLabel} 음정 추출 작업을 대기열에 배치하는 중입니다.`,
         '작업이 끝나면 후보 검토 목록에 표시됩니다.',
       ],
     )
@@ -126,17 +117,10 @@ export function useStudioTrackActions({
       return
     }
 
-    if (isDocumentImageUpload(file)) {
-      setActionState({
-        phase: 'success',
-        message: `${trackLabel} 문서 분석 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
-      })
-    } else if (sourceKind === 'audio') {
-      setActionState({
-        phase: 'success',
-        message: `${trackLabel} 오디오 추출 작업을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
-      })
-    }
+    setActionState({
+      phase: 'success',
+      message: `${trackLabel} 녹음파일 분석을 시작했습니다. 후보가 준비되면 검토 목록에 표시됩니다.`,
+    })
   }
 
   async function handleGenerate(track: TrackSlot) {

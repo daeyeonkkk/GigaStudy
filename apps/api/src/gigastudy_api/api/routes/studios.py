@@ -143,6 +143,27 @@ def get_document_job_source_preview(
     )
 
 
+@router.get("/{studio_id}/exports/midi")
+def export_studio_midi(
+    studio_id: str,
+    owner_token_query: str | None = Query(default=None, alias="owner_token"),
+    owner_token_header: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> Response:
+    content, filename = repository.export_studio_midi(
+        studio_id,
+        owner_token=owner_token_header or owner_token_query,
+    )
+    return Response(
+        content=content,
+        media_type="audio/midi",
+        headers={
+            "Cache-Control": "private, max-age=60",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 @router.put("/direct-uploads/{asset_id}")
 async def put_direct_upload(
     asset_id: str,

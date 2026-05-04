@@ -37,11 +37,11 @@ The user starts from the home screen.
 
 They enter a project name, then choose one of two starts:
 
-- Upload and start (`업로드 후 시작`)
+- PDF/MIDI/MusicXML and start (`악보 파일로 시작`)
 - Start blank (`새로 시작`)
 
-Upload and start appears only after a document or music source is selected. BPM and
-time signature are requested only for Start blank.
+The score-file start appears only after a PDF, MIDI, or MusicXML source is
+selected. BPM and time signature are requested only for Start blank.
 
 If the user uploads a document, GigaStudy extracts track material into regions:
 
@@ -50,12 +50,9 @@ If the user uploads a document, GigaStudy extracts track material into regions:
 - Non-a cappella source: register the main melody into the most appropriate
   track as region events.
 
-The canonical source kind for this flow is `document`; deprecated document-source aliases are invalid.
-
-If the user uploads music, GigaStudy extracts every usable part and registers
-those into the six tracks where possible. Browser-decodable MP3/M4A/OGG/FLAC
-input is normalized to WAV before the symbolic pitch/rhythm extraction engine
-runs.
+The canonical source kind for this flow is `document`; deprecated
+document-source aliases are invalid. Track-level audio stays in the studio
+track rows as `recording file upload`, not in the studio creation seeding flow.
 
 If the user starts blank, all six tracks are empty.
 
@@ -66,7 +63,7 @@ The main studio is centered on the six tracks.
 Each track can be filled by:
 
 - Recording
-- Uploading
+- Recording-file upload
 - AI generation, once at least one track already exists
 
 Each registered track has a region lane, playback controls, stop, scoring

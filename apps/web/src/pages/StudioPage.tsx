@@ -20,6 +20,7 @@ import {
   copyRegion,
   deleteRegion,
   getDocumentJobSourcePreviewUrl,
+  getStudioMidiExportUrl,
   splitRegion,
 } from '../lib/api'
 import {
@@ -362,6 +363,9 @@ export function StudioPage() {
                 {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}
                 {registeredTracks.length}/6 · 리포트 {studio.reports.length}
               </p>
+              <a className="app-button app-button--secondary" href={getStudioMidiExportUrl(studio.studio_id)}>
+                MIDI 내보내기
+              </a>
             </div>
 
             <TrackBoard

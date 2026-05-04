@@ -18,6 +18,7 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     estimate_candidate_confidence,
     track_duration_seconds,
 )
+from gigastudy_api.services.engine.event_quality import RegistrationQualityResult
 from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
 from gigastudy_api.services.studio_access import require_studio_access
 from gigastudy_api.services.studio_candidates import (
@@ -179,40 +180,41 @@ class StudioCandidateCommands:
                 action_label="Job candidate approval",
             )
 
-            occupied_slots = [
+            occupied_slots = {
                 slot_id
                 for slot_id in unique_candidates_by_slot
                 if track_has_content(self._repository._find_track(studio, slot_id))
-            ]
-            if occupied_slots and not request.allow_overwrite:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Approving this document extraction job would overwrite existing registered tracks.",
-                )
+            }
+            blocked_slots = occupied_slots if not request.allow_overwrite else set()
+            candidates_to_register = {
+                slot_id: candidate
+                for slot_id, candidate in unique_candidates_by_slot.items()
+                if slot_id not in blocked_slots
+            }
 
             timestamp = self._now()
-            source_kinds = {candidate.source_kind for candidate in unique_candidates_by_slot.values()}
-            if len(source_kinds) == 1:
-                shared_source_kind = next(iter(source_kinds))
-                registrations = self._repository._prepare_registration_batch(
-                    studio,
-                    {
-                        slot_id: candidate.events
-                        for slot_id, candidate in unique_candidates_by_slot.items()
-                    },
-                    source_kind=shared_source_kind,
-                )
-            else:
-                registrations = {
-                    slot_id: self._repository._prepare_registration_events(
+            registrations, failed_registrations = self._prepare_job_candidate_registrations(
+                studio,
+                candidates_to_register,
+            )
+            approved_slot_ids: set[int] = set()
+
+            for slot_id, candidate in candidates_to_register.items():
+                if slot_id not in registrations:
+                    failure_message = failed_registrations.get(slot_id, "등록 가능한 음표로 정리하지 못했습니다.")
+                    candidate.message = f"등록하지 못했습니다: {failure_message}"
+                    candidate.diagnostics = {
+                        **candidate.diagnostics,
+                        "registration_failure": failure_message,
+                    }
+                    mark_candidate_rejected(candidate, timestamp=timestamp)
+                    release_review_track_if_no_pending_candidates(
                         studio,
-                        slot_id,
-                        source_kind=candidate.source_kind,
-                        events=candidate.events,
+                        slot_id=slot_id,
+                        resolved_candidate_id=candidate.candidate_id,
+                        timestamp=timestamp,
                     )
-                    for slot_id, candidate in unique_candidates_by_slot.items()
-                }
-            for slot_id, candidate in unique_candidates_by_slot.items():
+                    continue
                 track = self._repository._find_track(studio, slot_id)
                 registration = registrations[slot_id]
                 mark_candidate_approved(
@@ -234,16 +236,109 @@ class StudioCandidateCommands:
                     audio_source_label=candidate.audio_source_label,
                     audio_mime_type=candidate.audio_mime_type,
                 )
+                approved_slot_ids.add(slot_id)
 
             for candidate in duplicate_candidates:
-                mark_candidate_rejected(candidate, timestamp=timestamp)
+                if candidate.suggested_slot_id in approved_slot_ids:
+                    mark_candidate_rejected(candidate, timestamp=timestamp)
 
-            job.status = "completed"
-            job.message = "Document extraction candidates registered into their suggested tracks."
+            remaining_pending_candidates = pending_candidates_for_job(studio.candidates, job_id)
+            if remaining_pending_candidates:
+                job.status = "needs_review"
+            else:
+                job.status = "completed" if approved_slot_ids else "failed"
+            job.message = self._job_candidate_approval_message(
+                studio,
+                approved_slot_ids=approved_slot_ids,
+                blocked_slot_ids=blocked_slots,
+                failed_registrations=failed_registrations,
+                remaining_pending_count=len(remaining_pending_candidates),
+            )
             job.updated_at = timestamp
             studio.updated_at = timestamp
             self._repository._save_studio(studio)
         return studio
+
+    def _prepare_job_candidate_registrations(
+        self,
+        studio: Studio,
+        candidates_by_slot: dict[int, Any],
+    ) -> tuple[dict[int, RegistrationQualityResult], dict[int, str]]:
+        if not candidates_by_slot:
+            return {}, {}
+
+        source_kinds = {candidate.source_kind for candidate in candidates_by_slot.values()}
+        if len(source_kinds) == 1:
+            shared_source_kind = next(iter(source_kinds))
+            try:
+                return (
+                    self._repository._prepare_registration_batch(
+                        studio,
+                        {
+                            slot_id: candidate.events
+                            for slot_id, candidate in candidates_by_slot.items()
+                        },
+                        source_kind=shared_source_kind,
+                    ),
+                    {},
+                )
+            except Exception:
+                # Fall through to per-track preparation so one problematic part
+                # does not block the other extracted parts.
+                pass
+
+        registrations: dict[int, RegistrationQualityResult] = {}
+        failures: dict[int, str] = {}
+        for slot_id, candidate in candidates_by_slot.items():
+            try:
+                registrations[slot_id] = self._repository._prepare_registration_events(
+                    studio,
+                    slot_id,
+                    source_kind=candidate.source_kind,
+                    events=candidate.events,
+                )
+            except Exception as error:
+                failures[slot_id] = str(error) or error.__class__.__name__
+        return registrations, failures
+
+    def _job_candidate_approval_message(
+        self,
+        studio: Studio,
+        *,
+        approved_slot_ids: set[int],
+        blocked_slot_ids: set[int],
+        failed_registrations: dict[int, str],
+        remaining_pending_count: int,
+    ) -> str:
+        message_parts: list[str] = []
+        if approved_slot_ids:
+            message_parts.append(
+                f"{self._format_slot_names(studio, approved_slot_ids)} 등록 완료"
+            )
+        if blocked_slot_ids:
+            message_parts.append(
+                f"{self._format_slot_names(studio, blocked_slot_ids)} 기존 등록 유지"
+            )
+        if failed_registrations:
+            message_parts.append(
+                f"{self._format_slot_names(studio, set(failed_registrations))} 등록 실패"
+            )
+        if remaining_pending_count > 0:
+            message_parts.append(f"남은 후보 {remaining_pending_count}개")
+        if not message_parts:
+            return "등록할 수 있는 후보가 없습니다."
+        return " · ".join(message_parts)
+
+    def _format_slot_names(self, studio: Studio, slot_ids: set[int]) -> str:
+        if not slot_ids:
+            return ""
+        names: list[str] = []
+        for slot_id in sorted(slot_ids):
+            try:
+                names.append(self._repository._find_track(studio, slot_id).name)
+            except Exception:
+                names.append(f"Track {slot_id}")
+        return ", ".join(names)
 
     def append_initial_candidate(
         self,

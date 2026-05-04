@@ -107,7 +107,7 @@ export function StudioEditPage() {
       return
     }
     const targetTrack = studio.tracks.find((track) => track.slot_id === targetSlotId)
-    const targetName = targetTrack?.name ?? `Track ${targetSlotId}`
+    const targetName = targetTrack?.name ?? `트랙 ${targetSlotId}`
     await runStudioAction(
       () =>
         copyRegion(studio.studio_id, region.region_id, {
@@ -153,7 +153,7 @@ export function StudioEditPage() {
       return
     }
     const targetTrack = studio.tracks.find((track) => track.slot_id === draft.target_track_slot_id)
-    const targetName = targetTrack?.name ?? `Track ${draft.target_track_slot_id}`
+    const targetName = targetTrack?.name ?? `트랙 ${draft.target_track_slot_id}`
     await runStudioAction(
       () =>
         saveRegionRevision(studio.studio_id, region.region_id, {
@@ -173,7 +173,7 @@ export function StudioEditPage() {
           volume_percent: Math.max(0, Math.min(100, Math.round(draft.volume_percent))),
         }),
       `${formatTrackName(region.track_name)} 편집 내용을 저장하는 중입니다.`,
-      `${formatTrackName(targetName)} region 편집 내용을 저장했습니다.`,
+      `${formatTrackName(targetName)} 구간을 저장했습니다.`,
     )
   }
 
@@ -194,7 +194,7 @@ export function StudioEditPage() {
         homeLabel="홈으로"
         message="스튜디오 주소가 올바르지 않습니다."
         title="음표 편집 화면을 열 수 없습니다"
-        tone="편집 오류"
+        tone="오류"
       />
     )
   }
@@ -204,7 +204,7 @@ export function StudioEditPage() {
       <StudioRouteState
         pulseCount={6}
         title="음표 편집 화면을 준비하는 중입니다"
-        tone="편집 로딩"
+        tone="불러오는 중"
       />
     )
   }
@@ -215,7 +215,7 @@ export function StudioEditPage() {
         homeLabel="홈으로"
         message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
         title="음표 편집 화면을 열 수 없습니다"
-        tone="편집 오류"
+        tone="오류"
       />
     )
   }
@@ -228,27 +228,19 @@ export function StudioEditPage() {
             GS
           </Link>
           <span>GigaStudy 음표 편집 - {studio.title}</span>
-          <div className="composer-window-buttons" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
         </header>
 
         <StudioPurposeNav
           active="editor"
-          note="선택한 region의 pitch, 시작 위치, duration을 수정합니다. 등록과 연습은 각 전용 화면에서 이어갑니다."
           studioId={studio.studio_id}
         />
 
-        <section className="studio-status-line" aria-live="polite">
-          <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
-          <p>
-            {actionState.phase === 'idle'
-              ? 'Region을 선택하고 음 높이, 시작 위치, 길이를 shared timeline 위에서 수정하세요.'
-              : actionState.message}
-          </p>
-        </section>
+        {actionState.phase !== 'idle' ? (
+          <section className="studio-status-line" aria-live="polite">
+            <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
+            <p>{actionState.message}</p>
+          </section>
+        ) : null}
 
         <section className="composer-arrange-viewport composer-arrange-viewport--editor">
           <div className="composer-arrange-paper composer-arrange-paper--editor">
@@ -259,13 +251,6 @@ export function StudioEditPage() {
                 {studio.time_signature_denominator ?? 4} · 구간{' '}
                 {studio.regions.length} · 검토 {pendingCandidates.length}
               </p>
-              <section className="composer-page-brief" aria-label="음표 편집 화면 역할">
-                <div>
-                  <span>이 화면의 역할</span>
-                  <strong>Region 안의 음표를 shared timeline 위에서 고칩니다.</strong>
-                </div>
-                <p>Track 등록, upload, AI generation, scoring 시작은 스튜디오 화면에서 처리합니다.</p>
-              </section>
             </div>
 
             <TrackBoard
@@ -295,7 +280,6 @@ export function StudioEditPage() {
               }
               onDeleteRegion={(region) => void handleDeleteRegion(region)}
               onGenerate={() => undefined}
-              onOpenScore={() => undefined}
               onRecord={() => undefined}
               onRestoreRegionRevision={(region, revisionId) => void handleRestoreRegionRevision(region, revisionId)}
               onSaveRegionDraft={(region, draft, revisionLabel) =>
@@ -313,8 +297,8 @@ export function StudioEditPage() {
 
         <footer className="composer-statusbar">
           <span>음표 편집</span>
-          <span>{studio.regions.length} region</span>
-          <span>{studio.tracks.length} track</span>
+          <span>구간 {studio.regions.length}</span>
+          <span>트랙 {studio.tracks.length}</span>
           <span>{formatDurationSeconds(Math.max(0, ...studio.regions.map((region) => region.start_seconds + region.duration_seconds)))}</span>
         </footer>
       </section>

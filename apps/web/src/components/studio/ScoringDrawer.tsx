@@ -59,8 +59,8 @@ export function ScoringDrawer({
     scoreSession.selectedReferenceIds.includes(slotId),
   ).length
   const modeSummary = isHarmonyMode
-    ? `현재 모드: 화음 채점. ${selectedReferenceCount}개 기준 트랙을 기준으로 내 파트의 안정감과 충돌을 평가하고, ${playbackReferenceCount}개 트랙을 들려줍니다.`
-    : `현재 모드: 정답 채점. ${formatTrackName(targetTrack.name)} 음표를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 맥락으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
+    ? `화음 채점. ${selectedReferenceCount}개 기준 트랙을 기준으로 내 파트의 안정감과 충돌을 평가하고, ${playbackReferenceCount}개 트랙을 들려줍니다.`
+    : `정답 채점. ${formatTrackName(targetTrack.name)} 음표를 답안지로 삼고, ${selectedReferenceCount}개 기준 트랙은 채점 맥락으로만 사용하며 ${playbackReferenceCount}개 트랙을 들려줍니다.`
   const phaseLocked = scoreSession.phase !== 'ready'
 
   return (

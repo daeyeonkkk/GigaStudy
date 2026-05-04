@@ -141,90 +141,14 @@ export function StudioToolbar({
           GS
         </Link>
         <span>GigaStudy - {studioTitle}</span>
-        <div className="composer-window-buttons" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
       </header>
 
       <StudioPurposeNav
         active="studio"
-        note="트랙을 채우고 sync를 맞춘 뒤, 선택한 track을 같은 timeline에서 재생해 ensemble 상태를 확인합니다."
         studioId={studioId}
       />
 
-      <nav className="composer-menubar" aria-label="스튜디오 메뉴">
-        <Link className="composer-menubar__item" to="/" title="스튜디오 목록으로 이동">
-          파일
-        </Link>
-        <button
-          className="composer-menubar__item"
-          disabled
-          title="트랙 작업은 각 트랙 행에서 사용할 수 있습니다."
-          type="button"
-        >
-          트랙
-        </button>
-        <Link
-          className="composer-menubar__item"
-          to={`/studios/${studioId}/edit`}
-          title="region과 음표를 세부 편집합니다."
-        >
-          음표 편집
-        </Link>
-        <button
-          className="composer-menubar__item"
-          disabled={!globalPlaying && (transportDisabled || registeredTrackCount === 0)}
-          title={!globalPlaying ? transportDisabledReason ?? '동시 재생할 트랙을 선택합니다.' : '재생을 멈춥니다.'}
-          type="button"
-          onClick={globalPlaying ? onToggleGlobalPlayback : onTogglePlaybackPicker}
-        >
-          재생
-        </button>
-        <Link
-          className="composer-menubar__item"
-          to={`/studios/${studioId}/practice`}
-          title="연습 화면으로 이동"
-        >
-          연습
-        </Link>
-        <button
-          className="composer-menubar__item"
-          disabled
-          title="세부 도구 메뉴는 준비 중입니다."
-          type="button"
-        >
-          도구
-        </button>
-        <button
-          className="composer-menubar__item"
-          disabled
-          title="도움말 문서는 준비 중입니다."
-          type="button"
-        >
-          도움말
-        </button>
-      </nav>
-
       <div className="composer-toolbar" aria-label="전체 트랙 재생 제어">
-        <Link className="composer-tool composer-tool--home" to="/" aria-label="홈으로">
-          홈
-        </Link>
-        <Link
-          className="composer-tool composer-tool--text"
-          data-testid="note-editor-link"
-          to={`/studios/${studioId}/edit`}
-        >
-          음표 편집
-        </Link>
-        <Link
-          className="composer-tool composer-tool--text"
-          data-testid="practice-mode-link"
-          to={`/studios/${studioId}/practice`}
-        >
-          연습
-        </Link>
         <button
           aria-label={globalPlaying ? '선택 재생 일시정지' : '트랙 선택 재생'}
           className="composer-tool composer-tool--primary"
@@ -245,12 +169,6 @@ export function StudioToolbar({
           onClick={onStopGlobalPlayback}
         >
           <span aria-hidden="true">중지</span>
-        </button>
-        <button className="composer-tool" type="button" aria-label="확대">
-          <span aria-hidden="true">+</span>
-        </button>
-        <button className="composer-tool" type="button" aria-label="축소">
-          <span aria-hidden="true">-</span>
         </button>
         <label className="composer-sync-step">
           <span>싱크</span>
@@ -396,14 +314,12 @@ export function StudioToolbar({
         </section>
       )}
 
-      <section className="studio-status-line" aria-live="polite">
-        <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
-        <p>
-          {actionState.phase === 'idle'
-            ? `트랙을 녹음, 업로드, AI 생성으로 채운 뒤 ${formatStepInput(syncStepSeconds)}초 단위로 맞춰보세요.`
-            : actionState.message}
-        </p>
-      </section>
+      {actionState.phase !== 'idle' ? (
+        <section className="studio-status-line" aria-live="polite">
+          <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
+          <p>{actionState.message}</p>
+        </section>
+      ) : null}
     </>
   )
 }

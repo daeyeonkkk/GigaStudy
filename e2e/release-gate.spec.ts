@@ -33,15 +33,13 @@ async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.getByTestId('start-blank-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
   await expect(page.getByRole('heading', { name: title })).toBeVisible()
-  await expect(page.getByText('트랙 스튜디오')).toBeVisible()
-  await expect(page.getByRole('link', { exact: true, name: '파일' })).toBeVisible()
-  await expect(page.getByTestId('note-editor-link')).toBeVisible()
   await expect(page.getByTestId('purpose-nav-studio')).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('button', { exact: true, name: '트랙' })).toBeDisabled()
-  await expect(page.locator('.composer-tool--home')).toHaveText('홈')
+  await expect(page.getByTestId('purpose-nav-editor')).toBeVisible()
+  await expect(page.getByTestId('purpose-nav-practice')).toBeVisible()
   await expect(page.getByTestId('playback-source-audio')).toHaveText('원음 우선')
   await expect(page.getByTestId('playback-source-events')).toHaveText('연주음만')
   await expect(page.getByTestId('track-card-1')).toBeVisible()
+  await expect(page.locator('[data-testid^="track-score-"]')).toHaveCount(0)
 }
 
 async function uploadSopranoMusicXml(page: Page, slotId = 1) {
@@ -80,7 +78,7 @@ async function openNoteEditorForRegion(page: Page, slotId: number, labels: strin
 test('blank studio opens the region editor and independent practice route', async ({ page }) => {
   await createBlankStudio(page, 'Region blank session')
 
-  await page.getByTestId('note-editor-link').click()
+  await page.getByTestId('purpose-nav-editor').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/edit$/)
   await expect(page.getByText('GigaStudy 음표 편집 - Region blank session')).toBeVisible()
   await expect(page.getByTestId('purpose-nav-editor')).toHaveAttribute('aria-current', 'page')
@@ -99,7 +97,8 @@ test('blank studio opens the region editor and independent practice route', asyn
   await expect(page.locator('.practice-track-picker label.is-empty')).toHaveCount(6)
   await expect(page.getByTestId('practice-track-checkbox-1')).toBeDisabled()
   await expect(page.getByTestId('practice-track-checkbox-6')).toBeDisabled()
-  await expect(page.getByText('등록된 음표가 아직 없습니다.')).toBeVisible()
+  await expect(page.getByTestId('practice-score-button')).toBeDisabled()
+  await expect(page.getByText('음표 없음')).toBeVisible()
 })
 
 test('document upload flows through studio, note editor, and practice waterfall', async ({ page }) => {
@@ -130,6 +129,11 @@ test('document upload flows through studio, note editor, and practice waterfall'
   await page.getByTestId('purpose-nav-practice').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)
   await expect(page.locator('.practice-stage__event[title*="C5"]')).toBeVisible()
+  await expect(page.getByTestId('practice-score-button')).toBeEnabled()
+  await page.getByTestId('practice-score-button').click()
+  await expect(page.getByTestId('score-start-button')).toBeVisible()
+  await expect(page.getByText('소프라노 채점')).toBeVisible()
+  await page.getByRole('button', { name: '채점 체크리스트 닫기' }).click()
   await expect(page.locator('.practice-stage__event[title*="C#5"]')).toHaveCount(0)
 
   await page.getByTestId('purpose-nav-editor').click()

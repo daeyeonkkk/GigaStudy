@@ -33,8 +33,8 @@ export function PracticeWaterfall({
     <section className="practice-waterfall" aria-label="연습 미리보기">
       <header>
         <div>
-          <p className="eyebrow">연습 모드</p>
-          <h3>타임라인</h3>
+          <p className="eyebrow">연습</p>
+          <h3>미리보기</h3>
         </div>
         <span>{events.length}개 음표</span>
       </header>

@@ -51,18 +51,6 @@
   min-width: 0;
 }
 
-.candidate-review__engine {
-  width: fit-content;
-  padding: 3px 7px;
-  border: 1px solid #c8d3df;
-  border-radius: 4px;
-  background: #f4f7fa;
-  color: #314350;
-  font-size: 0.72rem;
-  font-weight: 900;
-  overflow-wrap: anywhere;
-}
-
 .candidate-review__item h3 {
   color: #111111;
   font-size: 1rem;

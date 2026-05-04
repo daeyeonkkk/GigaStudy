@@ -122,9 +122,7 @@ function getIssueDetail(issue: ReportIssue): string {
 function getIssueCoordinate(issue: ReportIssue): string {
   const expectedBeat = issue.expected_beat !== null ? `기준 박 ${issue.expected_beat}` : null
   const actualBeat = issue.actual_beat !== null ? `실제 박 ${issue.actual_beat}` : null
-  const eventId = issue.answer_event_id ?? issue.performance_event_id
-  const eventText = eventId ? `음표 ${eventId}` : null
-  return [expectedBeat, actualBeat, eventText].filter(Boolean).join(' / ')
+  return [expectedBeat, actualBeat].filter(Boolean).join(' / ')
 }
 
 function getIssueFocusPath(studioId: string, issue: ReportIssue): string | null {
@@ -212,7 +210,7 @@ export function ReportPage() {
   if (!studioId) {
     return (
       <ReportRouteState
-        eyebrow="리포트 오류"
+        eyebrow="오류"
         title="리포트를 찾을 수 없습니다"
         body="스튜디오 주소가 올바르지 않습니다."
         to="/"
@@ -222,13 +220,13 @@ export function ReportPage() {
   }
 
   if (loadState.phase === 'loading') {
-    return <ReportRouteState eyebrow="리포트 로딩" title="리포트를 불러오는 중입니다" />
+    return <ReportRouteState eyebrow="불러오는 중" title="리포트를 불러오는 중입니다" />
   }
 
   if (loadState.phase === 'error' || !studio || !report) {
     return (
       <ReportRouteState
-        eyebrow="리포트 오류"
+        eyebrow="오류"
         title="리포트를 찾을 수 없습니다"
         body={loadState.phase === 'error' ? loadState.message : '존재하지 않는 리포트입니다.'}
         to={studioId ? `/studios/${studioId}` : '/'}
@@ -250,14 +248,10 @@ export function ReportPage() {
             <p className="eyebrow">채점 리포트</p>
             <h1>{reportTitle(report)}</h1>
           </div>
-          <Link className="app-button app-button--secondary" to={`/studios/${studio.studio_id}`}>
-            스튜디오
-          </Link>
         </header>
 
         <StudioPurposeNav
           active="report"
-          note="채점 결과를 확인하고, 고쳐야 할 answer-side issue는 음표 편집 화면으로 바로 보냅니다."
           studioId={studio.studio_id}
         />
 
@@ -271,11 +265,6 @@ export function ReportPage() {
           <strong>{formatScore(report.overall_score)}</strong>
         </section>
 
-        <section className="report-purpose" aria-label="리포트 화면 역할">
-          <strong>이 화면은 scoring evidence를 읽고 다음 수정 지점을 찾는 곳입니다.</strong>
-          <p>Region/event가 있는 issue는 음표 편집으로 연결되고, 새 take를 녹음하려면 스튜디오에서 채점을 다시 시작합니다.</p>
-        </section>
-
         <section className="report-metrics" aria-label="리포트 지표">
           {metricCards.map((metric) => (
             <div key={metric.label}>
@@ -287,7 +276,7 @@ export function ReportPage() {
 
         <section className="report-issues" data-testid="report-issues">
           <header>
-            <p className="eyebrow">오차 타임라인</p>
+            <p className="eyebrow">오차</p>
             <h2>오차 목록</h2>
           </header>
 

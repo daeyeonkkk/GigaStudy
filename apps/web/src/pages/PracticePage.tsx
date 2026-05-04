@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { ReportFeed } from '../components/studio/ReportFeed'
+import { ScoringDrawer } from '../components/studio/ScoringDrawer'
 import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
 import {
@@ -13,6 +15,7 @@ import {
 import type { StudioActionState } from '../components/studio/studioActionState'
 import { useStudioPlayback } from '../components/studio/useStudioPlayback'
 import { useStudioResource } from '../components/studio/useStudioResource'
+import { useStudioScoring } from '../components/studio/useStudioScoring'
 import {
   DEFAULT_METER,
   formatDurationSeconds,
@@ -107,14 +110,14 @@ function getPlayheadStyle(
 }
 
 function PracticeStatus({ actionState }: { actionState: StudioActionState }) {
+  if (actionState.phase === 'idle') {
+    return null
+  }
+
   return (
     <section className="studio-status-line practice-status-line" aria-live="polite">
       <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
-      <p>
-        {actionState.phase === 'idle'
-          ? '연습 준비 완료'
-          : actionState.message}
-      </p>
+      <p>{actionState.message}</p>
     </section>
   )
 }
@@ -148,7 +151,7 @@ function PracticeWaterfallStage({
   )
 
   return (
-    <section className="practice-stage" aria-label="연습 타이밍 타임라인">
+    <section className="practice-stage" aria-label="연습 화면">
       <div className="practice-stage__labels" aria-hidden="true">
         <span>{formatDurationSeconds(minSeconds)}</span>
         <span>
@@ -172,7 +175,7 @@ function PracticeWaterfallStage({
           </div>
         ))}
         {events.length === 0 ? (
-          <p className="practice-stage__empty">등록된 음표가 아직 없습니다.</p>
+          <p className="practice-stage__empty">음표 없음</p>
         ) : (
           events.map((item) => (
             <i
@@ -198,9 +201,11 @@ export function PracticePage() {
     loadState,
     registeredSlotIds,
     registeredTracks,
+    setStudio,
     studio,
   } = useStudioResource(studioId, (message) => setActionState({ phase: 'error', message }))
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
+  const [selectedScoreTargetSlotId, setSelectedScoreTargetSlotId] = useState<number | null>(null)
   const studioMeter = useMemo(
     () => (studio ? getStudioMeter(studio) : DEFAULT_METER),
     [studio],
@@ -208,19 +213,45 @@ export function PracticePage() {
   const {
     changePlaybackSource,
     globalPlaying,
+    markReferencePlayback,
     playbackSource,
     playbackTimeline,
     playheadSeconds,
     selectAllPlaybackTracks,
     selectedPlaybackSlotIds,
+    startPlaybackSession,
     startSelectedPlayback,
     stopGlobalPlayback,
+    stopPlaybackSession,
     togglePlaybackSelection,
   } = useStudioPlayback({
     metronomeEnabled,
     registeredSlotIds,
     registeredTracks,
     setActionState,
+    studio,
+    studioMeter,
+  })
+  const {
+    cancelScoreSession,
+    openScoreSession,
+    scoreSession,
+    scoreTargetTrack,
+    setScoreIncludeMetronome,
+    startScoreListening,
+    stopScoreListening,
+    toggleScoreReference,
+    toggleScoreReferencePlayback,
+    updateScoreMode,
+  } = useStudioScoring({
+    markReferencePlayback,
+    metronomeEnabled,
+    recordingSlotId: null,
+    registeredSlotIds,
+    setActionState,
+    setStudio,
+    startPlaybackSession,
+    stopPlaybackSession,
     studio,
     studioMeter,
   })
@@ -234,6 +265,17 @@ export function PracticePage() {
     selectedPlaybackSlotIds.has(track.slot_id),
   ).length
   const actionBusy = actionState.phase === 'busy'
+  const practiceControlsLocked = actionBusy || scoreSession !== null
+  const selectedScoreTargetTrack =
+    studio?.tracks.find((track) => track.slot_id === selectedScoreTargetSlotId) ??
+    registeredTracks[0] ??
+    studio?.tracks[0] ??
+    null
+  const canScoreSelectedTrack = selectedScoreTargetTrack
+    ? selectedScoreTargetTrack.status === 'registered' ||
+      registeredTracks.some((track) => track.slot_id !== selectedScoreTargetTrack.slot_id)
+    : false
+  const scoreControlsLocked = practiceControlsLocked || globalPlaying
 
   if (!studioId) {
     return (
@@ -241,7 +283,7 @@ export function PracticePage() {
         homeLabel="홈"
         message="스튜디오 주소가 올바르지 않습니다."
         title="연습 모드를 열 수 없습니다"
-        tone="연습 오류"
+        tone="오류"
       />
     )
   }
@@ -251,7 +293,7 @@ export function PracticePage() {
       <StudioRouteState
         pulseCount={6}
         title="연습 화면을 준비하는 중입니다"
-        tone="연습 로딩"
+        tone="불러오는 중"
       />
     )
   }
@@ -262,7 +304,7 @@ export function PracticePage() {
         homeLabel="홈"
         message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
         title="연습 모드를 열 수 없습니다"
-        tone="연습 오류"
+        tone="오류"
       />
     )
   }
@@ -275,38 +317,26 @@ export function PracticePage() {
             GS
           </Link>
           <span>GigaStudy 연습 - {studio.title}</span>
-          <div className="composer-window-buttons" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
         </header>
 
         <StudioPurposeNav
           active="practice"
-          note="선택한 reference track을 들으며 waterfall에서 entrance와 duration을 확인하는 연습 전용 화면입니다."
           studioId={studio.studio_id}
         />
 
-        <section className="practice-page-brief" aria-label="연습 화면 역할">
+        <section className="practice-page-brief" aria-label="연습">
           <div>
             <p className="eyebrow">연습</p>
             <h1>{studio.title}</h1>
           </div>
-          <p>Track 선택, 재생 방식, metronome을 정한 뒤 같은 scheduled timeline에서 연습합니다.</p>
+          <p>{studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4}</p>
         </section>
 
         <div className="practice-toolbar" aria-label="연습 재생 제어">
-          <Link className="composer-tool composer-tool--text" to={`/studios/${studio.studio_id}`}>
-            스튜디오
-          </Link>
-          <Link className="composer-tool composer-tool--text" to={`/studios/${studio.studio_id}/edit`}>
-            편집
-          </Link>
           <button
             className="composer-tool composer-tool--primary"
             data-testid="practice-play-button"
-            disabled={selectedTrackCount === 0 || actionBusy}
+            disabled={selectedTrackCount === 0 || practiceControlsLocked}
             type="button"
             onClick={() => void startSelectedPlayback()}
           >
@@ -323,7 +353,7 @@ export function PracticePage() {
           </button>
           <button
             className="composer-tool composer-tool--text"
-            disabled={registeredTracks.length === 0 || globalPlaying || actionBusy}
+            disabled={registeredTracks.length === 0 || globalPlaying || practiceControlsLocked}
             type="button"
             onClick={selectAllPlaybackTracks}
           >
@@ -332,7 +362,7 @@ export function PracticePage() {
           <label className="composer-metronome">
             <input
               checked={metronomeEnabled}
-              disabled={actionBusy}
+              disabled={practiceControlsLocked}
               type="checkbox"
               onChange={(event) => setMetronomeEnabled(event.target.checked)}
             />
@@ -342,7 +372,7 @@ export function PracticePage() {
             <button
               aria-pressed={playbackSource === 'audio'}
               className={playbackSource === 'audio' ? 'is-active' : ''}
-              disabled={globalPlaying || actionBusy}
+              disabled={globalPlaying || practiceControlsLocked}
               type="button"
               onClick={() => changePlaybackSource('audio')}
             >
@@ -351,7 +381,7 @@ export function PracticePage() {
             <button
               aria-pressed={playbackSource === 'events'}
               className={playbackSource === 'events' ? 'is-active' : ''}
-              disabled={globalPlaying || actionBusy}
+              disabled={globalPlaying || practiceControlsLocked}
               type="button"
               onClick={() => changePlaybackSource('events')}
             >
@@ -368,15 +398,56 @@ export function PracticePage() {
                 <input
                   checked={isRegistered && selectedPlaybackSlotIds.has(track.slot_id)}
                   data-testid={`practice-track-checkbox-${track.slot_id}`}
-                  disabled={!isRegistered || globalPlaying || actionBusy}
+                  disabled={!isRegistered || globalPlaying || practiceControlsLocked}
                   type="checkbox"
                   onChange={() => togglePlaybackSelection(track.slot_id)}
                 />
                 <span>{formatTrackName(track.name)}</span>
-                {!isRegistered ? <em>이벤트 없음</em> : null}
+                {!isRegistered ? <em>비어 있음</em> : null}
               </label>
             )
           })}
+        </section>
+
+        <section className="practice-score-panel" aria-label="채점">
+          <div className="practice-score-panel__heading">
+            <span>채점할 파트</span>
+            <strong>{selectedScoreTargetTrack ? formatTrackName(selectedScoreTargetTrack.name) : '파트 선택'}</strong>
+          </div>
+          <div className="practice-score-targets" role="group" aria-label="채점할 파트 선택">
+            {studio.tracks.map((track) => {
+              const isSelected = selectedScoreTargetTrack?.slot_id === track.slot_id
+              const hasReference = registeredTracks.some((registeredTrack) => registeredTrack.slot_id !== track.slot_id)
+              const canUseTrack = track.status === 'registered' || hasReference
+              return (
+                <button
+                  aria-pressed={isSelected}
+                  className={isSelected ? 'is-selected' : ''}
+                  data-testid={`practice-score-target-${track.slot_id}`}
+                  disabled={!canUseTrack || scoreControlsLocked}
+                  key={track.slot_id}
+                  type="button"
+                  onClick={() => setSelectedScoreTargetSlotId(track.slot_id)}
+                >
+                  <strong>{formatTrackName(track.name)}</strong>
+                  <span>{track.status === 'registered' ? '정답' : hasReference ? '화음' : '비어 있음'}</span>
+                </button>
+              )
+            })}
+          </div>
+          <button
+            className="app-button"
+            data-testid="practice-score-button"
+            disabled={!selectedScoreTargetTrack || !canScoreSelectedTrack || scoreControlsLocked}
+            type="button"
+            onClick={() => {
+              if (selectedScoreTargetTrack) {
+                openScoreSession(selectedScoreTargetTrack)
+              }
+            }}
+          >
+            채점
+          </button>
         </section>
 
         <PracticeStatus actionState={actionState} />
@@ -399,6 +470,22 @@ export function PracticePage() {
           </span>
         </footer>
       </section>
+
+      <ReportFeed reports={studio.reports} studioId={studio.studio_id} tracks={studio.tracks} />
+
+      <ScoringDrawer
+        busy={actionBusy}
+        scoreSession={scoreSession}
+        targetTrack={scoreTargetTrack}
+        tracks={studio.tracks}
+        onCancel={cancelScoreSession}
+        onIncludeMetronomeChange={setScoreIncludeMetronome}
+        onScoreModeChange={updateScoreMode}
+        onStart={() => void startScoreListening()}
+        onStop={() => void stopScoreListening()}
+        onToggleReference={toggleScoreReference}
+        onToggleReferencePlayback={toggleScoreReferencePlayback}
+      />
     </main>
   )
 }

@@ -30,18 +30,19 @@ is excluded from persistence and remains an adapter detail.
 - `apps/web/src/pages/LaunchPage.tsx`
   Creates a blank studio or seeds one from document/music input.
 - `apps/web/src/pages/StudioPage.tsx`
-  Owns loaded studio state, transport state, recording state, scoring state,
-  candidate review state, and action status for the studio assembly surface.
-  It is the place for track registration, upload/record/generate, sync,
-  selected-track playback, candidate review, and report history. It does not
-  render the piano-roll editor or practice waterfall.
+  Owns loaded studio state, transport state, recording state, candidate review
+  state, and action status for the studio assembly surface. It is the place for
+  track registration, upload/record/generate, sync, selected-track playback,
+  candidate review, and report history. It does not render the piano-roll
+  editor, practice waterfall, or scoring controls.
 - `apps/web/src/pages/StudioEditPage.tsx`
   Dedicated note-editing surface for region selection, region structure
   actions, selected-region piano-roll editing, local draft save, and bounded
   revision restore. Report focus links land here when they carry answer
   region/event IDs.
 - `apps/web/src/pages/PracticePage.tsx`
-  Dedicated practice surface for selected-track playback controls and the
+  Dedicated practice surface for selected-track playback controls, target
+  selection, scoring setup/count-in, scoring capture, report feed, and the
   waterfall timing stage.
 - `apps/web/src/components/studio/StudioPurposeNav.tsx`
   Shared purpose navigation for studio assembly, note editing, practice, and
@@ -186,10 +187,11 @@ flowchart TD
   PracticePage --> Playback
   Playback --> TrackBoard
   Playback --> Waterfall
-  StudioPage --> Scoring
+  PracticePage --> Scoring
   Scoring --> API
   API --> Reports
   Reports --> StudioPage
+  Reports --> PracticePage
   Reports --> StudioEditPage
 ```
 
@@ -204,10 +206,11 @@ flowchart TD
    that have not yet been saved through the explicit-region path.
 5. Web passes `studio.regions` into `TrackBoard`, `StudioEditPage`, playback,
    report focus, and practice waterfall surfaces.
-6. Studio assembly, note editing, playback, candidate review, and practice
-   waterfall consume pitch events from the same region payload while staying
-   on separate purpose-specific pages. All three visible track surfaces keep
-   the six track slots present; empty tracks have lanes without event minis.
+6. Studio assembly, note editing, playback, candidate review, practice
+   waterfall, and practice scoring consume pitch events from the same region
+   payload while staying on separate purpose-specific pages. All three visible
+   track surfaces keep the six track slots present; empty tracks have lanes
+   without event minis.
 7. The note editor may keep unsaved draft edits in browser session storage
    while the user moves between studio sub-pages. Only `Save` mutates
    `Studio.regions`, so other pages continue to reflect the last saved product
@@ -235,11 +238,18 @@ flowchart TD
 
 ### Scoring
 
-1. Browser submits recorded audio or `performance_events`.
-2. API converts submitted performance events to the internal pitch-event adapter.
-3. Scoring compares those events with registered arrangement regions, preserving
+1. User opens scoring from the Practice page after choosing the target part.
+2. Reference tracks and metronome are selected in the scoring drawer; reference
+   selection is scoring input, while audible reference playback is practice UX.
+3. Browser records a take while selected audible references play on the shared
+   scheduled timeline.
+4. Browser submits recorded audio or `performance_events`.
+5. API converts submitted performance events to the internal pitch-event adapter.
+6. Scoring compares those events with registered arrangement regions, preserving
    public answer-region focus IDs through the internal adapter boundary.
-4. Reports return region/event IDs that can focus the piano roll.
+7. Report issues include region/event IDs and expected/actual beat coordinates.
+8. Report detail links can reopen the note editor with query parameters that
+   focus the matching region and piano-roll event.
 
 ### AI Generation
 
@@ -259,17 +269,6 @@ flowchart TD
    a user-visible timeline translation; barlines stay on the shared grid.
 5. Playhead state drives region lane timing on the studio surface and
    waterfall visual timing on the practice surface.
-
-### Scoring
-
-1. User opens scoring from a target track.
-2. Reference tracks and metronome are selected.
-3. Browser records a take while selected references play.
-4. API extracts the take and compares pitch/timing against the target or
-   harmony context.
-5. Report issues include region/event IDs and expected/actual beat coordinates.
-6. Report detail links can reopen the studio with query parameters that focus
-   the matching region and piano-roll event.
 
 ## Removed Surface
 

@@ -553,12 +553,12 @@ function PianoRollPanelContent({
 
       {hasDirtyChanges ? (
         <p className="draft-save-notice">
-          저장 전 변경사항은 이 브라우저에 임시 저장됩니다. 저장하면 다른 화면의 timeline에도 반영되고, 초기화하면 마지막 저장 상태로 돌아갑니다.
+          저장 전 변경사항은 이 브라우저에 임시 저장됩니다. 저장하면 다른 화면에도 반영되고, 초기화하면 마지막 저장 상태로 돌아갑니다.
         </p>
       ) : null}
 
       {!region || !draft ? (
-        <p className="piano-roll-panel__hint">Region lane에서 구간을 선택하면 수치 편집기가 열립니다.</p>
+        <p className="piano-roll-panel__hint">구간을 선택하면 세부 값을 수정할 수 있습니다.</p>
       ) : (
         <>
           <div className="region-draft-grid" aria-label="구간 수치 편집">

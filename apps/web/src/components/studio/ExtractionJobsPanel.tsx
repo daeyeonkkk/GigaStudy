@@ -60,9 +60,8 @@ export function ExtractionJobsPanel({
     <section className="extraction-jobs" data-testid="extraction-jobs" aria-label="추출 작업">
       <div className="extraction-jobs__header">
         <div>
-          <p className="eyebrow">엔진 대기열</p>
-          <h2>추출 작업</h2>
-          <p>대기, 실행, 승인 대기, 실패 작업을 한 곳에서 확인합니다.</p>
+          <p className="eyebrow">처리 중</p>
+          <h2>업로드 처리</h2>
         </div>
         <strong>진행 중 {activeJobCount}</strong>
       </div>
@@ -107,7 +106,7 @@ export function ExtractionJobsPanel({
           )
           const approveDisabled = busy || lockedByAnotherJob || (wouldOverwrite && !allowOverwrite)
           const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : '문서 분석'
-          const jobTargetLabel = job.parse_all_parts ? '전체 문서' : formatTrackName(jobTrack?.name ?? `Track ${job.slot_id}`)
+          const jobTargetLabel = job.parse_all_parts ? '전체 문서' : formatTrackName(jobTrack?.name ?? `트랙 ${job.slot_id}`)
           const candidateSummary = getJobCandidateSummary(jobCandidates, tracks)
           const recoveryHint = getJobRecoveryHint(job)
           const attemptLabel =
@@ -124,7 +123,6 @@ export function ExtractionJobsPanel({
               <span className={`extraction-jobs__status extraction-jobs__status--${job.status}`}>
                 {getJobStatusLabel(job.status)}
               </span>
-              <p>{job.message ?? job.method}</p>
               <p className="extraction-jobs__state-hint">{getJobStateHint(job)}</p>
               {candidateSummary ? <p className="extraction-jobs__candidate-strip">{candidateSummary}</p> : null}
               {lockedByAnotherJob ? (
@@ -193,7 +191,7 @@ function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: Track
         getCandidateDiagnosticNumber(candidate, 'event_count') ??
         candidate.region.pitch_events.length
       const measureLabel = measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'
-      return `${formatTrackName(track?.name ?? `Track ${candidate.suggested_slot_id}`)} ${confidence} / ${measureLabel} / ${eventCount}개`
+      return `${formatTrackName(track?.name ?? `트랙 ${candidate.suggested_slot_id}`)} ${confidence} / ${measureLabel} / ${eventCount}개`
     })
     .join(' | ')
 }

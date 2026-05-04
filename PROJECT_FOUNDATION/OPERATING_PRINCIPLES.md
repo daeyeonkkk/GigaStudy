@@ -161,6 +161,8 @@ the same change.
   - Answer scoring: compare a performance against a registered target track.
   - Harmony scoring: judge a new part against selected reference tracks without
     a target answer sheet.
+- Scoring is part of the Practice workflow. Studio may show report history, but
+  it should not open track-row scoring controls from the assembly surface.
 - A reference track can be a scoring criterion without being audible. Playback
   selection is UX support; scoring reference selection is evaluation input.
 - Scoring should prefer offline alignment and clear reports over realtime
@@ -199,11 +201,15 @@ the same change.
   - Note editing for precise region/event edits. Region track, start,
     duration, volume, label, and selected event pitch/start/duration should be
     adjustable by direct values as well as small musical nudges.
-  - Practice for selected-reference playback and waterfall timing.
+  - Practice for selected-reference playback, target selection, count-in,
+    microphone scoring, and waterfall timing.
   - Report detail for scoring evidence and deep-links back to note editing.
-- Every studio sub-page should expose the same purpose navigation and a short
-  page-role statement so the user knows which work belongs on the current
-  surface and where to go next.
+- Every studio sub-page should expose the same purpose navigation, but
+  non-admin copy must stay user-facing and action-oriented. Do not show
+  meta labels such as internal model names, engine evidence names, "this
+  screen's role" explanations, or implementation vocabulary when a plain
+  musical/workflow phrase can say the same thing. Raw engine/job/candidate
+  messages should be translated into product guidance or kept out of the UI.
 - Every studio sub-page should keep the six visible track slots visible.
   An empty track is a real lane with no MIDI/event material, not a missing UI
   row.

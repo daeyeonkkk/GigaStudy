@@ -76,7 +76,7 @@ function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate 
 
   return (
     <div className="candidate-review__region" data-testid={`candidate-region-${candidate.candidate_id}`}>
-      <span>구간 후보</span>
+      <span>미리보기</span>
       <div className="candidate-review__region-grid">
         {events.length === 0 ? (
           <p>음표 없음</p>
@@ -136,7 +136,6 @@ export function CandidateReviewPanel({
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
           const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
           const contourPoints = getCandidateContourPoints(candidate)
-          const engineLabel = getCandidateEngineLabel(candidate)
           const verdict = getCandidateVerdict(candidate, wouldOverwrite)
           const sourcePreviewUrl =
             candidate.job_id && shouldShowSourcePreview(candidate) && getJobSourcePreviewUrl
@@ -151,8 +150,7 @@ export function CandidateReviewPanel({
                   {sourceLabels[candidate.source_kind]}
                   {candidate.variant_label ? ` · ${formatGeneratedLabel(candidate.variant_label)}` : ''}
                 </span>
-                <span className="candidate-review__engine">{engineLabel}</span>
-                <h3>{formatTrackName(suggestedTrack?.name ?? `Track ${candidate.suggested_slot_id}`)} 후보</h3>
+                <h3>{formatTrackName(suggestedTrack?.name ?? `트랙 ${candidate.suggested_slot_id}`)} 후보</h3>
                 <div className={`candidate-review__verdict candidate-review__verdict--${verdict.tone}`}>
                   <strong>{verdict.label}</strong>
                   <span>{verdict.reason}</span>
@@ -263,19 +261,6 @@ export function CandidateReviewPanel({
                 </details>
               ) : null}
 
-              {candidate.message ? <p>{candidate.message}</p> : null}
-              <details className="candidate-review__technical">
-                <summary>엔진 정보</summary>
-                <dl>
-                  {decisionSummary.technical.map((metric) => (
-                    <div key={`${candidate.candidate_id}-technical-${metric.label}`}>
-                      <dt>{metric.label}</dt>
-                      <dd>{metric.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
-
               <div className="candidate-review__actions">
                 <button
                   className="app-button"
@@ -369,16 +354,6 @@ function getDiagnosticStringList(diagnostics: Record<string, unknown>, key: stri
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : []
-}
-
-function getCandidateEngineLabel(candidate: ExtractionCandidate): string {
-  if (candidate.method.includes('deepseek')) {
-    return '엔진: DeepSeek 편성 계획 + 성부 진행'
-  }
-  if (candidate.method.includes('rule_based')) {
-    return '엔진: 규칙 기반 성부 진행'
-  }
-  return `엔진: ${candidate.method}`
 }
 
 function shouldShowSourcePreview(candidate: ExtractionCandidate): boolean {

@@ -104,11 +104,12 @@ waterfall preview를 통합하지 않는다.
 
 ### 5. Scoring과 Report
 
-사용자는 practice attempt를 녹음한다. answer scoring은 target track과
-비교하고, harmony scoring은 selected reference tracks 위에서 새 part가 잘
-맞는지 평가한다. report는 timing, pitch, missing, extra, harmony issue를
-행동 가능한 형태로 보여주고, 가능하면 studio의 matching region/event를
-다시 열 수 있어야 한다.
+채점은 Practice 화면의 연습 흐름 안에서 시작한다. 사용자는 채점할 part와
+reference track을 고른 뒤 practice attempt를 녹음한다. answer scoring은
+target track과 비교하고, harmony scoring은 selected reference tracks 위에서
+새 part가 잘 맞는지 평가한다. report는 timing, pitch, missing, extra,
+harmony issue를 행동 가능한 형태로 보여주고, 가능하면 studio의 matching
+region/event를 다시 열 수 있어야 한다.
 
 ### 6. 부족한 Part 생성
 

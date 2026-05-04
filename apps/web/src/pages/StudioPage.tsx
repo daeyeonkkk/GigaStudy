@@ -1,12 +1,11 @@
 ﻿import { useMemo, useState } from 'react'
 import { useRef } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { CandidateReviewPanel } from '../components/studio/CandidateReviewPanel'
 import { ExtractionJobsPanel } from '../components/studio/ExtractionJobsPanel'
 import { PendingRecordingDialog } from '../components/studio/PendingRecordingDialog'
 import { ReportFeed } from '../components/studio/ReportFeed'
-import { ScoringDrawer } from '../components/studio/ScoringDrawer'
 import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { StudioToolbar } from '../components/studio/StudioToolbar'
 import { TrackBoard } from '../components/studio/TrackBoard'
@@ -15,7 +14,6 @@ import { useCandidateReviewState } from '../components/studio/useCandidateReview
 import { useStudioPlayback } from '../components/studio/useStudioPlayback'
 import { useStudioRecording } from '../components/studio/useStudioRecording'
 import { useStudioResource } from '../components/studio/useStudioResource'
-import { useStudioScoring } from '../components/studio/useStudioScoring'
 import { useStudioTrackActions } from '../components/studio/useStudioTrackActions'
 
 import {
@@ -69,7 +67,6 @@ export function StudioPage() {
   const {
     changePlaybackSource,
     globalPlaying,
-    markReferencePlayback,
     openPlaybackPicker,
     playbackPickerOpen,
     playbackSource,
@@ -80,7 +77,6 @@ export function StudioPage() {
     selectAllPlaybackTracks,
     selectedPlaybackSlotIds,
     setActiveTrackVolume,
-    startPlaybackSession,
     startSelectedPlayback,
     stopGlobalPlayback,
     stopPlaybackSession,
@@ -110,29 +106,6 @@ export function StudioPage() {
     metronomeEnabled,
     runStudioAction,
     setActionState,
-    studio,
-    studioMeter,
-  })
-  const {
-    cancelScoreSession,
-    openScoreSession,
-    scoreSession,
-    scoreTargetTrack,
-    setScoreIncludeMetronome,
-    startScoreListening,
-    stopScoreListening,
-    toggleScoreReference,
-    toggleScoreReferencePlayback,
-    updateScoreMode,
-  } = useStudioScoring({
-    markReferencePlayback,
-    metronomeEnabled,
-    recordingSlotId,
-    registeredSlotIds,
-    setActionState,
-    setStudio,
-    startPlaybackSession,
-    stopPlaybackSession,
     studio,
     studioMeter,
   })
@@ -218,18 +191,6 @@ export function StudioPage() {
   })
 
   async function handleRecord(track: TrackSlot) {
-    if (
-      scoreSession?.phase === 'counting_in' ||
-      scoreSession?.phase === 'listening' ||
-      scoreSession?.phase === 'analyzing'
-    ) {
-      setActionState({
-        phase: 'error',
-        message: '채점 녹음이 진행 중입니다. 먼저 채점을 중지한 뒤 트랙 녹음을 시작해 주세요.',
-      })
-      return
-    }
-
     await handleTrackRecording(track)
   }
 
@@ -248,36 +209,31 @@ export function StudioPage() {
     }
     return next
   }, [activeExtractionJobs, studio])
-  const scoringInteractionLocked = scoreSession !== null
   const recordingInteractionLocked = recordingSlotId !== null || trackCountIn !== null || pendingTrackRecording !== null
   const playbackInteractionLocked = globalPlaying || playingSlots.size > 0
   const actionBusy = actionState.phase === 'busy'
   const arrangementEditDisabled =
-    actionBusy || scoringInteractionLocked || recordingInteractionLocked || playbackInteractionLocked
+    actionBusy || recordingInteractionLocked || playbackInteractionLocked
   const arrangementEditDisabledReason = actionBusy
     ? '현재 작업이 끝난 뒤 편집할 수 있습니다.'
-    : scoringInteractionLocked
-      ? '채점 패널이 열려 있습니다. 채점을 끝내거나 닫은 뒤 편집할 수 있습니다.'
-      : recordingInteractionLocked
+    : recordingInteractionLocked
         ? '녹음 작업이 진행 중입니다. 녹음을 저장하거나 폐기한 뒤 편집할 수 있습니다.'
         : playbackInteractionLocked
           ? '재생 중에는 편집을 잠시 멈춥니다. 정지 후 다시 시도해 주세요.'
           : null
-  const transportDisabled = actionBusy || scoringInteractionLocked || recordingInteractionLocked
+  const transportDisabled = actionBusy || recordingInteractionLocked
   const transportDisabledReason = actionBusy
     ? '현재 작업이 끝난 뒤 재생할 수 있습니다.'
-    : scoringInteractionLocked
-      ? '채점 중에는 일반 재생을 잠시 멈춥니다.'
-      : recordingInteractionLocked
-        ? '녹음 중에는 일반 재생을 잠시 멈춥니다.'
-        : null
+    : recordingInteractionLocked
+      ? '녹음 중에는 일반 재생을 잠시 멈춥니다.'
+      : null
 
   async function handleCopyRegion(region: ArrangementRegion, targetSlotId: number, startSeconds: number) {
     if (!studio) {
       return
     }
     const targetTrack = studio.tracks.find((track) => track.slot_id === targetSlotId)
-    const targetName = targetTrack?.name ?? `Track ${targetSlotId}`
+    const targetName = targetTrack?.name ?? `트랙 ${targetSlotId}`
     await runStudioAction(
       () =>
         copyRegion(studio.studio_id, region.region_id, {
@@ -333,7 +289,7 @@ export function StudioPage() {
         homeLabel="홈으로"
         message="스튜디오 주소가 올바르지 않습니다."
         title="스튜디오를 찾을 수 없습니다"
-        tone="Studio error"
+        tone="오류"
       />
     )
   }
@@ -343,7 +299,7 @@ export function StudioPage() {
       <StudioRouteState
         pulseCount={6}
         title="트랙을 불러오는 중입니다"
-        tone="Studio loading"
+        tone="불러오는 중"
       />
     )
   }
@@ -354,7 +310,7 @@ export function StudioPage() {
         homeLabel="홈으로"
         message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
         title="스튜디오를 찾을 수 없습니다"
-        tone="Studio error"
+        tone="오류"
       />
     )
   }
@@ -405,21 +361,6 @@ export function StudioPage() {
                 {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}
                 {registeredTracks.length}/6 · 리포트 {studio.reports.length}
               </p>
-              <section className="composer-page-brief" aria-label="스튜디오 화면 역할">
-                <div>
-                  <span>이 화면의 역할</span>
-                  <strong>6개 track을 채우고 shared timeline에 맞춥니다.</strong>
-                </div>
-                <p>세부 음표 수정은 음표 편집에서, reference playback 연습은 연습 화면에서 이어갑니다.</p>
-                <div className="composer-page-brief__actions">
-                  <Link className="app-button app-button--secondary" to={`/studios/${studio.studio_id}/edit`}>
-                    음표 편집
-                  </Link>
-                  <Link className="app-button app-button--secondary" to={`/studios/${studio.studio_id}/practice`}>
-                    연습
-                  </Link>
-                </div>
-              </section>
             </div>
 
             <TrackBoard
@@ -448,7 +389,6 @@ export function StudioPage() {
               onDeleteRegion={(region) => void handleDeleteRegion(region)}
               onGenerate={(track) => void handleGenerate(track)}
               onOpenRegionEditor={handleOpenRegionEditor}
-              onOpenScore={openScoreSession}
               onRecord={(track) => void handleRecord(track)}
               onSplitRegion={(region, splitSeconds) => void handleSplitRegion(region, splitSeconds)}
               onStopPlayback={stopTrackPlayback}
@@ -501,20 +441,6 @@ export function StudioPage() {
       </section>
 
       <ReportFeed reports={studio.reports} studioId={studio.studio_id} tracks={studio.tracks} />
-
-      <ScoringDrawer
-        busy={actionBusy}
-        scoreSession={scoreSession}
-        targetTrack={scoreTargetTrack}
-        tracks={studio.tracks}
-        onCancel={cancelScoreSession}
-        onIncludeMetronomeChange={setScoreIncludeMetronome}
-        onScoreModeChange={updateScoreMode}
-        onStart={() => void startScoreListening()}
-        onStop={() => void stopScoreListening()}
-        onToggleReference={toggleScoreReference}
-        onToggleReferencePlayback={toggleScoreReferencePlayback}
-      />
 
       {pendingTrackRecording ? (
         <PendingRecordingDialog

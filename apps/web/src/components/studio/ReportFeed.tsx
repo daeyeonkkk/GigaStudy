@@ -25,7 +25,7 @@ export function ReportFeed({ reports, studioId, tracks }: ReportFeedProps) {
       {reports.length === 0 ? (
         <div className="report-empty">
           <strong>아직 리포트가 없습니다.</strong>
-          <p>트랙에서 채점을 시작하면 제목과 시간이 여기에 쌓입니다.</p>
+          <p>연습에서 채점을 마치면 제목과 시간이 여기에 쌓입니다.</p>
         </div>
       ) : (
         <div className="report-list">

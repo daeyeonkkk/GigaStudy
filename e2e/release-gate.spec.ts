@@ -59,9 +59,9 @@ async function approveFirstCandidate(page: Page) {
 async function expectRegisteredRegion(page: Page, slotId: number, labels: string[]) {
   const region = page.getByTestId(`track-region-${slotId}`)
   await expect(region).toBeVisible()
-  await expect(region).toContainText(`${labels.length}개 음표`)
+  await expect(page.locator(`[data-track-slot-id="${slotId}"][data-testid^="track-event-mini-"]`)).toHaveCount(labels.length)
   for (const label of labels) {
-    await expect(region).toContainText(label, { timeout: 1000 }).catch(() => undefined)
+    await expect(page.locator(`[data-track-slot-id="${slotId}"][title*="${label}"]`).first()).toBeVisible()
   }
 }
 
@@ -80,7 +80,7 @@ test('blank studio opens the region editor and independent practice route', asyn
 
   await page.getByTestId('purpose-nav-editor').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/edit$/)
-  await expect(page.getByText('GigaStudy 음표 편집 - Region blank session')).toBeVisible()
+  await expect(page.getByText('GigaStudy 구간 편집 - Region blank session')).toBeVisible()
   await expect(page.getByTestId('purpose-nav-editor')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('.piano-roll-panel')).toBeVisible()
   await expect(page.getByText('편집할 구간을 선택하세요.')).toBeVisible()
@@ -101,7 +101,7 @@ test('blank studio opens the region editor and independent practice route', asyn
   await expect(page.getByText('음표 없음')).toBeVisible()
 })
 
-test('document upload flows through studio, note editor, and practice waterfall', async ({ page }) => {
+test('document upload flows through studio, region editor, and practice waterfall', async ({ page }) => {
   await createBlankStudio(page, 'Region import session', '104')
   await uploadSopranoMusicXml(page)
   await expect(page.locator('[data-testid^="candidate-region-"]').first()).toContainText('C5')
@@ -121,9 +121,9 @@ test('document upload flows through studio, note editor, and practice waterfall'
   await expect(page.getByTestId('track-region-1')).toHaveClass(/is-focused/)
   await expect(page.getByTestId(c5EventTestId)).toHaveClass(/is-focused/)
 
-  await page.getByLabel('구간 시작초').fill('0.25')
-  await page.getByLabel('구간 길이초').fill('2.25')
-  await page.getByLabel('MIDI 높이').fill('73')
+  await page.getByLabel('시작 위치', { exact: true }).fill('0.25')
+  await page.locator('.region-draft-grid').getByLabel('길이', { exact: true }).fill('2.25')
+  await page.getByLabel('음높이').fill('73')
   await expect(page.locator('.piano-roll__event[title*="C#5"]')).toBeVisible()
 
   await page.getByTestId('purpose-nav-practice').click()
@@ -142,7 +142,7 @@ test('document upload flows through studio, note editor, and practice waterfall'
 
   await page.getByTestId('save-region-draft-button').click()
   await expect(page.locator('.piano-roll__event[title*="C#5"]')).toBeVisible()
-  await expect(page.getByTestId('track-region-1')).toContainText('0.25초')
+  await expect(page.getByTestId('track-region-1')).toHaveAttribute('aria-label', /0.25초/)
 
   await page.getByTestId('purpose-nav-practice').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)
@@ -151,9 +151,9 @@ test('document upload flows through studio, note editor, and practice waterfall'
   await page.getByTestId('purpose-nav-editor').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/edit$/)
 
-  await page.getByRole('button', { name: '선택 버전 복원' }).click()
+  await page.getByRole('button', { name: '이 버전으로 되돌리기' }).click()
   await expect(page.locator('.piano-roll__event[title*="C5"]')).toBeVisible()
-  await expect(page.getByTestId('track-region-1')).toContainText('0.00초')
+  await expect(page.getByTestId('track-region-1')).toHaveAttribute('aria-label', /0.00초/)
 
   await page.getByTestId('purpose-nav-practice').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/practice$/)

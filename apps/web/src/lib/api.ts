@@ -414,7 +414,7 @@ export function updatePitchEvent(
       method: 'PATCH',
       body: JSON.stringify(payload),
     },
-    '음표를 저장하지 못했습니다.',
+    '구간을 저장하지 못했습니다.',
   )
 }
 

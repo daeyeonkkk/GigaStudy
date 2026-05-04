@@ -193,7 +193,7 @@ export function StudioEditPage() {
       <StudioRouteState
         homeLabel="홈으로"
         message="스튜디오 주소가 올바르지 않습니다."
-        title="음표 편집 화면을 열 수 없습니다"
+        title="구간 편집 화면을 열 수 없습니다"
         tone="오류"
       />
     )
@@ -203,7 +203,7 @@ export function StudioEditPage() {
     return (
       <StudioRouteState
         pulseCount={6}
-        title="음표 편집 화면을 준비하는 중입니다"
+        title="구간 편집 화면을 준비하는 중입니다"
         tone="불러오는 중"
       />
     )
@@ -214,7 +214,7 @@ export function StudioEditPage() {
       <StudioRouteState
         homeLabel="홈으로"
         message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
-        title="음표 편집 화면을 열 수 없습니다"
+        title="구간 편집 화면을 열 수 없습니다"
         tone="오류"
       />
     )
@@ -222,12 +222,12 @@ export function StudioEditPage() {
 
   return (
     <main className="app-shell studio-page studio-editor-page">
-      <section className="composer-window composer-window--editor" aria-label="GigaStudy 음표 편집">
+      <section className="composer-window composer-window--editor" aria-label="GigaStudy 구간 편집">
         <header className="composer-titlebar">
           <Link className="composer-app-mark" to="/" aria-label="홈으로">
             GS
           </Link>
-          <span>GigaStudy 음표 편집 - {studio.title}</span>
+          <span>GigaStudy 구간 편집 - {studio.title}</span>
         </header>
 
         <StudioPurposeNav
@@ -247,7 +247,7 @@ export function StudioEditPage() {
             <div className="composer-arrange-heading">
               <h1>{studio.title}</h1>
               <p>
-                음표 편집 · {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/
+                구간 편집 · {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/
                 {studio.time_signature_denominator ?? 4} · 구간{' '}
                 {studio.regions.length} · 검토 {pendingCandidates.length}
               </p>
@@ -296,7 +296,7 @@ export function StudioEditPage() {
         </section>
 
         <footer className="composer-statusbar">
-          <span>음표 편집</span>
+          <span>구간 편집</span>
           <span>구간 {studio.regions.length}</span>
           <span>트랙 {studio.tracks.length}</span>
           <span>{formatDurationSeconds(Math.max(0, ...studio.regions.map((region) => region.start_seconds + region.duration_seconds)))}</span>

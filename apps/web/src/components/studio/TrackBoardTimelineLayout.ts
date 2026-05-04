@@ -26,14 +26,12 @@ export function getDurationPercent(seconds: number, durationSeconds: number): nu
   return Math.max(0, Math.min(100, (seconds / Math.max(0.25, durationSeconds)) * 100))
 }
 
-export function getRegionStyle(
+export function getRegionHitAreaStyle(
   region: ArrangementRegion,
   timelineBounds: TimelineBounds,
-  laneIndex: number,
 ): CSSProperties {
   return {
     '--region-left': `${getTimelinePercent(region.start_seconds, timelineBounds)}%`,
-    '--region-top': `${10 + laneIndex * 36}px`,
     '--region-width': `${Math.max(1.5, getDurationPercent(region.duration_seconds, timelineBounds.durationSeconds))}%`,
   } as CSSProperties
 }
@@ -42,10 +40,9 @@ export function getRegionLaneStyle(
   isPlaying: boolean,
   playheadSeconds: number | null,
   timelineBounds: TimelineBounds,
-  regionCount: number,
 ): CSSProperties {
   return {
-    '--lane-min-height': `${Math.max(94, 24 + regionCount * 38)}px`,
+    '--lane-min-height': '94px',
     '--playhead-left': `${getTimelinePercent(isPlaying ? playheadSeconds ?? 0 : 0, timelineBounds)}%`,
   } as CSSProperties
 }

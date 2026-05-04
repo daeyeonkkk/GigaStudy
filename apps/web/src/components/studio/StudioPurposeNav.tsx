@@ -11,7 +11,7 @@ type StudioPurposeNavProps = {
 
 const purposeLabels: Record<StudioPurposeSurface, string> = {
   studio: '스튜디오',
-  editor: '음표 편집',
+  editor: '구간 편집',
   practice: '연습',
   report: '리포트',
 }

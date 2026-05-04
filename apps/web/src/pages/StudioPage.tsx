@@ -320,7 +320,7 @@ export function StudioPage() {
     <main className="app-shell studio-page">
       <section
         className={`composer-window ${playbackPickerOpen || globalPlaying ? 'composer-window--playback-panel' : ''}`}
-        aria-label="GigaStudy composer studio"
+        aria-label="GigaStudy 스튜디오"
       >
         <StudioToolbar
           actionState={actionState}

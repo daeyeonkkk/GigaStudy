@@ -76,17 +76,18 @@ tempo layer를 만들면 안 된다.
 
 Studio 본 화면은 track 등록, upload/record/generate, 후보 검토, sync,
 selected-track playback, report history에 집중한다. region 안의 세부
-pitch event 수정은 별도의 음표 편집 화면에서 한다.
+pitch event 수정은 별도의 구간 편집 화면에서 한다.
 
-음표 편집 화면은 region/event를 정밀하게 고치는 작업면이다. 사용자는
+구간 편집 화면은 region/event를 정밀하게 고치는 작업면이다. 사용자는
 region의 track, 시작 위치, 길이, 음량, 이름과 selected event의 pitch,
 시작 위치, 길이를 수치 입력과 작은 nudge로 조정한다. 상세 조정은 local
 draft로 쌓이고, `저장`을 눌렀을 때 한 번에 product timeline에 반영된다.
-저장 전 상태는 제한된 restore point로 남겨 잘못된 편집을 되돌릴 수 있어야
-한다. 저장 전 draft는 같은 브라우저 session 안에서 page 이동 후에도
-복구될 수 있지만, Studio와 Practice는 저장된 product timeline만 보여준다.
+버전 기록은 region마다 따로 저장된다. 저장 전 상태는 제한된 restore
+point로 남겨 잘못된 편집을 되돌릴 수 있어야 한다. 저장 전 draft는 같은
+브라우저 session 안에서 page 이동 후에도 복구될 수 있지만, Studio와
+Practice는 저장된 product timeline만 보여준다.
 
-Studio, 음표 편집, Practice의 6개 track slot은 항상 보인다. 빈 track은
+Studio, 구간 편집, Practice의 6개 track slot은 항상 보인다. 빈 track은
 사라지는 것이 아니라 event MIDI가 없는 lane으로 표시된다. Piano roll,
 studio lane, waterfall의 event mini는 음 길이에 맞는 얇은 bar로 표시하고,
 pitch가 있으면 높낮이가 시각적으로 드러나야 한다. 정확한 음계명, 시작,
@@ -127,10 +128,10 @@ AI generation은 등록된 context tracks를 바탕으로 symbolic track materia
 - 업로드, 녹음, direct upload, extraction queue, candidate review.
 - Region lane, selected-region piano roll, practice waterfall surface.
 - 빈 track lane 유지와 pitch/duration 기반 thin event mini.
-- 용도별 page: studio assembly, note editor, practice, report detail.
+- 용도별 page: 스튜디오, 구간 편집, 연습, 리포트 상세.
 - Studio 하위 page 간 전환을 위한 공통 목적 navigation과 각 page의 짧은
   역할 안내.
-- Note editor의 session draft, 일괄 저장, bounded region restore history.
+- 구간 편집기의 session draft, 일괄 저장, 구간별 복원 기록.
 - Shared BPM/meter timing, count-in, metronome, sync, playhead behavior.
 - Per-track volume을 가진 synchronized selected-track playback.
 - Answer scoring, harmony scoring, report history, report deep-link.

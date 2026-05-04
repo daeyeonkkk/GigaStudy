@@ -417,7 +417,7 @@ function PianoRollPanelContent({
   const [draft, setDraft] = useState<RegionEditorDraft | null>(initialDraft)
   const [undoStack, setUndoStack] = useState<RegionEditorDraft[]>([])
   const [redoStack, setRedoStack] = useState<RegionEditorDraft[]>([])
-  const [revisionLabel, setRevisionLabel] = useState('음표 편집 저장')
+  const [revisionLabel, setRevisionLabel] = useState('구간 편집 저장')
   const [selectedRevisionId, setSelectedRevisionId] = useState(revisionHistory[0]?.revision_id ?? '')
 
   const hasDirtyChanges = draftSignature(draft) !== sourceSignature
@@ -528,13 +528,13 @@ function PianoRollPanelContent({
   }, [draft, draftStorageKey, hasDirtyChanges, sourceSignature])
 
   return (
-    <section className="piano-roll-panel" aria-label="음표 세부 편집기">
+    <section className="piano-roll-panel" aria-label="구간 편집기">
       <header>
         <div>
-          <p className="eyebrow">세부 편집</p>
-          <h3>{region ? `${selectedTrackName(tracks, draft?.target_track_slot_id ?? region.track_slot_id)} 음표 편집` : '음표 편집'}</h3>
+          <p className="eyebrow">구간 편집</p>
+          <h3>{region ? `${selectedTrackName(tracks, draft?.target_track_slot_id ?? region.track_slot_id)} 구간 편집` : '구간 선택'}</h3>
         </div>
-        <div className="piano-roll-panel__tools" aria-label="편집 저장 도구">
+        <div className="piano-roll-panel__tools" aria-label="편집 도구">
           {disabled && disabledReason ? <span className="piano-roll-panel__lock">{disabledReason}</span> : null}
           <button disabled={disabled || !hasDirtyChanges} type="button" onClick={saveDraft} data-testid="save-region-draft-button">
             저장
@@ -561,9 +561,9 @@ function PianoRollPanelContent({
         <p className="piano-roll-panel__hint">구간을 선택하면 세부 값을 수정할 수 있습니다.</p>
       ) : (
         <>
-          <div className="region-draft-grid" aria-label="구간 수치 편집">
+          <div className="region-draft-grid" aria-label="구간 설정">
             <label className="editor-field">
-              <span>트랙</span>
+              <span>파트</span>
               <select
                 disabled={disabled}
                 value={draft.target_track_slot_id}
@@ -578,7 +578,7 @@ function PianoRollPanelContent({
             </label>
             <FieldNumber
               disabled={disabled}
-              label="구간 시작초"
+              label="시작 위치"
               min={MIN_TIMELINE_SECONDS}
               step={0.001}
               value={draft.start_seconds}
@@ -586,7 +586,7 @@ function PianoRollPanelContent({
             />
             <FieldNumber
               disabled={disabled}
-              label="구간 길이초"
+              label="길이"
               min={MIN_DURATION_SECONDS}
               step={0.001}
               value={draft.duration_seconds}
@@ -594,7 +594,7 @@ function PianoRollPanelContent({
             />
             <FieldNumber
               disabled={disabled}
-              label="구간 음량%"
+              label="음량"
               max={100}
               min={0}
               step={1}
@@ -602,7 +602,7 @@ function PianoRollPanelContent({
               onChange={(value) => patchDraft({ volume_percent: clampVolume(value) })}
             />
             <label className="editor-field editor-field--wide">
-              <span>구간 이름</span>
+              <span>이름</span>
               <input
                 disabled={disabled}
                 maxLength={180}
@@ -647,16 +647,16 @@ function PianoRollPanelContent({
                   </button>
                 ))
               ) : (
-                <p>음표가 있는 구간을 선택하세요.</p>
+                <p>편집할 구간을 선택하세요.</p>
               )}
             </div>
           </div>
 
           {selectedEvent ? (
-            <section className="event-inspector" aria-label="선택 음표 수치 편집">
+            <section className="event-inspector" aria-label="선택한 음 편집">
               <header>
                 <div>
-                  <p className="eyebrow">선택 음표</p>
+                  <p className="eyebrow">선택한 음</p>
                   <h4>{selectedEvent.label}</h4>
                 </div>
                 <div className="event-inspector__buttons">
@@ -670,7 +670,7 @@ function PianoRollPanelContent({
                       }
                     }}
                   >
-                    음정 -
+                    반음 내림
                   </button>
                   <button
                     disabled={disabled || selectedEvent.pitch_midi === null}
@@ -682,7 +682,7 @@ function PianoRollPanelContent({
                       }
                     }}
                   >
-                    음정 +
+                    반음 올림
                   </button>
                   <button
                     disabled={disabled}
@@ -693,7 +693,7 @@ function PianoRollPanelContent({
                       })
                     }
                   >
-                    당기기
+                    앞으로
                   </button>
                   <button
                     disabled={disabled}
@@ -704,16 +704,16 @@ function PianoRollPanelContent({
                       })
                     }
                   >
-                    밀기
+                    뒤로
                   </button>
                   <button disabled={disabled} type="button" onClick={snapSelectedEvent}>
-                    스냅
+                    격자 맞춤
                   </button>
                 </div>
               </header>
               <div className="event-inspector__grid">
                 <label className="editor-field">
-                  <span>라벨</span>
+                  <span>음 이름</span>
                   <input
                     disabled={disabled}
                     maxLength={32}
@@ -724,7 +724,7 @@ function PianoRollPanelContent({
                 </label>
                 <FieldNumber
                   disabled={disabled}
-                  label="MIDI 높이"
+                  label="음높이"
                   max={127}
                   min={0}
                   step={1}
@@ -740,7 +740,7 @@ function PianoRollPanelContent({
                 />
                 <FieldNumber
                   disabled={disabled}
-                  label="시작초"
+                  label="시작 시간"
                   min={MIN_TIMELINE_SECONDS}
                   step={0.001}
                   value={selectedEvent.start_seconds}
@@ -750,7 +750,7 @@ function PianoRollPanelContent({
                 />
                 <FieldNumber
                   disabled={disabled}
-                  label="길이초"
+                  label="길이"
                   min={MIN_DURATION_SECONDS}
                   step={0.001}
                   value={selectedEvent.duration_seconds}
@@ -760,7 +760,7 @@ function PianoRollPanelContent({
                 />
                 <FieldNumber
                   disabled={disabled}
-                  label="시작 beat"
+                  label="박자 위치"
                   min={0}
                   step={0.001}
                   value={startBeatForEvent(selectedEvent, draft, bpm)}
@@ -772,7 +772,7 @@ function PianoRollPanelContent({
                 />
                 <FieldNumber
                   disabled={disabled}
-                  label="길이 beat"
+                  label="박자 길이"
                   min={0.001}
                   step={0.001}
                   value={durationBeatsForEvent(selectedEvent, bpm)}
@@ -795,22 +795,22 @@ function PianoRollPanelContent({
                       })
                     }
                   />
-                  <span>쉼표</span>
+                  <span>쉼표로 표시</span>
                 </label>
               </div>
             </section>
           ) : null}
 
-          <section className="revision-panel" aria-label="저장 버전">
-            <div>
-              <p className="eyebrow">저장 버전</p>
-              <h4>{revisionHistory.length > 0 ? `${revisionHistory.length}개 복원 지점` : '아직 저장 버전 없음'}</h4>
+          <section className="revision-panel" aria-label="버전 기록">
+            <div className="revision-panel__intro">
+              <p className="eyebrow">버전 기록</p>
+              <h4>{revisionHistory.length > 0 ? `${revisionHistory.length}개 저장됨` : '아직 저장된 버전 없음'}</h4>
               <p>
-                저장할 때마다 직전 상태가 보관됩니다. 필요하면 이전 상태를 선택해 현재 region으로 복원합니다.
+                저장하면 이전 상태가 이 구간의 복원 지점으로 남습니다.
               </p>
             </div>
             <label className="editor-field editor-field--wide">
-              <span>저장 라벨</span>
+              <span>저장 메모</span>
               <input
                 maxLength={120}
                 type="text"
@@ -818,27 +818,32 @@ function PianoRollPanelContent({
                 onChange={(event) => setRevisionLabel(event.currentTarget.value)}
               />
             </label>
-            {revisionHistory.length > 0 ? (
-              <div className="revision-panel__restore">
-                <select
-                  value={selectedRevisionId}
-                  onChange={(event) => setSelectedRevisionId(event.currentTarget.value)}
-                >
-                  {revisionHistory.map((revision) => (
-                    <option key={revision.revision_id} value={revision.revision_id}>
-                      {revision.label} · {formatDateTime(revision.created_at)} · {revision.summary}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  disabled={disabled || !selectedRevisionId}
-                  type="button"
-                  onClick={() => onRestoreRevision(region, selectedRevisionId)}
-                >
-                  선택 버전 복원
-                </button>
-              </div>
-            ) : null}
+            <div className="revision-panel__history">
+              <h5>되돌릴 버전</h5>
+              {revisionHistory.length > 0 ? (
+                <div className="revision-panel__restore">
+                  <select
+                    value={selectedRevisionId}
+                    onChange={(event) => setSelectedRevisionId(event.currentTarget.value)}
+                  >
+                    {revisionHistory.map((revision) => (
+                      <option key={revision.revision_id} value={revision.revision_id}>
+                        {revision.label} · {formatDateTime(revision.created_at)} · {revision.summary}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={disabled || !selectedRevisionId}
+                    type="button"
+                    onClick={() => onRestoreRevision(region, selectedRevisionId)}
+                  >
+                    이 버전으로 되돌리기
+                  </button>
+                </div>
+              ) : (
+                <p>저장 후 되돌릴 수 있는 버전이 여기에 표시됩니다.</p>
+              )}
+            </div>
           </section>
         </>
       )}

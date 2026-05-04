@@ -6,11 +6,9 @@ import {
   TRACK_UPLOAD_ACCEPT,
   formatDurationSeconds,
   formatSeconds,
-  formatSourceLabel,
   formatTrackName,
   getArrangementTimelineBounds,
   getJobStatusLabel,
-  getPitchedEvents,
   statusLabels,
 } from '../../lib/studio'
 import type {
@@ -30,8 +28,8 @@ import { getGridSeconds } from './TrackBoardEditorGrid'
 import {
   getDurationPercent,
   getMeasureStarts,
+  getRegionHitAreaStyle,
   getRegionLaneStyle,
-  getRegionStyle,
   getTimelinePercent,
 } from './TrackBoardTimelineLayout'
 import './TrackBoard.css'
@@ -138,7 +136,7 @@ function getTrackMiniStyle(
   const laneTopPercent = 28 + ((rawTopPercent - 12) / 76) * 58
   return {
     '--event-left': `${getTimelinePercent(item.event.start_seconds, timelineBounds)}%`,
-    '--event-top': `${Math.max(28, Math.min(86, laneTopPercent))}%`,
+    '--event-top': `${Math.max(12, Math.min(88, laneTopPercent))}%`,
     '--event-width': `${Math.max(1.2, getDurationPercent(item.event.duration_seconds, timelineBounds.durationSeconds))}%`,
   } as CSSProperties
 }
@@ -331,7 +329,7 @@ export function TrackBoard({
   const canOpenSelectedRegionEditor = Boolean(selectedRegion && !isEditorMode && onOpenRegionEditor)
 
   return (
-    <section className={`studio-tracks studio-tracks--${mode}`} aria-label={isEditorMode ? '음표 편집기' : '6트랙 스튜디오'}>
+    <section className={`studio-tracks studio-tracks--${mode}`} aria-label={isEditorMode ? '구간 편집기' : '6트랙 스튜디오'}>
       <div className="studio-tracks__header">
         <div className="studio-tracks__summary">
           <span>등록 {registeredTracks.length}</span>
@@ -405,7 +403,7 @@ export function TrackBoard({
               <div
                 className="track-card__timeline track-card__region-lane"
                 aria-label={`${formatTrackName(track.name)} 구간`}
-                style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineBounds, trackRegions.length)}
+                style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineBounds)}
               >
                 <div className="track-card__measure-grid" aria-hidden="true">
                   {measureStarts.map((seconds) => (
@@ -422,13 +420,15 @@ export function TrackBoard({
                   <>
                     {trackRegions.map((region, index) => (
                       <button
-                        aria-label={`${formatTrackName(track.name)} 구간 ${index + 1}`}
+                        aria-label={`${formatTrackName(track.name)} 구간 ${index + 1}: ${formatDurationSeconds(
+                          region.start_seconds,
+                        )}부터 ${formatDurationSeconds(region.start_seconds + region.duration_seconds)}까지`}
                         aria-pressed={selectedRegion?.region_id === region.region_id}
-                        className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
+                        className={`track-card__region-hit-area ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
                         data-region-id={region.region_id}
                         data-testid={index === 0 ? `track-region-${track.slot_id}` : `track-region-${track.slot_id}-${index + 1}`}
                         key={region.region_id}
-                        style={getRegionStyle(region, timelineBounds, index)}
+                        style={getRegionHitAreaStyle(region, timelineBounds)}
                         type="button"
                         onClick={() => {
                           setSelectedRegionId(region.region_id)
@@ -440,12 +440,9 @@ export function TrackBoard({
                           onOpenRegionEditor?.(region)
                         }}
                       >
-                        <span>{region.source_label ? formatSourceLabel(region.source_label) : formatTrackName(track.name)}</span>
-                        <strong>{getPitchedEvents(region.pitch_events).length}개 음표</strong>
-                        <em>
-                          {formatDurationSeconds(region.start_seconds)} -{' '}
-                          {formatDurationSeconds(region.start_seconds + region.duration_seconds)}
-                        </em>
+                        <span className="event-mini__sr">
+                          {formatTrackName(track.name)} 구간 {index + 1}
+                        </span>
                       </button>
                     ))}
                     {trackMiniEvents.map((item) => (
@@ -462,6 +459,7 @@ export function TrackBoard({
                             : ''
                         }`}
                         data-testid={`track-event-mini-${item.event.event_id}`}
+                        data-track-slot-id={track.slot_id}
                         key={`${item.region.region_id}-${item.event.event_id}`}
                         style={getTrackMiniStyle(item, trackMiniEvents, timelineBounds)}
                         title={getEventMiniTitle(item.event, track.name)}
@@ -481,7 +479,7 @@ export function TrackBoard({
                     ))}
                   </>
                 ) : (
-                  <p>{needsReview ? '후보 검토' : '비어 있음'}</p>
+                  <span className="track-card__empty-lane" aria-hidden="true" />
                 )}
               </div>
 

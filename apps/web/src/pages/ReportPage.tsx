@@ -300,7 +300,7 @@ export function ReportPage() {
                       <p>{getIssueDetail(issue)}</p>
                       {focusPath ? (
                         <Link className="report-issue__focus" to={focusPath}>
-                          음표 편집에서 보기
+                          구간 편집에서 보기
                         </Link>
                       ) : null}
                     </div>

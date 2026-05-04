@@ -36,7 +36,7 @@ is excluded from persistence and remains an adapter detail.
   candidate review, and report history. It does not render the piano-roll
   editor, practice waterfall, or scoring controls.
 - `apps/web/src/pages/StudioEditPage.tsx`
-  Dedicated note-editing surface for region selection, region structure
+  Dedicated region-editing surface for region selection, region structure
   actions, selected-region piano-roll editing, local draft save, and bounded
   revision restore. Report focus links land here when they carry answer
   region/event IDs.
@@ -45,7 +45,7 @@ is excluded from persistence and remains an adapter detail.
   selection, scoring setup/count-in, scoring capture, report feed, and the
   waterfall timing stage.
 - `apps/web/src/components/studio/StudioPurposeNav.tsx`
-  Shared purpose navigation for studio assembly, note editing, practice, and
+  Shared purpose navigation for studio assembly, region editing, practice, and
   report detail surfaces. It keeps page transitions explicit and reinforces
   which work belongs on the current page.
 - `apps/web/src/components/studio/StudioToolbar.tsx`
@@ -62,12 +62,13 @@ is excluded from persistence and remains an adapter detail.
   synth tuned to sit beside human singing instead of a sampled organ or choir
   soundfont.
 - `apps/web/src/components/studio/TrackBoard.tsx`
-  Main six-track arrangement component. In studio mode it renders macro region
-  lanes, thin pitch-positioned event minis, and track registration/playback/sync
-  controls. In editor mode it renders the same six visible lanes plus
-  selected-region tools and piano-roll editing. Empty tracks remain visible as
-  lanes with no event minis. Practice waterfall rendering belongs to
-  `PracticePage`.
+  Main six-track arrangement component. In studio mode it renders six shared
+  timeline lanes with thin pitch-positioned event minis directly on the lane,
+  plus track registration/playback/sync controls. Region hit areas remain
+  selectable but are not visual cards. In editor mode it renders the same six
+  visible lanes plus selected-region tools and piano-roll editing. Empty tracks
+  remain visible as lanes with no event minis. Practice waterfall rendering
+  belongs to `PracticePage`.
 - `apps/web/src/components/studio/eventMiniLayout.ts`
   Shared event-mini presentation helper for filtering renderable events,
   positioning minis by pitch, and generating hover/accessibility labels with
@@ -96,7 +97,7 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/api/routes/studios.py`
   FastAPI studio command/query endpoints, including single-field region/event
   mutation endpoints and the batch region revision save/restore endpoints used
-  by the note editor.
+  by the region editor.
 - `apps/api/src/gigastudy_api/services/studio_repository.py`
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
@@ -206,12 +207,12 @@ flowchart TD
    that have not yet been saved through the explicit-region path.
 5. Web passes `studio.regions` into `TrackBoard`, `StudioEditPage`, playback,
    report focus, and practice waterfall surfaces.
-6. Studio assembly, note editing, playback, candidate review, practice
+6. Studio assembly, region editing, playback, candidate review, practice
    waterfall, and practice scoring consume pitch events from the same region
    payload while staying on separate purpose-specific pages. All three visible
    track surfaces keep the six track slots present; empty tracks have lanes
    without event minis.
-7. The note editor may keep unsaved draft edits in browser session storage
+7. The region editor may keep unsaved draft edits in browser session storage
    while the user moves between studio sub-pages. Only `Save` mutates
    `Studio.regions`, so other pages continue to reflect the last saved product
    timeline; the API records the pre-save region material as a bounded restore
@@ -248,7 +249,7 @@ flowchart TD
 6. Scoring compares those events with registered arrangement regions, preserving
    public answer-region focus IDs through the internal adapter boundary.
 7. Report issues include region/event IDs and expected/actual beat coordinates.
-8. Report detail links can reopen the note editor with query parameters that
+8. Report detail links can reopen the region editor with query parameters that
    focus the matching region and piano-roll event.
 
 ### AI Generation

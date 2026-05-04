@@ -16,9 +16,12 @@ import {
 } from '../lib/api'
 import {
   DEFAULT_METER,
+  DEFAULT_SYNC_STEP_SECONDS,
   formatDurationSeconds,
   formatTrackName,
   getStudioMeter,
+  roundStudioSeconds,
+  STUDIO_TIME_PRECISION_SECONDS,
 } from '../lib/studio'
 import type {
   ArrangementRegion,
@@ -157,18 +160,18 @@ export function StudioEditPage() {
     await runStudioAction(
       () =>
         saveRegionRevision(studio.studio_id, region.region_id, {
-          duration_seconds: Math.max(0.08, Math.round(draft.duration_seconds * 1000) / 1000),
+          duration_seconds: Math.max(STUDIO_TIME_PRECISION_SECONDS, roundStudioSeconds(draft.duration_seconds)),
           events: draft.events.map((event) => ({
-            duration_seconds: Math.max(0.08, Math.round(event.duration_seconds * 1000) / 1000),
+            duration_seconds: Math.max(STUDIO_TIME_PRECISION_SECONDS, roundStudioSeconds(event.duration_seconds)),
             event_id: event.event_id,
             is_rest: event.is_rest,
             label: event.label.trim() || (event.is_rest ? 'Rest' : 'Note'),
             pitch_midi: event.is_rest ? null : event.pitch_midi,
-            start_seconds: Math.max(-30, Math.round(event.start_seconds * 1000) / 1000),
+            start_seconds: Math.max(-30, roundStudioSeconds(event.start_seconds)),
           })),
           revision_label: revisionLabel,
           source_label: draft.source_label.trim() || null,
-          start_seconds: Math.max(-30, Math.round(draft.start_seconds * 1000) / 1000),
+          start_seconds: Math.max(-30, roundStudioSeconds(draft.start_seconds)),
           target_track_slot_id: draft.target_track_slot_id,
           volume_percent: Math.max(0, Math.min(100, Math.round(draft.volume_percent))),
         }),
@@ -269,7 +272,7 @@ export function StudioEditPage() {
               editDisabled={actionBusy}
               editDisabledReason={editDisabledReason}
               registeredTracks={registeredTracks}
-              syncStepSeconds={0.01}
+              syncStepSeconds={DEFAULT_SYNC_STEP_SECONDS}
               trackCountIn={null}
               recordingSlotId={null}
               trackRecordingMeter={EMPTY_RECORDING_METER}

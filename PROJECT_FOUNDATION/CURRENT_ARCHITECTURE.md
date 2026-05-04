@@ -142,6 +142,8 @@ is excluded from persistence and remains an adapter detail.
   contract snaps near-grid symbolic import timing to the current sixteenth-note
   unit, merges same-pitch fragments, and absorbs import/export micro-gaps below
   that unit while preserving real gaps and exempting manual region editing.
+  Studio storage/edit precision remains 0.001 seconds; registration rhythm
+  normalization and storage precision are separate contracts.
 - `apps/api/src/gigastudy_api/services/engine/voice.py`
   Voice pitch extraction with Basic Pitch/librosa/local fallback, fixed-BPM
   metronome phase alignment, strict sung-segment cleanup, and a narrow rescue
@@ -332,6 +334,8 @@ flowchart TD
    configured root MIDI pitch; otherwise it falls back to the built-in synth.
    Dense MIDI-style event sessions are scheduled by lookahead chunks against
    the shared scheduled start so browser oscillator load does not mute playback.
+   Playback uses persisted event durations within studio precision and does not
+   stretch events to the registration rhythm grid.
 4. Sync offset and volume are applied per track. Negative sync is preserved as
    a user-visible timeline translation; barlines stay on the shared grid.
 5. Audio clips are scheduled from `TrackSlot.sync_offset_seconds`. Region pitch

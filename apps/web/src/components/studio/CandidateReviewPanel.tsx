@@ -10,6 +10,7 @@ import {
   formatSourceLabel,
   formatTrackName,
   sourceLabels,
+  STUDIO_TIME_PRECISION_SECONDS,
   statusLabels,
 } from '../../lib/studio'
 import type { ExtractionCandidate, PitchEvent, TrackSlot } from '../../types/studio'
@@ -38,7 +39,10 @@ type CandidateVerdict = {
 }
 
 function getEventTimelinePercent(seconds: number, startSeconds: number, durationSeconds: number): number {
-  return Math.max(0, Math.min(100, ((seconds - startSeconds) / Math.max(0.0001, durationSeconds)) * 100))
+  return Math.max(
+    0,
+    Math.min(100, ((seconds - startSeconds) / Math.max(STUDIO_TIME_PRECISION_SECONDS, durationSeconds)) * 100),
+  )
 }
 
 function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {

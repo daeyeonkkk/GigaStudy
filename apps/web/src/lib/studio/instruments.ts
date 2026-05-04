@@ -1,3 +1,5 @@
+import { STUDIO_TIME_PRECISION_SECONDS } from './timing'
+
 export type PlaybackNode = {
   filters?: BiquadFilterNode[]
   oscillator?: OscillatorNode
@@ -70,6 +72,14 @@ export function createInstrumentPlayback(
   return createSynthInstrumentPlayback(context, request, instrument)
 }
 
+function getPlaybackDuration(requestedDuration: number): number {
+  return Math.max(STUDIO_TIME_PRECISION_SECONDS, requestedDuration)
+}
+
+function getReleaseTime(duration: number, ratio: number, maxSeconds: number): number {
+  return Math.min(maxSeconds, Math.max(STUDIO_TIME_PRECISION_SECONDS, duration * ratio))
+}
+
 function createSampleInstrumentPlayback(
   context: AudioContext,
   request: InstrumentPlaybackRequest,
@@ -78,9 +88,9 @@ function createSampleInstrumentPlayback(
   const destination = request.destination ?? context.destination
   const source = context.createBufferSource()
   const gain = context.createGain()
-  const duration = Math.max(0.04, request.duration)
+  const duration = getPlaybackDuration(request.duration)
   const attackTime = Math.min(0.035, duration * 0.25)
-  const releaseTime = Math.max(0.08, Math.min(0.24, duration * 0.2))
+  const releaseTime = getReleaseTime(duration, 0.2, 0.24)
   const playbackRate = Math.max(0.25, Math.min(4, request.frequency / instrument.rootFrequency))
 
   source.buffer = instrument.audioBuffer
@@ -124,10 +134,10 @@ function createGuideSustainTone(
   const destination = request.destination ?? context.destination
   const filter = context.createBiquadFilter()
   const masterGain = context.createGain()
-  const duration = Math.max(0.06, request.duration)
+  const duration = getPlaybackDuration(request.duration)
   const attackTime = Math.min(0.055, duration * 0.3)
-  const releaseTime = Math.max(0.16, Math.min(0.34, duration * 0.24))
-  const holdEndTime = request.startTime + Math.max(attackTime + 0.02, duration)
+  const releaseTime = getReleaseTime(duration, 0.24, 0.34)
+  const holdEndTime = request.startTime + duration
   const oscillators: OscillatorNode[] = []
   const gains: GainNode[] = [masterGain]
 
@@ -179,10 +189,10 @@ function createPluckedReferenceTone(
   const destination = request.destination ?? context.destination
   const filter = context.createBiquadFilter()
   const masterGain = context.createGain()
-  const duration = Math.max(0.08, request.duration)
+  const duration = getPlaybackDuration(request.duration)
   const attackTime = Math.min(0.012, duration / 5)
   const decayTime = Math.min(duration * 0.5, 0.32)
-  const releaseTime = Math.max(0.1, Math.min(0.28, duration * 0.28))
+  const releaseTime = getReleaseTime(duration, 0.28, 0.28)
   const oscillators: OscillatorNode[] = []
   const gains: GainNode[] = [masterGain]
 
@@ -236,7 +246,7 @@ function createPercussionClickTone(
   const destination = request.destination ?? context.destination
   const oscillator = context.createOscillator()
   const gain = context.createGain()
-  const duration = Math.max(0.035, Math.min(0.12, request.duration))
+  const duration = Math.min(0.12, getPlaybackDuration(request.duration))
   const attackTime = Math.min(0.01, duration / 3)
 
   oscillator.type = 'square'

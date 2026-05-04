@@ -4,6 +4,8 @@ import type { CSSProperties } from 'react'
 import {
   formatDurationSeconds,
   formatTrackName,
+  roundStudioSeconds,
+  STUDIO_TIME_PRECISION_SECONDS,
 } from '../../lib/studio'
 import type {
   ArrangementRegion,
@@ -18,7 +20,7 @@ import {
 import { getDurationPercent } from './TrackBoardTimelineLayout'
 
 const MIN_TIMELINE_SECONDS = -30
-const MIN_DURATION_SECONDS = 0.08
+const MIN_DURATION_SECONDS = STUDIO_TIME_PRECISION_SECONDS
 const MAX_UNDO_STEPS = 24
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -65,7 +67,7 @@ function roundToGrid(value: number, gridSeconds: number): number {
 }
 
 function roundSeconds(value: number): number {
-  return Math.round(value * 1000) / 1000
+  return roundStudioSeconds(value)
 }
 
 function clampTimelineStart(value: number): number {

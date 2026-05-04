@@ -1,6 +1,7 @@
 import {
   getPitchEventPlaybackFrequency,
   regionsHavePlayableEvents,
+  STUDIO_TIME_PRECISION_SECONDS,
   trackHasPlayableAudio,
   type PlaybackSourceMode,
 } from '../../lib/studio'
@@ -38,17 +39,17 @@ const VOCAL_SLOT_CENTERS: Record<number, number> = {
 export function getSustainedPitchEvents(
   events: PitchEvent[],
   isPercussion: boolean,
-  minimumEventSeconds: number,
+  precisionSeconds: number = STUDIO_TIME_PRECISION_SECONDS,
   slotId = 0,
 ): ScheduledPitchEvent[] {
-  const readableMinimumSeconds = Math.max(0.001, minimumEventSeconds)
+  const timelinePrecisionSeconds = Math.max(STUDIO_TIME_PRECISION_SECONDS, precisionSeconds)
   const scheduledEvents = events
     .map((event) => {
       const frequency = getPitchEventPlaybackFrequency(event)
       return frequency === null
         ? null
         : {
-            durationSeconds: Math.max(readableMinimumSeconds, event.duration_seconds),
+            durationSeconds: Math.max(0, event.duration_seconds),
             event,
             frequency,
             startSeconds: event.start_seconds,
@@ -77,7 +78,7 @@ export function getSustainedPitchEvents(
       (current.event.pitch_midi !== null &&
         current.event.pitch_midi !== undefined &&
         current.event.pitch_midi === previous.event.pitch_midi)
-    const smallGap = current.startSeconds <= previousEndSeconds + readableMinimumSeconds + 0.001
+    const smallGap = current.startSeconds <= previousEndSeconds + timelinePrecisionSeconds
     if (samePitch && smallGap) {
       previous.durationSeconds = Math.max(previous.durationSeconds, currentEndSeconds - previous.startSeconds)
       continue
@@ -85,7 +86,7 @@ export function getSustainedPitchEvents(
 
     merged.push({ ...current })
   }
-  return enforceMonophonicPlaybackLine(merged, slotId, readableMinimumSeconds)
+  return enforceMonophonicPlaybackLine(merged, slotId, timelinePrecisionSeconds)
 }
 
 function enforceMonophonicPlaybackLine(
@@ -216,17 +217,17 @@ export function getAudioTrackSchedule({
 export function getPitchEventSchedule({
   durationSeconds,
   eventStartSeconds,
-  minimumEventSeconds,
+  precisionSeconds,
   scheduledStart,
   startSeconds,
 }: {
   durationSeconds: number
   eventStartSeconds: number
-  minimumEventSeconds: number
+  precisionSeconds?: number
   scheduledStart: number
   startSeconds: number
 }): PitchEventSchedule | null {
-  const readableMinimumSeconds = Math.max(0.001, minimumEventSeconds)
+  const timelinePrecisionSeconds = Math.max(STUDIO_TIME_PRECISION_SECONDS, precisionSeconds ?? STUDIO_TIME_PRECISION_SECONDS)
   const safeDurationSeconds = Math.max(0, durationSeconds)
   const eventEndSeconds = eventStartSeconds + safeDurationSeconds
   if (eventEndSeconds <= startSeconds) {
@@ -234,7 +235,7 @@ export function getPitchEventSchedule({
   }
   const relativeStartSeconds = Math.max(0, eventStartSeconds - startSeconds)
   const remainingDurationSeconds = Math.max(
-    readableMinimumSeconds,
+    timelinePrecisionSeconds,
     eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
   )
   return {

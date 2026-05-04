@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 
+import { STUDIO_TIME_PRECISION_SECONDS } from '../../lib/studio'
 import type { ArrangementRegion } from '../../types/studio'
 
 export type TimelineBounds = {
@@ -24,7 +25,7 @@ export function getMeasureStarts(
   let measureIndex = 1
   let seconds = 0
   const maxTimelineSeconds = Math.max(0.25, timelineBounds.maxSeconds)
-  while (seconds <= maxTimelineSeconds + 0.001 && starts.length < 10000) {
+  while (seconds <= maxTimelineSeconds + STUDIO_TIME_PRECISION_SECONDS && starts.length < 10000) {
     starts.push({ measureIndex, seconds: Math.round(seconds * 10000) / 10000 })
     seconds += measureSeconds
     measureIndex += 1
@@ -43,7 +44,7 @@ export function getTimelinePercent(seconds: number, timelineBounds: TimelineBoun
 }
 
 export function getDurationPercent(seconds: number, durationSeconds: number): number {
-  return Math.max(0, Math.min(100, (seconds / Math.max(0.0001, durationSeconds)) * 100))
+  return Math.max(0, Math.min(100, (seconds / Math.max(STUDIO_TIME_PRECISION_SECONDS, durationSeconds)) * 100))
 }
 
 export function getRegionHitAreaStyle(
@@ -52,7 +53,7 @@ export function getRegionHitAreaStyle(
 ): CSSProperties {
   return {
     '--region-left': `${getTimelinePercent(region.start_seconds, timelineBounds)}%`,
-    '--region-width': `${Math.max(1.5, getDurationPercent(region.duration_seconds, timelineBounds.durationSeconds))}%`,
+    '--region-width': `${getDurationPercent(region.duration_seconds, timelineBounds.durationSeconds)}%`,
   } as CSSProperties
 }
 

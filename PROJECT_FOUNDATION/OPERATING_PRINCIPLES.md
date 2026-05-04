@@ -75,9 +75,13 @@ the same change.
 - Onsets and durations should be quantized to musically useful beat units, then
   simplified so the track reads as intentional phrases rather than frame-level
   detector noise.
-- Automatic registration uses a dynamic shortest readable note unit derived
-  from BPM and meter: the current measure's sixteenth-note subdivision. Timing
-  cleanup must use that beat-derived unit, never a fixed seconds threshold.
+- The studio can store and edit timing at 0.001-second precision. That is the
+  product resolution, not the musical rhythm unit for automatic registration.
+- Automatic track registration must publish regular rhythmic values derived
+  from BPM and meter, such as eighth notes, sixteenth notes, and sixteenth
+  rests. The shortest readable registration unit is the current meter's
+  sixteenth-note subdivision. Timing cleanup must use beat-derived units, never
+  arbitrary fixed seconds thresholds.
 - Same-pitch event fragments that touch or overlap should be merged into one
   continuous event. Import/export articulation gaps shorter than the dynamic
   sixteenth-note unit may be absorbed during automatic registration; gaps at or
@@ -305,6 +309,9 @@ the same change.
 - Event-mini width is the event duration divided by the visible shared timeline
   duration. Pitch changes are shown by vertical position, not by changing the
   bar thickness.
+- Playback and UI previews must use the persisted event start and duration
+  exactly, within studio time precision. They may not stretch short events to
+  the registration rhythm unit just to make them easier to hear or see.
 - Studio and region-editing lanes should not draw region cards behind event
   minis. Regions are selectable time spans, but the visible material should be
   the individual pitch bars on the shared lane.

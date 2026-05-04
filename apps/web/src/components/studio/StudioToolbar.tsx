@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { formatTrackName, type PlaybackSourceMode } from '../../lib/studio'
+import { formatTrackName, STUDIO_TIME_PRECISION_SECONDS, type PlaybackSourceMode } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
 import { StudioPurposeNav } from './StudioPurposeNav'
 
@@ -295,7 +295,7 @@ export function StudioToolbar({
                 disabled={!globalPlaying}
                 max={playbackRange.maxSeconds}
                 min={playbackRange.minSeconds}
-                step="0.01"
+                step={STUDIO_TIME_PRECISION_SECONDS}
                 type="range"
                 value={seekValue}
                 onChange={(event) => setSeekDraftSeconds(Number(event.target.value))}

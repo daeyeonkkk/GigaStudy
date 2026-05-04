@@ -7,12 +7,13 @@ import {
   createInstrumentPlayback,
   DEFAULT_MELODIC_INSTRUMENT,
   DEFAULT_PERCUSSION_INSTRUMENT,
+  DEFAULT_SYNC_STEP_SECONDS,
   disposePlaybackSession,
   fetchAudioArrayBuffer,
   formatTrackName,
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
-  getSixteenthNoteSeconds,
+  STUDIO_TIME_PRECISION_SECONDS,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
   loadCustomGuideInstrument,
@@ -79,7 +80,7 @@ export function useStudioPlayback({
   const [playbackSource, setPlaybackSource] = useState<PlaybackSourceMode>('audio')
   const [playbackPickerOpen, setPlaybackPickerOpen] = useState(false)
   const [selectedPlaybackSlotIds, setSelectedPlaybackSlotIds] = useState<Set<number>>(() => new Set())
-  const [syncStepSeconds, setSyncStepSeconds] = useState(0.01)
+  const [syncStepSeconds, setSyncStepSeconds] = useState(DEFAULT_SYNC_STEP_SECONDS)
   const [globalPlaying, setGlobalPlaying] = useState(false)
   const [playingSlots, setPlayingSlots] = useState<Set<number>>(() => new Set())
   const [playbackTimeline, setPlaybackTimeline] = useState<PlaybackTimeline | null>(null)
@@ -195,7 +196,7 @@ export function useStudioPlayback({
     disposeCurrentPlaybackSession()
 
     const beatSeconds = 60 / studio.bpm
-    const minimumEventSeconds = getSixteenthNoteSeconds(studio.bpm, studioMeter)
+    const eventPrecisionSeconds = STUDIO_TIME_PRECISION_SECONDS
     const minTimelineSeconds = Math.min(
       0,
       ...playableTracks.map((track) => track.sync_offset_seconds),
@@ -263,7 +264,7 @@ export function useStudioPlayback({
         }
         pendingSynthEvents.sort((left, right) => left.relativeStartSeconds - right.relativeStartSeconds)
         let nextEventIndex = 0
-        const scheduleAheadSeconds = Math.max(0.75, minimumEventSeconds * 6)
+        const scheduleAheadSeconds = Math.max(0.75, eventPrecisionSeconds * 6)
         const lookaheadMilliseconds = 90
 
         const scheduleChunk = () => {
@@ -424,7 +425,7 @@ export function useStudioPlayback({
           getSustainedPitchEvents(
             region.pitch_events,
             isPercussion,
-            minimumEventSeconds,
+            eventPrecisionSeconds,
             track.slot_id,
           ).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
             const duration = durationSeconds
@@ -433,7 +434,7 @@ export function useStudioPlayback({
             const eventSchedule = getPitchEventSchedule({
               durationSeconds: duration,
               eventStartSeconds,
-              minimumEventSeconds,
+              precisionSeconds: eventPrecisionSeconds,
               scheduledStart,
               startSeconds,
             })

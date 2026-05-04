@@ -5,9 +5,11 @@ import {
   getPitchEventSchedule,
   getSustainedPitchEvents,
 } from '../../apps/web/src/components/studio/studioPlaybackHelpers'
+import { getGridSeconds } from '../../apps/web/src/components/studio/TrackBoardEditorGrid'
 import {
   getSixteenthNoteSeconds,
   getPitchEventPlaybackFrequency,
+  STUDIO_TIME_PRECISION_SECONDS,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
 } from '../../apps/web/src/lib/studio'
@@ -55,7 +57,7 @@ describe('studio playback scheduling helpers', () => {
     const schedule = getPitchEventSchedule({
       durationSeconds: 0.75,
       eventStartSeconds: 1.2,
-      minimumEventSeconds: 0.25,
+      precisionSeconds: STUDIO_TIME_PRECISION_SECONDS,
       scheduledStart: 10,
       startSeconds: -0.3,
     })
@@ -70,7 +72,7 @@ describe('studio playback scheduling helpers', () => {
     const schedule = getPitchEventSchedule({
       durationSeconds: 1.2,
       eventStartSeconds: 1,
-      minimumEventSeconds: 0.25,
+      precisionSeconds: STUDIO_TIME_PRECISION_SECONDS,
       scheduledStart: 10,
       startSeconds: 1.5,
     })
@@ -149,17 +151,48 @@ describe('studio playback scheduling helpers', () => {
     expect(scheduled[1].startSeconds).toBeCloseTo(0.5)
   })
 
-  it('derives the readable event minimum from BPM instead of fixed seconds', () => {
-    const minimumEventSeconds = getSixteenthNoteSeconds(113)
+  it('keeps playback duration at studio precision instead of the readable import grid', () => {
+    const readableImportUnitSeconds = getSixteenthNoteSeconds(113)
     const schedule = getPitchEventSchedule({
       durationSeconds: 0.03,
       eventStartSeconds: 0,
-      minimumEventSeconds,
+      precisionSeconds: STUDIO_TIME_PRECISION_SECONDS,
       scheduledStart: 10,
       startSeconds: 0,
     })
 
-    expect(minimumEventSeconds).toBeCloseTo((60 / 113) * 0.25)
-    expect(schedule?.remainingDurationSeconds).toBeCloseTo(minimumEventSeconds)
+    expect(readableImportUnitSeconds).toBeCloseTo((60 / 113) * 0.25)
+    expect(schedule?.remainingDurationSeconds).toBeCloseTo(0.03)
+  })
+
+  it('preserves sub-sixteenth event durations for playback', () => {
+    const baseEvent = {
+      beat_in_measure: null,
+      confidence: 1,
+      duration_beats: 0.057,
+      duration_seconds: 0.03,
+      event_id: 'short',
+      extraction_method: 'test',
+      is_rest: false,
+      label: 'A4',
+      measure_index: null,
+      pitch_hz: null,
+      pitch_midi: 69,
+      quality_warnings: [],
+      region_id: 'region-1',
+      source: 'midi',
+      start_beat: 1,
+      start_seconds: 0,
+      track_slot_id: 1,
+    } as PitchEvent
+
+    const scheduled = getSustainedPitchEvents([baseEvent], false, STUDIO_TIME_PRECISION_SECONDS, 1)
+
+    expect(scheduled[0].durationSeconds).toBeCloseTo(0.03)
+  })
+
+  it('uses the BPM-derived sixteenth note for editor snapping', () => {
+    expect(getGridSeconds(120)).toBeCloseTo(0.125)
+    expect(getGridSeconds(113)).toBeCloseTo((60 / 113) * 0.25)
   })
 })

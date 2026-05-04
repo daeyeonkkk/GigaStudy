@@ -8,6 +8,11 @@ from gigastudy_api.services.engine.event_normalization import (
     enforce_monophonic_vocal_events,
     merge_contiguous_same_pitch_events,
 )
+from gigastudy_api.services.studio_time import (
+    STUDIO_TIME_PRECISION_SECONDS,
+    clamp_studio_duration_seconds,
+    studio_time_precision_beats,
+)
 
 TrackStatus = Literal[
     "empty",
@@ -207,7 +212,7 @@ def build_arrangement_region_from_track_events(
         default=region_start,
     )
     content_duration = max(
-        4.0,
+        STUDIO_TIME_PRECISION_SECONDS,
         track.duration_seconds,
         event_end_seconds - region_start,
     )
@@ -265,7 +270,7 @@ def _track_event_start_seconds(event: _TrackPitchEvent, bpm: int) -> float:
 def _track_event_duration_seconds(event: _TrackPitchEvent, bpm: int) -> float:
     if isfinite(event.duration_seconds) and event.duration_seconds > 0:
         return event.duration_seconds
-    return max(0.08, event.duration_beats * _beat_seconds(bpm))
+    return clamp_studio_duration_seconds(event.duration_beats * _beat_seconds(bpm))
 
 
 def _beat_seconds(bpm: int) -> float:
@@ -305,7 +310,7 @@ def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
         source_kind=candidate.source_kind,
         source_label=candidate.source_label,
         start_seconds=region_start,
-        duration_seconds=max(4.0, region_end - region_start),
+        duration_seconds=clamp_studio_duration_seconds(region_end - region_start),
         pitch_events=pitch_events,
         diagnostics=candidate.diagnostics,
     )
@@ -336,7 +341,9 @@ def _candidate_pitch_event_from_track_event(
         pitch_midi=event.pitch_midi,
         pitch_hz=event.pitch_hz,
         start_seconds=event.onset_seconds if isfinite(event.onset_seconds) else max(0.0, event.beat - 1),
-        duration_seconds=event.duration_seconds if isfinite(event.duration_seconds) and event.duration_seconds > 0 else max(0.08, event.duration_beats),
+        duration_seconds=event.duration_seconds
+        if isfinite(event.duration_seconds) and event.duration_seconds > 0
+        else clamp_studio_duration_seconds(event.duration_beats),
         start_beat=event.beat,
         duration_beats=event.duration_beats,
         confidence=event.confidence,
@@ -549,6 +556,7 @@ def _sanitize_arrangement_region(studio: Studio, region: ArrangementRegion) -> A
         slot_id=region.track_slot_id,
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
+        minimum_duration_beats=studio_time_precision_beats(_beat_seconds(studio.bpm)),
     )
     if _region_event_identity(track_events) == _region_event_identity(sanitized_track_events):
         return region
@@ -582,7 +590,7 @@ def _sanitize_arrangement_region(studio: Studio, region: ArrangementRegion) -> A
                     region.duration_seconds,
                     region_end - region.start_seconds,
                     region_end - region_start,
-                    0.08,
+                    STUDIO_TIME_PRECISION_SECONDS,
                 ),
                 4,
             ),

@@ -23,6 +23,12 @@ from gigastudy_api.services.engine.music_theory import (
     midi_to_label,
     seconds_per_beat,
 )
+from gigastudy_api.services.studio_time import (
+    STUDIO_TIME_PRECISION_SECONDS,
+    clamp_studio_duration_seconds,
+    round_studio_seconds,
+    studio_time_precision_beats,
+)
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.studio_access import require_studio_access
 
@@ -283,9 +289,12 @@ class StudioRegionCommands:
                 {region.track_slot_id},
                 action_label="Region split",
             )
-            split_seconds = round(request.split_seconds, 4)
+            split_seconds = round_studio_seconds(request.split_seconds)
             region_end = region.start_seconds + region.duration_seconds
-            if split_seconds <= region.start_seconds + 0.05 or split_seconds >= region_end - 0.05:
+            if (
+                split_seconds <= region.start_seconds + STUDIO_TIME_PRECISION_SECONDS
+                or split_seconds >= region_end - STUDIO_TIME_PRECISION_SECONDS
+            ):
                 raise HTTPException(status_code=422, detail="Split point must be inside the region.")
 
             beat_seconds = seconds_per_beat(studio.bpm)
@@ -314,8 +323,8 @@ class StudioRegionCommands:
                         )
                     )
                 else:
-                    left_duration = max(0.0001, split_seconds - event_start)
-                    right_duration = max(0.0001, event_end - split_seconds)
+                    left_duration = max(STUDIO_TIME_PRECISION_SECONDS, split_seconds - event_start)
+                    right_duration = max(STUDIO_TIME_PRECISION_SECONDS, event_end - split_seconds)
                     left_events.append(
                         event.model_copy(
                             update={
@@ -416,19 +425,20 @@ class StudioRegionCommands:
 
     def _normalize_region(self, region: ArrangementRegion, *, bpm: int) -> None:
         beat_seconds = seconds_per_beat(bpm)
-        region.start_seconds = round(region.start_seconds, 4)
-        region.duration_seconds = round(max(0.08, region.duration_seconds), 4)
-        region.sync_offset_seconds = round(region.start_seconds, 4)
+        region.start_seconds = round_studio_seconds(region.start_seconds)
+        region.duration_seconds = clamp_studio_duration_seconds(region.duration_seconds)
+        region.sync_offset_seconds = round_studio_seconds(region.start_seconds)
+        minimum_duration_beats = studio_time_precision_beats(beat_seconds)
         region.pitch_events = sorted(
             [
                 event.model_copy(
                     update={
                         "track_slot_id": region.track_slot_id,
                         "region_id": region.region_id,
-                        "start_seconds": round(event.start_seconds, 4),
-                        "duration_seconds": round(max(0.0001, event.duration_seconds), 4),
+                        "start_seconds": round_studio_seconds(event.start_seconds),
+                        "duration_seconds": clamp_studio_duration_seconds(event.duration_seconds),
                         "start_beat": round(max(0.0, event.start_beat), 4),
-                        "duration_beats": round(max(0.01, event.duration_beats), 4),
+                        "duration_beats": round(max(minimum_duration_beats, event.duration_beats), 4),
                     }
                 )
                 for event in region.pitch_events
@@ -439,7 +449,7 @@ class StudioRegionCommands:
             (event.start_seconds + event.duration_seconds for event in region.pitch_events),
             default=region.start_seconds + region.duration_seconds,
         )
-        region.duration_seconds = round(max(region.duration_seconds, event_end - region.start_seconds, beat_seconds), 4)
+        region.duration_seconds = clamp_studio_duration_seconds(max(region.duration_seconds, event_end - region.start_seconds))
 
     def _sync_tracks_for_slots(
         self,

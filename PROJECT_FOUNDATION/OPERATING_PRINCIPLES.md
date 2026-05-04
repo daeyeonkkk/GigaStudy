@@ -60,6 +60,10 @@ the same change.
 - Onsets and durations should be quantized to musically useful beat units, then
   simplified so the track reads as intentional phrases rather than frame-level
   detector noise.
+- Voice extraction may use a conservative rescue pass for short, weak, but
+  stable sung contours. The rescue pass must still reject tonal clicks and room
+  noise, and it must mark rescued events in diagnostics rather than hiding that
+  confidence was lower than the strict path.
 - Events that cross measure boundaries must be represented consistently for the
   current UI. If notation output is active, split or tie them correctly. If
   piano-roll output is active, keep the region continuous but preserve measure
@@ -153,6 +157,10 @@ the same change.
   explicit revision.
 - Candidates should be meaningfully different by role, such as stable blend,
   counterline, open support, upper blend, or active motion.
+- The deterministic generator should search a slightly larger candidate pool
+  than the UI needs, then expose the most distinct normalized candidates. If
+  post-normalization candidates are similar, diagnostics should say so instead
+  of pretending they are three independent musical ideas.
 - Generated candidates must pass the same normalization, event-quality, range,
   and ensemble checks as imported or recorded material.
 - User-facing candidate information should lead with musical decision evidence,

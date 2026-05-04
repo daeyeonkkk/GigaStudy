@@ -2252,6 +2252,9 @@ def test_ai_generation_creates_candidates_and_approval_requires_overwrite_confir
         if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
     ]
     assert len(alto_candidates) == 3
+    assert alto_candidates[0]["diagnostics"]["generation_context_slot_ids"] == [1]
+    assert alto_candidates[0]["diagnostics"]["generation_context_track_count"] == 1
+    assert alto_candidates[0]["diagnostics"]["candidate_diversity_label"] in {"distinct", "similar", "single"}
     assert all("후보 " not in candidate["variant_label"] for candidate in alto_candidates)
     assert all("중심 " in candidate["variant_label"] for candidate in alto_candidates)
     first_group_id = alto_candidates[0]["candidate_group_id"]

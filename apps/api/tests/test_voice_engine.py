@@ -15,7 +15,10 @@ from gigastudy_api.services.engine.extraction_plan import (
     default_voice_extraction_plan,
 )
 from gigastudy_api.services.engine.voice import (
+    PitchFrame,
+    VOICE_RESCUE_WARNING,
     VoiceTranscriptionError,
+    _frames_to_events,
     _estimate_metronome_phase_alignment,
     build_metronome_aligned_wav_bytes,
     transcribe_voice_file,
@@ -254,6 +257,29 @@ def test_pre_extraction_plan_controls_voice_quantization(tmp_path: Path, monkeyp
     assert diagnostic_plan["provider"] == "test_llm"
     assert diagnostic_plan["used_llm"] is True
     assert diagnostic_plan["quantization_grid"] == 0.5
+
+
+def test_voice_rescue_pass_keeps_short_stable_sung_contour() -> None:
+    result = _frames_to_events(
+        [
+            PitchFrame(time_seconds=0.0, midi_float=72.0, confidence=0.44),
+            PitchFrame(time_seconds=0.035, midi_float=72.25, confidence=0.45),
+            PitchFrame(time_seconds=0.07, midi_float=71.85, confidence=0.43),
+            PitchFrame(time_seconds=0.105, midi_float=72.1, confidence=0.44),
+        ],
+        bpm=96,
+        slot_id=1,
+        hop_seconds=0.035,
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+        extraction_method="test_rescue",
+        extraction_plan=default_voice_extraction_plan(slot_id=1, bpm=96),
+    )
+
+    assert [event.label for event in result.events] == ["C5"]
+    assert VOICE_RESCUE_WARNING in result.events[0].quality_warnings
+    assert result.diagnostics is not None
+    assert result.diagnostics["voice_rescue_pass"] is True
 
 
 def test_metronome_aligned_wav_bytes_trim_and_pad_source_audio(tmp_path: Path) -> None:

@@ -65,6 +65,7 @@ METRONOME_ALIGNMENT_MIN_EVENTS = 2
 METRONOME_ALIGNMENT_MIN_IMPROVEMENT_BEATS = 0.035
 METRONOME_ALIGNMENT_MIN_OFFSET_SECONDS = 0.018
 NO_METRONOME_ALIGNMENT = MetronomeAlignment(False, 0.0, 0.0, 0.0, 0.0, 0)
+VOICE_RESCUE_WARNING = "voice_rescue_pass"
 
 
 def transcribe_voice_file(
@@ -711,13 +712,24 @@ def _frames_to_events(
         confidence_values = [frame.confidence]
 
     segments.append(_build_segment(current_start, previous_time, midi_values, confidence_values, hop_seconds))
+    raw_segments = segments
+    min_segment_seconds = max(plan.min_segment_seconds, hop_seconds * 3.5)
     segments = _clean_segments(
         segments,
-        min_segment_seconds=max(plan.min_segment_seconds, hop_seconds * 3.5),
+        min_segment_seconds=min_segment_seconds,
         min_segment_confidence=plan.min_segment_confidence,
         max_pitch_std=plan.max_pitch_std,
         suppress_unstable_events=plan.suppress_unstable_events,
     )
+    rescue_applied = False
+    if not segments:
+        segments = _rescue_voice_segments(
+            raw_segments,
+            min_segment_seconds=min_segment_seconds,
+            min_segment_confidence=plan.min_segment_confidence,
+            max_pitch_std=plan.max_pitch_std,
+        )
+        rescue_applied = bool(segments)
     if not segments:
         raise VoiceTranscriptionError("No stable voiced event was detected.")
 
@@ -739,6 +751,8 @@ def _frames_to_events(
             quantize(segment.duration_seconds / beat_seconds, plan.quantization_grid),
         )
         warnings = ["metronome_phase_aligned"] if alignment.applied else []
+        if rescue_applied:
+            warnings.append(VOICE_RESCUE_WARNING)
         events.append(
             event_from_pitch(
                 beat=beat,
@@ -772,6 +786,7 @@ def _frames_to_events(
             frame_count=frame_count if frame_count is not None else len(frame_pitches),
             segment_count=len(segments),
             event_count=len(events),
+            rescue_applied=rescue_applied,
         ),
     )
 
@@ -834,6 +849,52 @@ def _clean_segments(
     return cleaned
 
 
+def _rescue_voice_segments(
+    segments: list[VoiceSegment],
+    *,
+    min_segment_seconds: float,
+    min_segment_confidence: float,
+    max_pitch_std: float,
+) -> list[VoiceSegment]:
+    """Recover likely sung notes that strict cleanup would otherwise discard.
+
+    The rescue pass is deliberately narrow: it only relaxes duration and pitch
+    jitter a little, then requires enough voiced duration/confidence to keep
+    short tonal clicks and room noise rejected.
+    """
+
+    rescued = _clean_segments(
+        segments,
+        min_segment_seconds=max(0.1, min_segment_seconds * 0.68),
+        min_segment_confidence=max(0.36, min_segment_confidence - 0.08),
+        max_pitch_std=min(0.92, max_pitch_std + 0.22),
+        suppress_unstable_events=True,
+    )
+    if not rescued:
+        return []
+    if not _looks_like_sung_material(rescued):
+        return []
+    return rescued
+
+
+def _looks_like_sung_material(segments: list[VoiceSegment]) -> bool:
+    total_duration = sum(segment.duration_seconds for segment in segments)
+    average_confidence = sum(segment.confidence * segment.duration_seconds for segment in segments) / max(
+        0.001,
+        total_duration,
+    )
+    max_pitch_std = max((segment.pitch_std for segment in segments), default=0.0)
+    if len(segments) == 1:
+        segment = segments[0]
+        return (
+            segment.duration_seconds >= 0.11
+            and segment.confidence >= 0.4
+            and segment.frame_count >= 3
+            and segment.pitch_std <= 0.88
+        )
+    return total_duration >= 0.18 and average_confidence >= 0.38 and max_pitch_std <= 0.9
+
+
 def _voice_transcription_diagnostics(
     plan: VoiceExtractionPlan,
     *,
@@ -841,6 +902,7 @@ def _voice_transcription_diagnostics(
     frame_count: int,
     segment_count: int,
     event_count: int,
+    rescue_applied: bool = False,
 ) -> dict[str, object]:
     return {
         "engine": extraction_method,
@@ -848,6 +910,7 @@ def _voice_transcription_diagnostics(
         "pre_registration_frame_count": frame_count,
         "pre_registration_segment_count": segment_count,
         "pre_normalization_event_count": event_count,
+        "voice_rescue_pass": rescue_applied,
         "bpm_is_absolute": True,
     }
 

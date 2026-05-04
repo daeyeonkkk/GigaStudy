@@ -36,6 +36,7 @@ from gigastudy_api.services.studio_documents import register_track_material, tra
 from gigastudy_api.services.studio_generation import generation_candidate_review_metadata
 from gigastudy_api.services.studio_jobs import clear_unmapped_document_placeholders
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
+from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 
 SUPERSEDED_AI_CANDIDATE_MESSAGE = "Superseded by newer AI generation candidates."
 
@@ -420,6 +421,7 @@ class StudioCandidateCommands:
         method: str,
         message: str,
         llm_plan: DeepSeekHarmonyPlan | None = None,
+        context_events_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
     ) -> Studio:
         with self._repository._lock:
             studio = self._repository._load_studio(studio_id)
@@ -436,14 +438,21 @@ class StudioCandidateCommands:
                 slot_id,
             )
             candidate_group_id = uuid4().hex
-            for index, candidate_track_events in enumerate(candidate_events, start=1):
+            context_events_by_slot = context_events_by_slot or registered_region_events_by_slot(
+                studio,
+                exclude_slot_id=slot_id,
+            )
+            prepared_candidates: list[tuple[list[TrackPitchEvent], Any]] = []
+            for candidate_track_events in candidate_events:
                 registration = self._repository._prepare_registration_events(
                     studio,
                     slot_id,
                     source_kind="ai",
                     events=candidate_track_events,
                 )
-                prepared_events = registration.events
+                prepared_candidates.append((registration.events, registration))
+            prepared_event_sets = [prepared_events for prepared_events, _registration in prepared_candidates]
+            for index, (prepared_events, registration) in enumerate(prepared_candidates, start=1):
                 confidence = min((event.confidence for event in prepared_events), default=0.65)
                 diagnostics, variant_label = generation_candidate_review_metadata(
                     slot_id=slot_id,
@@ -452,6 +461,12 @@ class StudioCandidateCommands:
                     confidence=confidence,
                     candidate_index=index,
                     llm_plan=llm_plan,
+                    context_events_by_slot=context_events_by_slot,
+                    sibling_candidates=[
+                        sibling
+                        for sibling_index, sibling in enumerate(prepared_event_sets, start=1)
+                        if sibling_index != index
+                    ],
                 )
                 candidate = build_pending_candidate(
                     candidate_group_id=candidate_group_id,

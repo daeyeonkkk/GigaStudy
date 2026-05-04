@@ -1134,6 +1134,7 @@ class StudioRepository:
         method: str,
         message: str,
         llm_plan: DeepSeekHarmonyPlan | None = None,
+        context_events_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
     ) -> Studio:
         return self._candidates.add_generation_candidates(
             studio_id,
@@ -1143,6 +1144,7 @@ class StudioRepository:
             method=method,
             message=message,
             llm_plan=llm_plan,
+            context_events_by_slot=context_events_by_slot,
         )
 
     def _schedule_engine_queue_processing(self, background_tasks: BackgroundTasks | None) -> None:

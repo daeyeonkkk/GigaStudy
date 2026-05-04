@@ -58,6 +58,7 @@ class StudioGenerationCommands:
                 method=generated.method,
                 message=generated.message,
                 llm_plan=generated.llm_plan,
+                context_events_by_slot=generated.context_events_by_slot,
             )
 
         target_track = self._repository._find_track(studio, slot_id)

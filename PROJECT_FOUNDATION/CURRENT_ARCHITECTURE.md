@@ -1,6 +1,6 @@
 # GigaStudy Current Architecture
 
-Date: 2026-05-02
+Date: 2026-05-04
 
 This is the current canonical architecture after the region/piano-roll rebuild.
 GigaStudy is a six-track vocal arrangement and practice workspace, not an
@@ -126,6 +126,11 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/services/engine/event_quality.py`
   The registration quality gate before extracted material becomes product
   regions. It replaces the old notation quality layer.
+- `apps/api/src/gigastudy_api/services/engine/voice.py`
+  Voice pitch extraction with Basic Pitch/librosa/local fallback, fixed-BPM
+  metronome phase alignment, strict sung-segment cleanup, and a narrow rescue
+  pass for short stable sung contours. Rescued material is marked in event
+  warnings and diagnostics.
 - `apps/api/src/gigastudy_api/services/registration_context.py`
   The single provider for region-aware registration context. Registration
   cleanup, LLM review, and ensemble gates use this instead of reading
@@ -256,8 +261,11 @@ flowchart TD
 
 1. User asks a target track to generate from registered context tracks.
 2. API uses deterministic harmony generation plus optional bounded LLM planning.
-3. Generated candidates remain reviewable until approved.
-4. Approved material becomes a region in the target track.
+3. The generator searches a slightly larger candidate pool, normalizes the
+   results, selects the most distinct candidates for review, and records context
+   and diversity diagnostics.
+4. Generated candidates remain reviewable until approved.
+5. Approved material becomes a region in the target track.
 
 ### Playback
 

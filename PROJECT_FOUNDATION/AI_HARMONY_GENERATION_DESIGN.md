@@ -1,6 +1,17 @@
 # AI Harmony Generation Quality Design
 
-Last updated: 2026-04-28
+Last updated: 2026-05-04
+
+## 2026-05-04 Stabilization Slice
+
+- Deterministic generation now searches a larger internal candidate pool than
+  the UI request count, then selects the most distinct normalized candidates.
+- Candidate review diagnostics now record which registered context slots were
+  used and whether sibling candidates are distinct, similar, duplicate, or a
+  single candidate.
+- This keeps the LLM boundary unchanged: DeepSeek may still plan candidate
+  roles and measure intent, but final pitch-event selection and diversity
+  gating remain deterministic.
 
 ## 2026-04-28 Implemented Slice
 

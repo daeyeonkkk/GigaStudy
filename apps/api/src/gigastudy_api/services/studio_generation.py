@@ -16,11 +16,14 @@ from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan, plan_harmon
 
 DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT = 160
 DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 6.0
+GENERATION_EXTRA_DIVERSITY_CANDIDATES = 2
+GENERATION_DISTINCT_DIFFERENCE_THRESHOLD = 0.18
 
 
 @dataclass(frozen=True)
 class GeneratedTrackMaterial:
     candidate_events: list[list[TrackPitchEvent]]
+    context_events_by_slot: dict[int, list[TrackPitchEvent]]
     source_label: str
     method: str
     message: str
@@ -89,6 +92,7 @@ def generate_track_material(
         context_events_by_slot=context_events_by_slot,
         candidate_count=request.candidate_count,
     )
+    engine_candidate_count = generation_search_candidate_count(request.candidate_count)
     candidate_events = generate_rule_based_harmony_candidates(
         target_slot_id=target_slot_id,
         context_tracks=context_events,
@@ -96,7 +100,7 @@ def generate_track_material(
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
         context_events_by_slot=context_events_by_slot,
-        candidate_count=request.candidate_count,
+        candidate_count=engine_candidate_count,
         profile_names=llm_plan.profile_names() if llm_plan is not None else None,
         harmony_plan=llm_plan,
     )
@@ -109,8 +113,12 @@ def generate_track_material(
             time_signature_numerator=studio.time_signature_numerator,
             time_signature_denominator=studio.time_signature_denominator,
             context_events_by_slot=context_events_by_slot,
-            candidate_count=request.candidate_count,
+            candidate_count=engine_candidate_count,
         )
+    candidate_events = select_diverse_generated_candidates(
+        candidate_events,
+        requested_count=request.candidate_count,
+    )
     label = "퍼커션 그루브" if target_slot_id == 6 else "성부 진행 화음"
     method = (
         "rule_based_percussion_candidates_v0"
@@ -129,6 +137,7 @@ def generate_track_material(
     )
     return GeneratedTrackMaterial(
         candidate_events=candidate_events,
+        context_events_by_slot=context_events_by_slot,
         source_label=label,
         method=method,
         message=message,
@@ -151,6 +160,108 @@ def _generation_planning_settings(settings: Settings, *, context_event_count: in
     )
 
 
+def generation_search_candidate_count(requested_count: int) -> int:
+    return max(
+        1,
+        min(5, requested_count + GENERATION_EXTRA_DIVERSITY_CANDIDATES),
+    )
+
+
+def select_diverse_generated_candidates(
+    candidates: list[list[TrackPitchEvent]],
+    *,
+    requested_count: int,
+) -> list[list[TrackPitchEvent]]:
+    if requested_count <= 0:
+        return []
+
+    selected: list[list[TrackPitchEvent]] = []
+    similar_candidates: list[list[TrackPitchEvent]] = []
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if all(
+            generated_candidate_difference_score(candidate, current) >= GENERATION_DISTINCT_DIFFERENCE_THRESHOLD
+            for current in selected
+        ):
+            selected.append(candidate)
+        else:
+            similar_candidates.append(candidate)
+        if len(selected) >= requested_count:
+            return selected
+
+    for candidate in similar_candidates:
+        if all(_event_sequence_signature(candidate) != _event_sequence_signature(current) for current in selected):
+            selected.append(candidate)
+        if len(selected) >= requested_count:
+            return selected
+
+    for candidate in candidates:
+        if candidate not in selected:
+            selected.append(candidate)
+        if len(selected) >= requested_count:
+            break
+    return selected[:requested_count]
+
+
+def generated_candidate_difference_score(
+    first: list[TrackPitchEvent],
+    second: list[TrackPitchEvent],
+) -> float:
+    first_pitches = _pitch_sequence(first)
+    second_pitches = _pitch_sequence(second)
+    if not first_pitches or not second_pitches:
+        return _unpitched_event_difference_score(first, second)
+
+    pair_count = min(len(first_pitches), len(second_pitches))
+    changed_positions = sum(
+        1
+        for index in range(pair_count)
+        if abs(first_pitches[index] - second_pitches[index]) >= 3
+    )
+    average_register_delta = abs(
+        (sum(first_pitches) / len(first_pitches))
+        - (sum(second_pitches) / len(second_pitches))
+    )
+    contour_delta = _contour_difference_score(first_pitches, second_pitches)
+    rhythm_delta = _rhythm_difference_score(first, second)
+    length_delta = abs(len(first_pitches) - len(second_pitches)) / max(len(first_pitches), len(second_pitches))
+    return (
+        (changed_positions / pair_count) * 0.56
+        + min(1.0, average_register_delta / 8) * 0.18
+        + contour_delta * 0.14
+        + rhythm_delta * 0.08
+        + length_delta * 0.04
+    )
+
+
+def generation_context_diagnostics(
+    *,
+    events: list[TrackPitchEvent],
+    context_events_by_slot: dict[int, list[TrackPitchEvent]] | None,
+    sibling_candidates: list[list[TrackPitchEvent]] | None,
+) -> dict[str, Any]:
+    context_events_by_slot = context_events_by_slot or {}
+    context_slot_ids = sorted(slot_id for slot_id, events in context_events_by_slot.items() if events)
+    sibling_scores = [
+        generated_candidate_difference_score(events, sibling)
+        for sibling in (sibling_candidates or [])
+        if sibling
+    ]
+    closest_difference = min(sibling_scores) if sibling_scores else None
+    return {
+        "generation_context_slot_ids": context_slot_ids,
+        "generation_context_track_count": len(context_slot_ids),
+        "generation_context_event_count": sum(len(events) for events in context_events_by_slot.values()),
+        "candidate_diversity_score": (
+            None
+            if closest_difference is None
+            else round(max(0.0, min(1.0, closest_difference)), 3)
+        ),
+        "candidate_diversity_label": _candidate_diversity_label(closest_difference),
+    }
+
+
 def generation_candidate_review_metadata(
     *,
     slot_id: int,
@@ -159,6 +270,8 @@ def generation_candidate_review_metadata(
     confidence: float,
     candidate_index: int,
     llm_plan: DeepSeekHarmonyPlan | None,
+    context_events_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
+    sibling_candidates: list[list[TrackPitchEvent]] | None = None,
 ) -> tuple[dict[str, Any], str]:
     llm_direction = llm_plan.direction_for_index(candidate_index) if llm_plan is not None else None
     diagnostics: dict[str, Any] = candidate_diagnostics(
@@ -188,9 +301,111 @@ def generation_candidate_review_metadata(
         diagnostics["selection_hint"] = llm_direction.selection_hint
         diagnostics["candidate_role"] = llm_direction.role
         diagnostics["risk_tags"] = llm_direction.risk_tags
+    diagnostics.update(
+        generation_context_diagnostics(
+            events=events,
+            context_events_by_slot=context_events_by_slot,
+            sibling_candidates=sibling_candidates,
+        )
+    )
     variant_label = (
         llm_direction.title
         if llm_direction is not None
         else generation_variant_label(candidate_index, slot_id, events)
     )
     return diagnostics, variant_label
+
+
+def _pitch_sequence(events: list[TrackPitchEvent]) -> list[int]:
+    return [
+        event.pitch_midi
+        for event in sorted(events, key=lambda item: (item.beat, item.id))
+        if event.pitch_midi is not None and not event.is_rest
+    ]
+
+
+def _event_sequence_signature(events: list[TrackPitchEvent]) -> tuple[tuple[float, float, int | None], ...]:
+    return tuple(
+        (
+            round(event.beat, 3),
+            round(event.duration_beats, 3),
+            event.pitch_midi,
+        )
+        for event in sorted(events, key=lambda item: (item.beat, item.id))
+        if not event.is_rest
+    )
+
+
+def _contour_difference_score(first_pitches: list[int], second_pitches: list[int]) -> float:
+    first_contour = _contour_signature(first_pitches)
+    second_contour = _contour_signature(second_pitches)
+    if not first_contour or not second_contour:
+        return 0.0
+    pair_count = min(len(first_contour), len(second_contour))
+    return sum(1 for index in range(pair_count) if first_contour[index] != second_contour[index]) / pair_count
+
+
+def _contour_signature(pitches: list[int]) -> tuple[int, ...]:
+    return tuple(
+        _motion_direction(pitches[index - 1], pitches[index])
+        for index in range(1, len(pitches))
+    )
+
+
+def _rhythm_difference_score(first: list[TrackPitchEvent], second: list[TrackPitchEvent]) -> float:
+    first_signature = [
+        (round(event.beat, 3), round(event.duration_beats, 3))
+        for event in sorted(first, key=lambda item: (item.beat, item.id))
+        if not event.is_rest
+    ]
+    second_signature = [
+        (round(event.beat, 3), round(event.duration_beats, 3))
+        for event in sorted(second, key=lambda item: (item.beat, item.id))
+        if not event.is_rest
+    ]
+    if not first_signature or not second_signature:
+        return 1.0 if first_signature != second_signature else 0.0
+    pair_count = min(len(first_signature), len(second_signature))
+    changed = sum(1 for index in range(pair_count) if first_signature[index] != second_signature[index])
+    length_delta = abs(len(first_signature) - len(second_signature)) / max(len(first_signature), len(second_signature))
+    return changed / pair_count * 0.8 + length_delta * 0.2
+
+
+def _unpitched_event_difference_score(
+    first: list[TrackPitchEvent],
+    second: list[TrackPitchEvent],
+) -> float:
+    first_labels = [
+        event.label
+        for event in sorted(first, key=lambda item: (item.beat, item.id))
+        if not event.is_rest
+    ]
+    second_labels = [
+        event.label
+        for event in sorted(second, key=lambda item: (item.beat, item.id))
+        if not event.is_rest
+    ]
+    if not first_labels or not second_labels:
+        return 1.0 if first_labels != second_labels else 0.0
+    pair_count = min(len(first_labels), len(second_labels))
+    label_delta = sum(1 for index in range(pair_count) if first_labels[index] != second_labels[index]) / pair_count
+    length_delta = abs(len(first_labels) - len(second_labels)) / max(len(first_labels), len(second_labels))
+    return label_delta * 0.8 + _rhythm_difference_score(first, second) * 0.15 + length_delta * 0.05
+
+
+def _motion_direction(previous_pitch: int, current_pitch: int) -> int:
+    if current_pitch > previous_pitch:
+        return 1
+    if current_pitch < previous_pitch:
+        return -1
+    return 0
+
+
+def _candidate_diversity_label(closest_difference: float | None) -> str:
+    if closest_difference is None:
+        return "single"
+    if closest_difference >= GENERATION_DISTINCT_DIFFERENCE_THRESHOLD:
+        return "distinct"
+    if closest_difference > 0:
+        return "similar"
+    return "duplicate"

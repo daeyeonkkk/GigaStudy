@@ -4,6 +4,13 @@ from pathlib import Path
 import fitz
 from fastapi.testclient import TestClient
 
+from gigastudy_api.api.schemas.studios import (
+    ArrangementRegion,
+    PitchEvent,
+    Studio,
+    TrackSlot,
+    build_studio_response,
+)
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.main import create_app
@@ -240,6 +247,35 @@ def build_single_note_midi_bytes(*, bpm: int = 113, pitch: int = 72, duration_ti
             b"\x00\xff\x51\x03" + tempo_microseconds.to_bytes(3, "big"),
             b"\x00\x90" + bytes([pitch, 100]),
             _vlq(duration_ticks) + b"\x80" + bytes([pitch, 64]),
+            b"\x00\xff\x2f\x00",
+        ]
+    )
+    return b"".join(
+        [
+            b"MThd",
+            (6).to_bytes(4, "big"),
+            (1).to_bytes(2, "big"),
+            (1).to_bytes(2, "big"),
+            (480).to_bytes(2, "big"),
+            b"MTrk",
+            len(track_events).to_bytes(4, "big"),
+            track_events,
+        ]
+    )
+
+
+def build_polyphonic_vocal_midi_bytes(*, bpm: int = 113) -> bytes:
+    tempo_microseconds = int(round(60_000_000 / bpm))
+    track_events = b"".join(
+        [
+            b"\x00\xff\x03\x07Soprano",
+            b"\x00\xff\x51\x03" + tempo_microseconds.to_bytes(3, "big"),
+            b"\x00\x90\x48\x64",
+            b"\x00\x90\x4c\x64",
+            _vlq(240) + b"\x90\x4f\x64",
+            _vlq(240) + b"\x80\x48\x40",
+            b"\x00\x80\x4c\x40",
+            _vlq(480) + b"\x80\x4f\x40",
             b"\x00\xff\x2f\x00",
         ]
     )
@@ -529,6 +565,125 @@ def test_upload_start_uses_source_midi_tempo_when_bpm_is_not_provided(tmp_path: 
     payload = response.json()
     assert payload["bpm"] == 113
     assert _track_events(payload, 1)[0]["duration_seconds"] == 0.531
+
+
+def test_upload_start_applies_shared_monophonic_contract_to_midi_tracks(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_polyphonic_vocal_midi_bytes(bpm=113)).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "Poly MIDI contract",
+            "start_mode": "upload",
+            "source_kind": "document",
+            "source_filename": "poly.mid",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    events = _track_region_events(payload, 1)
+    assert [event["label"] for event in events] == ["E5", "G5"]
+    assert events[0]["beat"] == 1
+    assert events[0]["duration_beats"] == 0.5
+    assert events[0]["onset_seconds"] + events[0]["duration_seconds"] <= events[1]["onset_seconds"]
+    assert "polyphonic_onset_collapsed" in events[0]["quality_warnings"]
+
+
+def test_studio_response_sanitizes_legacy_explicit_polyphonic_regions() -> None:
+    timestamp = "2026-05-04T00:00:00+00:00"
+    studio = Studio(
+        studio_id="legacy-poly",
+        title="Legacy poly",
+        bpm=120,
+        tracks=[
+            TrackSlot(
+                slot_id=1,
+                name="Soprano",
+                status="registered",
+                source_kind="midi",
+                source_label="legacy.mid",
+                updated_at=timestamp,
+            ),
+            *[
+                TrackSlot(slot_id=slot_id, name=name, status="empty", updated_at=timestamp)
+                for slot_id, name in [
+                    (2, "Alto"),
+                    (3, "Tenor"),
+                    (4, "Baritone"),
+                    (5, "Bass"),
+                    (6, "Percussion"),
+                ]
+            ],
+        ],
+        regions=[
+            ArrangementRegion(
+                region_id="track-1-region-1",
+                track_slot_id=1,
+                track_name="Soprano",
+                source_kind="midi",
+                source_label="legacy.mid",
+                start_seconds=0,
+                duration_seconds=2,
+                pitch_events=[
+                    PitchEvent(
+                        event_id="low",
+                        track_slot_id=1,
+                        region_id="track-1-region-1",
+                        label="C5",
+                        pitch_midi=72,
+                        pitch_hz=523.2511,
+                        start_seconds=0,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        confidence=1,
+                        source="midi",
+                    ),
+                    PitchEvent(
+                        event_id="high",
+                        track_slot_id=1,
+                        region_id="track-1-region-1",
+                        label="E5",
+                        pitch_midi=76,
+                        pitch_hz=659.2551,
+                        start_seconds=0,
+                        duration_seconds=0.5,
+                        start_beat=1,
+                        duration_beats=1,
+                        confidence=1,
+                        source="midi",
+                    ),
+                    PitchEvent(
+                        event_id="next",
+                        track_slot_id=1,
+                        region_id="track-1-region-1",
+                        label="G5",
+                        pitch_midi=79,
+                        pitch_hz=783.9909,
+                        start_seconds=0.25,
+                        duration_seconds=0.5,
+                        start_beat=1.5,
+                        duration_beats=1,
+                        confidence=1,
+                        source="midi",
+                    ),
+                ],
+            )
+        ],
+        reports=[],
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+    response = build_studio_response(studio)
+    events = response.regions[0].pitch_events
+
+    assert [event.label for event in events] == ["E5", "G5"]
+    assert events[0].start_seconds + events[0].duration_seconds <= events[1].start_seconds
+    assert "region_monophonic_vocal_line" in response.regions[0].diagnostics["actions"]
 
 
 def test_studio_timing_update_retimes_symbolic_regions_for_all_studios(tmp_path: Path, monkeypatch) -> None:

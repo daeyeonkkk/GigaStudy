@@ -93,7 +93,10 @@ def test_registration_context_uses_region_events_after_region_edit(monkeypatch) 
 
     reference_tracks = captured["reference_tracks"]
     existing_tracks_by_slot = captured["existing_tracks_by_slot"]
-    assert result.events == [candidate]
+    assert len(result.events) == 1
+    assert result.events[0].id == candidate.id
+    assert result.events[0].source == "ai"
+    assert result.events[0].voice_index == 2
     assert len(reference_tracks) == 1
     assert reference_tracks[0][0].id == "edited-region-1-event-1"
     assert existing_tracks_by_slot[1][0].region_id == "edited-region-1"

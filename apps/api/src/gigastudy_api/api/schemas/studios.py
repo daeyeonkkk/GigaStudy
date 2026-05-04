@@ -272,11 +272,23 @@ def _beat_seconds(bpm: int) -> float:
     return 60 / max(1, bpm)
 
 
+def _bpm_from_events(events: list[_TrackPitchEvent]) -> int:
+    for event in events:
+        if event.duration_beats > 0 and isfinite(event.duration_seconds) and event.duration_seconds > 0:
+            return max(1, round(60 / (event.duration_seconds / event.duration_beats)))
+    return 120
+
+
 def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
     region_id = f"candidate-{candidate.candidate_id}-region-1"
+    candidate_events = enforce_monophonic_vocal_events(
+        candidate.events,
+        bpm=_bpm_from_events(candidate.events),
+        slot_id=candidate.suggested_slot_id,
+    )
     pitch_events = [
         _candidate_pitch_event_from_track_event(event, candidate=candidate, region_id=region_id)
-        for event in sorted(candidate.events, key=lambda item: (item.beat, item.id))
+        for event in sorted(candidate_events, key=lambda item: (item.beat, item.id))
     ]
     region_start = min((event.start_seconds for event in pitch_events), default=0.0)
     region_end = max(
@@ -505,8 +517,12 @@ def _merged_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     ]
     explicit_slot_ids = {region.track_slot_id for region in explicit_regions}
     derived_regions = [region for region in derived_regions if region.track_slot_id not in explicit_slot_ids]
+    merged_regions = [
+        _sanitize_arrangement_region(studio, region)
+        for region in [*explicit_regions, *derived_regions]
+    ]
     return sorted(
-        [*explicit_regions, *derived_regions],
+        merged_regions,
         key=lambda region: (region.track_slot_id, region.start_seconds, region.region_id),
     )
 
@@ -515,6 +531,121 @@ def _should_preserve_explicit_region(region: ArrangementRegion, track: TrackSlot
     if track is not None and track.status == "empty":
         return False
     return bool(region.pitch_events or region.audio_source_path)
+
+
+def _sanitize_arrangement_region(studio: Studio, region: ArrangementRegion) -> ArrangementRegion:
+    if region.track_slot_id == 6 or not region.pitch_events:
+        return region
+
+    track_events = [
+        _track_event_from_region_pitch_event(event)
+        for event in region.pitch_events
+    ]
+    sanitized_track_events = enforce_monophonic_vocal_events(
+        track_events,
+        bpm=studio.bpm,
+        slot_id=region.track_slot_id,
+        time_signature_numerator=studio.time_signature_numerator,
+        time_signature_denominator=studio.time_signature_denominator,
+    )
+    if _region_event_identity(track_events) == _region_event_identity(sanitized_track_events):
+        return region
+
+    sanitized_pitch_events = [
+        _region_pitch_event_from_track_event(
+            event,
+            region=region,
+            studio=studio,
+        )
+        for event in sanitized_track_events
+    ]
+    region_start = min(
+        (event.start_seconds for event in sanitized_pitch_events),
+        default=region.start_seconds,
+    )
+    region_end = max(
+        (event.start_seconds + event.duration_seconds for event in sanitized_pitch_events),
+        default=region.start_seconds + region.duration_seconds,
+    )
+    diagnostics = dict(region.diagnostics)
+    actions = list(diagnostics.get("actions", []))
+    if "region_monophonic_vocal_line" not in actions:
+        actions.append("region_monophonic_vocal_line")
+    diagnostics["actions"] = actions
+    return region.model_copy(
+        update={
+            "pitch_events": sanitized_pitch_events,
+            "duration_seconds": round(
+                max(
+                    region.duration_seconds,
+                    region_end - region.start_seconds,
+                    region_end - region_start,
+                    0.08,
+                ),
+                4,
+            ),
+            "diagnostics": diagnostics,
+        }
+    )
+
+
+def _track_event_from_region_pitch_event(event: PitchEvent) -> _TrackPitchEvent:
+    return _TrackPitchEvent(
+        id=event.event_id,
+        pitch_midi=event.pitch_midi,
+        pitch_hz=event.pitch_hz,
+        label=event.label,
+        onset_seconds=event.start_seconds,
+        duration_seconds=event.duration_seconds,
+        beat=event.start_beat,
+        duration_beats=event.duration_beats,
+        measure_index=event.measure_index,
+        beat_in_measure=event.beat_in_measure,
+        confidence=event.confidence,
+        source=event.source,
+        extraction_method=event.extraction_method,
+        is_rest=event.is_rest,
+        quality_warnings=list(event.quality_warnings),
+    )
+
+
+def _region_pitch_event_from_track_event(
+    event: _TrackPitchEvent,
+    *,
+    region: ArrangementRegion,
+    studio: Studio,
+) -> PitchEvent:
+    return PitchEvent(
+        event_id=event.id,
+        track_slot_id=region.track_slot_id,
+        region_id=region.region_id,
+        label=event.label,
+        pitch_midi=event.pitch_midi,
+        pitch_hz=event.pitch_hz,
+        start_seconds=_track_event_start_seconds(event, studio.bpm),
+        duration_seconds=_track_event_duration_seconds(event, studio.bpm),
+        start_beat=event.beat,
+        duration_beats=event.duration_beats,
+        confidence=event.confidence,
+        source=event.source,
+        extraction_method=event.extraction_method,
+        is_rest=event.is_rest,
+        measure_index=event.measure_index,
+        beat_in_measure=event.beat_in_measure,
+        quality_warnings=event.quality_warnings,
+    )
+
+
+def _region_event_identity(events: list[_TrackPitchEvent]) -> list[tuple[str, int | None, float, float]]:
+    return [
+        (
+            event.id,
+            event.pitch_midi,
+            round(event.beat, 4),
+            round(event.duration_beats, 4),
+        )
+        for event in events
+    ]
 
 
 def _clear_track_event_shadows_for_explicit_regions(studio: Studio) -> None:

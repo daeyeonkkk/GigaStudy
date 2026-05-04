@@ -7,6 +7,7 @@ from gigastudy_api.services.engine.arrangement import prepare_ensemble_registrat
 from gigastudy_api.services.engine.event_quality import (
     RegistrationQualityResult,
     apply_registration_review_instruction,
+    enforce_registration_event_contract,
     prepare_events_for_track_registration,
 )
 from gigastudy_api.services.llm.registration_review import (
@@ -38,12 +39,13 @@ class TrackRegistrationPreparer:
             source_kind=source_kind,
             events=events,
         )
-        return self._apply_ensemble_arrangement_gate(
+        ensemble_registration = self._apply_ensemble_arrangement_gate(
             studio,
             slot_id,
             registration,
             source_kind=source_kind,
         )
+        return self._finalize_track_contract(studio, slot_id, ensemble_registration)
 
     def prepare_batch(
         self,
@@ -65,7 +67,7 @@ class TrackRegistrationPreparer:
             slot_id: registration.events
             for slot_id, registration in first_pass.items()
         }
-        return {
+        ensemble_results = {
             slot_id: self._apply_ensemble_arrangement_gate(
                 studio,
                 slot_id,
@@ -74,6 +76,10 @@ class TrackRegistrationPreparer:
                 proposed_tracks_by_slot=proposed_tracks_by_slot,
             )
             for slot_id, registration in first_pass.items()
+        }
+        return {
+            slot_id: self._finalize_track_contract(studio, slot_id, registration)
+            for slot_id, registration in ensemble_results.items()
         }
 
     def _prepare_single_track_events(
@@ -212,6 +218,21 @@ class TrackRegistrationPreparer:
                 "ensemble_arrangement": reviewed_ensemble_result.diagnostics,
                 "pre_ensemble_llm_registration_quality": ensemble_registration.diagnostics,
             },
+        )
+
+    def _finalize_track_contract(
+        self,
+        studio: Studio,
+        slot_id: int,
+        registration: RegistrationQualityResult,
+    ) -> RegistrationQualityResult:
+        return enforce_registration_event_contract(
+            registration.events,
+            bpm=studio.bpm,
+            slot_id=slot_id,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            diagnostics=registration.diagnostics,
         )
 
     def _reference_tracks(

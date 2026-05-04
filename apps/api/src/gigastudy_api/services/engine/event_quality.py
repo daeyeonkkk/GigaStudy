@@ -24,6 +24,7 @@ from gigastudy_api.services.engine.event_normalization import (
     VOICE_QUANTIZATION_GRID_BEATS,
     annotate_track_events_for_slot,
     accidental_for_key,
+    enforce_monophonic_vocal_events,
     normalize_track_events,
     pitch_label_octave_shift_for_slot,
     pitch_register_for_slot,
@@ -69,6 +70,42 @@ REFERENCE_ALIGNMENT_MIN_IMPROVEMENT = 0.12
 class RegistrationQualityResult:
     events: list[TrackPitchEvent]
     diagnostics: dict[str, Any]
+
+
+def enforce_registration_event_contract(
+    events: list[TrackPitchEvent],
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+    diagnostics: dict[str, Any] | None = None,
+) -> RegistrationQualityResult:
+    """Final shared contract for all registered track material.
+
+    Every source path, including recording, audio upload, PDF/MusicXML, MIDI,
+    and AI generation, must end here before material becomes user-visible track
+    data.
+    """
+
+    contract_events, contract_actions, event_contract = _enforce_registration_event_contract(
+        events,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+    next_diagnostics = dict(diagnostics or {})
+    actions = list(next_diagnostics.get("actions", []))
+    for action in contract_actions:
+        if action not in actions:
+            actions.append(action)
+    next_diagnostics["actions"] = actions
+    next_diagnostics["event_contract"] = event_contract
+    return RegistrationQualityResult(
+        events=_attach_quality_warnings(contract_events, next_diagnostics),
+        diagnostics=next_diagnostics,
+    )
 
 
 def prepare_events_for_track_registration(
@@ -1286,6 +1323,16 @@ def _enforce_registration_event_contract(
 
     contract_events = events
     actions: list[str] = []
+    monophonic_events = enforce_monophonic_vocal_events(
+        contract_events,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+    if _event_identity(monophonic_events) != _event_identity(contract_events):
+        actions.append("event_contract_monophonic_vocal_line")
+    contract_events = monophonic_events
     if _has_measure_crossing_events(
         contract_events,
         time_signature_numerator=time_signature_numerator,
@@ -1384,6 +1431,18 @@ def _shared_key_signature(events: list[TrackPitchEvent]) -> str | None:
     if not key_counts:
         return None
     return key_counts.most_common(1)[0][0]
+
+
+def _event_identity(events: list[TrackPitchEvent]) -> list[tuple[str, int | None, float, float]]:
+    return [
+        (
+            event.id,
+            event.pitch_midi,
+            round(event.beat, 4),
+            round(event.duration_beats, 4),
+        )
+        for event in events
+    ]
 
 
 def _event_contract_diagnostics(
@@ -1760,6 +1819,8 @@ def _registration_diagnostics(
 
 def _attach_quality_warnings(events: list[TrackPitchEvent], diagnostics: dict[str, Any]) -> list[TrackPitchEvent]:
     warnings: list[str] = []
+    if "range_fit_ratio" not in diagnostics:
+        return events
     if diagnostics["range_fit_ratio"] < 0.8:
         warnings.append("registration_range_review")
     if diagnostics["timing_grid_ratio"] < 0.92:

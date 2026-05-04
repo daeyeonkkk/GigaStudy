@@ -1,12 +1,13 @@
 # GigaStudy Project Foundation
 
-Date: 2026-05-02
+Date: 2026-05-04
 
 This folder is the source of truth for the current GigaStudy product direction.
 
 GigaStudy is now a six-track a cappella arrangement and practice studio built
 around region arrangement, piano-roll editing, and waterfall practice playback.
-It is no longer an engraved notation UI.
+It is not a print-grade notation-first editor, but every registered track must
+still sit on one shared musical score clock.
 
 ## Product Definition
 
@@ -99,7 +100,7 @@ sync, missing, and extra-event data. Each issue carries region/event IDs and
 beat coordinates, and answer-side issues can deep-link back into the studio with
 the matching region and piano-roll event focused.
 
-Scoring requests submit recorded audio or `performance_events`. Deprecated performance payloads are not compatibility inputs; remaining track-level event arrays are internal adapter state inside extraction, persistence, and scoring engines.
+Scoring requests submit recorded audio or `performance_events`. Deprecated performance payloads are not compatibility inputs; remaining track-level event arrays are internal event state inside extraction, persistence, and scoring engines.
 
 The web client treats `Studio.regions` and `ExtractionCandidate.region` as the
 only product event contract. Studio routes return a public response model that
@@ -128,10 +129,12 @@ foundation for now.
 Read in this order:
 
 1. `WORKING_PROTOCOL.md`
-2. `REGION_PIANOROLL_RESET_PLAN.md`
-3. `CURRENT_ARCHITECTURE.md`
-4. `ACAPPELLA_ARRANGEMENT_AUDIT.md`
-5. `AI_HARMONY_GENERATION_DESIGN.md`
+2. `PRODUCT_PURPOSE_AND_FUNCTIONS.md`
+3. `OPERATING_PRINCIPLES.md`
+4. `REGION_PIANOROLL_RESET_PLAN.md`
+5. `CURRENT_ARCHITECTURE.md`
+6. `ACAPPELLA_ARRANGEMENT_AUDIT.md`
+7. `AI_HARMONY_GENERATION_DESIGN.md`
 
 ## Foundation Rule
 
@@ -142,6 +145,10 @@ in the current foundation.
 If engine work changes the region/event contract, extraction strategy, AI
 generation strategy, or scoring alignment rules, update
 `CURRENT_ARCHITECTURE.md` in the same work.
+
+If a task changes the default rules for timing, sync, registration, LLM use,
+playback, UX, infrastructure, code structure, or verification, update
+`OPERATING_PRINCIPLES.md` in the same work.
 
 Every task must follow `WORKING_PROTOCOL.md`: check the relevant foundation
 documents before implementation and update foundation in the same task whenever

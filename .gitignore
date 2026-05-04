@@ -30,6 +30,9 @@ playwright-report/
 test-results/
 output/
 
+# Local Codex environment transfer bundle.
+codex-portable-bootstrap/
+
 # Raw local sound-bank downloads. Curated deployable copies live under apps/web/public/instruments/.
 SynthPadChoir SFZ+WAV-20200516/
 DrawbarOrganEmulation-SFZ-20190712/

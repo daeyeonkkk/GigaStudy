@@ -28,8 +28,8 @@ GigaStudy is currently aligned with the foundational region model:
 
 - The product artifact is one six-track timeline with a shared BPM and meter.
 - Region/PitchEvent coordinates are canonical for rendering, playback, and
-  scoring; `TrackPitchEvent` is only an internal import/storage/scoring adapter
-  until persistence moves fully to explicit regions.
+  scoring; `TrackPitchEvent` is only an internal import/storage/scoring event
+  model until persistence moves fully to explicit regions.
 - Per-track recording uses the studio clock and count-in instead of estimating
   a new tempo from every take.
 - Final registration can nudge extracted voice/audio material onto the existing

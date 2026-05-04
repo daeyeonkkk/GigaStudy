@@ -25,8 +25,8 @@ New center:
 `Studio -> Track -> Region -> PitchEvent/AudioClip -> practice playback`
 
 The old extracted-event object is no longer the canonical product truth or internal type name.
-The temporary internal adapter is `TrackPitchEvent`, and public clients consume
-`ArrangementRegion`/`PitchEvent` only.
+The bounded internal event model is `TrackPitchEvent`, and public clients
+consume `ArrangementRegion`/`PitchEvent` only.
 
 ## Assets To Preserve
 

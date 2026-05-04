@@ -31,7 +31,22 @@ is excluded from persistence and remains an adapter detail.
   Creates a blank studio or seeds one from document/music input.
 - `apps/web/src/pages/StudioPage.tsx`
   Owns loaded studio state, transport state, recording state, scoring state,
-  candidate review state, and action status.
+  candidate review state, and action status for the studio assembly surface.
+  It is the place for track registration, upload/record/generate, sync,
+  selected-track playback, candidate review, and report history. It does not
+  render the piano-roll editor or practice waterfall.
+- `apps/web/src/pages/StudioEditPage.tsx`
+  Dedicated note-editing surface for region selection, region structure
+  actions, selected-region piano-roll editing, local draft save, and bounded
+  revision restore. Report focus links land here when they carry answer
+  region/event IDs.
+- `apps/web/src/pages/PracticePage.tsx`
+  Dedicated practice surface for selected-track playback controls and the
+  waterfall timing stage.
+- `apps/web/src/components/studio/StudioPurposeNav.tsx`
+  Shared purpose navigation for studio assembly, note editing, practice, and
+  report detail surfaces. It keeps page transitions explicit and reinforces
+  which work belongs on the current page.
 - `apps/web/src/components/studio/StudioToolbar.tsx`
   Global transport, sync step, playback source, metronome, and selected-track
   playback controls. Playback source is now audio clips or region events, not
@@ -46,10 +61,16 @@ is excluded from persistence and remains an adapter detail.
   synth tuned to sit beside human singing instead of a sampled organ or choir
   soundfont.
 - `apps/web/src/components/studio/TrackBoard.tsx`
-  Main arrangement surface and track command composer. It renders:
-  - macro region lanes for all six tracks,
-  - a selected-region piano roll,
-  - a waterfall practice preview.
+  Main six-track arrangement component. In studio mode it renders macro region
+  lanes, thin pitch-positioned event minis, and track registration/playback/sync
+  controls. In editor mode it renders the same six visible lanes plus
+  selected-region tools and piano-roll editing. Empty tracks remain visible as
+  lanes with no event minis. Practice waterfall rendering belongs to
+  `PracticePage`.
+- `apps/web/src/components/studio/eventMiniLayout.ts`
+  Shared event-mini presentation helper for filtering renderable events,
+  positioning minis by pitch, and generating hover/accessibility labels with
+  pitch name, start, and duration.
 - `apps/web/src/components/studio/TrackBoardTimeline.tsx` and
   `apps/web/src/components/studio/TrackBoardTimelineLayout.ts`
   Waterfall practice preview rendering plus shared track-board timeline math
@@ -57,8 +78,12 @@ is excluded from persistence and remains an adapter detail.
   layout details inline.
 - `apps/web/src/components/studio/TrackBoardEditor.tsx` and
   `apps/web/src/components/studio/TrackBoardEditorGrid.ts`
-  Region and pitch-event editing controls for the selected arrangement region,
-  including piano-roll event positioning and beat-grid snap helpers.
+  Region and pitch-event editing controls for the selected arrangement region.
+  The editor exposes direct numeric fields for region track/start/duration and
+  selected-event pitch/start/duration, keeps detailed edits in a local draft,
+  persists unsaved drafts in browser session storage across studio sub-page
+  navigation, saves them through one region revision command, and reads bounded
+  restore history from region diagnostics.
 - `apps/web/src/lib/studio/regions.ts`
   Region utility helpers only. The web client consumes region payloads and must
   not rebuild product regions from internal storage event arrays. Timeline
@@ -68,7 +93,9 @@ is excluded from persistence and remains an adapter detail.
 ### API
 
 - `apps/api/src/gigastudy_api/api/routes/studios.py`
-  FastAPI studio command/query endpoints.
+  FastAPI studio command/query endpoints, including single-field region/event
+  mutation endpoints and the batch region revision save/restore endpoints used
+  by the note editor.
 - `apps/api/src/gigastudy_api/services/studio_repository.py`
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
@@ -121,6 +148,7 @@ flowchart TD
   User["User"]
   Launch["Launch Page"]
   StudioPage["Studio Page"]
+  StudioEditPage["Studio Edit Page"]
   PracticePage["Practice Page"]
   TrackBoard["TrackBoard: Region View + Piano Roll"]
   Waterfall["Waterfall Practice Stage"]
@@ -137,9 +165,11 @@ flowchart TD
 
   User --> Launch
   User --> StudioPage
+  User --> StudioEditPage
   User --> PracticePage
   Launch --> API
   StudioPage --> API
+  StudioEditPage --> API
   PracticePage --> API
   API --> Store
   API --> Assets
@@ -150,6 +180,7 @@ flowchart TD
   Store --> Regions
   API --> Regions
   Regions --> TrackBoard
+  Regions --> StudioEditPage
   Regions --> Waterfall
   StudioPage --> Playback
   PracticePage --> Playback
@@ -159,6 +190,7 @@ flowchart TD
   Scoring --> API
   API --> Reports
   Reports --> StudioPage
+  Reports --> StudioEditPage
 ```
 
 ### Studio Load
@@ -170,9 +202,17 @@ flowchart TD
 4. `StudioResponse.regions` uses persisted explicit regions and derives a
    fallback region from registered track event shadows only for older payloads
    that have not yet been saved through the explicit-region path.
-5. Web passes `studio.regions` into `TrackBoard`.
-6. `TrackBoard`, playback, candidate review, and practice waterfall consume
-   pitch events from the same region payload.
+5. Web passes `studio.regions` into `TrackBoard`, `StudioEditPage`, playback,
+   report focus, and practice waterfall surfaces.
+6. Studio assembly, note editing, playback, candidate review, and practice
+   waterfall consume pitch events from the same region payload while staying
+   on separate purpose-specific pages. All three visible track surfaces keep
+   the six track slots present; empty tracks have lanes without event minis.
+7. The note editor may keep unsaved draft edits in browser session storage
+   while the user moves between studio sub-pages. Only `Save` mutates
+   `Studio.regions`, so other pages continue to reflect the last saved product
+   timeline; the API records the pre-save region material as a bounded restore
+   point in `ArrangementRegion.diagnostics.region_editor`.
 
 ### Upload / Import
 
@@ -217,7 +257,8 @@ flowchart TD
    the default playback path.
 4. Sync offset and volume are applied per track. Negative sync is preserved as
    a user-visible timeline translation; barlines stay on the shared grid.
-5. Playhead state drives region lane and waterfall visual timing.
+5. Playhead state drives region lane timing on the studio surface and
+   waterfall visual timing on the practice surface.
 
 ### Scoring
 

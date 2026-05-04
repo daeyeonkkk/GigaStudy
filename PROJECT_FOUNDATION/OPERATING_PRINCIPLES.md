@@ -193,6 +193,33 @@ the same change.
 - Build the actual workflow, not a landing page around it.
 - The desktop-composer aesthetic is useful, but it must serve the region and
   practice workflow rather than resurrecting notation UI by habit.
+- Keep major surfaces separated by user purpose:
+  - Studio assembly for track registration, sync, playback, candidate review,
+    and report history.
+  - Note editing for precise region/event edits. Region track, start,
+    duration, volume, label, and selected event pitch/start/duration should be
+    adjustable by direct values as well as small musical nudges.
+  - Practice for selected-reference playback and waterfall timing.
+  - Report detail for scoring evidence and deep-links back to note editing.
+- Every studio sub-page should expose the same purpose navigation and a short
+  page-role statement so the user knows which work belongs on the current
+  surface and where to go next.
+- Every studio sub-page should keep the six visible track slots visible.
+  An empty track is a real lane with no MIDI/event material, not a missing UI
+  row.
+- Piano-roll, studio lane, and practice waterfall event minis should read as
+  thin duration bars positioned by pitch where MIDI pitch exists. Exact pitch
+  name, start, and duration belong in hover/accessibility labels rather than
+  permanent text inside each mini.
+- Note editing should use a local draft and a single explicit save for detailed
+  region/event changes. Do not send a server mutation for every small pitch or
+  timing adjustment. Each saved material change should keep a small bounded
+  restore point so the user can recover from a bad edit without treating the
+  whole studio as disposable. Unsaved note-editor drafts may survive page
+  navigation in browser session storage, but practice/studio pages must keep
+  showing the last saved product timeline until the user explicitly saves.
+- Do not merge note editing and practice waterfall previews back into the
+  studio assembly page unless the foundation is reopened first.
 - The home flow has two distinct starts:
   - Upload and start appears only after a supported file is selected.
   - Start blank asks for BPM and meter and requires no upload.

@@ -1,6 +1,6 @@
 # GigaStudy Working Protocol
 
-Date: 2026-05-02
+Date: 2026-05-04
 
 This protocol applies to every product, engine, UI, and test task in this
 repository.
@@ -19,10 +19,14 @@ task.
 Before changing code or specs, check the relevant foundation documents:
 
 1. `README.md` for product scope and canonical document order
-2. `REGION_PIANOROLL_RESET_PLAN.md` for reset intent and preserved assets
-3. `CURRENT_ARCHITECTURE.md` for code structure, data flow, and contracts
-4. `ACAPPELLA_ARRANGEMENT_AUDIT.md` for musical product constraints
-5. `AI_HARMONY_GENERATION_DESIGN.md` for AI generation constraints
+2. `PRODUCT_PURPOSE_AND_FUNCTIONS.md` for the compact product purpose,
+   functional scope, non-goals, and decision rules
+3. `OPERATING_PRINCIPLES.md` for timing, sync, registration, LLM, UX,
+   infrastructure, code, and verification defaults
+4. `REGION_PIANOROLL_RESET_PLAN.md` for reset intent and preserved assets
+5. `CURRENT_ARCHITECTURE.md` for code structure, data flow, and contracts
+6. `ACAPPELLA_ARRANGEMENT_AUDIT.md` for musical product constraints
+7. `AI_HARMONY_GENERATION_DESIGN.md` for AI generation constraints
 
 ## During Work
 
@@ -42,6 +46,9 @@ Before finishing a task:
 
 - Update `CURRENT_ARCHITECTURE.md` if region/event contracts, extraction, AI
   generation, scoring, or visible data flow changed.
+- Update `OPERATING_PRINCIPLES.md` if default rules for timing, sync,
+  registration, LLM use, playback, UX, infrastructure, code structure, or
+  verification change.
 - Update `REGION_PIANOROLL_RESET_PLAN.md` if the reset sequence or retained
   asset list changes.
 - Update `ACAPPELLA_ARRANGEMENT_AUDIT.md` or

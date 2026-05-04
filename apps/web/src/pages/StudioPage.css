@@ -136,32 +136,9 @@
   font-weight: 900;
 }
 
-.composer-bpm-control input {
-  width: 58px;
-  min-height: 22px;
-  padding: 0 5px;
-  border: 1px solid #a8b2bb;
-  border-radius: 3px;
-  background: #ffffff;
+.composer-bpm-control strong {
   color: #111111;
-  font: inherit;
-}
-
-.composer-inline-button {
-  display: inline-grid;
-  width: 24px;
-  height: 22px;
-  place-items: center;
-  border: 1px solid #9aa7b3;
-  border-radius: 3px;
-  background: #ffffff;
-  color: #082fbd;
-  font-weight: 900;
-}
-
-.composer-inline-button:disabled {
-  color: #8a949d;
-  cursor: not-allowed;
+  font-size: 0.84rem;
 }
 
 .composer-sync-step input {
@@ -170,77 +147,6 @@
   padding: 0 5px;
   border: 1px solid #a8b2bb;
   border-radius: 3px;
-  background: #ffffff;
-  color: #111111;
-  font: inherit;
-}
-
-.composer-tempo-panel {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  min-height: 42px;
-  padding: 7px 10px;
-  border-bottom: 1px solid #a8b2bb;
-  background: #f6f8fa;
-}
-
-.composer-tempo-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.composer-tempo-list p,
-.composer-tempo-list span {
-  color: #33414d;
-  font-size: 0.82rem;
-  font-weight: 900;
-}
-
-.composer-tempo-list span {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 7px;
-  border: 1px solid #b6c0c8;
-  border-radius: 4px;
-  background: #ffffff;
-}
-
-.composer-tempo-list button {
-  min-height: 22px;
-  border: 0;
-  background: transparent;
-  color: #9f2f29;
-  font-weight: 900;
-}
-
-.composer-tempo-add {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.composer-tempo-add label {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  color: #1c2c3a;
-  font-size: 0.8rem;
-  font-weight: 900;
-}
-
-.composer-tempo-add input {
-  width: 64px;
-  min-height: 28px;
-  padding: 0 6px;
-  border: 1px solid #a8b2bb;
-  border-radius: 4px;
   background: #ffffff;
   color: #111111;
   font: inherit;

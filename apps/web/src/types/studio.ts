@@ -32,11 +32,6 @@ export type PitchEvent = {
   quality_warnings: string[]
 }
 
-export type TempoChange = {
-  measure_index: number
-  bpm: number
-}
-
 export type ArrangementRegion = {
   region_id: string
   track_slot_id: number
@@ -234,7 +229,6 @@ export type Studio = {
   deactivated_at: string | null
   title: string
   bpm: number
-  tempo_changes: TempoChange[]
   time_signature_numerator: number
   time_signature_denominator: number
   tracks: TrackSlot[]
@@ -267,11 +261,6 @@ export type CreateStudioRequest = {
   source_filename?: string
   source_content_base64?: string
   source_asset_path?: string
-}
-
-export type UpdateStudioTimingRequest = {
-  bpm?: number | null
-  tempo_changes?: TempoChange[] | null
 }
 
 export type PlaybackInstrumentConfig = {

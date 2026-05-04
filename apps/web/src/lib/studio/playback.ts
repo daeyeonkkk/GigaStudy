@@ -11,7 +11,7 @@ import {
   PERCUSSION_CLICK_INSTRUMENT,
   type PlaybackNode,
 } from './instruments'
-import type { ArrangementRegion, PitchEvent, TempoChange, TrackSlot } from '../../types/studio'
+import type { ArrangementRegion, PitchEvent, TrackSlot } from '../../types/studio'
 
 export type PlaybackSourceMode = 'audio' | 'events'
 
@@ -296,7 +296,6 @@ export function scheduleMetronomeClicksFromTimeline(
   bpm: number,
   meter: MeterContext,
   volume: number,
-  tempoChanges: TempoChange[] = [],
 ): number {
   let latestStop = 0
   for (
@@ -304,12 +303,7 @@ export function scheduleMetronomeClicksFromTimeline(
     quarterBeatOffset <= Math.max(0, maxBeat - 1) + 0.001;
     quarterBeatOffset += meter.pulseQuarterBeats
   ) {
-    const clickStartSeconds = beatToSeconds(
-      quarterBeatOffset + 1,
-      bpm,
-      meter.beatsPerMeasure,
-      tempoChanges,
-    )
+    const clickStartSeconds = beatToSeconds(quarterBeatOffset + 1, bpm)
     if (clickStartSeconds + 0.045 < startSeconds) {
       continue
     }

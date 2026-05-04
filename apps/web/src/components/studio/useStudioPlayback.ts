@@ -420,7 +420,6 @@ export function useStudioPlayback({
             studio.bpm,
             studioMeter,
             0.035,
-            studio.tempo_changes,
           ),
         )
       }

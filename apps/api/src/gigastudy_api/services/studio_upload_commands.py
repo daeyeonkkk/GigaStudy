@@ -13,7 +13,6 @@ from gigastudy_api.api.schemas.studios import (
     SourceKind,
     Studio,
     StudioSeedUploadRequest,
-    TempoChange,
     UploadTrackRequest,
 )
 from gigastudy_api.services.engine.candidate_diagnostics import track_duration_seconds
@@ -250,10 +249,6 @@ class StudioUploadCommands:
                 parsed_symbolic = parse_symbolic_file_with_metadata(source_path, bpm=studio.bpm)
                 if use_source_tempo and parsed_symbolic.source_bpm is not None:
                     studio.bpm = parsed_symbolic.source_bpm
-                    studio.tempo_changes = [
-                        TempoChange(measure_index=change.measure_index, bpm=change.bpm)
-                        for change in parsed_symbolic.tempo_changes
-                    ]
                     parsed_symbolic = parse_symbolic_file_with_metadata(source_path, bpm=studio.bpm)
             except SymbolicParseError as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error

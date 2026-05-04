@@ -33,12 +33,10 @@ from gigastudy_api.api.schemas.studios import (
     StudioListItem,
     StudioSeedUploadRequest,
     SyncTrackRequest,
-    TempoChange,
     TrackExtractionJob,
     TrackSlot,
     UpdatePitchEventRequest,
     UpdateRegionRequest,
-    UpdateStudioTimingRequest,
     UploadTrackRequest,
     VolumeTrackRequest,
 )
@@ -99,7 +97,6 @@ from gigastudy_api.services.studio_track_settings import (
     set_track_volume,
     shift_registered_track_sync_offsets,
 )
-from gigastudy_api.services.studio_timing import normalize_tempo_changes, retime_studio_regions
 from gigastudy_api.services.track_registration import TrackRegistrationPreparer
 from gigastudy_api.services.studio_documents import (
     empty_tracks as _empty_tracks,
@@ -627,50 +624,6 @@ class StudioRepository:
             self._save_studio(studio)
         return studio
 
-    def update_timing(
-        self,
-        studio_id: str,
-        request: UpdateStudioTimingRequest,
-        *,
-        owner_token: str | None = None,
-    ) -> Studio:
-        with self._lock:
-            studio = self._load_studio(studio_id)
-            if studio is None:
-                raise HTTPException(status_code=404, detail="Studio not found.")
-            require_studio_access(studio, owner_token)
-            ensure_no_active_extraction_jobs(
-                studio,
-                (track.slot_id for track in studio.tracks),
-                action_label="Studio timing editing",
-            )
-            timestamp = _now()
-            old_bpm = studio.bpm
-            old_tempo_changes = list(studio.tempo_changes)
-            next_bpm = request.bpm if request.bpm is not None else studio.bpm
-            next_tempo_changes = (
-                request.tempo_changes
-                if request.tempo_changes is not None
-                else list(studio.tempo_changes)
-            )
-            studio.bpm = next_bpm
-            studio.tempo_changes = normalize_tempo_changes(
-                next_tempo_changes,
-                base_bpm=next_bpm,
-            )
-            sync_studio_arrangement_regions(studio)
-            retime_studio_regions(
-                studio,
-                old_bpm=old_bpm,
-                old_tempo_changes=old_tempo_changes,
-            )
-            for track in studio.tracks:
-                if track.status == "registered":
-                    track.updated_at = timestamp
-            studio.updated_at = timestamp
-            self._save_studio(studio)
-        return studio
-
     def update_region(
         self,
         studio_id: str,
@@ -796,12 +749,11 @@ class StudioRepository:
             self._save_studio(studio)
         return studio
 
-    def _update_symbolic_seed_timing(
+    def _apply_symbolic_seed_clock(
         self,
         studio_id: str,
         *,
         bpm: int | None,
-        tempo_changes: list[TempoChange] | None,
         time_signature_numerator: int | None,
         time_signature_denominator: int | None,
     ) -> Studio:
@@ -812,16 +764,6 @@ class StudioRepository:
             timestamp = _now()
             if bpm is not None:
                 studio.bpm = bpm
-                studio.tempo_changes = normalize_tempo_changes(
-                    tempo_changes,
-                    base_bpm=bpm,
-                )
-                studio.updated_at = timestamp
-            elif tempo_changes is not None:
-                studio.tempo_changes = normalize_tempo_changes(
-                    tempo_changes,
-                    base_bpm=studio.bpm,
-                )
                 studio.updated_at = timestamp
             if (
                 time_signature_numerator is not None

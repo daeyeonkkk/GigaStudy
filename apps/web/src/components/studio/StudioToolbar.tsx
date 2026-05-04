@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { formatTrackName, type PlaybackSourceMode } from '../../lib/studio'
-import type { TempoChange, TrackSlot, UpdateStudioTimingRequest } from '../../types/studio'
+import type { TrackSlot } from '../../types/studio'
 import { StudioPurposeNav } from './StudioPurposeNav'
 
 type ActionState =
@@ -26,9 +26,6 @@ type StudioToolbarProps = {
   studioId: string
   studioTitle: string
   syncStepSeconds: number
-  tempoChanges: TempoChange[]
-  timingDisabled: boolean
-  timingDisabledReason: string | null
   transportDisabled: boolean
   transportDisabledReason: string | null
   onMetronomeChange: (enabled: boolean) => void
@@ -40,7 +37,6 @@ type StudioToolbarProps = {
   onStopGlobalPlayback: () => void
   onShiftAllSync: (deltaSeconds: number) => void
   onSyncStepChange: (seconds: number) => void
-  onTimingChange: (payload: UpdateStudioTimingRequest) => void
   onTogglePlaybackSelection: (slotId: number) => void
   onToggleGlobalPlayback: () => void
 }
@@ -54,30 +50,6 @@ function formatClockSeconds(seconds: number): string {
 
 function formatStepInput(seconds: number): string {
   return Number(seconds.toFixed(3)).toString()
-}
-
-function parseBpmInput(rawValue: string): number | null {
-  const parsedValue = Number.parseInt(rawValue, 10)
-  if (!Number.isFinite(parsedValue) || parsedValue < 40 || parsedValue > 240) {
-    return null
-  }
-  return parsedValue
-}
-
-function parseMeasureInput(rawValue: string): number | null {
-  const parsedValue = Number.parseInt(rawValue, 10)
-  if (!Number.isFinite(parsedValue) || parsedValue < 2 || parsedValue > 10000) {
-    return null
-  }
-  return parsedValue
-}
-
-function nextTempoMeasure(tempoChanges: TempoChange[]): number {
-  return Math.max(2, 1 + Math.max(1, ...tempoChanges.map((change) => change.measure_index)))
-}
-
-function sortedTempoChanges(tempoChanges: TempoChange[]): TempoChange[] {
-  return tempoChanges.slice().sort((left, right) => left.measure_index - right.measure_index)
 }
 
 export function StudioToolbar({
@@ -95,9 +67,6 @@ export function StudioToolbar({
   studioId,
   studioTitle,
   syncStepSeconds,
-  tempoChanges,
-  timingDisabled,
-  timingDisabledReason,
   transportDisabled,
   transportDisabledReason,
   onMetronomeChange,
@@ -109,21 +78,11 @@ export function StudioToolbar({
   onStopGlobalPlayback,
   onShiftAllSync,
   onSyncStepChange,
-  onTimingChange,
   onTogglePlaybackSelection,
   onToggleGlobalPlayback,
 }: StudioToolbarProps) {
-  const [bpmInput, setBpmInput] = useState(() => String(bpm))
   const [syncStepInput, setSyncStepInput] = useState(() => formatStepInput(syncStepSeconds))
   const [seekDraftSeconds, setSeekDraftSeconds] = useState<number | null>(null)
-  const [tempoEditorOpen, setTempoEditorOpen] = useState(false)
-  const [newTempoMeasureInput, setNewTempoMeasureInput] = useState(() => String(nextTempoMeasure(tempoChanges)))
-  const [newTempoBpmInput, setNewTempoBpmInput] = useState(() => String(bpm))
-
-  useEffect(() => {
-    setBpmInput(String(bpm))
-    setNewTempoBpmInput(String(bpm))
-  }, [bpm])
 
   useEffect(() => {
     setSyncStepInput(formatStepInput(syncStepSeconds))
@@ -149,8 +108,6 @@ export function StudioToolbar({
     : 0
   const actionBusy = actionState.phase === 'busy'
   const editControlsDisabled = actionBusy || transportDisabled || globalPlaying
-  const timingControlsDisabled = actionBusy || timingDisabled || globalPlaying
-  const orderedTempoChanges = sortedTempoChanges(tempoChanges)
 
   function updateSyncStep(rawValue: string) {
     setSyncStepInput(rawValue)
@@ -165,45 +122,6 @@ export function StudioToolbar({
     if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
       setSyncStepInput(formatStepInput(syncStepSeconds))
     }
-  }
-
-  function commitBaseBpm(rawValue = bpmInput) {
-    const nextBpm = parseBpmInput(rawValue)
-    if (nextBpm === null) {
-      setBpmInput(String(bpm))
-      return
-    }
-    setBpmInput(String(nextBpm))
-    if (nextBpm !== bpm) {
-      onTimingChange({ bpm: nextBpm })
-    }
-  }
-
-  function openTempoEditor() {
-    setTempoEditorOpen((current) => !current)
-    setNewTempoMeasureInput(String(nextTempoMeasure(tempoChanges)))
-    setNewTempoBpmInput(String(bpm))
-  }
-
-  function addTempoChange() {
-    const measureIndex = parseMeasureInput(newTempoMeasureInput)
-    const nextBpm = parseBpmInput(newTempoBpmInput)
-    if (measureIndex === null || nextBpm === null) {
-      return
-    }
-    const nextChanges = sortedTempoChanges([
-      ...tempoChanges.filter((change) => change.measure_index !== measureIndex),
-      { measure_index: measureIndex, bpm: nextBpm },
-    ])
-    onTimingChange({ tempo_changes: nextChanges })
-    setNewTempoMeasureInput(String(nextTempoMeasure(nextChanges)))
-    setNewTempoBpmInput(String(nextBpm))
-  }
-
-  function deleteTempoChange(measureIndex: number) {
-    onTimingChange({
-      tempo_changes: tempoChanges.filter((change) => change.measure_index !== measureIndex),
-    })
   }
 
   function commitSeek(nextSeconds = seekDraftSeconds) {
@@ -254,39 +172,10 @@ export function StudioToolbar({
         >
           <span aria-hidden="true">중지</span>
         </button>
-        <label className="composer-bpm-control">
+        <div className="composer-bpm-control" aria-label="스튜디오 BPM">
           <span>BPM</span>
-          <input
-            aria-label="스튜디오 BPM"
-            data-testid="studio-bpm-edit-input"
-            disabled={timingControlsDisabled}
-            inputMode="numeric"
-            max="240"
-            min="40"
-            step="1"
-            type="number"
-            title={timingControlsDisabled ? timingDisabledReason ?? undefined : undefined}
-            value={bpmInput}
-            onBlur={() => commitBaseBpm()}
-            onChange={(event) => setBpmInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                commitBaseBpm(event.currentTarget.value)
-              }
-            }}
-          />
-          <button
-            aria-label="마디별 BPM 추가"
-            className="composer-inline-button"
-            data-testid="studio-tempo-add-toggle"
-            disabled={timingControlsDisabled}
-            title={timingControlsDisabled ? timingDisabledReason ?? undefined : '특정 마디부터 BPM을 바꿉니다.'}
-            type="button"
-            onClick={openTempoEditor}
-          >
-            +
-          </button>
-        </label>
+          <strong>{bpm}</strong>
+        </div>
         <label className="composer-sync-step">
           <span>싱크</span>
           <input
@@ -357,72 +246,6 @@ export function StudioToolbar({
           </button>
         </div>
       </div>
-
-      {tempoEditorOpen ? (
-        <section className="composer-tempo-panel" data-testid="studio-tempo-panel">
-          <div className="composer-tempo-list" aria-label="마디별 BPM 변경">
-            {orderedTempoChanges.length === 0 ? (
-              <p>마디별 BPM 변경 없음</p>
-            ) : (
-              orderedTempoChanges.map((change) => (
-                <span key={change.measure_index}>
-                  {change.measure_index}마디부터 {change.bpm} BPM
-                  <button
-                    aria-label={`${change.measure_index}마디 BPM 변경 삭제`}
-                    disabled={timingControlsDisabled}
-                    type="button"
-                    onClick={() => deleteTempoChange(change.measure_index)}
-                  >
-                    삭제
-                  </button>
-                </span>
-              ))
-            )}
-          </div>
-          <div className="composer-tempo-add">
-            <label>
-              <span>마디</span>
-              <input
-                aria-label="BPM 변경 시작 마디"
-                data-testid="studio-tempo-measure-input"
-                disabled={timingControlsDisabled}
-                inputMode="numeric"
-                min="2"
-                type="number"
-                value={newTempoMeasureInput}
-                onChange={(event) => setNewTempoMeasureInput(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>BPM</span>
-              <input
-                aria-label="변경 BPM"
-                data-testid="studio-tempo-bpm-input"
-                disabled={timingControlsDisabled}
-                inputMode="numeric"
-                max="240"
-                min="40"
-                type="number"
-                value={newTempoBpmInput}
-                onChange={(event) => setNewTempoBpmInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    addTempoChange()
-                  }
-                }}
-              />
-            </label>
-            <button
-              className="composer-mini-button composer-mini-button--primary"
-              disabled={timingControlsDisabled}
-              type="button"
-              onClick={addTempoChange}
-            >
-              추가
-            </button>
-          </div>
-        </section>
-      ) : null}
 
       {(playbackPickerOpen || globalPlaying) && (
         <section className="composer-playback-panel" data-testid="selected-playback-panel">

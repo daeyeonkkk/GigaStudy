@@ -53,11 +53,6 @@ class PitchEvent(BaseModel):
     quality_warnings: list[str] = Field(default_factory=list)
 
 
-class TempoChange(BaseModel):
-    measure_index: int = Field(ge=2, le=10000)
-    bpm: int = Field(ge=40, le=240)
-
-
 class ArrangementRegion(SourceKindModel):
     region_id: str
     track_slot_id: int
@@ -434,7 +429,6 @@ class Studio(BaseModel):
     deactivated_at: str | None = None
     title: str
     bpm: int
-    tempo_changes: list[TempoChange] = Field(default_factory=list)
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
     time_signature_denominator: TimeSignatureDenominator = 4
     tracks: list[TrackSlot]
@@ -489,7 +483,6 @@ class StudioResponse(BaseModel):
     deactivated_at: str | None = None
     title: str
     bpm: int
-    tempo_changes: list[TempoChange] = Field(default_factory=list)
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
     time_signature_denominator: TimeSignatureDenominator = 4
     tracks: list[TrackSlotResponse]
@@ -680,7 +673,6 @@ def build_studio_response(studio: Studio) -> StudioResponse:
         deactivated_at=studio.deactivated_at,
         title=studio.title,
         bpm=studio.bpm,
-        tempo_changes=studio.tempo_changes,
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
         tracks=[
@@ -800,17 +792,6 @@ class ShiftTrackSyncRequest(BaseModel):
 
 class VolumeTrackRequest(BaseModel):
     volume_percent: int = Field(ge=0, le=100)
-
-
-class UpdateStudioTimingRequest(BaseModel):
-    bpm: int | None = Field(default=None, ge=40, le=240)
-    tempo_changes: list[TempoChange] | None = None
-
-    @model_validator(mode="after")
-    def validate_update_fields(self) -> "UpdateStudioTimingRequest":
-        if not self.model_fields_set:
-            raise ValueError("Studio timing update requires BPM or tempo changes.")
-        return self
 
 
 class UpdateRegionRequest(BaseModel):

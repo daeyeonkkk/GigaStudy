@@ -1,6 +1,6 @@
 # GigaStudy Operating Principles
 
-Date: 2026-05-04
+Date: 2026-05-05
 
 These principles are the working rules for GigaStudy while it is still a
 one-person alpha product. They are strong defaults, not permanent law. Change
@@ -104,6 +104,10 @@ the same change.
 ## Clock, Count-In, And Timing
 
 - Studio BPM and time signature are absolute.
+- In alpha, studio BPM is chosen only at studio creation. If a studio is seeded
+  from a MIDI file and the user did not provide BPM, the importer may use the
+  file's initial tempo as the studio BPM. After creation there is no user BPM
+  edit flow and no persisted per-measure tempo map.
 - Recording analysis may estimate latency, drift, or entrance offset, but must
   not rewrite studio BPM or meter.
 - The metronome toggle controls audible clicks only; the internal clock remains

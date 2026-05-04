@@ -22,7 +22,6 @@ import {
   getDocumentJobSourcePreviewUrl,
   getStudioMidiExportUrl,
   splitRegion,
-  updateStudioTiming,
 } from '../lib/api'
 import {
   DEFAULT_METER,
@@ -273,18 +272,6 @@ export function StudioPage() {
     )
   }
 
-  async function handleTimingChange(payload: Parameters<typeof updateStudioTiming>[1]) {
-    if (!studio) {
-      return
-    }
-    await runStudioAction(
-      () => updateStudioTiming(studio.studio_id, payload),
-      '스튜디오 템포를 저장하는 중입니다.',
-      '스튜디오 템포를 저장했습니다.',
-      ['음표 위치를 새 BPM 기준으로 다시 맞추는 중입니다.', '마디 눈금과 재생 타임라인을 갱신하는 중입니다.'],
-    )
-  }
-
   function handleOpenRegionEditor(region: ArrangementRegion) {
     if (!studio) {
       return
@@ -355,9 +342,6 @@ export function StudioPage() {
           studioId={studio.studio_id}
           studioTitle={studio.title}
           syncStepSeconds={syncStepSeconds}
-          tempoChanges={studio.tempo_changes}
-          timingDisabled={arrangementEditDisabled}
-          timingDisabledReason={arrangementEditDisabledReason}
           transportDisabled={transportDisabled}
           transportDisabledReason={transportDisabledReason}
           onMetronomeChange={setMetronomeEnabled}
@@ -369,7 +353,6 @@ export function StudioPage() {
           onStopGlobalPlayback={stopGlobalPlayback}
           onShiftAllSync={(deltaSeconds) => void handleShiftAllSync(deltaSeconds)}
           onSyncStepChange={updateSyncStep}
-          onTimingChange={(payload) => void handleTimingChange(payload)}
           onTogglePlaybackSelection={togglePlaybackSelection}
           onToggleGlobalPlayback={() => void toggleGlobalPlayback()}
         />
@@ -379,7 +362,7 @@ export function StudioPage() {
               <h1>{studio.title}</h1>
               <p>
                 {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}
-                {registeredTracks.length}/6 · 템포 변경 {studio.tempo_changes.length} · 리포트 {studio.reports.length}
+                {registeredTracks.length}/6 · 리포트 {studio.reports.length}
               </p>
               <a className="app-button app-button--secondary" href={getStudioMidiExportUrl(studio.studio_id)}>
                 MIDI 내보내기
@@ -389,7 +372,6 @@ export function StudioPage() {
             <TrackBoard
               beatsPerMeasure={studioBeatsPerMeasure}
               bpm={studio.bpm}
-              tempoChanges={studio.tempo_changes}
               metronomeEnabled={metronomeEnabled}
               pendingCandidateCount={pendingCandidates.length}
               extractionJobs={visibleExtractionJobs}

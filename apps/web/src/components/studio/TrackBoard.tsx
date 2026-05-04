@@ -14,7 +14,6 @@ import {
 import type {
   ArrangementRegion,
   PitchEvent,
-  TempoChange,
   TrackExtractionJob,
   TrackSlot,
 } from '../../types/studio'
@@ -56,7 +55,6 @@ type TrackBoardProps = {
   activeJobSlotIds: Set<number>
   beatsPerMeasure: number
   bpm: number
-  tempoChanges: TempoChange[]
   draftStorageScope?: string
   mode?: 'studio' | 'editor'
   editDisabled: boolean
@@ -244,7 +242,6 @@ export function TrackBoard({
   activeJobSlotIds,
   beatsPerMeasure,
   bpm,
-  tempoChanges,
   draftStorageScope,
   mode = 'studio',
   editDisabled,
@@ -312,8 +309,8 @@ export function TrackBoard({
     [playheadSeconds, regions],
   )
   const measureStarts = useMemo(
-    () => getMeasureStarts(timelineBounds, bpm, beatsPerMeasure, tempoChanges),
-    [beatsPerMeasure, bpm, tempoChanges, timelineBounds],
+    () => getMeasureStarts(timelineBounds, bpm, beatsPerMeasure),
+    [beatsPerMeasure, bpm, timelineBounds],
   )
   const timelineWidthPixels = useMemo(() => {
     const measureCount = Math.max(1, measureStarts.length - 1)

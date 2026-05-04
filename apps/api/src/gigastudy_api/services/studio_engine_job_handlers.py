@@ -4,7 +4,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from gigastudy_api.api.schemas.studios import TempoChange
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
@@ -206,14 +205,9 @@ class StudioEngineJobHandlers:
             )
             return
 
-        tempo_changes = [
-            TempoChange(measure_index=change.measure_index, bpm=change.bpm)
-            for change in parsed_symbolic.tempo_changes
-        ]
-        self._repository._update_symbolic_seed_timing(
+        self._repository._apply_symbolic_seed_clock(
             record.studio_id,
             bpm=parsed_symbolic.source_bpm if bool(record.payload.get("use_source_tempo")) else None,
-            tempo_changes=tempo_changes if bool(record.payload.get("use_source_tempo")) else None,
             time_signature_numerator=(
                 parsed_symbolic.time_signature_numerator if parsed_symbolic.has_time_signature else None
             ),

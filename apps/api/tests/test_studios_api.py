@@ -818,34 +818,24 @@ def test_studio_response_sanitizes_legacy_explicit_polyphonic_regions() -> None:
     assert "region_monophonic_vocal_line" in response.regions[0].diagnostics["actions"]
 
 
-def test_studio_timing_update_retimes_symbolic_regions_for_all_studios(tmp_path: Path, monkeypatch) -> None:
+def test_studio_bpm_change_endpoint_is_not_exposed(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "Retempo",
+            "title": "Fixed BPM",
             "bpm": 120,
             "start_mode": "blank",
         },
     )
     studio_id = create_response.json()["studio_id"]
-    upload_musicxml_track(client, studio_id)
 
     response = client.patch(
         f"/api/studios/{studio_id}/timing",
-        json={
-            "bpm": 60,
-            "tempo_changes": [{"measure_index": 3, "bpm": 90}],
-        },
+        json={"bpm": 60},
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["bpm"] == 60
-    assert payload["tempo_changes"] == [{"measure_index": 3, "bpm": 90}]
-    events = _track_events(payload, 1)
-    assert events[0]["duration_seconds"] == 1.0
-    assert events[1]["start_seconds"] == 1.0
+    assert response.status_code == 404
 
 
 def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> None:

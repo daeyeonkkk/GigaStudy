@@ -1,6 +1,6 @@
 # GigaStudy Current Architecture
 
-Date: 2026-05-04
+Date: 2026-05-05
 
 This is the current canonical architecture after the region/piano-roll rebuild.
 GigaStudy is a six-track vocal arrangement and practice workspace, not an
@@ -50,8 +50,9 @@ is excluded from persistence and remains an adapter detail.
   which work belongs on the current page.
 - `apps/web/src/components/studio/StudioToolbar.tsx`
   Global transport, sync step, playback source, metronome, and selected-track
-  playback controls. Playback source is now audio clips or region events, not
-  notation rendering.
+  playback controls. BPM is shown as fixed studio context, not edited after
+  creation. Playback source is now audio clips or region events, not notation
+  rendering.
 - `apps/web/src/components/studio/useStudioPlayback.ts` and
   `apps/web/src/components/studio/studioPlaybackHelpers.ts`
   Browser playback orchestration plus pure playback-planning helpers for
@@ -155,8 +156,8 @@ is excluded from persistence and remains an adapter detail.
   MXL, and XML inputs are parsed directly in the same engine queue; clear
   singer-line results register to regions, while ambiguous symbolic material
   becomes review candidates. `TrackExtractionJob.use_source_tempo` lets queued
-  MIDI seeding update the studio BPM/tempo map before registration without
-  making the create-studio HTTP request perform the whole import.
+  MIDI seeding use the source MIDI's initial tempo as the studio BPM when BPM
+  was omitted at studio creation; it does not persist a per-measure tempo map.
 - `apps/api/src/gigastudy_api/services/engine/symbolic.py`
   MusicXML/MIDI parsing and track-to-slot mapping. MIDI parsing splits
   channel-packed tracks into per-channel parsed parts, records MIDI program/name

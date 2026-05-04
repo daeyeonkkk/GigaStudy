@@ -16,7 +16,6 @@ from gigastudy_api.services.engine.music_theory import (
     infer_slot_id,
     midi_to_label,
     event_from_pitch,
-    measure_index_from_beat,
     quarter_beats_per_measure,
     rank_slot_candidates,
     slot_id_from_name,
@@ -36,12 +35,6 @@ class ParsedTrack:
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(frozen=True)
-class ParsedTempoChange:
-    measure_index: int
-    bpm: int
-
-
 @dataclass
 class ParsedSymbolicFile:
     tracks: list[ParsedTrack]
@@ -50,7 +43,6 @@ class ParsedSymbolicFile:
     time_signature_denominator: int = DEFAULT_TIME_SIGNATURE[1]
     has_time_signature: bool = False
     source_bpm: int | None = None
-    tempo_changes: list[ParsedTempoChange] = field(default_factory=list)
 
 
 class SymbolicParseError(ValueError):
@@ -110,7 +102,6 @@ def parse_symbolic_file_with_metadata(
         time_signature_denominator=parsed_document.time_signature_denominator,
         has_time_signature=parsed_document.has_time_signature,
         source_bpm=parsed_document.source_bpm,
-        tempo_changes=parsed_document.tempo_changes,
     )
 
 
@@ -759,12 +750,7 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
             )
         )
 
-    source_bpm, tempo_changes = _midi_tempo_map_from_events(
-        raw_tempo_events,
-        ticks_per_quarter=ticks_per_quarter,
-        time_signature_numerator=document_time_signature[0],
-        time_signature_denominator=document_time_signature[1],
-    )
+    source_bpm = _midi_source_bpm_from_events(raw_tempo_events)
     return ParsedSymbolicFile(
         tracks=tracks,
         mapped_events={},
@@ -772,7 +758,6 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         time_signature_denominator=document_time_signature[1],
         has_time_signature=has_time_signature,
         source_bpm=source_bpm,
-        tempo_changes=tempo_changes,
     )
 
 
@@ -932,35 +917,14 @@ def _tempo_payload_to_bpm(payload: bytes) -> int:
     return max(40, min(240, round(60_000_000 / microseconds_per_quarter)))
 
 
-def _midi_tempo_map_from_events(
-    raw_tempo_events: list[tuple[int, int]],
-    *,
-    ticks_per_quarter: int,
-    time_signature_numerator: int,
-    time_signature_denominator: int,
-) -> tuple[int | None, list[ParsedTempoChange]]:
+def _midi_source_bpm_from_events(raw_tempo_events: list[tuple[int, int]]) -> int | None:
     if not raw_tempo_events:
-        return None, []
+        return None
     tempo_by_tick: dict[int, int] = {}
     for tick, bpm in raw_tempo_events:
         tempo_by_tick[max(0, tick)] = bpm
     sorted_events = sorted(tempo_by_tick.items())
-    source_bpm = sorted_events[0][1]
-    changes: list[ParsedTempoChange] = []
-    latest_measure_bpm: dict[int, int] = {}
-    for tick, bpm in sorted_events[1:]:
-        beat = (tick / ticks_per_quarter) + 1
-        measure_index = measure_index_from_beat(
-            beat,
-            time_signature_numerator,
-            time_signature_denominator,
-        )
-        if measure_index <= 1 or bpm == source_bpm:
-            continue
-        latest_measure_bpm[measure_index] = bpm
-    for measure_index, bpm in sorted(latest_measure_bpm.items()):
-        changes.append(ParsedTempoChange(measure_index=measure_index, bpm=bpm))
-    return source_bpm, changes
+    return sorted_events[0][1]
 
 
 def _read_musicxml_root(path: Path) -> ElementTree.Element:

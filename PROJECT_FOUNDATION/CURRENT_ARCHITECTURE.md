@@ -36,6 +36,11 @@ is excluded from persistence and remains an adapter detail.
   Global transport, sync step, playback source, metronome, and selected-track
   playback controls. Playback source is now audio clips or region events, not
   notation rendering.
+- `apps/web/src/components/studio/useStudioPlayback.ts` and
+  `apps/web/src/components/studio/studioPlaybackHelpers.ts`
+  Browser playback orchestration plus pure playback-planning helpers for
+  region grouping, playable track selection, sustained event merging, and
+  metronome beat coverage.
 - `apps/web/src/components/studio/TrackBoard.tsx`
   Main arrangement surface and track command composer. It renders:
   - macro region lanes for all six tracks,

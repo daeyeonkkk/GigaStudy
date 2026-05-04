@@ -10,23 +10,26 @@ import {
   disposePlaybackSession,
   fetchAudioArrayBuffer,
   formatTrackName,
-  getPitchEventPlaybackFrequency,
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
   getTrackVolumeScale,
   loadPercussiveOrganInstrument,
   scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
-  trackHasPlayableAudio,
-  regionsHavePlayableEvents,
   type MeterContext,
   type PlaybackInstrument,
   type PlaybackNode,
   type PlaybackSession,
   type PlaybackSourceMode,
 } from '../../lib/studio'
-import type { ArrangementRegion, PitchEvent, Studio, TrackSlot } from '../../types/studio'
+import type { Studio, TrackSlot } from '../../types/studio'
 import type { SetStudioActionState } from './studioActionState'
+import {
+  buildPlaybackTrackPlan,
+  getMaxBeatFromRegions,
+  getPlaybackRegionsBySlot,
+  getSustainedPitchEvents,
+} from './studioPlaybackHelpers'
 
 type PlaybackTimeline = {
   maxSeconds: number
@@ -43,13 +46,6 @@ type PlaybackStartOptions = {
   startSeconds?: number
 }
 
-type ScheduledPitchEvent = {
-  durationSeconds: number
-  event: PitchEvent
-  frequency: number
-  startSeconds: number
-}
-
 type UseStudioPlaybackArgs = {
   metronomeEnabled: boolean
   registeredSlotIds: number[]
@@ -57,53 +53,6 @@ type UseStudioPlaybackArgs = {
   setActionState: SetStudioActionState
   studio: Studio | null
   studioMeter: MeterContext
-}
-
-function getSustainedPitchEvents(events: PitchEvent[], isPercussion: boolean): ScheduledPitchEvent[] {
-  const scheduledEvents = events
-    .map((event) => {
-      const frequency = getPitchEventPlaybackFrequency(event)
-      return frequency === null
-        ? null
-        : {
-            durationSeconds: Math.max(isPercussion ? 0.08 : 0.12, event.duration_seconds),
-            event,
-            frequency,
-            startSeconds: event.start_seconds,
-          }
-    })
-    .filter((event): event is ScheduledPitchEvent => event !== null)
-    .sort((left, right) => left.startSeconds - right.startSeconds || left.event.event_id.localeCompare(right.event.event_id))
-
-  if (isPercussion) {
-    return scheduledEvents
-  }
-
-  const merged: ScheduledPitchEvent[] = []
-  for (const current of scheduledEvents) {
-    const previous = merged[merged.length - 1]
-    if (!previous) {
-      merged.push({ ...current })
-      continue
-    }
-
-    const previousEndSeconds = previous.startSeconds + previous.durationSeconds
-    const currentEndSeconds = current.startSeconds + current.durationSeconds
-    const samePitch =
-      current.event.label === previous.event.label ||
-      Math.abs(current.frequency - previous.frequency) < 0.5 ||
-      (current.event.pitch_midi !== null &&
-        current.event.pitch_midi !== undefined &&
-        current.event.pitch_midi === previous.event.pitch_midi)
-    const smallGap = current.startSeconds <= previousEndSeconds + 0.08
-    if (samePitch && smallGap) {
-      previous.durationSeconds = Math.max(previous.durationSeconds, currentEndSeconds - previous.startSeconds)
-      continue
-    }
-
-    merged.push({ ...current })
-  }
-  return merged
 }
 
 export function useStudioPlayback({
@@ -193,22 +142,6 @@ export function useStudioPlayback({
     })
   }, [registeredSlotIds])
 
-  function getPlaybackRegionsBySlot(): Map<number, ArrangementRegion[]> {
-    if (!studio) {
-      return new Map()
-    }
-    const regionsBySlot = new Map<number, ArrangementRegion[]>()
-    for (const region of studio.regions) {
-      const trackRegions = regionsBySlot.get(region.track_slot_id) ?? []
-      trackRegions.push(region)
-      regionsBySlot.set(region.track_slot_id, trackRegions)
-    }
-    for (const trackRegions of regionsBySlot.values()) {
-      trackRegions.sort((left, right) => left.start_seconds - right.start_seconds)
-    }
-    return regionsBySlot
-  }
-
   async function startPlaybackSession(
     tracksToPlay: TrackSlot[],
     includeMetronome = metronomeEnabled,
@@ -218,14 +151,11 @@ export function useStudioPlayback({
       return false
     }
 
-    const regionsBySlot = getPlaybackRegionsBySlot()
-    const hasPlayableEvents = (track: TrackSlot) => regionsHavePlayableEvents(regionsBySlot.get(track.slot_id))
-    const playableTracks = tracksToPlay.filter(
-      (track) =>
-        track.status === 'registered' &&
-        (playbackSource === 'audio'
-          ? trackHasPlayableAudio(track) || hasPlayableEvents(track)
-          : hasPlayableEvents(track)),
+    const regionsBySlot = getPlaybackRegionsBySlot(studio.regions)
+    const { audioTracks, eventTracks, playableTracks } = buildPlaybackTrackPlan(
+      tracksToPlay,
+      playbackSource,
+      regionsBySlot,
     )
     if (playableTracks.length === 0) {
       setActionState({ phase: 'error', message: '재생할 수 있는 등록 트랙이 없습니다.' })
@@ -244,10 +174,6 @@ export function useStudioPlayback({
     )
     const startSeconds = Math.max(minTimelineSeconds, options.startSeconds ?? minTimelineSeconds)
     const minimumStartDelaySeconds = 0.08
-    const audioTracks = playbackSource === 'audio' ? playableTracks.filter(trackHasPlayableAudio) : []
-    const eventTracks = playableTracks.filter(
-      (track) => !(playbackSource === 'audio' && trackHasPlayableAudio(track)) && hasPlayableEvents(track),
-    )
     const needsAudioContext = audioTracks.length > 0 || eventTracks.length > 0 || includeMetronome
     const nodes: PlaybackNode[] = []
     const timeoutIds: number[] = []
@@ -284,14 +210,6 @@ export function useStudioPlayback({
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
       let melodicPlaybackInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
-
-      function updateMaxBeatFromRegions(regions: ArrangementRegion[] | null | undefined) {
-        regions?.forEach((region) => {
-          region.pitch_events.forEach((event) => {
-            maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
-          })
-        })
-      }
 
       function getTrackOutput(track: TrackSlot): AudioNode | null {
         if (!activeContext) {
@@ -408,7 +326,7 @@ export function useStudioPlayback({
         maxBeat = Math.max(maxBeat, Math.ceil(trackEndSeconds / beatSeconds) + 1)
         scheduledAnyTrack = true
 
-        updateMaxBeatFromRegions(trackRegions)
+        maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
       })
 
       eventTracks.forEach((track) => {
@@ -417,15 +335,13 @@ export function useStudioPlayback({
           return
         }
         if (!activeContext) {
-          updateMaxBeatFromRegions(trackRegions)
+          maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
           return
         }
 
         const isPercussion = track.slot_id === 6
+        maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
         trackRegions.forEach((region) => {
-          region.pitch_events.forEach((event) => {
-            maxBeat = Math.max(maxBeat, event.start_beat + event.duration_beats - 1)
-          })
           getSustainedPitchEvents(region.pitch_events, isPercussion).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
             const duration = durationSeconds
             const eventEndSeconds = eventStartSeconds + duration
@@ -588,7 +504,7 @@ export function useStudioPlayback({
         selectedTracks,
         metronomeEnabled,
         playbackSource,
-        getPlaybackRegionsBySlot(),
+        getPlaybackRegionsBySlot(studio?.regions),
       ),
     })
     if (await startPlaybackSession(selectedTracks, metronomeEnabled, { startSeconds })) {
@@ -671,7 +587,7 @@ export function useStudioPlayback({
 
     setActionState({
       phase: 'busy',
-      message: getPlaybackPreparationMessage([track], metronomeEnabled, playbackSource, getPlaybackRegionsBySlot()),
+      message: getPlaybackPreparationMessage([track], metronomeEnabled, playbackSource, getPlaybackRegionsBySlot(studio?.regions)),
     })
     if (await startPlaybackSession([track])) {
       setGlobalPlaying(false)

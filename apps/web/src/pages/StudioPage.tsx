@@ -69,6 +69,7 @@ export function StudioPage() {
   const {
     changePlaybackSource,
     globalPlaying,
+    openPlaybackPicker,
     playbackPickerOpen,
     playbackSource,
     playbackTimeline,
@@ -360,6 +361,7 @@ export function StudioPage() {
           transportDisabled={transportDisabled}
           transportDisabledReason={transportDisabledReason}
           onMetronomeChange={setMetronomeEnabled}
+          onOpenPlaybackPicker={openPlaybackPicker}
           onPlaybackSourceChange={changePlaybackSource}
           onSeekPlayback={seekSelectedPlayback}
           onSelectAllPlaybackTracks={selectAllPlaybackTracks}

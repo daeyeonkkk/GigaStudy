@@ -223,6 +223,46 @@ def test_midi_parser_preserves_time_signature_for_measure_grid(tmp_path: Path) -
     assert notes[3].beat_in_measure == 1
 
 
+def test_midi_mapping_collapses_vocal_tracks_to_monophonic_lines(tmp_path: Path) -> None:
+    track_events = b"".join(
+        [
+            b"\x00\xff\x03\x07Soprano",
+            b"\x00\x90\x48\x64",  # C5 chord tone.
+            b"\x00\x90\x4c\x64",  # E5 starts at the same onset and should win for soprano.
+            _vlq(240) + b"\x90\x4f\x64",  # G5 starts before the first notes end.
+            _vlq(240) + b"\x80\x48\x40",
+            b"\x00\x80\x4c\x40",
+            _vlq(480) + b"\x80\x4f\x40",
+            b"\x00\xff\x2f\x00",
+        ]
+    )
+    midi_payload = b"".join(
+        [
+            b"MThd",
+            (6).to_bytes(4, "big"),
+            (1).to_bytes(2, "big"),
+            (1).to_bytes(2, "big"),
+            (480).to_bytes(2, "big"),
+            b"MTrk",
+            len(track_events).to_bytes(4, "big"),
+            track_events,
+        ]
+    )
+    midi_path = tmp_path / "polyphonic-soprano.mid"
+    midi_path.write_bytes(midi_payload)
+
+    parsed = parse_symbolic_file_with_metadata(midi_path, bpm=120)
+    notes = parsed.mapped_events[1]
+
+    assert [note.label for note in notes] == ["E5", "G5"]
+    assert notes[0].beat == 1
+    assert notes[0].duration_beats == 0.5
+    assert notes[1].beat == 1.5
+    assert notes[0].beat + notes[0].duration_beats <= notes[1].beat
+    assert "polyphonic_onset_collapsed" in notes[0].quality_warnings
+    assert "monophonic_overlap_resolved" in notes[1].quality_warnings
+
+
 def test_symbolic_mapping_uses_pitch_range_when_part_names_are_generic(tmp_path: Path) -> None:
     musicxml_path = tmp_path / "generic-parts.musicxml"
     musicxml_path.write_text(

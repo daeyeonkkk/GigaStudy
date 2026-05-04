@@ -78,6 +78,20 @@ export function useStudioPlayback({
   const playbackTrackGainsRef = useRef<Map<number, GainNode>>(new Map())
   const playbackRunIdRef = useRef(0)
 
+  function primeAudioContext(context: AudioContext) {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    const startTime = context.currentTime + 0.005
+    gain.gain.setValueAtTime(0.0001, startTime)
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.02)
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(440, startTime)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(startTime)
+    oscillator.stop(startTime + 0.025)
+  }
+
   function disposeCurrentPlaybackSession() {
     disposePlaybackSession(playbackSessionRef.current)
     playbackSessionRef.current = null
@@ -198,7 +212,8 @@ export function useStudioPlayback({
       try {
         context = new AudioContextConstructor()
         scheduledStart = context.currentTime + minimumStartDelaySeconds
-        await context.resume().catch(() => undefined)
+        primeAudioContext(context)
+        await context.resume()
       } catch {
         setActionState({ phase: 'error', message: '오디오 장치를 열 수 없습니다. 브라우저 권한을 확인하세요.' })
         return false
@@ -292,6 +307,12 @@ export function useStudioPlayback({
       )
       playbackStartAtMs = performance.now() + scheduledStartDelaySeconds * 1000
       scheduledStart = activeContext ? activeContext.currentTime + scheduledStartDelaySeconds : 0
+      if (activeContext) {
+        await activeContext.resume()
+        if (activeContext.state !== 'running') {
+          throw new Error('브라우저 오디오가 아직 시작되지 않았습니다. 재생 버튼을 다시 눌러주세요.')
+        }
+      }
       options.onStartScheduled?.(playbackStartAtMs)
 
       preparedAudioTracks.forEach(({ buffer, track, trackStartSeconds }) => {
@@ -345,7 +366,7 @@ export function useStudioPlayback({
         const isPercussion = track.slot_id === 6
         maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
         trackRegions.forEach((region) => {
-          getSustainedPitchEvents(region.pitch_events, isPercussion).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
+          getSustainedPitchEvents(region.pitch_events, isPercussion, track.slot_id).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
             const duration = durationSeconds
             const eventEndSeconds = eventStartSeconds + duration
             timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)

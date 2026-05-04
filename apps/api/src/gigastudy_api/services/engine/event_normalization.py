@@ -5,6 +5,7 @@ from typing import Literal
 
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import (
+    SLOT_COMFORT_CENTERS,
     SLOT_RANGES,
     label_to_midi,
     event_from_pitch,
@@ -18,6 +19,8 @@ VOICE_QUANTIZATION_GRID_BEATS = 0.25
 MIN_EVENT_DURATION_BEATS = 0.25
 MERGE_GAP_BEATS = 0.125
 OVERLAP_EPSILON_BEATS = 0.001
+MONOPHONIC_GROUP_EPSILON_BEATS = 0.0005
+MONOPHONIC_MIN_DURATION_BEATS = 0.0625
 
 SHARP_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 FLAT_NAMES = ("C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B")
@@ -190,6 +193,159 @@ def annotate_track_events_for_slot(
             )
         )
     return annotated
+
+
+def enforce_monophonic_vocal_events(
+    events: list[TrackPitchEvent],
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+) -> list[TrackPitchEvent]:
+    """Collapse a vocal slot to one singable pitch at a time.
+
+    MIDI and some symbolic files can carry chords, pedal-like overlaps, or
+    multiple voices inside one track. Slots 1-5 represent one human singer, so
+    the studio surface should expose a single melodic line rather than a
+    polyphonic stack.
+    """
+
+    if slot_id == 6 or not events:
+        return events
+
+    pitched_events = [event for event in events if not event.is_rest and _resolve_pitch_midi(event) is not None]
+    if not pitched_events:
+        return events
+
+    selected_events = _select_one_event_per_onset(pitched_events, slot_id=slot_id)
+    selected_events.sort(key=lambda event: (event.beat, event.id))
+
+    line: list[tuple[TrackPitchEvent, float, float, list[str]]] = []
+    for event in selected_events:
+        start_beat = max(1.0, event.beat)
+        end_beat = max(start_beat + MONOPHONIC_MIN_DURATION_BEATS, start_beat + max(0.0, event.duration_beats))
+        warnings = list(event.quality_warnings)
+
+        while line and start_beat < line[-1][2] - OVERLAP_EPSILON_BEATS:
+            previous_event, previous_start, previous_end, previous_warnings = line[-1]
+            trimmed_end = max(previous_start, start_beat)
+            if trimmed_end - previous_start >= MONOPHONIC_MIN_DURATION_BEATS:
+                previous_warnings = [*previous_warnings, "monophonic_overlap_trimmed"]
+                line[-1] = (previous_event, previous_start, trimmed_end, previous_warnings)
+                warnings.append("monophonic_overlap_resolved")
+                break
+
+            previous_rank = _monophonic_event_rank(previous_event, slot_id=slot_id)
+            current_rank = _monophonic_event_rank(event, slot_id=slot_id)
+            if current_rank < previous_rank:
+                line.pop()
+                warnings.append("monophonic_overlap_replaced")
+                continue
+
+            warnings.append("monophonic_overlap_dropped")
+            start_beat = end_beat
+            break
+
+        if end_beat - start_beat < MONOPHONIC_MIN_DURATION_BEATS:
+            continue
+        line.append((event, start_beat, end_beat, warnings))
+
+    normalized = [
+        _retime_monophonic_event(
+            event,
+            start_beat=start_beat,
+            end_beat=end_beat,
+            bpm=bpm,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            quality_warnings=warnings,
+        )
+        for event, start_beat, end_beat, warnings in line
+    ]
+    return normalized
+
+
+def _select_one_event_per_onset(events: list[TrackPitchEvent], *, slot_id: int) -> list[TrackPitchEvent]:
+    selected: list[TrackPitchEvent] = []
+    group: list[TrackPitchEvent] = []
+    group_start: float | None = None
+
+    for event in sorted(events, key=lambda item: (item.beat, _monophonic_event_rank(item, slot_id=slot_id), item.id)):
+        if group_start is None or abs(event.beat - group_start) <= MONOPHONIC_GROUP_EPSILON_BEATS:
+            group.append(event)
+            group_start = event.beat if group_start is None else group_start
+            continue
+
+        selected.append(_best_onset_event(group, slot_id=slot_id))
+        group = [event]
+        group_start = event.beat
+
+    if group:
+        selected.append(_best_onset_event(group, slot_id=slot_id))
+    return selected
+
+
+def _best_onset_event(events: list[TrackPitchEvent], *, slot_id: int) -> TrackPitchEvent:
+    best = min(events, key=lambda event: (_monophonic_event_rank(event, slot_id=slot_id), event.id))
+    if len(events) == 1:
+        return best
+    warnings = [*best.quality_warnings, "polyphonic_onset_collapsed"]
+    return best.model_copy(update={"quality_warnings": _dedupe_warnings(warnings)})
+
+
+def _monophonic_event_rank(event: TrackPitchEvent, *, slot_id: int) -> tuple[float, float, float]:
+    pitch_midi = _resolve_pitch_midi(event)
+    if pitch_midi is None:
+        pitch_midi = round(SLOT_COMFORT_CENTERS.get(slot_id, 60))
+    if slot_id == 1:
+        role_distance = -pitch_midi
+    elif slot_id == 5:
+        role_distance = pitch_midi
+    else:
+        role_distance = abs(pitch_midi - SLOT_COMFORT_CENTERS.get(slot_id, pitch_midi))
+    return (role_distance, -event.confidence, -event.duration_beats)
+
+
+def _retime_monophonic_event(
+    event: TrackPitchEvent,
+    *,
+    start_beat: float,
+    end_beat: float,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+    quality_warnings: list[str],
+) -> TrackPitchEvent:
+    pitch_midi = _resolve_pitch_midi(event)
+    retimed = event_from_pitch(
+        beat=start_beat,
+        duration_beats=max(MONOPHONIC_MIN_DURATION_BEATS, end_beat - start_beat),
+        bpm=bpm,
+        source=event.source,
+        extraction_method=event.extraction_method,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+        pitch_midi=pitch_midi,
+        label=event.label,
+        confidence=event.confidence,
+        voice_index=event.voice_index,
+        is_rest=event.is_rest,
+        is_tied=event.is_tied,
+        spelled_label=event.spelled_label,
+        accidental=event.accidental,
+        pitch_register=event.pitch_register,
+        key_signature=event.key_signature,
+        pitch_label_octave_shift=event.pitch_label_octave_shift,
+        quantization_grid=event.quantization_grid,
+        quality_warnings=_dedupe_warnings(quality_warnings),
+    )
+    retimed.id = event.id
+    return retimed
+
+
+def _dedupe_warnings(warnings: list[str]) -> list[str]:
+    return list(dict.fromkeys(warnings))
 
 
 def estimate_key_signature(events: list[TrackPitchEvent]) -> str:

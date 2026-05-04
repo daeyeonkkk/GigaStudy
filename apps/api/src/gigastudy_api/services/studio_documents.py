@@ -57,7 +57,13 @@ def register_track_material(
     track.duration_seconds = duration_seconds
     track.diagnostics = {"registration_quality": registration_diagnostics}
     track.updated_at = timestamp
-    region = build_arrangement_region_from_track_events(track, events=events, bpm=studio.bpm)
+    region = build_arrangement_region_from_track_events(
+        track,
+        events=events,
+        bpm=studio.bpm,
+        time_signature_numerator=studio.time_signature_numerator,
+        time_signature_denominator=studio.time_signature_denominator,
+    )
     _replace_track_region(studio, track.slot_id, region)
     track.events = []
 

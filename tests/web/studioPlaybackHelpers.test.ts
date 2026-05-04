@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest'
 import {
   getAudioTrackSchedule,
   getPitchEventSchedule,
+  getSustainedPitchEvents,
 } from '../../apps/web/src/components/studio/studioPlaybackHelpers'
 import {
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
 } from '../../apps/web/src/lib/studio/playback'
 import type { TrackSlot } from '../../apps/web/src/types/studio'
+import type { PitchEvent } from '../../apps/web/src/types/studio'
 
 describe('studio playback scheduling helpers', () => {
   it('keeps selected audio tracks aligned to one scheduled start', () => {
@@ -81,5 +83,54 @@ describe('studio playback scheduling helpers', () => {
     expect(getVolumeScaleFromPercent(37.6)).toBe(0.38)
     expect(getTrackVolumeScale(track)).toBe(0.38)
     expect(getVolumeScaleFromPercent(Number.NaN)).toBe(1)
+  })
+
+  it('collapses vocal playback events to one active pitch at a time', () => {
+    const baseEvent = {
+      beat_in_measure: null,
+      confidence: 1,
+      duration_beats: 1,
+      extraction_method: 'test',
+      is_rest: false,
+      measure_index: null,
+      pitch_hz: null,
+      quality_warnings: [],
+      region_id: 'region-1',
+      source: 'midi',
+      start_beat: 1,
+      track_slot_id: 1,
+    } satisfies Partial<PitchEvent>
+    const events = [
+      {
+        ...baseEvent,
+        duration_seconds: 1,
+        event_id: 'low',
+        label: 'C5',
+        pitch_midi: 72,
+        start_seconds: 0,
+      },
+      {
+        ...baseEvent,
+        duration_seconds: 1,
+        event_id: 'high',
+        label: 'E5',
+        pitch_midi: 76,
+        start_seconds: 0,
+      },
+      {
+        ...baseEvent,
+        duration_seconds: 1,
+        event_id: 'next',
+        label: 'G5',
+        pitch_midi: 79,
+        start_seconds: 0.5,
+      },
+    ] as PitchEvent[]
+
+    const scheduled = getSustainedPitchEvents(events, false, 1)
+
+    expect(scheduled.map((event) => event.event.event_id)).toEqual(['high', 'next'])
+    expect(scheduled[0].durationSeconds).toBeCloseTo(0.5)
+    expect(scheduled[1].startSeconds).toBeCloseTo(0.5)
   })
 })

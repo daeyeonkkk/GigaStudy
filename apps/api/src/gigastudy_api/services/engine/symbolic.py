@@ -19,7 +19,10 @@ from gigastudy_api.services.engine.music_theory import (
     rank_slot_candidates,
     slot_assignment_diagnostics,
 )
-from gigastudy_api.services.engine.event_normalization import annotate_track_events_for_slot
+from gigastudy_api.services.engine.event_normalization import (
+    annotate_track_events_for_slot,
+    enforce_monophonic_vocal_events,
+)
 
 
 @dataclass
@@ -72,7 +75,13 @@ def parse_symbolic_file_with_metadata(
 
     return ParsedSymbolicFile(
         tracks=parsed_document.tracks,
-        mapped_events=map_tracks_to_slots(parsed_document.tracks, target_slot_id=target_slot_id),
+        mapped_events=map_tracks_to_slots(
+            parsed_document.tracks,
+            target_slot_id=target_slot_id,
+            bpm=bpm,
+            time_signature_numerator=parsed_document.time_signature_numerator,
+            time_signature_denominator=parsed_document.time_signature_denominator,
+        ),
         time_signature_numerator=parsed_document.time_signature_numerator,
         time_signature_denominator=parsed_document.time_signature_denominator,
         has_time_signature=parsed_document.has_time_signature,
@@ -85,6 +94,9 @@ def map_tracks_to_slots(
     parsed_tracks: list[ParsedTrack],
     *,
     target_slot_id: int | None = None,
+    bpm: int = 120,
+    time_signature_numerator: int = DEFAULT_TIME_SIGNATURE[0],
+    time_signature_denominator: int = DEFAULT_TIME_SIGNATURE[1],
 ) -> dict[int, list[TrackPitchEvent]]:
     non_empty_tracks = [track for track in parsed_tracks if track.events]
     if not non_empty_tracks:
@@ -102,7 +114,15 @@ def map_tracks_to_slots(
                 fallback=target_slot_id,
             )
         )
-        return {target_slot_id: annotate_track_events_for_slot(selected.events, slot_id=target_slot_id)}
+        return {
+            target_slot_id: _prepare_slot_events(
+                selected.events,
+                slot_id=target_slot_id,
+                bpm=bpm,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            )
+        }
 
     assignments = _assign_tracks_by_name_and_range(non_empty_tracks)
     mapped: dict[int, list[TrackPitchEvent]] = {}
@@ -117,8 +137,32 @@ def map_tracks_to_slots(
                     fallback=slot_id,
                 )
             )
-            mapped[slot_id] = annotate_track_events_for_slot(track.events, slot_id=slot_id)
+            mapped[slot_id] = _prepare_slot_events(
+                track.events,
+                slot_id=slot_id,
+                bpm=bpm,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            )
     return mapped
+
+
+def _prepare_slot_events(
+    events: list[TrackPitchEvent],
+    *,
+    slot_id: int,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> list[TrackPitchEvent]:
+    annotated = annotate_track_events_for_slot(events, slot_id=slot_id)
+    return enforce_monophonic_vocal_events(
+        annotated,
+        bpm=bpm,
+        slot_id=slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
 
 
 def _assign_tracks_by_name_and_range(parsed_tracks: list[ParsedTrack]) -> list[tuple[ParsedTrack, int]]:

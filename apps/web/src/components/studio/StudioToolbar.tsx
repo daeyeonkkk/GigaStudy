@@ -32,6 +32,7 @@ type StudioToolbarProps = {
   transportDisabled: boolean
   transportDisabledReason: string | null
   onMetronomeChange: (enabled: boolean) => void
+  onOpenPlaybackPicker: () => void
   onPlaybackSourceChange: (source: PlaybackSourceMode) => void
   onSeekPlayback: (seconds: number) => void
   onSelectAllPlaybackTracks: () => void
@@ -100,6 +101,7 @@ export function StudioToolbar({
   transportDisabled,
   transportDisabledReason,
   onMetronomeChange,
+  onOpenPlaybackPicker,
   onPlaybackSourceChange,
   onSeekPlayback,
   onSelectAllPlaybackTracks,
@@ -238,7 +240,7 @@ export function StudioToolbar({
           disabled={!globalPlaying && (transportDisabled || registeredTrackCount === 0)}
           title={!globalPlaying ? transportDisabledReason ?? undefined : undefined}
           type="button"
-          onClick={onToggleGlobalPlayback}
+          onClick={globalPlaying ? onToggleGlobalPlayback : onOpenPlaybackPicker}
         >
           <span aria-hidden="true">{globalPlaying ? '일시정지' : '재생'}</span>
         </button>
@@ -456,9 +458,9 @@ export function StudioToolbar({
               data-testid="selected-play-button"
               disabled={selectedTrackCount === 0 || actionBusy || transportDisabled}
               type="button"
-              onClick={onStartSelectedPlayback}
+              onClick={globalPlaying ? onToggleGlobalPlayback : onStartSelectedPlayback}
             >
-              {globalPlaying ? '처음부터' : '선택한 트랙 재생'}
+              {globalPlaying ? '일시정지' : '재생'}
             </button>
           </div>
           {playbackRange ? (

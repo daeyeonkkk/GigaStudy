@@ -27,7 +27,19 @@ export type PitchEventSchedule = {
   scheduledStartSeconds: number
 }
 
-export function getSustainedPitchEvents(events: PitchEvent[], isPercussion: boolean): ScheduledPitchEvent[] {
+const VOCAL_SLOT_CENTERS: Record<number, number> = {
+  1: 70.5,
+  2: 64.5,
+  3: 57.5,
+  4: 54.5,
+  5: 50,
+}
+
+export function getSustainedPitchEvents(
+  events: PitchEvent[],
+  isPercussion: boolean,
+  slotId = 0,
+): ScheduledPitchEvent[] {
   const scheduledEvents = events
     .map((event) => {
       const frequency = getPitchEventPlaybackFrequency(event)
@@ -71,7 +83,59 @@ export function getSustainedPitchEvents(events: PitchEvent[], isPercussion: bool
 
     merged.push({ ...current })
   }
-  return merged
+  return enforceMonophonicPlaybackLine(merged, slotId)
+}
+
+function enforceMonophonicPlaybackLine(events: ScheduledPitchEvent[], slotId: number): ScheduledPitchEvent[] {
+  const selectedByOnset: ScheduledPitchEvent[] = []
+  let onsetGroup: ScheduledPitchEvent[] = []
+  let groupStartSeconds: number | null = null
+  for (const event of events) {
+    if (groupStartSeconds === null || Math.abs(event.startSeconds - groupStartSeconds) <= 0.001) {
+      onsetGroup.push(event)
+      groupStartSeconds = groupStartSeconds ?? event.startSeconds
+      continue
+    }
+    selectedByOnset.push(bestPlaybackEventForSlot(onsetGroup, slotId))
+    onsetGroup = [event]
+    groupStartSeconds = event.startSeconds
+  }
+  if (onsetGroup.length > 0) {
+    selectedByOnset.push(bestPlaybackEventForSlot(onsetGroup, slotId))
+  }
+
+  const line: ScheduledPitchEvent[] = []
+  for (const event of selectedByOnset) {
+    const current = { ...event }
+    const previous = line[line.length - 1]
+    if (previous) {
+      const previousEndSeconds = previous.startSeconds + previous.durationSeconds
+      if (current.startSeconds < previousEndSeconds - 0.001) {
+        previous.durationSeconds = Math.max(0.05, current.startSeconds - previous.startSeconds)
+      }
+    }
+    line.push(current)
+  }
+  return line.filter((event) => event.durationSeconds >= 0.05)
+}
+
+function bestPlaybackEventForSlot(events: ScheduledPitchEvent[], slotId: number): ScheduledPitchEvent {
+  return events.slice().sort((left, right) => playbackEventRank(left, slotId) - playbackEventRank(right, slotId))[0]
+}
+
+function playbackEventRank(event: ScheduledPitchEvent, slotId: number): number {
+  const midi = event.event.pitch_midi
+  if (typeof midi !== 'number') {
+    return 0
+  }
+  if (slotId === 1) {
+    return -midi
+  }
+  if (slotId === 5) {
+    return midi
+  }
+  const center = VOCAL_SLOT_CENTERS[slotId] ?? midi
+  return Math.abs(midi - center)
 }
 
 export function getPlaybackRegionsBySlot(

@@ -4,6 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from gigastudy_api.domain.track_events import PitchEventSource as EventSource, TrackPitchEvent as _TrackPitchEvent
+from gigastudy_api.services.engine.event_normalization import enforce_monophonic_vocal_events
 
 TrackStatus = Literal[
     "empty",
@@ -141,16 +142,40 @@ class TrackSlot(SourceKindModel):
     updated_at: str
 
 
-def build_arrangement_regions(tracks: list[TrackSlot], bpm: int) -> list[ArrangementRegion]:
-    return [
-        region
-        for track in tracks
-        if (region := _build_track_region(track, bpm)) is not None
-    ]
+def build_arrangement_regions(
+    tracks: list[TrackSlot],
+    bpm: int,
+    *,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+) -> list[ArrangementRegion]:
+    regions: list[ArrangementRegion] = []
+    for track in tracks:
+        region = _build_track_region(
+            track,
+            bpm,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+        )
+        if region is not None:
+            regions.append(region)
+    return regions
 
 
-def _build_track_region(track: TrackSlot, bpm: int) -> ArrangementRegion | None:
-    return build_arrangement_region_from_track_events(track, events=track.events, bpm=bpm)
+def _build_track_region(
+    track: TrackSlot,
+    bpm: int,
+    *,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+) -> ArrangementRegion | None:
+    return build_arrangement_region_from_track_events(
+        track,
+        events=track.events,
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
 
 
 def build_arrangement_region_from_track_events(
@@ -158,14 +183,23 @@ def build_arrangement_region_from_track_events(
     *,
     events: list[_TrackPitchEvent],
     bpm: int,
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
 ) -> ArrangementRegion | None:
     if track.status != "registered" or (not events and not track.audio_source_path):
         return None
 
     region_id = f"track-{track.slot_id}-region-1"
+    region_events = enforce_monophonic_vocal_events(
+        events,
+        bpm=bpm,
+        slot_id=track.slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
     pitch_events = [
         _pitch_event_from_track_event(event, track=track, region_id=region_id, bpm=bpm)
-        for event in sorted(events, key=lambda item: (item.beat, item.id))
+        for event in sorted(region_events, key=lambda item: (item.beat, item.id))
     ]
     region_start = track.sync_offset_seconds
     event_end_seconds = max(
@@ -458,7 +492,12 @@ def sync_studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
 
 def _merged_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     tracks_by_slot = {track.slot_id: track for track in studio.tracks}
-    derived_regions = build_arrangement_regions(studio.tracks, studio.bpm)
+    derived_regions = build_arrangement_regions(
+        studio.tracks,
+        studio.bpm,
+        time_signature_numerator=studio.time_signature_numerator,
+        time_signature_denominator=studio.time_signature_denominator,
+    )
     explicit_regions = [
         region
         for region in studio.regions

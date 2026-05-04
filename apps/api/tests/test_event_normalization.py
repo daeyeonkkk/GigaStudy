@@ -50,6 +50,21 @@ def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
     assert all("measure_boundary_tie" in entry.quality_warnings for entry in normalized)
 
 
+def test_event_normalization_merges_only_touching_same_pitch_events() -> None:
+    notes = [
+        event_from_pitch(beat=1, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=1.5, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=2.25, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
+    ]
+
+    normalized = normalize_track_events(notes, bpm=120, slot_id=1)
+
+    assert [(entry.beat, entry.duration_beats) for entry in normalized] == [
+        (1.0, 1.0),
+        (2.25, 0.5),
+    ]
+
+
 def test_event_normalization_applies_track_pitch_register_policy() -> None:
     tenor = event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=55)
     baritone = event_from_pitch(beat=1, duration_beats=1, bpm=120, source="voice", extraction_method="test", pitch_midi=50)
@@ -107,7 +122,7 @@ def test_registration_quality_simplifies_dense_voice_noise_to_event_grid() -> No
     assert all(note.measure_index == 1 for note in result.events)
 
 
-def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated() -> None:
+def test_registration_quality_keeps_symbolic_sustain_continuous_and_annotated() -> None:
     note = event_from_pitch(
         beat=4.5,
         duration_beats=1,
@@ -126,13 +141,34 @@ def test_registration_quality_keeps_symbolic_input_measure_owned_and_annotated()
         time_signature_denominator=4,
     )
 
-    assert [(entry.beat, entry.duration_beats, entry.measure_index) for entry in result.events] == [
-        (4.5, 0.5, 1),
-        (5.0, 0.5, 2),
-    ]
+    assert [(entry.beat, entry.duration_beats, entry.measure_index) for entry in result.events] == [(4.5, 1.0, 1)]
     assert all(entry.pitch_register == "tenor_voice" for entry in result.events)
     assert all(entry.key_signature for entry in result.events)
-    assert result.diagnostics["cross_measure_event_count"] == 0
+    assert result.diagnostics["cross_measure_event_count"] == 1
+    assert "symbolic_same_pitch_contiguous_merge" in result.diagnostics["actions"]
+
+
+def test_registration_quality_merges_symbolic_same_pitch_without_filling_gaps() -> None:
+    notes = [
+        event_from_pitch(beat=1, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=1.5, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=2.25, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
+    ]
+
+    result = prepare_events_for_track_registration(
+        notes,
+        bpm=120,
+        slot_id=1,
+        source_kind="midi",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    assert [(entry.beat, entry.duration_beats) for entry in result.events] == [
+        (1.0, 1.0),
+        (2.25, 0.5),
+    ]
+    assert "symbolic_same_pitch_contiguous_merge" in result.diagnostics["actions"]
 
 
 def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() -> None:

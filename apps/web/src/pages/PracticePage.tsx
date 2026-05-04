@@ -96,7 +96,7 @@ function getEventStyle(
     '--event-hue': getEventHue(event),
     '--event-left': `${getTimelinePercent(event.start_seconds, minSeconds, maxSeconds)}%`,
     '--event-top': `${((region.track_slot_id - 1) * laneHeightPercent) + ((pitchTopPercent / 100) * laneHeightPercent)}%`,
-    '--event-width': `${Math.max(0.2, (event.duration_seconds / Math.max(0.25, maxSeconds - minSeconds)) * 100)}%`,
+    '--event-width': `${(event.duration_seconds / Math.max(0.0001, maxSeconds - minSeconds)) * 100}%`,
   } as CSSProperties
 }
 

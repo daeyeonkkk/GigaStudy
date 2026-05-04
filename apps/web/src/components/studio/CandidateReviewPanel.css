@@ -198,19 +198,16 @@
   left: var(--candidate-event-left);
   top: var(--candidate-event-top);
   width: var(--candidate-event-width);
-  min-width: 30px;
-  height: 18px;
-  padding: 0 5px;
+  min-width: 0;
+  height: 7px;
+  padding: 0;
   border: 1px solid #225f4d;
-  border-radius: 4px;
+  border-radius: 999px;
   background: #69c497;
   color: #092219;
-  font-size: 0.68rem;
   font-style: normal;
-  font-weight: 900;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transform: translateY(-50%);
 }
 
 .candidate-review__region-grid p {

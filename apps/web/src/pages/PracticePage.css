@@ -253,7 +253,7 @@
   left: var(--event-left);
   width: var(--event-width);
   height: 8px;
-  min-width: 4px;
+  min-width: 0;
   padding: 0;
   border: 1px solid hsl(var(--event-hue) 64% 30%);
   border-radius: 999px;

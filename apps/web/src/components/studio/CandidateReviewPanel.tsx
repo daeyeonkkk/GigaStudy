@@ -38,7 +38,7 @@ type CandidateVerdict = {
 }
 
 function getEventTimelinePercent(seconds: number, startSeconds: number, durationSeconds: number): number {
-  return Math.max(0, Math.min(100, ((seconds - startSeconds) / Math.max(0.25, durationSeconds)) * 100))
+  return Math.max(0, Math.min(100, ((seconds - startSeconds) / Math.max(0.0001, durationSeconds)) * 100))
 }
 
 function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {
@@ -60,13 +60,10 @@ function getCandidateEventStyle(
       candidate.region.duration_seconds,
     )}%`,
     '--candidate-event-top': `${getEventTopPercent(event, events)}%`,
-    '--candidate-event-width': `${Math.max(
-      2.4,
-      getEventTimelinePercent(
-        event.start_seconds + event.duration_seconds,
-        event.start_seconds,
-        candidate.region.duration_seconds,
-      ),
+    '--candidate-event-width': `${getEventTimelinePercent(
+      event.start_seconds + event.duration_seconds,
+      event.start_seconds,
+      candidate.region.duration_seconds,
     )}%`,
   } as CSSProperties
 }
@@ -87,9 +84,7 @@ function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate 
               key={event.event_id}
               style={getCandidateEventStyle(candidate, event, events)}
               title={`${event.label}@${event.start_beat}`}
-            >
-              {event.label}
-            </i>
+            />
           ))
         )}
       </div>

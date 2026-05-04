@@ -138,7 +138,7 @@ function getTrackMiniStyle(
   return {
     '--event-left': `${getTimelinePercent(item.event.start_seconds, timelineBounds)}%`,
     '--event-top': `${getEventMiniTopPercent(item.event, trackEvents)}%`,
-    '--event-width': `${Math.max(0.2, getDurationPercent(item.event.duration_seconds, timelineBounds.durationSeconds))}%`,
+    '--event-width': `${getDurationPercent(item.event.duration_seconds, timelineBounds.durationSeconds)}%`,
   } as CSSProperties
 }
 

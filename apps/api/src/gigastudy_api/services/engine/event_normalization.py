@@ -17,7 +17,7 @@ TrackPitchRegister = Literal["upper_voice", "tenor_voice", "lower_voice", "percu
 
 VOICE_QUANTIZATION_GRID_BEATS = 0.25
 MIN_EVENT_DURATION_BEATS = 0.25
-MERGE_GAP_BEATS = 0.125
+SAME_PITCH_MERGE_EPSILON_BEATS = 0.001
 OVERLAP_EPSILON_BEATS = 0.001
 MONOPHONIC_GROUP_EPSILON_BEATS = 0.0005
 MONOPHONIC_MIN_DURATION_BEATS = 0.0625
@@ -193,6 +193,62 @@ def annotate_track_events_for_slot(
             )
         )
     return annotated
+
+
+def merge_contiguous_same_pitch_events(
+    events: list[TrackPitchEvent],
+    *,
+    bpm: int,
+    gap_epsilon_beats: float = SAME_PITCH_MERGE_EPSILON_BEATS,
+) -> list[TrackPitchEvent]:
+    """Merge same-pitch event fragments only when they touch or overlap.
+
+    This preserves real empty time. A positive gap larger than the rounding
+    epsilon remains a visible gap in the registered timeline.
+    """
+
+    if len(events) < 2:
+        return events
+
+    beat_seconds = 60 / max(1, bpm)
+    ordered_events = sorted(events, key=lambda event: (event.beat, event.id))
+    merged: list[TrackPitchEvent] = []
+    for event in ordered_events:
+        if event.is_rest or _resolve_pitch_midi(event) is None:
+            merged.append(event)
+            continue
+        if not merged:
+            merged.append(event)
+            continue
+
+        previous = merged[-1]
+        previous_pitch = _resolve_pitch_midi(previous)
+        event_pitch = _resolve_pitch_midi(event)
+        previous_end = round(previous.beat + previous.duration_beats, 4)
+        gap = round(event.beat - previous_end, 4)
+        if (
+            not previous.is_rest
+            and previous_pitch is not None
+            and previous_pitch == event_pitch
+            and gap <= gap_epsilon_beats
+        ):
+            end_beat = max(previous_end, round(event.beat + event.duration_beats, 4))
+            duration_beats = round(max(MONOPHONIC_MIN_DURATION_BEATS, end_beat - previous.beat), 4)
+            warnings = list(dict.fromkeys([*previous.quality_warnings, *event.quality_warnings]))
+            if "same_pitch_contiguous_merged" not in warnings:
+                warnings.append("same_pitch_contiguous_merged")
+            merged[-1] = previous.model_copy(
+                update={
+                    "duration_beats": duration_beats,
+                    "duration_seconds": round(duration_beats * beat_seconds, 4),
+                    "confidence": max(previous.confidence, event.confidence),
+                    "quality_warnings": warnings,
+                }
+            )
+            continue
+
+        merged.append(event)
+    return merged
 
 
 def enforce_monophonic_vocal_events(
@@ -436,7 +492,7 @@ def _merge_and_resolve_intervals(
         if (
             merge_adjacent_same_pitch
             and _same_pitch(previous, interval)
-            and interval.start_beat <= previous.end_beat + MERGE_GAP_BEATS
+            and interval.start_beat <= previous.end_beat + SAME_PITCH_MERGE_EPSILON_BEATS
         ):
             resolved[-1] = _EventInterval(
                 event=previous.event,

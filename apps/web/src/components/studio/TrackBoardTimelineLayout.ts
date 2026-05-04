@@ -52,7 +52,7 @@ export function getTimelinePercent(seconds: number, timelineBounds: TimelineBoun
 }
 
 export function getDurationPercent(seconds: number, durationSeconds: number): number {
-  return Math.max(0, Math.min(100, (seconds / Math.max(0.25, durationSeconds)) * 100))
+  return Math.max(0, Math.min(100, (seconds / Math.max(0.0001, durationSeconds)) * 100))
 }
 
 export function getRegionHitAreaStyle(

@@ -57,7 +57,7 @@ function getEventLeftPercent(event: RegionEditorDraftEvent, regionStartSeconds: 
 }
 
 function getEventWidthPercent(event: RegionEditorDraftEvent, regionDurationSeconds: number): number {
-  return Math.max(0.2, getDurationPercent(event.duration_seconds, regionDurationSeconds))
+  return getDurationPercent(event.duration_seconds, regionDurationSeconds)
 }
 
 function roundToGrid(value: number, gridSeconds: number): number {

@@ -69,7 +69,7 @@ export function PracticeWaterfall({
               {
                 '--waterfall-left': `${getTimelinePercent(event.start_seconds, timelineBounds)}%`,
                 '--waterfall-row-index': laneSlotIds.indexOf(region.track_slot_id),
-                '--waterfall-width': `${Math.max(1.8, getDurationPercent(event.duration_seconds, timelineBounds.durationSeconds))}%`,
+                '--waterfall-width': `${getDurationPercent(event.duration_seconds, timelineBounds.durationSeconds)}%`,
               } as CSSProperties
             }
             title={`${formatTrackName(region.track_name)} - ${event.label}`}

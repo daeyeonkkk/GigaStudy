@@ -25,6 +25,7 @@ from gigastudy_api.services.engine.event_normalization import (
     annotate_track_events_for_slot,
     accidental_for_key,
     enforce_monophonic_vocal_events,
+    merge_contiguous_same_pitch_events,
     normalize_track_events,
     pitch_label_octave_shift_for_slot,
     pitch_register_for_slot,
@@ -223,6 +224,13 @@ def prepare_events_for_track_registration(
                 merge_adjacent_same_pitch=False,
             )
             actions.append("symbolic_measure_boundary_split")
+        merged_events = merge_contiguous_same_pitch_events(
+            prepared_events,
+            bpm=bpm,
+        )
+        if _event_identity(merged_events) != _event_identity(prepared_events):
+            prepared_events = merged_events
+            actions.append("symbolic_same_pitch_contiguous_merge")
 
     prepared_events = _deduplicate_and_sort(prepared_events)
     alignment = _align_to_reference_tracks(
@@ -1333,6 +1341,13 @@ def _enforce_registration_event_contract(
     if _event_identity(monophonic_events) != _event_identity(contract_events):
         actions.append("event_contract_monophonic_vocal_line")
     contract_events = monophonic_events
+    merged_events = merge_contiguous_same_pitch_events(
+        contract_events,
+        bpm=bpm,
+    )
+    if _event_identity(merged_events) != _event_identity(contract_events):
+        actions.append("event_contract_same_pitch_contiguous_merge")
+    contract_events = merged_events
     if _has_measure_crossing_events(
         contract_events,
         time_signature_numerator=time_signature_numerator,
@@ -1356,6 +1371,13 @@ def _enforce_registration_event_contract(
             merge_adjacent_same_pitch=False,
         )
         actions.append("event_contract_measure_split")
+        merged_events = merge_contiguous_same_pitch_events(
+            contract_events,
+            bpm=bpm,
+        )
+        if _event_identity(merged_events) != _event_identity(contract_events):
+            actions.append("event_contract_same_pitch_contiguous_merge")
+        contract_events = merged_events
 
     shared_key_signature = _shared_key_signature(contract_events)
     annotated_events = annotate_track_events_for_slot(

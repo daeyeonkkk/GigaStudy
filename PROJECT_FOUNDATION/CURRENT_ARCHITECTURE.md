@@ -74,7 +74,9 @@ is excluded from persistence and remains an adapter detail.
   positioning minis by pitch, sizing dense lanes by pitch span, and generating
   hover/accessibility labels with pitch name, start, and duration. Track-board,
   region editor, and practice waterfall views use the same thin-bar contract so
-  short MIDI events do not become oversized overlapping pills.
+  short MIDI events do not become oversized overlapping pills. Event mini width
+  is proportional to the visible shared timeline duration; pitch affects only
+  the vertical position, not the bar thickness.
 - `apps/web/src/components/studio/TrackBoardTimeline.tsx` and
   `apps/web/src/components/studio/TrackBoardTimelineLayout.ts`
   Waterfall practice preview rendering plus shared track-board timeline math
@@ -124,7 +126,9 @@ is excluded from persistence and remains an adapter detail.
   scoring. `TrackPitchEvent` belongs here instead of the API schema module.
 - `apps/api/src/gigastudy_api/services/engine/event_normalization.py`
   Internal pitch-event preparation helpers for timing quantization, range
-  metadata, spelling, and measure positions.
+  metadata, spelling, measure positions, and same-pitch contiguous fragment
+  merging. Same-pitch merge only consumes touching or overlapping fragments;
+  positive gaps remain empty timeline space.
 - `apps/api/src/gigastudy_api/services/engine/event_quality.py`
   The registration quality gate before extracted material becomes product
   regions. It replaces the old notation quality layer.

@@ -267,7 +267,7 @@
   left: var(--event-left);
   top: var(--event-top);
   width: var(--event-width);
-  min-width: 4px;
+  min-width: 0;
   height: 7px;
   padding: 0;
   border: 1px solid #225f4d;
@@ -691,7 +691,7 @@
   left: var(--event-left);
   top: var(--event-top);
   width: var(--event-width);
-  min-width: 4px;
+  min-width: 0;
   height: 8px;
   padding: 0;
   border: 1px solid #225f4d;
@@ -860,9 +860,9 @@
   left: var(--waterfall-left);
   top: calc((100% / var(--waterfall-row-count, 1)) * var(--waterfall-row-index) + 26px);
   width: var(--waterfall-width);
-  height: calc((100% / var(--waterfall-row-count, 1)) - 34px);
-  min-width: 18px;
-  min-height: 10px;
+  height: 8px;
+  min-width: 0;
+  min-height: 0;
   border: 1px solid #16424e;
   border-radius: 4px;
   background: #8bd2ff;

@@ -75,6 +75,10 @@ the same change.
 - Onsets and durations should be quantized to musically useful beat units, then
   simplified so the track reads as intentional phrases rather than frame-level
   detector noise.
+- Same-pitch event fragments that touch or overlap should be merged into one
+  continuous event. Real gaps must remain empty time; normalization must not
+  silently stretch an event across a positive gap just to make the lane look
+  continuous.
 - Voice extraction may use a conservative rescue pass for short, weak, but
   stable sung contours. The rescue pass must still reject tonal clicks and room
   noise, and it must mark rescued events in diagnostics rather than hiding that
@@ -288,6 +292,9 @@ the same change.
 - Event minis must not use minimum visual sizes that imply false overlaps or
   false durations. Dense imported material should get more lane height and
   scroll space before the UI lies about the timeline.
+- Event-mini width is the event duration divided by the visible shared timeline
+  duration. Pitch changes are shown by vertical position, not by changing the
+  bar thickness.
 - Studio and region-editing lanes should not draw region cards behind event
   minis. Regions are selectable time spans, but the visible material should be
   the individual pitch bars on the shared lane.

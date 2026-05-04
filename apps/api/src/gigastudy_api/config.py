@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     deepseek_extraction_plan_enabled: bool = False
     deepseek_registration_review_enabled: bool = False
     deepseek_ensemble_review_enabled: bool = False
+    deepseek_midi_role_review_enabled: bool = False
     deepseek_api_key: str | None = None
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"

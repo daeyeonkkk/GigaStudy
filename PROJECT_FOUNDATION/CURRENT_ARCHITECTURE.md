@@ -151,6 +151,12 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/services/llm/registration_review.py`
   Optional bounded LLM review for registration cleanup; the model can only
   choose deterministic repair directives and cannot author canonical events.
+- `apps/api/src/gigastudy_api/services/llm/midi_role_review.py`
+  Optional bounded LLM review for ambiguous MIDI singer-role assignment. It
+  receives compact per-part name/channel/program/range/polyphony summaries and
+  may choose existing visible slots or mark an existing part for candidate
+  review. It cannot create tracks, delete events, rewrite pitch material, or
+  change BPM/meter; invalid or low-confidence responses are ignored.
 - `apps/api/src/gigastudy_api/services/studio_store.py`
   Studio persistence abstraction.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`

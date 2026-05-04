@@ -199,6 +199,38 @@ def map_tracks_to_slots(
     return mapped
 
 
+def rebuild_mapped_events_from_track_slots(
+    parsed_tracks: list[ParsedTrack],
+    *,
+    bpm: int = 120,
+    time_signature_numerator: int = DEFAULT_TIME_SIGNATURE[0],
+    time_signature_denominator: int = DEFAULT_TIME_SIGNATURE[1],
+) -> dict[int, list[TrackPitchEvent]]:
+    mapped: dict[int, list[TrackPitchEvent]] = {}
+    for track in parsed_tracks:
+        slot_id = track.slot_id
+        if slot_id is None or not 1 <= slot_id <= 6 or not track.events:
+            continue
+        if slot_id in mapped:
+            continue
+        track.diagnostics.update(
+            slot_assignment_diagnostics(
+                track.name,
+                track.events,
+                assigned_slot_id=slot_id,
+                fallback=slot_id,
+            )
+        )
+        mapped[slot_id] = _prepare_slot_events(
+            track.events,
+            slot_id=slot_id,
+            bpm=bpm,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+        )
+    return mapped
+
+
 def _prepare_slot_events(
     events: list[TrackPitchEvent],
     *,

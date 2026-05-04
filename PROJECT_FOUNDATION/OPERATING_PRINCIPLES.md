@@ -175,6 +175,11 @@ the same change.
   repeated-note merging, suspicious-noise removal, range-display correction, or
   candidate rejection. They should not invent unseen pitch material during
   source registration.
+- For MIDI studio-start imports, an LLM may review the deterministic
+  singer-role assignment only when the file remains ambiguous enough to justify
+  the call. The LLM may choose existing visible slots or mark an existing part
+  for candidate review, but it must not create tracks, delete events, rewrite
+  pitch material, or change BPM/meter.
 - LLM failure must not break the product. Every LLM path needs deterministic
   fallback behavior.
 - Use low-cost LLM calls where they can change a real engine decision. Do not

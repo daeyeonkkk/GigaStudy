@@ -41,6 +41,7 @@ def read_readiness() -> dict[str, str | int | bool]:
         "voice_transcription_backend": settings.voice_transcription_backend,
         "deepseek_configured": deepseek_configured,
         "deepseek_harmony_enabled": deepseek_configured and settings.deepseek_harmony_enabled,
+        "deepseek_midi_role_review_enabled": deepseek_configured and settings.deepseek_midi_role_review_enabled,
         "deepseek_registration_review_enabled": deepseek_configured and settings.deepseek_registration_review_enabled,
         "deepseek_ensemble_review_enabled": deepseek_configured and settings.deepseek_ensemble_review_enabled,
     }

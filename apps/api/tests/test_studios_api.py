@@ -20,6 +20,7 @@ from gigastudy_api.services.engine.pdf_vector_document import PdfVectorDocumentE
 from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, ParsedTrack
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services import studio_repository
+from gigastudy_api.services.llm.midi_role_review import MidiRoleAssignment, MidiRoleReviewInstruction
 
 
 MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
@@ -642,6 +643,51 @@ def test_upload_start_registers_generic_midi_parts_when_register_order_is_clear(
     assert pending_candidates == []
     assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 2
     assert [event["label"] for event in _track_region_events(payload, 1)] == ["C5"]
+    assert [event["label"] for event in _track_region_events(payload, 5)] == ["C3"]
+
+
+def test_upload_start_applies_llm_midi_role_review_when_enabled(tmp_path: Path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_midi_role_review(*args, **kwargs):  # noqa: ANN002, ANN003
+        calls.append(kwargs["source_label"])
+        return MidiRoleReviewInstruction(
+            confidence=0.82,
+            assignments=[
+                MidiRoleAssignment(source_track_index=1, midi_channels=[1], assigned_slot_id=2),
+                MidiRoleAssignment(source_track_index=1, midi_channels=[2], assigned_slot_id=5),
+            ],
+            reasons=["Generic MIDI role reviewer adjusted the upper part."],
+            used=True,
+            provider="test",
+            model="test-model",
+        )
+
+    monkeypatch.setenv("GIGASTUDY_API_DEEPSEEK_MIDI_ROLE_REVIEW_ENABLED", "true")
+    monkeypatch.setenv("GIGASTUDY_API_DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_upload_commands.review_midi_roles_with_deepseek",
+        fake_midi_role_review,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_generic_channel_packed_midi_bytes(bpm=113)).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "LLM MIDI role review",
+            "start_mode": "upload",
+            "source_kind": "document",
+            "source_filename": "generic.mid",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert calls == ["generic.mid"]
+    assert _track_region_events(payload, 1) == []
+    assert [event["label"] for event in _track_region_events(payload, 2)] == ["C5"]
     assert [event["label"] for event in _track_region_events(payload, 5)] == ["C3"]
 
 

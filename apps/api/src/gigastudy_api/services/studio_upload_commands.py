@@ -35,6 +35,11 @@ from gigastudy_api.services.upload_policy import (
     validate_studio_seed_upload_filename,
     validate_track_upload_filename,
 )
+from gigastudy_api.config import get_settings
+from gigastudy_api.services.llm.midi_role_review import (
+    apply_midi_role_review_instruction,
+    review_midi_roles_with_deepseek,
+)
 
 
 class StudioUploadCommands:
@@ -255,6 +260,18 @@ class StudioUploadCommands:
             if parsed_symbolic.has_time_signature:
                 studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
                 studio.time_signature_denominator = parsed_symbolic.time_signature_denominator
+            if suffix in {".mid", ".midi"}:
+                midi_role_instruction = review_midi_roles_with_deepseek(
+                    settings=get_settings(),
+                    title=studio.title,
+                    source_label=source_filename,
+                    parsed_symbolic=parsed_symbolic,
+                )
+                apply_midi_role_review_instruction(
+                    parsed_symbolic=parsed_symbolic,
+                    instruction=midi_role_instruction,
+                    bpm=studio.bpm,
+                )
             review_reasons = symbolic_seed_review_reasons(parsed_symbolic, source_suffix=suffix)
             if review_reasons:
                 review_reason_text = ", ".join(review_reasons)

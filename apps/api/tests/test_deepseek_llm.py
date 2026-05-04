@@ -3,6 +3,7 @@ import json
 from gigastudy_api.config import Settings
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.music_theory import event_from_pitch
+from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, ParsedTrack, map_tracks_to_slots
 from gigastudy_api.services.llm.deepseek import (
     _build_chat_completion_payload,
     _build_plan_revision_payload,
@@ -13,6 +14,10 @@ from gigastudy_api.services.llm.deepseek import (
 from gigastudy_api.services.llm.extraction_plan import (
     _parse_deepseek_extraction_response,
     plan_voice_extraction_with_deepseek,
+)
+from gigastudy_api.services.llm.midi_role_review import (
+    apply_midi_role_review_instruction,
+    review_midi_roles_with_deepseek,
 )
 from gigastudy_api.services.studio_generation import (
     DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT,
@@ -30,6 +35,33 @@ def _note(beat: float = 1, label: str = "C5"):
         label=label,
         confidence=1,
     )
+
+
+def _generic_midi_role_fixture() -> ParsedSymbolicFile:
+    tracks = [
+        ParsedTrack(
+            name=f"Staff {index}",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=pitch,
+                )
+            ],
+            diagnostics={
+                "midi_source_track_index": index,
+                "midi_channels": [index],
+                "midi_generic_track_name": True,
+                "midi_vocal_program_hint": False,
+            },
+        )
+        for index, pitch in [(1, 72), (2, 48)]
+    ]
+    mapped_events = map_tracks_to_slots(tracks, bpm=113)
+    return ParsedSymbolicFile(tracks=tracks, mapped_events=mapped_events)
 
 
 def test_deepseek_planner_is_disabled_until_explicitly_enabled() -> None:
@@ -112,6 +144,98 @@ def test_deepseek_extraction_plan_is_disabled_until_explicitly_enabled() -> None
     )
 
     assert plan is None
+
+
+def test_deepseek_midi_role_review_is_disabled_until_explicitly_enabled() -> None:
+    settings = Settings(deepseek_midi_role_review_enabled=False, deepseek_api_key="secret")
+    parsed = _generic_midi_role_fixture()
+
+    instruction = review_midi_roles_with_deepseek(
+        settings=settings,
+        title="Disabled",
+        source_label="generic.mid",
+        parsed_symbolic=parsed,
+    )
+
+    assert instruction is None
+
+
+def test_deepseek_midi_role_review_applies_bounded_slot_assignment(monkeypatch) -> None:
+    captured_payload: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            content = json.dumps(
+                {
+                    "confidence": 0.82,
+                    "assignments": [
+                        {
+                            "source_track_index": 1,
+                            "midi_channels": [1],
+                            "assigned_slot_id": 2,
+                            "review_required": False,
+                            "reason": "Upper line is closer to alto register than soprano.",
+                        },
+                        {
+                            "source_track_index": 2,
+                            "midi_channels": [2],
+                            "assigned_slot_id": 5,
+                            "review_required": True,
+                            "reason": "Low part is useful but should stay reviewable.",
+                        },
+                    ],
+                    "reasons": ["Generic staff names need musical role review."],
+                    "warnings": ["Keep original MIDI events unchanged."],
+                }
+            )
+            return json.dumps({"choices": [{"message": {"content": content}}]}).encode("utf-8")
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001
+        captured_payload["timeout"] = timeout
+        captured_payload["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr("gigastudy_api.services.llm.midi_role_review.urlopen", fake_urlopen)
+    settings = Settings(
+        deepseek_midi_role_review_enabled=True,
+        deepseek_api_key="test-key",
+        deepseek_base_url="https://openrouter.ai/api/v1",
+        deepseek_model="deepseek/deepseek-v4-flash:free",
+    )
+    parsed = _generic_midi_role_fixture()
+
+    instruction = review_midi_roles_with_deepseek(
+        settings=settings,
+        title="Generic MIDI",
+        source_label="generic.mid",
+        parsed_symbolic=parsed,
+    )
+    applied = apply_midi_role_review_instruction(
+        parsed_symbolic=parsed,
+        instruction=instruction,
+        bpm=113,
+    )
+
+    assert applied is True
+    assert instruction is not None
+    assert instruction.used is True
+    assert instruction.provider == "openrouter"
+    assert set(parsed.mapped_events) == {2, 5}
+    assert parsed.tracks[0].slot_id == 2
+    assert parsed.tracks[1].slot_id == 5
+    assert parsed.tracks[1].diagnostics["midi_seed_review_required"] is True
+    assert parsed.tracks[0].diagnostics["llm_midi_role_review"]["applied"] is True
+    assert captured_payload["body"]["response_format"] == {"type": "json_object"}
+    user_context = json.loads(captured_payload["body"]["messages"][1]["content"])
+    assert user_context["review_scope"] == "midi_singer_role_assignment"
+    assert user_context["tracks"][0]["source_track_index"] == 1
+    assert any("Do not create" in rule for rule in user_context["rules"])
 
 
 def test_deepseek_extraction_response_applies_bounded_plan() -> None:

@@ -161,6 +161,13 @@ export function getPlaybackPreparationMessage(
 
 export function getTrackVolumeScale(track: TrackSlot): number {
   const volumePercent = Number.isFinite(track.volume_percent) ? track.volume_percent : 100
+  return getVolumeScaleFromPercent(volumePercent)
+}
+
+export function getVolumeScaleFromPercent(volumePercent: number): number {
+  if (!Number.isFinite(volumePercent)) {
+    return 1
+  }
   return Math.max(0, Math.min(100, Math.round(volumePercent))) / 100
 }
 

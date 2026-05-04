@@ -214,6 +214,7 @@ export function StudioPage() {
   const actionBusy = actionState.phase === 'busy'
   const arrangementEditDisabled =
     actionBusy || recordingInteractionLocked || playbackInteractionLocked
+  const trackVolumeDisabled = actionBusy || recordingInteractionLocked
   const arrangementEditDisabledReason = actionBusy
     ? '현재 작업이 끝난 뒤 편집할 수 있습니다.'
     : recordingInteractionLocked
@@ -377,6 +378,7 @@ export function StudioPage() {
               activeJobSlotIds={activeJobSlotIds}
               editDisabled={arrangementEditDisabled}
               editDisabledReason={arrangementEditDisabledReason}
+              volumeDisabled={trackVolumeDisabled}
               registeredTracks={registeredTracks}
               syncStepSeconds={syncStepSeconds}
               trackCountIn={trackCountIn}

@@ -267,7 +267,10 @@ flowchart TD
    the default playback path.
 4. Sync offset and volume are applied per track. Negative sync is preserved as
    a user-visible timeline translation; barlines stay on the shared grid.
-5. Playhead state drives region lane timing on the studio surface and
+5. Audio clips are scheduled from `TrackSlot.sync_offset_seconds`. Region pitch
+   events are scheduled from public `PitchEvent.start_seconds`, which is already
+   sync-resolved at the API boundary.
+6. Playhead state drives region lane timing on the studio surface and
    waterfall visual timing on the practice surface.
 
 ## Removed Surface

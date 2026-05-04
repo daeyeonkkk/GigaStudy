@@ -9,10 +9,12 @@
     "dev:web": "npm run dev --workspace @gigastudy/web",
     "build:web": "npm run build --workspace @gigastudy/web",
     "lint:web": "npm run lint --workspace @gigastudy/web",
+    "test:web:unit": "vitest run tests/web",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1"
+    "@playwright/test": "^1.59.1",
+    "vitest": "^4.1.5"
   }
 }

@@ -13,6 +13,7 @@ import {
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
   getTrackVolumeScale,
+  getVolumeScaleFromPercent,
   scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
   type MeterContext,
@@ -24,7 +25,9 @@ import type { Studio, TrackSlot } from '../../types/studio'
 import type { SetStudioActionState } from './studioActionState'
 import {
   buildPlaybackTrackPlan,
+  getAudioTrackSchedule,
   getMaxBeatFromRegions,
+  getPitchEventSchedule,
   getPlaybackRegionsBySlot,
   getSustainedPitchEvents,
 } from './studioPlaybackHelpers'
@@ -283,13 +286,17 @@ export function useStudioPlayback({
         if (!activeContext) {
           return
         }
-        const sourceOffsetSeconds = Math.max(0, startSeconds - trackStartSeconds)
-        const relativeStartSeconds = Math.max(0, trackStartSeconds - startSeconds)
+        const trackSchedule = getAudioTrackSchedule({
+          bufferDurationSeconds: buffer.duration,
+          scheduledStart,
+          startSeconds,
+          trackStartSeconds,
+        })
         const node = createAudioBufferPlayback(
           activeContext,
           buffer,
-          scheduledStart + relativeStartSeconds,
-          sourceOffsetSeconds,
+          trackSchedule.scheduledStartSeconds,
+          trackSchedule.sourceOffsetSeconds,
           audioTrackVolume,
           getTrackOutput(track) ?? activeContext.destination,
         )
@@ -299,8 +306,8 @@ export function useStudioPlayback({
         nodes.push(node)
         const trackRegions = regionsBySlot.get(track.slot_id)
         const trackEndSeconds = Math.max(
-          trackStartSeconds + buffer.duration,
-          getRegionsTimelineEndSeconds(trackRegions) || trackStartSeconds + buffer.duration,
+          trackSchedule.timelineEndSeconds,
+          getRegionsTimelineEndSeconds(trackRegions) || trackSchedule.timelineEndSeconds,
         )
         latestStop = Math.max(
           latestStop,
@@ -330,28 +337,32 @@ export function useStudioPlayback({
             const duration = durationSeconds
             const eventEndSeconds = eventStartSeconds + duration
             timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
-            if (eventEndSeconds <= startSeconds) {
+            const eventSchedule = getPitchEventSchedule({
+              durationSeconds: duration,
+              eventStartSeconds,
+              scheduledStart,
+              startSeconds,
+            })
+            if (!eventSchedule) {
               return
             }
-            const relativeStartSeconds = Math.max(0, eventStartSeconds - startSeconds)
-            const remainingDuration = Math.max(
-              0.05,
-              eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
-            )
             nodes.push(
               createInstrumentPlayback(
                 activeContext,
                 {
                   destination: getTrackOutput(track) ?? activeContext.destination,
-                  duration: remainingDuration,
+                  duration: eventSchedule.remainingDurationSeconds,
                   frequency,
                   instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : DEFAULT_MELODIC_INSTRUMENT,
-                  startTime: scheduledStart + relativeStartSeconds,
+                  startTime: eventSchedule.scheduledStartSeconds,
                   volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
                 },
               ),
             )
-            latestStop = Math.max(latestStop, relativeStartSeconds + remainingDuration)
+            latestStop = Math.max(
+              latestStop,
+              eventSchedule.relativeStartSeconds + eventSchedule.remainingDurationSeconds,
+            )
             scheduledAnyTrack = true
           })
         })
@@ -620,7 +631,7 @@ export function useStudioPlayback({
     }
     const currentTime = activeTrackGain.context.currentTime
     activeTrackGain.gain.cancelScheduledValues(currentTime)
-    activeTrackGain.gain.setTargetAtTime(volumePercent / 100, currentTime, 0.015)
+    activeTrackGain.gain.setTargetAtTime(getVolumeScaleFromPercent(volumePercent), currentTime, 0.015)
   }
 
   return {

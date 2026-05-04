@@ -100,6 +100,9 @@ the same change.
 - Avoid stacking multiple hidden offsets. If track sync, region start, and
   audio alignment coexist, calculate effective time in one clear boundary and
   document it.
+- In browser playback, retained audio clips use the track sync offset as their
+  clip start. Public `PitchEvent.start_seconds` is already sync-resolved and
+  must not receive the track sync offset again.
 - If users frequently need large sync corrections, improve automatic
   pre-registration alignment instead of relying on manual sync.
 - "Shift all sync" is valid for moving an already-aligned ensemble onto the
@@ -184,6 +187,9 @@ the same change.
 - Single-track audio playback may be fast, but if it is part of a synchronized
   session it should wait for the rest of the session and start on the shared
   scheduled time.
+- Track volume is part of live mix control. It may be saved during playback and
+  should update the active gain immediately without stopping synchronized
+  playback.
 - Playback status messages should say what is happening: loading original
   audio, preparing guide tones, aligning synchronized start, or waiting for
   selected tracks.
@@ -281,5 +287,8 @@ the same change.
   the preferred finish is to push the reviewed commits and, when the change is
   meant to be released, deploy the verified build instead of leaving a large
   finished change only on the local machine.
+- Browser release gates should run against e2e-owned ports by default. Reuse
+  local dev servers only when explicitly requested so tests do not validate a
+  stale web/API/storage process.
 - Distinguish "pushed to main" from "deployed and live bundle updated." Always
   say which happened, and do not describe a push as a deployment.

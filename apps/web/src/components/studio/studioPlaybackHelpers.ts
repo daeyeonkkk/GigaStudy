@@ -13,6 +13,20 @@ export type ScheduledPitchEvent = {
   startSeconds: number
 }
 
+export type AudioTrackSchedule = {
+  relativeStartSeconds: number
+  scheduledStartSeconds: number
+  sourceOffsetSeconds: number
+  timelineEndSeconds: number
+}
+
+export type PitchEventSchedule = {
+  eventEndSeconds: number
+  relativeStartSeconds: number
+  remainingDurationSeconds: number
+  scheduledStartSeconds: number
+}
+
 export function getSustainedPitchEvents(events: PitchEvent[], isPercussion: boolean): ScheduledPitchEvent[] {
   const scheduledEvents = events
     .map((event) => {
@@ -107,4 +121,53 @@ export function buildPlaybackTrackPlan(
   )
 
   return { audioTracks, eventTracks, playableTracks }
+}
+
+export function getAudioTrackSchedule({
+  bufferDurationSeconds,
+  scheduledStart,
+  startSeconds,
+  trackStartSeconds,
+}: {
+  bufferDurationSeconds: number
+  scheduledStart: number
+  startSeconds: number
+  trackStartSeconds: number
+}): AudioTrackSchedule {
+  const relativeStartSeconds = Math.max(0, trackStartSeconds - startSeconds)
+  return {
+    relativeStartSeconds,
+    scheduledStartSeconds: scheduledStart + relativeStartSeconds,
+    sourceOffsetSeconds: Math.max(0, startSeconds - trackStartSeconds),
+    timelineEndSeconds: trackStartSeconds + Math.max(0, bufferDurationSeconds),
+  }
+}
+
+export function getPitchEventSchedule({
+  durationSeconds,
+  eventStartSeconds,
+  scheduledStart,
+  startSeconds,
+}: {
+  durationSeconds: number
+  eventStartSeconds: number
+  scheduledStart: number
+  startSeconds: number
+}): PitchEventSchedule | null {
+  const safeDurationSeconds = Math.max(0, durationSeconds)
+  const eventEndSeconds = eventStartSeconds + safeDurationSeconds
+  if (eventEndSeconds <= startSeconds) {
+    return null
+  }
+  const relativeStartSeconds = Math.max(0, eventStartSeconds - startSeconds)
+  const remainingDurationSeconds = Math.max(
+    0.05,
+    eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
+  )
+  return {
+    eventEndSeconds,
+    relativeStartSeconds,
+    remainingDurationSeconds,
+    scheduledStartSeconds: scheduledStart + relativeStartSeconds,
+  }
 }

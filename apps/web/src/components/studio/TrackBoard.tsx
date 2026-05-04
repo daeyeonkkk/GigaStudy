@@ -60,6 +60,7 @@ type TrackBoardProps = {
   mode?: 'studio' | 'editor'
   editDisabled: boolean
   editDisabledReason: string | null
+  volumeDisabled?: boolean
   metronomeEnabled: boolean
   pendingCandidateCount: number
   extractionJobs: TrackExtractionJob[]
@@ -234,6 +235,7 @@ export function TrackBoard({
   mode = 'studio',
   editDisabled,
   editDisabledReason,
+  volumeDisabled = false,
   metronomeEnabled,
   pendingCandidateCount,
   extractionJobs,
@@ -361,6 +363,7 @@ export function TrackBoard({
           const activeJobLocked = activeJobSlotIds.has(track.slot_id) || track.status === 'extracting'
           const isRecordToggleAvailable = isRecording || isCountingIn
           const trackEditDisabled = editDisabled || activeJobLocked
+          const trackVolumeDisabled = volumeDisabled || activeJobLocked
           const trackEditDisabledReason = activeJobLocked
             ? `${formatTrackName(track.name)} 트랙은 추출 작업이 끝난 뒤 편집할 수 있습니다.`
             : editDisabledReason
@@ -546,7 +549,7 @@ export function TrackBoard({
                   >
                     +{formatSyncStep(syncStepSeconds)}
                   </button>
-                  <TrackVolumeControl disabled={trackEditDisabled} track={track} onVolumeChange={onVolumeChange} />
+                  <TrackVolumeControl disabled={trackVolumeDisabled} track={track} onVolumeChange={onVolumeChange} />
                   <button
                     aria-label={isPlaying ? `${formatTrackName(track.name)} 일시정지` : `${formatTrackName(track.name)} 재생`}
                     className="studio-icon-button"

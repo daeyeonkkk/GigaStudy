@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -322,6 +322,48 @@ class StudioAssetService:
         )
         return aligned_path
 
+    def persist_voice_analysis_wav(
+        self,
+        *,
+        relative_audio_path: str,
+        analysis_wav_path: Path,
+        source_label: str,
+        audio_mime_type: str,
+        transcription: VoiceTranscriptionResult,
+    ) -> tuple[str, str]:
+        if not relative_audio_path:
+            return relative_audio_path, audio_mime_type
+
+        source_is_wav = PurePosixPath(relative_audio_path).suffix.lower() == ".wav"
+        if source_is_wav and audio_mime_type == "audio/wav":
+            self.replace_audio_asset_with_aligned_wav(
+                relative_audio_path=relative_audio_path,
+                source_path=analysis_wav_path,
+                source_label=source_label,
+                audio_mime_type=audio_mime_type,
+                transcription=transcription,
+            )
+            return relative_audio_path, audio_mime_type
+
+        persisted_content = _voice_analysis_wav_content(analysis_wav_path, transcription)
+        normalized_relative_path = _normalized_voice_wav_relative_path(relative_audio_path)
+        self.ensure_capacity(len(persisted_content))
+        try:
+            self._asset_storage.write_direct_upload(
+                relative_path=normalized_relative_path,
+                content=persisted_content,
+            )
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+        self.register_asset(
+            relative_path=normalized_relative_path,
+            kind="upload",
+            filename=f"{Path(source_label).stem or PurePosixPath(relative_audio_path).stem}.wav",
+            size_bytes=len(persisted_content),
+            content_type="audio/wav",
+        )
+        return normalized_relative_path, "audio/wav"
+
     def delete_asset_file(self, relative_path: str) -> tuple[int, int]:
         try:
             result = self._asset_storage.delete_file(relative_path)
@@ -547,3 +589,25 @@ class StudioAssetService:
             return self._asset_storage.resolve_path(asset_path)
         except AssetStorageError as error:
             raise HTTPException(status_code=404, detail="Track audio source not found.") from error
+
+
+def _voice_analysis_wav_content(path: Path, transcription: VoiceTranscriptionResult) -> bytes:
+    if transcription.alignment.applied:
+        aligned_content = build_metronome_aligned_wav_bytes(
+            path,
+            transcription.alignment.offset_seconds,
+        )
+        if aligned_content is not None:
+            return aligned_content
+    return path.read_bytes()
+
+
+def _normalized_voice_wav_relative_path(relative_audio_path: str) -> str:
+    source_path = PurePosixPath(relative_audio_path)
+    source_stem = source_path.stem.strip() or "voice"
+    safe_stem = "".join(
+        character if character.isalnum() or character in {"-", "_", "."} else "-"
+        for character in source_stem
+    )
+    safe_stem = safe_stem.strip(".-_") or "voice"
+    return source_path.with_name(f"{safe_stem}-normalized.wav").as_posix()

@@ -131,6 +131,13 @@ is excluded from persistence and remains an adapter detail.
   metronome phase alignment, strict sung-segment cleanup, and a narrow rescue
   pass for short stable sung contours. Rescued material is marked in event
   warnings and diagnostics.
+- `apps/api/src/gigastudy_api/services/engine/audio_decode.py`
+  Server-side audio normalization for voice analysis. Track recording uploads
+  and studio-start music audio may arrive as WAV/MP3/M4A/OGG/FLAC, but non-WAV
+  files are decoded through ffmpeg into temporary WAV before the voice engine
+  runs. When a retained audio clip was decoded or aligned, `studio_assets`
+  writes a normalized WAV asset and exposes that path/MIME to playback instead
+  of pointing a track at mismatched original bytes.
 - `apps/api/src/gigastudy_api/services/engine/symbolic.py`
   MusicXML/MIDI parsing and track-to-slot mapping. MIDI parsing splits
   channel-packed tracks into per-channel parsed parts, records MIDI program/name
@@ -246,7 +253,8 @@ flowchart TD
    audio extraction.
 2. Browser sends the file via direct upload or inline fallback.
 3. API either registers clearly assigned symbolic seed parts directly or creates
-   an extraction job/candidate review path for ambiguous material.
+   an extraction job/candidate review path for ambiguous material. Audio
+   extraction first normalizes non-WAV containers into a WAV analysis source.
 4. Engine queue runs document/audio extraction when asynchronous extraction is
    needed.
 5. Extracted or ambiguous material becomes reviewable candidates with

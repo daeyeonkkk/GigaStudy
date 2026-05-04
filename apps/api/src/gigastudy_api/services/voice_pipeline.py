@@ -8,6 +8,7 @@ from typing import Any
 from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
+from gigastudy_api.services.engine.audio_decode import cleanup_voice_analysis_audio, prepare_voice_analysis_wav
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 from gigastudy_api.services.engine.voice import VoiceTranscriptionResult
@@ -28,7 +29,7 @@ def run_voice_pipeline(
     *,
     audio_mime_type: str,
     record: EngineQueueJob,
-    replace_audio_asset_with_aligned_wav: Callable[..., Path],
+    persist_voice_analysis_wav: Callable[..., tuple[str, str]],
     source_label: str,
     source_path: Path,
     studio: Studio,
@@ -57,29 +58,40 @@ def run_voice_pipeline(
     if llm_plan is not None:
         extraction_plan = llm_plan
 
-    transcription = transcribe_with_alignment(
-        source_path,
-        bpm=studio.bpm,
-        slot_id=record.slot_id,
-        time_signature_numerator=studio.time_signature_numerator,
-        time_signature_denominator=studio.time_signature_denominator,
-        extraction_plan=extraction_plan,
-    )
     relative_audio_path = str(record.payload.get("input_path") or "")
-    replace_audio_asset_with_aligned_wav(
-        relative_audio_path=relative_audio_path,
-        source_path=source_path,
-        source_label=source_label,
-        audio_mime_type=audio_mime_type,
-        transcription=transcription,
+    analysis_audio = prepare_voice_analysis_wav(
+        source_path,
+        timeout_seconds=settings.engine_processing_timeout_seconds,
     )
+    try:
+        transcription = transcribe_with_alignment(
+            analysis_audio.path,
+            bpm=studio.bpm,
+            slot_id=record.slot_id,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            extraction_plan=extraction_plan,
+        )
+        retained_audio_path, retained_mime_type = persist_voice_analysis_wav(
+            relative_audio_path=relative_audio_path,
+            analysis_wav_path=analysis_audio.path,
+            source_label=source_label,
+            audio_mime_type=audio_mime_type,
+            transcription=transcription,
+        )
+    finally:
+        cleanup_voice_analysis_audio(analysis_audio)
     return VoicePipelineResult(
         events=transcription.events,
-        relative_audio_path=relative_audio_path,
+        relative_audio_path=retained_audio_path,
         source_label=source_label,
-        audio_mime_type=audio_mime_type,
+        audio_mime_type=retained_mime_type,
         diagnostics={
             **(transcription.diagnostics or {}),
             "context_track_count": len(context_tracks_by_slot),
+            "audio_decode": {
+                "converted_to_wav": analysis_audio.converted,
+                "source_suffix": analysis_audio.original_suffix,
+            },
         },
     )

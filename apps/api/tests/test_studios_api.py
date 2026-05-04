@@ -13,6 +13,7 @@ from gigastudy_api.api.schemas.studios import (
 )
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
+from gigastudy_api.services.engine.audio_decode import VoiceAnalysisAudio
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.audiveris_document import AudiverisDocumentError
 from gigastudy_api.services.engine.music_theory import event_from_pitch
@@ -1743,6 +1744,147 @@ def test_audio_upload_keeps_source_file_for_track_playback(tmp_path: Path, monke
     assert audio_response.status_code == 200
     assert audio_response.headers["content-type"].startswith("audio/wav")
     assert audio_response.content == audio_bytes
+
+
+def test_audio_upload_normalizes_non_wav_for_analysis_and_playback(tmp_path: Path, monkeypatch) -> None:
+    decoded_bytes = b"RIFF....WAVEfmt decoded audio"
+    transcribed_paths: list[Path] = []
+
+    def fake_prepare_voice_analysis_wav(source_path: Path, *, timeout_seconds: int):
+        assert source_path.suffix == ".mp3"
+        assert timeout_seconds > 0
+        decoded_path = source_path.with_suffix(".decoded.wav")
+        decoded_path.write_bytes(decoded_bytes)
+        return VoiceAnalysisAudio(path=decoded_path, converted=True, original_suffix=".mp3")
+
+    def fake_transcribe_voice_file(path: Path, *args, **kwargs):
+        transcribed_paths.append(path)
+        assert path.suffix == ".wav"
+        return [
+            TrackPitchEvent(
+                pitch_midi=72,
+                pitch_hz=261.63,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.voice_pipeline.prepare_voice_analysis_wav",
+        fake_prepare_voice_analysis_wav,
+    )
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "MP3 voice upload",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    encoded = base64.b64encode(b"fake mp3 bytes").decode("ascii")
+
+    upload_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "voice.mp3",
+            "content_base64": encoded,
+            "review_before_register": False,
+        },
+    )
+
+    assert upload_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    soprano = payload["tracks"][0]
+    assert transcribed_paths and transcribed_paths[0].suffix == ".wav"
+    assert soprano["status"] == "registered"
+    assert soprano["audio_source_path"].endswith("-normalized.wav")
+    assert soprano["audio_source_label"] == "voice.mp3"
+    assert soprano["audio_mime_type"] == "audio/wav"
+    assert soprano["diagnostics"]["registration_quality"]["source_extraction"]["audio_decode"] == {
+        "converted_to_wav": True,
+        "source_suffix": ".mp3",
+    }
+
+    audio_response = client.get(f"/api/studios/{studio_id}/tracks/1/audio")
+
+    assert audio_response.status_code == 200
+    assert audio_response.headers["content-type"].startswith("audio/wav")
+    assert audio_response.content == decoded_bytes
+
+
+def test_upload_start_music_normalizes_non_wav_audio_candidate(tmp_path: Path, monkeypatch) -> None:
+    decoded_bytes = b"RIFF....WAVEfmt seed decoded audio"
+
+    def fake_prepare_voice_analysis_wav(source_path: Path, *, timeout_seconds: int):
+        assert source_path.suffix == ".mp3"
+        decoded_path = source_path.with_suffix(".decoded.wav")
+        decoded_path.write_bytes(decoded_bytes)
+        return VoiceAnalysisAudio(path=decoded_path, converted=True, original_suffix=".mp3")
+
+    def fake_transcribe_voice_file(path: Path, *args, **kwargs):
+        assert path.suffix == ".wav"
+        return [
+            TrackPitchEvent(
+                pitch_midi=72,
+                pitch_hz=261.63,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_upload_commands.prepare_voice_analysis_wav",
+        fake_prepare_voice_analysis_wav,
+    )
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(b"fake mp3 bytes").decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "MP3 seeded studio",
+            "start_mode": "upload",
+            "source_kind": "music",
+            "source_filename": "lead.mp3",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tracks"][0]["status"] == "needs_review"
+    assert len(payload["candidates"]) == 1
+    candidate = payload["candidates"][0]
+    assert candidate["audio_source_path"].endswith("-normalized.wav")
+    assert candidate["audio_source_label"] == "lead.mp3"
+    assert candidate["audio_mime_type"] == "audio/wav"
+    assert candidate["diagnostics"]["audio_decode"] == {
+        "converted_to_wav": True,
+        "source_suffix": ".mp3",
+    }
 
 
 def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypatch) -> None:

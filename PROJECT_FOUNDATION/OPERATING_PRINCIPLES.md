@@ -146,6 +146,12 @@ the same change.
   Individual track rows expose `recording file upload` for user-recorded audio
   only. Backend adapters may still support additional import paths, but
   user-facing labels must not collapse them into one vague upload action.
+- Per-track recording-file upload accepts common audio containers
+  (WAV/MP3/M4A/OGG/FLAC). Non-WAV input must be decoded server-side into an
+  analysis WAV before voice transcription, and the retained playback asset must
+  point at a valid WAV when conversion or metronome alignment changed the
+  audio bytes. The low-level voice extractor may remain WAV-only; the upload
+  pipeline owns format normalization.
 - Studio-start MIDI may register directly when the internal parts behave like
   singer lines after characterization. Track names, channel numbers, and MIDI
   programs are hints, not the source of truth: pitched monophonic parts should

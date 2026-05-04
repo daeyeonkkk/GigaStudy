@@ -148,7 +148,7 @@ class StudioEngineJobHandlers:
         result = run_voice_pipeline(
             audio_mime_type=audio_mime_type,
             record=record,
-            replace_audio_asset_with_aligned_wav=self._assets.replace_audio_asset_with_aligned_wav,
+            persist_voice_analysis_wav=self._assets.persist_voice_analysis_wav,
             source_label=source_label,
             source_path=source_path,
             studio=studio,

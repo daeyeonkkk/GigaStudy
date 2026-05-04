@@ -17,6 +17,7 @@ from gigastudy_api.api.schemas.studios import (
     UploadTrackRequest,
 )
 from gigastudy_api.services.engine.candidate_diagnostics import track_duration_seconds
+from gigastudy_api.services.engine.audio_decode import cleanup_voice_analysis_audio, prepare_voice_analysis_wav
 from gigastudy_api.services.engine.symbolic import (
     SymbolicParseError,
     parse_symbolic_file_with_metadata,
@@ -323,27 +324,29 @@ class StudioUploadCommands:
             return studio
 
         if source_kind == "music" and suffix in AUDIO_SOURCE_SUFFIXES:
-            if suffix != ".wav":
-                raise HTTPException(
-                    status_code=422,
-                    detail="Audio analysis currently supports WAV. MP3/M4A/OGG/FLAC upload is accepted by the UI but still needs a decoder path before analysis can run.",
-                )
             try:
-                suggested_slot_id, transcription, confidence = extract_home_audio_candidate(
-                    studio,
+                analysis_audio = prepare_voice_analysis_wav(
                     source_path,
-                    transcribe_with_alignment=self._repository._transcribe_voice_file_with_alignment,
+                    timeout_seconds=get_settings().engine_processing_timeout_seconds,
                 )
+                try:
+                    suggested_slot_id, transcription, confidence = extract_home_audio_candidate(
+                        studio,
+                        analysis_audio.path,
+                        transcribe_with_alignment=self._repository._transcribe_voice_file_with_alignment,
+                    )
+                    audio_source_path = self._assets.relative_data_asset_path(source_path)
+                    retained_audio_path, retained_mime_type = self._assets.persist_voice_analysis_wav(
+                        relative_audio_path=audio_source_path,
+                        analysis_wav_path=analysis_audio.path,
+                        source_label=source_filename,
+                        audio_mime_type=guess_audio_mime_type(source_filename),
+                        transcription=transcription,
+                    )
+                finally:
+                    cleanup_voice_analysis_audio(analysis_audio)
             except VoiceTranscriptionError as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
-            audio_source_path = self._assets.relative_data_asset_path(source_path)
-            self._assets.replace_audio_asset_with_aligned_wav(
-                relative_audio_path=audio_source_path,
-                source_path=source_path,
-                source_label=source_filename,
-                audio_mime_type=guess_audio_mime_type(source_filename),
-                transcription=transcription,
-            )
             self._repository._append_initial_candidate(
                 studio,
                 suggested_slot_id=suggested_slot_id,
@@ -353,10 +356,16 @@ class StudioUploadCommands:
                 confidence=confidence,
                 events=transcription.events,
                 message="Audio upload produced a reviewable track candidate.",
-                audio_source_path=audio_source_path,
+                audio_source_path=retained_audio_path,
                 audio_source_label=source_filename,
-                audio_mime_type=guess_audio_mime_type(source_filename),
-                source_diagnostics=transcription.diagnostics,
+                audio_mime_type=retained_mime_type,
+                source_diagnostics={
+                    **(transcription.diagnostics or {}),
+                    "audio_decode": {
+                        "converted_to_wav": analysis_audio.converted,
+                        "source_suffix": analysis_audio.original_suffix,
+                    },
+                },
             )
             return studio
 

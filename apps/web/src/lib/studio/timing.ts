@@ -6,6 +6,7 @@ export type MeterContext = {
 }
 
 const DEFAULT_BEATS_PER_MEASURE = 4
+const SIXTEENTH_NOTE_QUARTER_BEATS = 0.25
 export const DEFAULT_METER: MeterContext = {
   beatsPerMeasure: DEFAULT_BEATS_PER_MEASURE,
   pulseQuarterBeats: 1,
@@ -13,6 +14,12 @@ export const DEFAULT_METER: MeterContext = {
 
 export function getBeatSeconds(bpm: number): number {
   return 60 / Math.max(1, bpm)
+}
+
+export function getSixteenthNoteSeconds(bpm: number, meter: MeterContext = DEFAULT_METER): number {
+  const beatsPerMeasure = Math.max(SIXTEENTH_NOTE_QUARTER_BEATS, meter.beatsPerMeasure)
+  const sixteenthNotesPerMeasure = Math.max(1, beatsPerMeasure / SIXTEENTH_NOTE_QUARTER_BEATS)
+  return getBeatSeconds(bpm) * (beatsPerMeasure / sixteenthNotesPerMeasure)
 }
 
 export function beatToSeconds(beat: number, bpm: number): number {

@@ -12,6 +12,7 @@ import {
   formatTrackName,
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
+  getSixteenthNoteSeconds,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
   loadCustomGuideInstrument,
@@ -56,6 +57,15 @@ type UseStudioPlaybackArgs = {
   setActionState: SetStudioActionState
   studio: Studio | null
   studioMeter: MeterContext
+}
+
+type PendingSynthEvent = {
+  destination: AudioNode
+  durationSeconds: number
+  frequency: number
+  instrument: PlaybackInstrument
+  relativeStartSeconds: number
+  volume: number
 }
 
 export function useStudioPlayback({
@@ -185,6 +195,7 @@ export function useStudioPlayback({
     disposeCurrentPlaybackSession()
 
     const beatSeconds = 60 / studio.bpm
+    const minimumEventSeconds = getSixteenthNoteSeconds(studio.bpm, studioMeter)
     const minTimelineSeconds = Math.min(
       0,
       ...playableTracks.map((track) => track.sync_offset_seconds),
@@ -227,6 +238,7 @@ export function useStudioPlayback({
         Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length)))) * 0.4
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
+      const pendingSynthEvents: PendingSynthEvent[] = []
       let melodicInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
 
       function getTrackOutput(track: TrackSlot): AudioNode | null {
@@ -243,6 +255,49 @@ export function useStudioPlayback({
         trackVolumeGains.set(track.slot_id, trackGain)
         nodes.push({ gain: trackGain })
         return trackGain
+      }
+
+      function schedulePendingSynthEvents() {
+        if (!activeContext || pendingSynthEvents.length === 0) {
+          return
+        }
+        pendingSynthEvents.sort((left, right) => left.relativeStartSeconds - right.relativeStartSeconds)
+        let nextEventIndex = 0
+        const scheduleAheadSeconds = Math.max(0.75, minimumEventSeconds * 6)
+        const lookaheadMilliseconds = 90
+
+        const scheduleChunk = () => {
+          if (activeContext.state === 'closed' || playbackRunIdRef.current !== runId) {
+            return
+          }
+          const currentRelativeSeconds = activeContext.currentTime - scheduledStart
+          const scheduleUntilSeconds = currentRelativeSeconds + scheduleAheadSeconds
+          while (
+            nextEventIndex < pendingSynthEvents.length &&
+            pendingSynthEvents[nextEventIndex].relativeStartSeconds <= scheduleUntilSeconds
+          ) {
+            const event = pendingSynthEvents[nextEventIndex]
+            nodes.push(
+              createInstrumentPlayback(
+                activeContext,
+                {
+                  destination: event.destination,
+                  duration: event.durationSeconds,
+                  frequency: event.frequency,
+                  instrument: event.instrument,
+                  startTime: scheduledStart + event.relativeStartSeconds,
+                  volume: event.volume,
+                },
+              ),
+            )
+            nextEventIndex += 1
+          }
+          if (nextEventIndex < pendingSynthEvents.length) {
+            timeoutIds.push(window.setTimeout(scheduleChunk, lookaheadMilliseconds))
+          }
+        }
+
+        scheduleChunk()
       }
 
       if (audioTracks.length > 0) {
@@ -366,32 +421,33 @@ export function useStudioPlayback({
         const isPercussion = track.slot_id === 6
         maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
         trackRegions.forEach((region) => {
-          getSustainedPitchEvents(region.pitch_events, isPercussion, track.slot_id).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
+          getSustainedPitchEvents(
+            region.pitch_events,
+            isPercussion,
+            minimumEventSeconds,
+            track.slot_id,
+          ).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
             const duration = durationSeconds
             const eventEndSeconds = eventStartSeconds + duration
             timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
             const eventSchedule = getPitchEventSchedule({
               durationSeconds: duration,
               eventStartSeconds,
+              minimumEventSeconds,
               scheduledStart,
               startSeconds,
             })
             if (!eventSchedule) {
               return
             }
-            nodes.push(
-              createInstrumentPlayback(
-                activeContext,
-                {
-                  destination: getTrackOutput(track) ?? activeContext.destination,
-                  duration: eventSchedule.remainingDurationSeconds,
-                  frequency,
-                  instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : melodicInstrument,
-                  startTime: eventSchedule.scheduledStartSeconds,
-                  volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
-                },
-              ),
-            )
+            pendingSynthEvents.push({
+              destination: getTrackOutput(track) ?? activeContext.destination,
+              durationSeconds: eventSchedule.remainingDurationSeconds,
+              frequency,
+              instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : melodicInstrument,
+              relativeStartSeconds: eventSchedule.relativeStartSeconds,
+              volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
+            })
             latestStop = Math.max(
               latestStop,
               eventSchedule.relativeStartSeconds + eventSchedule.remainingDurationSeconds,
@@ -406,6 +462,8 @@ export function useStudioPlayback({
         setActionState({ phase: 'error', message: '재생 가능한 녹음이나 음표가 없습니다.' })
         return false
       }
+
+      schedulePendingSynthEvents()
 
       if (includeMetronome && activeContext) {
         timelineEndSeconds = Math.max(timelineEndSeconds, maxBeat * beatSeconds)

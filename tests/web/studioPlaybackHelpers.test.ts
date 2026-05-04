@@ -6,10 +6,11 @@ import {
   getSustainedPitchEvents,
 } from '../../apps/web/src/components/studio/studioPlaybackHelpers'
 import {
+  getSixteenthNoteSeconds,
   getPitchEventPlaybackFrequency,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
-} from '../../apps/web/src/lib/studio/playback'
+} from '../../apps/web/src/lib/studio'
 import type { TrackSlot } from '../../apps/web/src/types/studio'
 import type { PitchEvent } from '../../apps/web/src/types/studio'
 
@@ -54,6 +55,7 @@ describe('studio playback scheduling helpers', () => {
     const schedule = getPitchEventSchedule({
       durationSeconds: 0.75,
       eventStartSeconds: 1.2,
+      minimumEventSeconds: 0.25,
       scheduledStart: 10,
       startSeconds: -0.3,
     })
@@ -68,6 +70,7 @@ describe('studio playback scheduling helpers', () => {
     const schedule = getPitchEventSchedule({
       durationSeconds: 1.2,
       eventStartSeconds: 1,
+      minimumEventSeconds: 0.25,
       scheduledStart: 10,
       startSeconds: 1.5,
     })
@@ -139,10 +142,24 @@ describe('studio playback scheduling helpers', () => {
       },
     ] as PitchEvent[]
 
-    const scheduled = getSustainedPitchEvents(events, false, 1)
+    const scheduled = getSustainedPitchEvents(events, false, 0.25, 1)
 
     expect(scheduled.map((event) => event.event.event_id)).toEqual(['high', 'next'])
     expect(scheduled[0].durationSeconds).toBeCloseTo(0.5)
     expect(scheduled[1].startSeconds).toBeCloseTo(0.5)
+  })
+
+  it('derives the readable event minimum from BPM instead of fixed seconds', () => {
+    const minimumEventSeconds = getSixteenthNoteSeconds(113)
+    const schedule = getPitchEventSchedule({
+      durationSeconds: 0.03,
+      eventStartSeconds: 0,
+      minimumEventSeconds,
+      scheduledStart: 10,
+      startSeconds: 0,
+    })
+
+    expect(minimumEventSeconds).toBeCloseTo((60 / 113) * 0.25)
+    expect(schedule?.remainingDurationSeconds).toBeCloseTo(minimumEventSeconds)
   })
 })

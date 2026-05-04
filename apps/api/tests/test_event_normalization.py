@@ -2,6 +2,7 @@ from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.engine.event_normalization import (
     accidental_for_key,
     estimate_key_signature,
+    measure_sixteenth_note_beats,
     normalize_track_events,
     spell_midi_label,
 )
@@ -28,6 +29,12 @@ def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:
     assert normalized[0].onset_seconds == 0.8333
     assert normalized[0].duration_seconds == 0.3333
     assert normalized[0].quantization_grid == 0.25
+
+
+def test_measure_sixteenth_note_beats_is_derived_from_meter() -> None:
+    assert measure_sixteenth_note_beats(4, 4) == 0.25
+    assert measure_sixteenth_note_beats(3, 4) == 0.25
+    assert measure_sixteenth_note_beats(6, 8) == 0.25
 
 
 def test_event_normalization_splits_measure_crossing_notes_with_ties() -> None:
@@ -169,6 +176,52 @@ def test_registration_quality_merges_symbolic_same_pitch_without_filling_gaps() 
         (2.25, 0.5),
     ]
     assert "symbolic_same_pitch_contiguous_merge" in result.diagnostics["actions"]
+
+
+def test_registration_quality_absorbs_symbolic_micro_gaps_on_sixteenth_grid() -> None:
+    notes = [
+        event_from_pitch(beat=1, duration_beats=0.4896, bpm=113, source="midi", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=1.5, duration_beats=0.4896, bpm=113, source="midi", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=2.0, duration_beats=0.2396, bpm=113, source="midi", extraction_method="test", pitch_midi=62),
+    ]
+
+    result = prepare_events_for_track_registration(
+        notes,
+        bpm=113,
+        slot_id=2,
+        source_kind="midi",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    assert result.diagnostics["event_contract"]["minimum_note_beats"] == 0.25
+    assert [(event.pitch_midi, event.beat, event.duration_beats) for event in result.events] == [
+        (60, 1.0, 1.0),
+        (62, 2.0, 0.25),
+    ]
+    assert min(event.duration_beats for event in result.events) >= 0.25
+
+
+def test_registration_quality_fills_symbolic_rests_shorter_than_sixteenth_note() -> None:
+    notes = [
+        event_from_pitch(beat=1, duration_beats=0.43, bpm=113, source="midi", extraction_method="test", pitch_midi=60),
+        event_from_pitch(beat=1.5, duration_beats=0.5, bpm=113, source="midi", extraction_method="test", pitch_midi=62),
+    ]
+
+    result = prepare_events_for_track_registration(
+        notes,
+        bpm=113,
+        slot_id=2,
+        source_kind="midi",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    assert [(event.pitch_midi, event.beat, event.duration_beats) for event in result.events] == [
+        (60, 1.0, 0.5),
+        (62, 1.5, 0.5),
+    ]
+    assert "event_contract_subdivision_gap_absorbed_1" in result.diagnostics["actions"]
 
 
 def test_registration_quality_aligns_extracted_audio_to_existing_track_grid() -> None:

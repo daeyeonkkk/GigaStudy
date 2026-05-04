@@ -57,7 +57,9 @@ is excluded from persistence and remains an adapter detail.
   `apps/web/src/components/studio/studioPlaybackHelpers.ts`
   Browser playback orchestration plus pure playback-planning helpers for
   region grouping, playable track selection, sustained event merging, and
-  metronome beat coverage.
+  metronome beat coverage. Long event-backed MIDI/MusicXML sessions schedule
+  guide-tone events in rolling lookahead chunks instead of constructing every
+  oscillator at playback start.
 - `apps/web/src/lib/studio/instruments.ts`
   Browser event synthesis. The default melodic event voice is a warm guide
   synth tuned to sit beside human singing instead of a sampled organ or choir
@@ -128,15 +130,18 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/services/engine/event_normalization.py`
   Internal pitch-event preparation helpers for timing quantization, range
   metadata, spelling, measure positions, and same-pitch contiguous fragment
-  merging. Same-pitch merge only consumes touching or overlapping fragments;
-  positive gaps remain empty timeline space.
+  merging. It exposes the beat-derived sixteenth-note unit used by automatic
+  registration, so cleanup is tied to BPM/meter rather than fixed seconds.
 - `apps/api/src/gigastudy_api/services/studio_region_commands.py`
   Manual region editing, split/copy, save, and revision restore preserve the
   user's explicit event fragments. They normalize IDs and timing fields but do
   not apply registration-only same-pitch merging.
 - `apps/api/src/gigastudy_api/services/engine/event_quality.py`
   The registration quality gate before extracted material becomes product
-  regions. It replaces the old notation quality layer.
+  regions. It replaces the old notation quality layer. The final registration
+  contract snaps near-grid symbolic import timing to the current sixteenth-note
+  unit, merges same-pitch fragments, and absorbs import/export micro-gaps below
+  that unit while preserving real gaps and exempting manual region editing.
 - `apps/api/src/gigastudy_api/services/engine/voice.py`
   Voice pitch extraction with Basic Pitch/librosa/local fallback, fixed-BPM
   metronome phase alignment, strict sung-segment cleanup, and a narrow rescue
@@ -325,6 +330,8 @@ flowchart TD
    with the warm guide tone by default. If admin has uploaded a custom guide
    sample, melodic event synthesis may use that sample transposed from its
    configured root MIDI pitch; otherwise it falls back to the built-in synth.
+   Dense MIDI-style event sessions are scheduled by lookahead chunks against
+   the shared scheduled start so browser oscillator load does not mute playback.
 4. Sync offset and volume are applied per track. Negative sync is preserved as
    a user-visible timeline translation; barlines stay on the shared grid.
 5. Audio clips are scheduled from `TrackSlot.sync_offset_seconds`. Region pitch

@@ -38,15 +38,17 @@ const VOCAL_SLOT_CENTERS: Record<number, number> = {
 export function getSustainedPitchEvents(
   events: PitchEvent[],
   isPercussion: boolean,
+  minimumEventSeconds: number,
   slotId = 0,
 ): ScheduledPitchEvent[] {
+  const readableMinimumSeconds = Math.max(0.001, minimumEventSeconds)
   const scheduledEvents = events
     .map((event) => {
       const frequency = getPitchEventPlaybackFrequency(event)
       return frequency === null
         ? null
         : {
-            durationSeconds: Math.max(isPercussion ? 0.08 : 0.12, event.duration_seconds),
+            durationSeconds: Math.max(readableMinimumSeconds, event.duration_seconds),
             event,
             frequency,
             startSeconds: event.start_seconds,
@@ -75,7 +77,7 @@ export function getSustainedPitchEvents(
       (current.event.pitch_midi !== null &&
         current.event.pitch_midi !== undefined &&
         current.event.pitch_midi === previous.event.pitch_midi)
-    const smallGap = current.startSeconds <= previousEndSeconds + 0.08
+    const smallGap = current.startSeconds <= previousEndSeconds + readableMinimumSeconds + 0.001
     if (samePitch && smallGap) {
       previous.durationSeconds = Math.max(previous.durationSeconds, currentEndSeconds - previous.startSeconds)
       continue
@@ -83,10 +85,14 @@ export function getSustainedPitchEvents(
 
     merged.push({ ...current })
   }
-  return enforceMonophonicPlaybackLine(merged, slotId)
+  return enforceMonophonicPlaybackLine(merged, slotId, readableMinimumSeconds)
 }
 
-function enforceMonophonicPlaybackLine(events: ScheduledPitchEvent[], slotId: number): ScheduledPitchEvent[] {
+function enforceMonophonicPlaybackLine(
+  events: ScheduledPitchEvent[],
+  slotId: number,
+  minimumEventSeconds: number,
+): ScheduledPitchEvent[] {
   const selectedByOnset: ScheduledPitchEvent[] = []
   let onsetGroup: ScheduledPitchEvent[] = []
   let groupStartSeconds: number | null = null
@@ -111,12 +117,12 @@ function enforceMonophonicPlaybackLine(events: ScheduledPitchEvent[], slotId: nu
     if (previous) {
       const previousEndSeconds = previous.startSeconds + previous.durationSeconds
       if (current.startSeconds < previousEndSeconds - 0.001) {
-        previous.durationSeconds = Math.max(0.05, current.startSeconds - previous.startSeconds)
+        previous.durationSeconds = Math.max(minimumEventSeconds, current.startSeconds - previous.startSeconds)
       }
     }
     line.push(current)
   }
-  return line.filter((event) => event.durationSeconds >= 0.05)
+  return line.filter((event) => event.durationSeconds >= minimumEventSeconds)
 }
 
 function bestPlaybackEventForSlot(events: ScheduledPitchEvent[], slotId: number): ScheduledPitchEvent {
@@ -210,14 +216,17 @@ export function getAudioTrackSchedule({
 export function getPitchEventSchedule({
   durationSeconds,
   eventStartSeconds,
+  minimumEventSeconds,
   scheduledStart,
   startSeconds,
 }: {
   durationSeconds: number
   eventStartSeconds: number
+  minimumEventSeconds: number
   scheduledStart: number
   startSeconds: number
 }): PitchEventSchedule | null {
+  const readableMinimumSeconds = Math.max(0.001, minimumEventSeconds)
   const safeDurationSeconds = Math.max(0, durationSeconds)
   const eventEndSeconds = eventStartSeconds + safeDurationSeconds
   if (eventEndSeconds <= startSeconds) {
@@ -225,7 +234,7 @@ export function getPitchEventSchedule({
   }
   const relativeStartSeconds = Math.max(0, eventStartSeconds - startSeconds)
   const remainingDurationSeconds = Math.max(
-    0.05,
+    readableMinimumSeconds,
     eventEndSeconds - Math.max(eventStartSeconds, startSeconds),
   )
   return {

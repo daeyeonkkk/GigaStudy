@@ -25,6 +25,7 @@ from gigastudy_api.services.engine.event_normalization import (
     annotate_track_events_for_slot,
     accidental_for_key,
     enforce_monophonic_vocal_events,
+    measure_sixteenth_note_beats,
     merge_contiguous_same_pitch_events,
     normalize_track_events,
     pitch_label_octave_shift_for_slot,
@@ -128,6 +129,10 @@ def prepare_events_for_track_registration(
     """
 
     original_count = len(events)
+    minimum_note_beats = measure_sixteenth_note_beats(
+        time_signature_numerator,
+        time_signature_denominator,
+    )
     actions: list[str] = []
     if not events:
         return RegistrationQualityResult(
@@ -206,6 +211,7 @@ def prepare_events_for_track_registration(
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
+            minimum_duration_beats=minimum_note_beats,
         )
         prepared_events = annotate_track_events_for_slot(repaired_events, slot_id=slot_id)
         actions.append("symbolic_event_metadata_annotation")
@@ -425,6 +431,10 @@ def apply_registration_review_instruction(
             bpm=bpm,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
+            minimum_duration_beats=measure_sixteenth_note_beats(
+                time_signature_numerator,
+                time_signature_denominator,
+            ),
         )
         prepared_events = annotate_track_events_for_slot(repaired_events, slot_id=slot_id)
         actions.append("llm_symbolic_event_review_annotation")
@@ -1269,12 +1279,17 @@ def _repair_symbolic_timing_metadata(
     bpm: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
+    minimum_duration_beats: float,
 ) -> list[TrackPitchEvent]:
     beat_seconds = seconds_per_beat(max(1, bpm))
+    minimum_note_beats = max(0.0001, minimum_duration_beats)
     repaired: list[TrackPitchEvent] = []
     for event in events:
-        beat = max(1.0, round(event.beat, 4))
-        duration_beats = max(0.0625, round(event.duration_beats, 4))
+        beat = max(1.0, round(_snap_to_readable_subdivision(event.beat, minimum_note_beats), 4))
+        duration_beats = max(
+            minimum_note_beats,
+            round(_snap_to_readable_subdivision(event.duration_beats, minimum_note_beats), 4),
+        )
         pitch_midi = event.pitch_midi
         if pitch_midi is None and not event.is_rest:
             pitch_midi = label_to_midi(event.label)
@@ -1305,6 +1320,48 @@ def _repair_symbolic_timing_metadata(
     return repaired
 
 
+def _snap_to_readable_subdivision(value: float, subdivision_beats: float) -> float:
+    if not isinstance(value, (int, float)) or subdivision_beats <= 0:
+        return value
+    quotient = value / subdivision_beats
+    snapped = round(quotient) * subdivision_beats
+    tolerance = subdivision_beats * 0.2
+    if abs(snapped - value) <= tolerance:
+        return snapped
+    return value
+
+
+def _fill_subdivision_gaps(
+    events: list[TrackPitchEvent],
+    *,
+    bpm: int,
+    minimum_gap_beats: float,
+) -> tuple[list[TrackPitchEvent], int]:
+    if len(events) < 2:
+        return events, 0
+
+    filled: list[TrackPitchEvent] = []
+    fill_count = 0
+    for event in sorted(events, key=lambda item: (item.beat, item.id)):
+        if not filled:
+            filled.append(event)
+            continue
+
+        previous = filled[-1]
+        previous_end = previous.beat + previous.duration_beats
+        gap_beats = round(event.beat - previous_end, 4)
+        if 0 < gap_beats < minimum_gap_beats - 0.0001:
+            filled[-1] = _extend_event_to_beat(
+                previous,
+                end_beat=event.beat,
+                bpm=bpm,
+                warning="subdivision_gap_absorbed",
+            )
+            fill_count += 1
+        filled.append(event)
+    return filled, fill_count
+
+
 def _enforce_registration_event_contract(
     events: list[TrackPitchEvent],
     *,
@@ -1329,6 +1386,10 @@ def _enforce_registration_event_contract(
             time_signature_denominator=time_signature_denominator,
         )
 
+    minimum_note_beats = measure_sixteenth_note_beats(
+        time_signature_numerator,
+        time_signature_denominator,
+    )
     contract_events = events
     actions: list[str] = []
     monophonic_events = enforce_monophonic_vocal_events(
@@ -1337,6 +1398,7 @@ def _enforce_registration_event_contract(
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
+        minimum_duration_beats=minimum_note_beats,
     )
     if _event_identity(monophonic_events) != _event_identity(contract_events):
         actions.append("event_contract_monophonic_vocal_line")
@@ -1344,6 +1406,7 @@ def _enforce_registration_event_contract(
     merged_events = merge_contiguous_same_pitch_events(
         contract_events,
         bpm=bpm,
+        gap_epsilon_beats=minimum_note_beats - 0.0001,
     )
     if _event_identity(merged_events) != _event_identity(contract_events):
         actions.append("event_contract_same_pitch_contiguous_merge")
@@ -1374,10 +1437,19 @@ def _enforce_registration_event_contract(
         merged_events = merge_contiguous_same_pitch_events(
             contract_events,
             bpm=bpm,
+            gap_epsilon_beats=minimum_note_beats - 0.0001,
         )
         if _event_identity(merged_events) != _event_identity(contract_events):
             actions.append("event_contract_same_pitch_contiguous_merge")
-        contract_events = merged_events
+    contract_events = merged_events
+    gap_filled_events, gap_fill_count = _fill_subdivision_gaps(
+        contract_events,
+        bpm=bpm,
+        minimum_gap_beats=minimum_note_beats,
+    )
+    if gap_fill_count:
+        actions.append(f"event_contract_subdivision_gap_absorbed_{gap_fill_count}")
+    contract_events = gap_filled_events
 
     shared_key_signature = _shared_key_signature(contract_events)
     annotated_events = annotate_track_events_for_slot(
@@ -1394,8 +1466,11 @@ def _enforce_registration_event_contract(
     enforced: list[TrackPitchEvent] = []
     changed_count = 0
     for event in annotated_events:
-        beat = max(1.0, round(event.beat, 4))
-        duration_beats = max(0.0625, round(event.duration_beats, 4))
+        beat = max(1.0, round(_snap_to_readable_subdivision(event.beat, minimum_note_beats), 4))
+        duration_beats = max(
+            minimum_note_beats,
+            round(_snap_to_readable_subdivision(event.duration_beats, minimum_note_beats), 4),
+        )
         pitch_midi = _resolve_pitch_midi(event)
         spelled_label = event.spelled_label
         accidental = event.accidental
@@ -1475,10 +1550,15 @@ def _event_contract_diagnostics(
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> dict[str, Any]:
+    minimum_note_beats = measure_sixteenth_note_beats(
+        time_signature_numerator,
+        time_signature_denominator,
+    )
     if not events:
         return {
             "version": "event_contract_v1",
             "event_count": 0,
+            "minimum_note_beats": minimum_note_beats,
             "single_voice_index": True,
             "single_key_signature": True,
             "seconds_follow_beat_grid": True,
@@ -1519,6 +1599,7 @@ def _event_contract_diagnostics(
     return {
         "version": "event_contract_v1",
         "event_count": len(events),
+        "minimum_note_beats": minimum_note_beats,
         "single_voice_index": len(voice_indices) == 1 and slot_id in voice_indices,
         "single_key_signature": len(key_signatures) == 1 and None not in key_signatures,
         "seconds_follow_beat_grid": seconds_follow_beat_grid,

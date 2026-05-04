@@ -75,10 +75,13 @@ the same change.
 - Onsets and durations should be quantized to musically useful beat units, then
   simplified so the track reads as intentional phrases rather than frame-level
   detector noise.
+- Automatic registration uses a dynamic shortest readable note unit derived
+  from BPM and meter: the current measure's sixteenth-note subdivision. Timing
+  cleanup must use that beat-derived unit, never a fixed seconds threshold.
 - Same-pitch event fragments that touch or overlap should be merged into one
-  continuous event. Real gaps must remain empty time; normalization must not
-  silently stretch an event across a positive gap just to make the lane look
-  continuous.
+  continuous event. Import/export articulation gaps shorter than the dynamic
+  sixteenth-note unit may be absorbed during automatic registration; gaps at or
+  above that unit remain empty time.
 - Manual region editing is exempt from automatic same-pitch merging. If a user
   deliberately splits adjacent notes during editing, save/restore must preserve
   those fragments.

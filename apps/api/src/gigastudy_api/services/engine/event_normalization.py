@@ -20,7 +20,9 @@ MIN_EVENT_DURATION_BEATS = 0.25
 SAME_PITCH_MERGE_EPSILON_BEATS = 0.001
 OVERLAP_EPSILON_BEATS = 0.001
 MONOPHONIC_GROUP_EPSILON_BEATS = 0.0005
-MONOPHONIC_MIN_DURATION_BEATS = 0.0625
+TECHNICAL_MIN_DURATION_BEATS = 0.0625
+MONOPHONIC_MIN_DURATION_BEATS = TECHNICAL_MIN_DURATION_BEATS
+SIXTEENTH_NOTE_SUBDIVISIONS_PER_WHOLE_NOTE = 16
 
 SHARP_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 FLAT_NAMES = ("C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B")
@@ -72,6 +74,27 @@ class _EventInterval:
     end_beat: float
     pitch_midi: int | None
     confidence: float
+
+
+def measure_sixteenth_note_beats(
+    time_signature_numerator: int = 4,
+    time_signature_denominator: int = 4,
+) -> float:
+    """Return the current meter's 16th-note duration in quarter-beat units.
+
+    The product clock stores beats as quarter-note beats. This derives the
+    readable minimum from the measure and beat type instead of using seconds.
+    In 4/4 this is exactly one sixteenth of the measure.
+    """
+
+    safe_numerator = max(1, time_signature_numerator)
+    safe_denominator = max(1, time_signature_denominator)
+    beats_per_measure = quarter_beats_per_measure(safe_numerator, safe_denominator)
+    sixteenth_notes_per_measure = max(
+        1.0,
+        safe_numerator * (SIXTEENTH_NOTE_SUBDIVISIONS_PER_WHOLE_NOTE / safe_denominator),
+    )
+    return round(max(TECHNICAL_MIN_DURATION_BEATS, beats_per_measure / sixteenth_notes_per_measure), 6)
 
 
 def pitch_register_for_slot(slot_id: int) -> TrackPitchRegister:
@@ -258,6 +281,7 @@ def enforce_monophonic_vocal_events(
     slot_id: int,
     time_signature_numerator: int = 4,
     time_signature_denominator: int = 4,
+    minimum_duration_beats: float = TECHNICAL_MIN_DURATION_BEATS,
 ) -> list[TrackPitchEvent]:
     """Collapse a vocal slot to one singable pitch at a time.
 
@@ -274,19 +298,20 @@ def enforce_monophonic_vocal_events(
     if not pitched_events:
         return events
 
+    safe_minimum_duration = max(0.0001, minimum_duration_beats)
     selected_events = _select_one_event_per_onset(pitched_events, slot_id=slot_id)
     selected_events.sort(key=lambda event: (event.beat, event.id))
 
     line: list[tuple[TrackPitchEvent, float, float, list[str]]] = []
     for event in selected_events:
         start_beat = max(1.0, event.beat)
-        end_beat = max(start_beat + MONOPHONIC_MIN_DURATION_BEATS, start_beat + max(0.0, event.duration_beats))
+        end_beat = max(start_beat + safe_minimum_duration, start_beat + max(0.0, event.duration_beats))
         warnings = list(event.quality_warnings)
 
         while line and start_beat < line[-1][2] - OVERLAP_EPSILON_BEATS:
             previous_event, previous_start, previous_end, previous_warnings = line[-1]
             trimmed_end = max(previous_start, start_beat)
-            if trimmed_end - previous_start >= MONOPHONIC_MIN_DURATION_BEATS:
+            if trimmed_end - previous_start >= safe_minimum_duration:
                 previous_warnings = [*previous_warnings, "monophonic_overlap_trimmed"]
                 line[-1] = (previous_event, previous_start, trimmed_end, previous_warnings)
                 warnings.append("monophonic_overlap_resolved")
@@ -303,7 +328,7 @@ def enforce_monophonic_vocal_events(
             start_beat = end_beat
             break
 
-        if end_beat - start_beat < MONOPHONIC_MIN_DURATION_BEATS:
+        if end_beat - start_beat < safe_minimum_duration:
             continue
         line.append((event, start_beat, end_beat, warnings))
 
@@ -316,6 +341,7 @@ def enforce_monophonic_vocal_events(
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
             quality_warnings=warnings,
+            minimum_duration_beats=safe_minimum_duration,
         )
         for event, start_beat, end_beat, warnings in line
     ]
@@ -372,11 +398,12 @@ def _retime_monophonic_event(
     time_signature_numerator: int,
     time_signature_denominator: int,
     quality_warnings: list[str],
+    minimum_duration_beats: float,
 ) -> TrackPitchEvent:
     pitch_midi = _resolve_pitch_midi(event)
     retimed = event_from_pitch(
         beat=start_beat,
-        duration_beats=max(MONOPHONIC_MIN_DURATION_BEATS, end_beat - start_beat),
+        duration_beats=max(minimum_duration_beats, end_beat - start_beat),
         bpm=bpm,
         source=event.source,
         extraction_method=event.extraction_method,

@@ -399,6 +399,7 @@ export function useStudioPlayback({
             studio.bpm,
             studioMeter,
             0.035,
+            studio.tempo_changes,
           ),
         )
       }
@@ -540,13 +541,33 @@ export function useStudioPlayback({
       return
     }
 
-    if (!playbackPickerOpen) {
-      setPlaybackPickerOpen(true)
-      setActionState({ phase: 'success', message: '동시에 재생할 트랙을 선택하세요.' })
-      return
+    let selectedTracks = getSelectedPlaybackTracks()
+    if (selectedTracks.length === 0) {
+      selectedTracks = registeredTracks
+      setSelectedPlaybackSlotIds(new Set(registeredTracks.map((track) => track.slot_id)))
     }
 
-    await startSelectedPlayback()
+    setPlaybackPickerOpen(true)
+    setActionState({
+      phase: 'busy',
+      message: getPlaybackPreparationMessage(
+        selectedTracks,
+        metronomeEnabled,
+        playbackSource,
+        getPlaybackRegionsBySlot(studio?.regions),
+      ),
+    })
+    if (await startPlaybackSession(selectedTracks, metronomeEnabled)) {
+      setPlayingSlots(new Set(selectedTracks.map((track) => track.slot_id)))
+      setGlobalPlaying(true)
+      setActionState({
+        phase: 'success',
+        message:
+          playbackSource === 'audio'
+            ? `${selectedTracks.length}개 트랙을 원음 우선으로 재생합니다.`
+            : `${selectedTracks.length}개 트랙을 연주음만으로 재생합니다.`,
+      })
+    }
   }
 
   function seekSelectedPlayback(nextSeconds: number) {

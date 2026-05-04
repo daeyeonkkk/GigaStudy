@@ -232,6 +232,40 @@ def upload_musicxml_track(
     return response
 
 
+def build_single_note_midi_bytes(*, bpm: int = 113, pitch: int = 72, duration_ticks: int = 480) -> bytes:
+    tempo_microseconds = int(round(60_000_000 / bpm))
+    track_events = b"".join(
+        [
+            b"\x00\xff\x03\x07Soprano",
+            b"\x00\xff\x51\x03" + tempo_microseconds.to_bytes(3, "big"),
+            b"\x00\x90" + bytes([pitch, 100]),
+            _vlq(duration_ticks) + b"\x80" + bytes([pitch, 64]),
+            b"\x00\xff\x2f\x00",
+        ]
+    )
+    return b"".join(
+        [
+            b"MThd",
+            (6).to_bytes(4, "big"),
+            (1).to_bytes(2, "big"),
+            (1).to_bytes(2, "big"),
+            (480).to_bytes(2, "big"),
+            b"MTrk",
+            len(track_events).to_bytes(4, "big"),
+            track_events,
+        ]
+    )
+
+
+def _vlq(value: int) -> bytes:
+    values = [value & 0x7F]
+    value >>= 7
+    while value:
+        values.insert(0, (value & 0x7F) | 0x80)
+        value >>= 7
+    return bytes(values)
+
+
 def _track_region_events(payload: dict, slot_id: int) -> list[dict]:
     return [_event_from_pitch_event(event) for event in _track_events(payload, slot_id)]
 
@@ -474,6 +508,57 @@ def test_upload_start_does_not_require_bpm_and_maps_symbolic_tracks(tmp_path: Pa
     assert payload["tracks"][0]["status"] == "registered"
     assert "notes" not in payload["tracks"][0]
     assert [note["label"] for note in _track_region_events(payload, 1)] == ["C5", "G5"]
+
+
+def test_upload_start_uses_source_midi_tempo_when_bpm_is_not_provided(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_single_note_midi_bytes(bpm=113)).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "MIDI source tempo",
+            "start_mode": "upload",
+            "source_kind": "document",
+            "source_filename": "source.mid",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["bpm"] == 113
+    assert _track_events(payload, 1)[0]["duration_seconds"] == 0.531
+
+
+def test_studio_timing_update_retimes_symbolic_regions_for_all_studios(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Retempo",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+
+    response = client.patch(
+        f"/api/studios/{studio_id}/timing",
+        json={
+            "bpm": 60,
+            "tempo_changes": [{"measure_index": 3, "bpm": 90}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["bpm"] == 60
+    assert payload["tempo_changes"] == [{"measure_index": 3, "bpm": 90}]
+    events = _track_events(payload, 1)
+    assert events[0]["duration_seconds"] == 1.0
+    assert events[1]["start_seconds"] == 1.0
 
 
 def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> None:

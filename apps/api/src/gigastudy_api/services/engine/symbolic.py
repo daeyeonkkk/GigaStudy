@@ -14,6 +14,7 @@ from gigastudy_api.services.engine.music_theory import (
     infer_slot_id,
     midi_to_label,
     event_from_pitch,
+    measure_index_from_beat,
     quarter_beats_per_measure,
     rank_slot_candidates,
     slot_assignment_diagnostics,
@@ -29,6 +30,12 @@ class ParsedTrack:
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class ParsedTempoChange:
+    measure_index: int
+    bpm: int
+
+
 @dataclass
 class ParsedSymbolicFile:
     tracks: list[ParsedTrack]
@@ -36,6 +43,8 @@ class ParsedSymbolicFile:
     time_signature_numerator: int = DEFAULT_TIME_SIGNATURE[0]
     time_signature_denominator: int = DEFAULT_TIME_SIGNATURE[1]
     has_time_signature: bool = False
+    source_bpm: int | None = None
+    tempo_changes: list[ParsedTempoChange] = field(default_factory=list)
 
 
 class SymbolicParseError(ValueError):
@@ -67,6 +76,8 @@ def parse_symbolic_file_with_metadata(
         time_signature_numerator=parsed_document.time_signature_numerator,
         time_signature_denominator=parsed_document.time_signature_denominator,
         has_time_signature=parsed_document.has_time_signature,
+        source_bpm=parsed_document.source_bpm,
+        tempo_changes=parsed_document.tempo_changes,
     )
 
 
@@ -267,6 +278,7 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
     tracks: list[ParsedTrack] = []
     document_time_signature = DEFAULT_TIME_SIGNATURE
     has_time_signature = False
+    raw_tempo_events: list[tuple[int, int]] = []
 
     for track_index in range(track_count):
         if data[offset : offset + 4] != b"MTrk":
@@ -310,6 +322,8 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                 position += length
                 if meta_type == 0x03 and payload:
                     track_name = payload.decode("utf-8", errors="ignore").strip() or track_name
+                elif meta_type == 0x51 and len(payload) == 3:
+                    raw_tempo_events.append((absolute_tick, _tempo_payload_to_bpm(payload)))
                 elif meta_type == 0x58 and len(payload) >= 2:
                     current_time_signature = _normalize_time_signature(payload[0], 2 ** payload[1])
                     if not has_time_signature:
@@ -367,12 +381,20 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         slot_id = 6 if 9 in channels_seen else infer_slot_id(track_name, events, fallback=track_index + 1)
         tracks.append(ParsedTrack(name=track_name, events=events, slot_id=slot_id))
 
+    source_bpm, tempo_changes = _midi_tempo_map_from_events(
+        raw_tempo_events,
+        ticks_per_quarter=ticks_per_quarter,
+        time_signature_numerator=document_time_signature[0],
+        time_signature_denominator=document_time_signature[1],
+    )
     return ParsedSymbolicFile(
         tracks=tracks,
         mapped_events={},
         time_signature_numerator=document_time_signature[0],
         time_signature_denominator=document_time_signature[1],
         has_time_signature=has_time_signature,
+        source_bpm=source_bpm,
+        tempo_changes=tempo_changes,
     )
 
 
@@ -406,6 +428,42 @@ def _append_midi_event(
             confidence=1,
         )
     )
+
+
+def _tempo_payload_to_bpm(payload: bytes) -> int:
+    microseconds_per_quarter = max(1, int.from_bytes(payload, "big"))
+    return max(40, min(240, round(60_000_000 / microseconds_per_quarter)))
+
+
+def _midi_tempo_map_from_events(
+    raw_tempo_events: list[tuple[int, int]],
+    *,
+    ticks_per_quarter: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> tuple[int | None, list[ParsedTempoChange]]:
+    if not raw_tempo_events:
+        return None, []
+    tempo_by_tick: dict[int, int] = {}
+    for tick, bpm in raw_tempo_events:
+        tempo_by_tick[max(0, tick)] = bpm
+    sorted_events = sorted(tempo_by_tick.items())
+    source_bpm = sorted_events[0][1]
+    changes: list[ParsedTempoChange] = []
+    latest_measure_bpm: dict[int, int] = {}
+    for tick, bpm in sorted_events[1:]:
+        beat = (tick / ticks_per_quarter) + 1
+        measure_index = measure_index_from_beat(
+            beat,
+            time_signature_numerator,
+            time_signature_denominator,
+        )
+        if measure_index <= 1 or bpm == source_bpm:
+            continue
+        latest_measure_bpm[measure_index] = bpm
+    for measure_index, bpm in sorted(latest_measure_bpm.items()):
+        changes.append(ParsedTempoChange(measure_index=measure_index, bpm=bpm))
+    return source_bpm, changes
 
 
 def _read_musicxml_root(path: Path) -> ElementTree.Element:

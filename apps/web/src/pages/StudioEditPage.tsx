@@ -249,7 +249,7 @@ export function StudioEditPage() {
               <p>
                 구간 편집 · {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/
                 {studio.time_signature_denominator ?? 4} · 구간{' '}
-                {studio.regions.length} · 검토 {pendingCandidates.length}
+                {studio.regions.length} · 템포 변경 {studio.tempo_changes.length} · 검토 {pendingCandidates.length}
               </p>
             </div>
 
@@ -257,6 +257,7 @@ export function StudioEditPage() {
               mode="editor"
               beatsPerMeasure={studioMeter.beatsPerMeasure}
               bpm={studio.bpm}
+              tempoChanges={studio.tempo_changes}
               draftStorageScope={studio.studio_id}
               metronomeEnabled={false}
               pendingCandidateCount={pendingCandidates.length}

@@ -173,9 +173,11 @@ def test_midi_parser_normalizes_seconds_to_studio_bpm(tmp_path: Path) -> None:
     midi_path.write_bytes(midi_payload)
 
     parsed_tracks = parse_midi_file(midi_path, bpm=120)
+    parsed = parse_symbolic_file_with_metadata(midi_path, bpm=120)
 
     assert parsed_tracks[0].events[0].duration_beats == 1
     assert parsed_tracks[0].events[0].duration_seconds == 0.5
+    assert parsed.source_bpm == 60
 
 
 def test_midi_parser_preserves_time_signature_for_measure_grid(tmp_path: Path) -> None:

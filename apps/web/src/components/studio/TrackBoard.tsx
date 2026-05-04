@@ -14,6 +14,7 @@ import {
 import type {
   ArrangementRegion,
   PitchEvent,
+  TempoChange,
   TrackExtractionJob,
   TrackSlot,
 } from '../../types/studio'
@@ -54,6 +55,7 @@ type TrackBoardProps = {
   activeJobSlotIds: Set<number>
   beatsPerMeasure: number
   bpm: number
+  tempoChanges: TempoChange[]
   draftStorageScope?: string
   mode?: 'studio' | 'editor'
   editDisabled: boolean
@@ -229,6 +231,7 @@ export function TrackBoard({
   activeJobSlotIds,
   beatsPerMeasure,
   bpm,
+  tempoChanges,
   draftStorageScope,
   mode = 'studio',
   editDisabled,
@@ -296,9 +299,16 @@ export function TrackBoard({
     [playheadSeconds, regions],
   )
   const measureStarts = useMemo(
-    () => getMeasureStarts(timelineBounds, bpm, beatsPerMeasure),
-    [beatsPerMeasure, bpm, timelineBounds],
+    () => getMeasureStarts(timelineBounds, bpm, beatsPerMeasure, tempoChanges),
+    [beatsPerMeasure, bpm, tempoChanges, timelineBounds],
   )
+  const timelineWidthPixels = useMemo(() => {
+    const measureCount = Math.max(1, measureStarts.length - 1)
+    return Math.min(12000, Math.max(900, measureCount * 58))
+  }, [measureStarts.length])
+  const timelineStyle = {
+    '--timeline-width': `${timelineWidthPixels}px`,
+  } as CSSProperties
   const gridSeconds = getGridSeconds(bpm)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
@@ -339,16 +349,17 @@ export function TrackBoard({
         </div>
       </div>
 
-      <div className="arrangement-ruler" aria-hidden="true">
-        {measureStarts.map((seconds, index) => (
-          <span
-            key={`measure-${seconds}`}
-            style={{ '--measure-left': `${getTimelinePercent(seconds, timelineBounds)}%` } as CSSProperties}
-          >
-            {index + 1}
-          </span>
-        ))}
-      </div>
+      <div className="track-timeline-scroll" style={timelineStyle}>
+        <div className="arrangement-ruler" aria-hidden="true">
+          {measureStarts.map((measure) => (
+            <span
+              key={`measure-${measure.measureIndex}`}
+              style={{ '--measure-left': `${getTimelinePercent(measure.seconds, timelineBounds)}%` } as CSSProperties}
+            >
+              {measure.measureIndex}
+            </span>
+          ))}
+        </div>
 
       <div className="track-stack">
         {tracks.map((track) => {
@@ -406,10 +417,10 @@ export function TrackBoard({
                 style={getRegionLaneStyle(isPlaying, playheadSeconds, timelineBounds)}
               >
                 <div className="track-card__measure-grid" aria-hidden="true">
-                  {measureStarts.map((seconds) => (
+                  {measureStarts.map((measure) => (
                     <i
-                      key={`${track.slot_id}-${seconds}`}
-                      style={{ '--measure-left': `${getTimelinePercent(seconds, timelineBounds)}%` } as CSSProperties}
+                      key={`${track.slot_id}-${measure.measureIndex}`}
+                      style={{ '--measure-left': `${getTimelinePercent(measure.seconds, timelineBounds)}%` } as CSSProperties}
                     />
                   ))}
                 </div>
@@ -597,6 +608,7 @@ export function TrackBoard({
             </article>
           )
         })}
+      </div>
       </div>
 
       {!isEditorMode ? (

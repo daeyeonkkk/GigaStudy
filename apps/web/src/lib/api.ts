@@ -14,6 +14,7 @@ import type {
   StudioListItem,
   UpdatePitchEventRequest,
   UpdateRegionRequest,
+  UpdateStudioTimingRequest,
 } from '../types/studio'
 
 const defaultApiBaseUrl = import.meta.env.PROD
@@ -338,6 +339,20 @@ export function updateTrackVolume(
       body: JSON.stringify({ volume_percent: volumePercent }),
     },
     '트랙 음량을 저장하지 못했습니다.',
+)
+}
+
+export function updateStudioTiming(
+  studioId: string,
+  payload: UpdateStudioTimingRequest,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/timing`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+    '스튜디오 템포를 저장하지 못했습니다.',
   )
 }
 

@@ -37,6 +37,7 @@ from gigastudy_api.api.schemas.studios import (
     TrackSlot,
     UpdatePitchEventRequest,
     UpdateRegionRequest,
+    UpdateStudioTimingRequest,
     UploadTrackRequest,
     VolumeTrackRequest,
 )
@@ -96,11 +97,13 @@ from gigastudy_api.services.studio_track_settings import (
     set_track_volume,
     shift_registered_track_sync_offsets,
 )
+from gigastudy_api.services.studio_timing import normalize_tempo_changes, retime_studio_regions
 from gigastudy_api.services.track_registration import TrackRegistrationPreparer
 from gigastudy_api.services.studio_documents import (
     empty_tracks as _empty_tracks,
     encode_studio_payload,
     register_track_material as _register_track_material,
+    sync_studio_arrangement_regions,
     studio_list_item_from_payload as _studio_list_item_from_payload,
     track_has_content as _track_has_content,
 )
@@ -314,6 +317,7 @@ class StudioRepository:
                 source_filename=source_label,
                 source_content_base64=source_content_base64,
                 source_asset_path=source_asset_path,
+                use_source_tempo=bpm is None,
             )
 
         with self._lock:
@@ -616,6 +620,50 @@ class StudioRepository:
             for region in studio.regions:
                 if region.track_slot_id == slot_id:
                     region.volume_percent = request.volume_percent
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+        return studio
+
+    def update_timing(
+        self,
+        studio_id: str,
+        request: UpdateStudioTimingRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            ensure_no_active_extraction_jobs(
+                studio,
+                (track.slot_id for track in studio.tracks),
+                action_label="Studio timing editing",
+            )
+            timestamp = _now()
+            old_bpm = studio.bpm
+            old_tempo_changes = list(studio.tempo_changes)
+            next_bpm = request.bpm if request.bpm is not None else studio.bpm
+            next_tempo_changes = (
+                request.tempo_changes
+                if request.tempo_changes is not None
+                else list(studio.tempo_changes)
+            )
+            studio.bpm = next_bpm
+            studio.tempo_changes = normalize_tempo_changes(
+                next_tempo_changes,
+                base_bpm=next_bpm,
+            )
+            sync_studio_arrangement_regions(studio)
+            retime_studio_regions(
+                studio,
+                old_bpm=old_bpm,
+                old_tempo_changes=old_tempo_changes,
+            )
+            for track in studio.tracks:
+                if track.status == "registered":
+                    track.updated_at = timestamp
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
@@ -986,6 +1034,7 @@ class StudioRepository:
         source_filename: str,
         source_content_base64: str | None,
         source_asset_path: str | None,
+        use_source_tempo: bool = True,
     ) -> Studio:
         return self._uploads.seed_from_upload(
             studio,
@@ -993,6 +1042,7 @@ class StudioRepository:
             source_filename=source_filename,
             source_content_base64=source_content_base64,
             source_asset_path=source_asset_path,
+            use_source_tempo=use_source_tempo,
         )
 
     def _prepare_studio_seed_upload(

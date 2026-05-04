@@ -21,6 +21,7 @@ from gigastudy_api.api.schemas.studios import (
     UploadTrackRequest,
     UpdatePitchEventRequest,
     UpdateRegionRequest,
+    UpdateStudioTimingRequest,
     VolumeTrackRequest,
     build_studio_response,
 )
@@ -279,6 +280,18 @@ def update_track_volume(
 ) -> StudioResponse:
     return _studio_response(
         repository.update_volume(studio_id, slot_id, request, owner_token=owner_token)
+    )
+
+
+@router.patch("/{studio_id}/timing", response_model=StudioResponse)
+def update_studio_timing(
+    studio_id: str,
+    request: UpdateStudioTimingRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.update_timing(studio_id, request, owner_token=owner_token)
     )
 
 

@@ -1,6 +1,7 @@
 import { getBrowserAudioContextConstructor } from '../audio/audioContext'
 import {
   DEFAULT_METER,
+  beatToSeconds,
   getBeatSeconds,
   isMeasureDownbeat,
   type MeterContext,
@@ -10,7 +11,7 @@ import {
   PERCUSSION_CLICK_INSTRUMENT,
   type PlaybackNode,
 } from './instruments'
-import type { ArrangementRegion, PitchEvent, TrackSlot } from '../../types/studio'
+import type { ArrangementRegion, PitchEvent, TempoChange, TrackSlot } from '../../types/studio'
 
 export type PlaybackSourceMode = 'audio' | 'events'
 
@@ -292,15 +293,20 @@ export function scheduleMetronomeClicksFromTimeline(
   bpm: number,
   meter: MeterContext,
   volume: number,
+  tempoChanges: TempoChange[] = [],
 ): number {
-  const beatSeconds = getBeatSeconds(bpm)
   let latestStop = 0
   for (
     let quarterBeatOffset = 0;
     quarterBeatOffset <= Math.max(0, maxBeat - 1) + 0.001;
     quarterBeatOffset += meter.pulseQuarterBeats
   ) {
-    const clickStartSeconds = quarterBeatOffset * beatSeconds
+    const clickStartSeconds = beatToSeconds(
+      quarterBeatOffset + 1,
+      bpm,
+      meter.beatsPerMeasure,
+      tempoChanges,
+    )
     if (clickStartSeconds + 0.045 < startSeconds) {
       continue
     }

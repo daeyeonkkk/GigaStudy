@@ -1,4 +1,4 @@
-import type { Studio } from '../../types/studio'
+import type { Studio, TempoChange } from '../../types/studio'
 
 export type MeterContext = {
   beatsPerMeasure: number
@@ -13,6 +13,32 @@ export const DEFAULT_METER: MeterContext = {
 
 export function getBeatSeconds(bpm: number): number {
   return 60 / Math.max(1, bpm)
+}
+
+export function beatToSeconds(
+  beat: number,
+  bpm: number,
+  beatsPerMeasure: number,
+  tempoChanges: TempoChange[] = [],
+): number {
+  const targetBeatOffset = Math.max(0, beat - 1)
+  let elapsedSeconds = 0
+  let cursorBeatOffset = 0
+  let activeBpm = Math.max(1, bpm)
+  for (const change of tempoChanges.slice().sort((left, right) => left.measure_index - right.measure_index)) {
+    const changeBeatOffset = Math.max(0, (change.measure_index - 1) * beatsPerMeasure)
+    if (changeBeatOffset <= cursorBeatOffset) {
+      activeBpm = change.bpm
+      continue
+    }
+    if (targetBeatOffset <= changeBeatOffset) {
+      return elapsedSeconds + ((targetBeatOffset - cursorBeatOffset) * getBeatSeconds(activeBpm))
+    }
+    elapsedSeconds += (changeBeatOffset - cursorBeatOffset) * getBeatSeconds(activeBpm)
+    cursorBeatOffset = changeBeatOffset
+    activeBpm = change.bpm
+  }
+  return elapsedSeconds + ((targetBeatOffset - cursorBeatOffset) * getBeatSeconds(activeBpm))
 }
 
 function getQuarterBeatsPerMeasure(numerator: number, denominator: number): number {

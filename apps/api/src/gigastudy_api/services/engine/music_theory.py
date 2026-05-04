@@ -31,12 +31,12 @@ SLOT_COMFORT_CENTERS: dict[int, float] = {
 }
 
 SLOT_NAME_ALIASES: dict[int, tuple[str, ...]] = {
-    1: ("soprano", "sop", "s."),
-    2: ("alto", "alt", "a."),
-    3: ("tenor", "ten", "t."),
-    4: ("baritone", "bari", "bar.", "bar"),
-    5: ("bass", "basso", "bs.", "b."),
-    6: ("percussion", "perc", "drum", "drums", "beat"),
+    1: ("soprano", "sop", "s.", "소프라노"),
+    2: ("alto", "alt", "a.", "알토"),
+    3: ("tenor", "ten", "t.", "테너"),
+    4: ("baritone", "bariton", "bari", "bar.", "bar", "바리톤"),
+    5: ("bass", "basso", "bs.", "b.", "베이스"),
+    6: ("percussion", "perc", "drum", "drums", "beat", "퍼커션", "드럼", "비트"),
 }
 
 PERCUSSION_LABEL_HINTS = ("kick", "snare", "hat", "clap", "rim", "tom", "cymbal", "ride", "crash")
@@ -265,7 +265,9 @@ def slot_assignment_diagnostics(
 
 
 def _normalize_assignment_name(name: str | None) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", (name or "").strip().lower())).strip()
+    return " ".join(
+        "".join(character.casefold() if character.isalnum() else " " for character in (name or "")).split()
+    )
 
 
 def _has_percussion_label_hint(name: str | None, events: list[TrackPitchEvent]) -> bool:

@@ -348,3 +348,16 @@ def test_slot_inference_respects_bass_range_over_generic_order() -> None:
     ]
 
     assert infer_slot_id("Track 1", notes, fallback=1) == 5
+
+
+def test_slot_inference_recognizes_nwc_and_korean_voice_names() -> None:
+    neutral_notes = [
+        event_from_pitch(beat=1, duration_beats=1, bpm=92, source="midi", extraction_method="test", pitch_midi=60),
+    ]
+
+    assert infer_slot_id("Bariton", neutral_notes, fallback=1) == 4
+    assert infer_slot_id("바리톤", neutral_notes, fallback=1) == 4
+    assert infer_slot_id("소프라노", neutral_notes, fallback=5) == 1
+    assert infer_slot_id("알토", neutral_notes, fallback=5) == 2
+    assert infer_slot_id("테너", neutral_notes, fallback=5) == 3
+    assert infer_slot_id("베이스", neutral_notes, fallback=1) == 5

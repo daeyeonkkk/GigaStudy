@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from gigastudy_api.services.engine.symbolic import (
+    ParsedSymbolicFile,
+    ParsedTrack,
+    map_tracks_to_slots,
     parse_midi_file,
     parse_musicxml_file,
     parse_symbolic_file_with_metadata,
@@ -264,7 +267,7 @@ def test_midi_mapping_collapses_vocal_tracks_to_monophonic_lines(tmp_path: Path)
     assert "monophonic_overlap_resolved" in notes[1].quality_warnings
 
 
-def test_midi_parser_splits_generic_channel_packed_tracks_for_review(tmp_path: Path) -> None:
+def test_midi_parser_splits_generic_channel_packed_tracks_by_register(tmp_path: Path) -> None:
     track_events = b"".join(
         [
             b"\x00\xff\x03\x0cMIDI track 1",
@@ -298,10 +301,10 @@ def test_midi_parser_splits_generic_channel_packed_tracks_for_review(tmp_path: P
     assert len(parsed_tracks) == 2
     assert {tuple(track.diagnostics["midi_channels"]) for track in parsed_tracks} == {(1,), (2,)}
     assert all(track.diagnostics["midi_split_from_multichannel_track"] is True for track in parsed_tracks)
-    assert symbolic_seed_review_reasons(parsed, source_suffix=".mid") == [
-        "generic_midi_track_name",
-        "midi_parts_have_no_vocal_labels",
-    ]
+    assert set(parsed.mapped_events) == {1, 5}
+    assert [note.label for note in parsed.mapped_events[1]] == ["C5"]
+    assert [note.label for note in parsed.mapped_events[5]] == ["C3"]
+    assert symbolic_seed_review_reasons(parsed, source_suffix=".mid") == []
 
 
 def test_symbolic_mapping_uses_pitch_range_when_part_names_are_generic(tmp_path: Path) -> None:
@@ -348,6 +351,136 @@ def test_slot_inference_respects_bass_range_over_generic_order() -> None:
     ]
 
     assert infer_slot_id("Track 1", notes, fallback=1) == 5
+
+
+def test_symbolic_mapping_places_generic_voice_parts_by_relative_register() -> None:
+    tracks = [
+        ParsedTrack(
+            name=f"Staff {index}",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=pitch,
+                )
+            ],
+        )
+        for index, pitch in enumerate([72, 65, 58, 53, 45], start=1)
+    ]
+
+    mapped = map_tracks_to_slots(tracks, bpm=113)
+
+    assert set(mapped) == {1, 2, 3, 4, 5}
+    assert [track.slot_id for track in tracks] == [1, 2, 3, 4, 5]
+    assert all(track.diagnostics["role_assignment_strategy"] == "relative_voice_register" for track in tracks)
+
+
+def test_symbolic_mapping_keeps_duplicate_tenor_parts_in_neighboring_voice_slots() -> None:
+    tracks = [
+        ParsedTrack(
+            name=f"Tenor {suffix}",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=pitch,
+                )
+            ],
+        )
+        for suffix, pitch in [("I", 60), ("II", 55)]
+    ]
+
+    mapped = map_tracks_to_slots(tracks, bpm=113)
+
+    assert set(mapped) == {3, 4}
+    assert [track.slot_id for track in tracks] == [3, 4]
+
+
+def test_symbolic_mapping_uses_register_over_conflicting_voice_names() -> None:
+    tracks = [
+        ParsedTrack(
+            name="Baritone",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=72,
+                )
+            ],
+        ),
+        ParsedTrack(
+            name="Soprano",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=48,
+                )
+            ],
+        ),
+    ]
+
+    mapped = map_tracks_to_slots(tracks, bpm=113)
+
+    assert set(mapped) == {1, 5}
+    assert [track.slot_id for track in tracks] == [1, 5]
+
+
+def test_symbolic_mapping_sends_channel_ten_to_percussion() -> None:
+    track = ParsedTrack(
+        name="Staff 6",
+        events=[
+            event_from_pitch(
+                beat=1,
+                duration_beats=0.25,
+                bpm=113,
+                source="midi",
+                extraction_method="test",
+                pitch_midi=35,
+            )
+        ],
+        diagnostics={"midi_source_track_index": 6, "midi_channels": [10]},
+    )
+
+    mapped = map_tracks_to_slots([track], bpm=113)
+
+    assert set(mapped) == {6}
+    assert track.slot_id == 6
+    assert track.diagnostics["role_assignment_strategy"] == "percussion_identity"
+
+
+def test_symbolic_seed_review_keeps_generic_polyphonic_accompaniment_reviewable() -> None:
+    track = ParsedTrack(
+        name="Staff 1",
+        events=[
+            event_from_pitch(
+                beat=1,
+                duration_beats=1,
+                bpm=113,
+                source="midi",
+                extraction_method="test",
+                pitch_midi=pitch,
+            )
+            for pitch in [48, 55, 60, 64]
+        ],
+        diagnostics={"midi_source_track_index": 1, "midi_channels": [1]},
+    )
+    mapped = map_tracks_to_slots([track], bpm=113)
+    parsed = ParsedSymbolicFile(tracks=[track], mapped_events=mapped)
+
+    assert symbolic_seed_review_reasons(parsed, source_suffix=".mid") == ["midi_polyphonic_accompaniment"]
 
 
 def test_slot_inference_recognizes_nwc_and_korean_voice_names() -> None:

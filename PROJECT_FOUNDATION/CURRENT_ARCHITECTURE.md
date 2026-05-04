@@ -134,8 +134,13 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/services/engine/symbolic.py`
   MusicXML/MIDI parsing and track-to-slot mapping. MIDI parsing splits
   channel-packed tracks into per-channel parsed parts, records MIDI program/name
-  diagnostics, and flags generic or non-vocal MIDI starts for candidate review
-  instead of silent registration.
+  diagnostics, then characterizes each part by musical role. Pitched
+  singer-like parts are assigned by relative register and range fit, so generic
+  staff names can still become soprano/alto/tenor/baritone/bass material.
+  Channel-10 or clearly special rhythmic parts map to percussion. Candidate
+  review is kept for parts that still look like accompaniment, overly broad
+  special-purpose material, or otherwise ambiguous non-vocal content after
+  characterization.
 - `apps/api/src/gigastudy_api/services/registration_context.py`
   The single provider for region-aware registration context. Registration
   cleanup, LLM review, and ensemble gates use this instead of reading

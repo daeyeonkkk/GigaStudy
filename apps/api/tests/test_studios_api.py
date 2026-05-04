@@ -621,14 +621,14 @@ def test_upload_start_applies_shared_monophonic_contract_to_midi_tracks(tmp_path
     assert "polyphonic_onset_collapsed" in events[0]["quality_warnings"]
 
 
-def test_upload_start_keeps_generic_midi_parts_reviewable(tmp_path: Path, monkeypatch) -> None:
+def test_upload_start_registers_generic_midi_parts_when_register_order_is_clear(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     encoded = base64.b64encode(build_generic_channel_packed_midi_bytes(bpm=113)).decode("ascii")
 
     response = client.post(
         "/api/studios",
         json={
-            "title": "Generic MIDI needs review",
+            "title": "Generic MIDI register order",
             "start_mode": "upload",
             "source_kind": "document",
             "source_filename": "generic.mid",
@@ -639,11 +639,10 @@ def test_upload_start_keeps_generic_midi_parts_reviewable(tmp_path: Path, monkey
     assert response.status_code == 200
     payload = response.json()
     pending_candidates = [candidate for candidate in payload["candidates"] if candidate["status"] == "pending"]
-    assert len(pending_candidates) == 2
-    assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 0
-    assert {candidate["suggested_slot_id"] for candidate in pending_candidates} == {1, 5}
-    assert all(candidate["method"] == "midi_seed_review" for candidate in pending_candidates)
-    assert "clearly label singer roles" in pending_candidates[0]["message"]
+    assert pending_candidates == []
+    assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 2
+    assert [event["label"] for event in _track_region_events(payload, 1)] == ["C5"]
+    assert [event["label"] for event in _track_region_events(payload, 5)] == ["C3"]
 
 
 def test_studio_response_sanitizes_legacy_explicit_polyphonic_regions() -> None:

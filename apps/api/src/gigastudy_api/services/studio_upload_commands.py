@@ -273,8 +273,8 @@ class StudioUploadCommands:
                         confidence=0.68,
                         events=events,
                         message=(
-                            "MIDI parts need review before registration because the file does not "
-                            f"clearly label singer roles ({review_reason_text})."
+                            "MIDI parts need review before registration because some material still "
+                            f"looks ambiguous after voice-role analysis ({review_reason_text})."
                         ),
                         source_diagnostics={
                             **diagnostics_by_slot.get(slot_id, {}),

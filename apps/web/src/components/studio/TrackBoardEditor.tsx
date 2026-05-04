@@ -1,53 +1,315 @@
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import {
   formatDurationSeconds,
   formatTrackName,
-  getPitchEventRange,
-  getPitchedEvents,
 } from '../../lib/studio'
 import type {
   ArrangementRegion,
-  PitchEvent,
   TrackSlot,
-  UpdatePitchEventRequest,
 } from '../../types/studio'
+import {
+  getEventMiniAriaLabel,
+  getEventMiniTitle,
+  getEventMiniTopPercent,
+  getRenderableMiniEvents,
+} from './eventMiniLayout'
 import { getDurationPercent } from './TrackBoardTimelineLayout'
 
 const MIN_TIMELINE_SECONDS = -30
+const MIN_DURATION_SECONDS = 0.08
+const MAX_UNDO_STEPS = 24
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-function getEventLeftPercent(event: PitchEvent, region: ArrangementRegion): number {
-  return getDurationPercent(event.start_seconds - region.start_seconds, region.duration_seconds)
+export type RegionEditorDraftEvent = {
+  event_id: string
+  label: string
+  pitch_midi: number | null
+  start_seconds: number
+  duration_seconds: number
+  is_rest: boolean
 }
 
-function getEventWidthPercent(event: PitchEvent, region: ArrangementRegion): number {
-  return Math.max(1.4, getDurationPercent(event.duration_seconds, region.duration_seconds))
+export type RegionEditorDraft = {
+  target_track_slot_id: number
+  start_seconds: number
+  duration_seconds: number
+  volume_percent: number
+  source_label: string
+  events: RegionEditorDraftEvent[]
 }
 
-function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {
-  const pitchRange = getPitchEventRange(events)
-  const midi = typeof event.pitch_midi === 'number' ? event.pitch_midi : pitchRange.minMidi
-  const span = Math.max(1, pitchRange.maxMidi - pitchRange.minMidi)
-  return Math.max(3, Math.min(91, ((pitchRange.maxMidi - midi) / span) * 88 + 3))
+type RegionRevisionEntry = {
+  revision_id: string
+  label: string
+  created_at: string
+  summary: string
+}
+
+type StoredRegionDraft = {
+  base_signature: string
+  draft: RegionEditorDraft
+}
+
+function getEventLeftPercent(event: RegionEditorDraftEvent, regionStartSeconds: number, regionDurationSeconds: number): number {
+  return getDurationPercent(event.start_seconds - regionStartSeconds, regionDurationSeconds)
+}
+
+function getEventWidthPercent(event: RegionEditorDraftEvent, regionDurationSeconds: number): number {
+  return Math.max(1.4, getDurationPercent(event.duration_seconds, regionDurationSeconds))
 }
 
 function roundToGrid(value: number, gridSeconds: number): number {
   return Math.round(value / gridSeconds) * gridSeconds
 }
 
+function roundSeconds(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+
 function clampTimelineStart(value: number): number {
-  return Math.max(MIN_TIMELINE_SECONDS, Math.round(value * 1000) / 1000)
+  return Math.max(MIN_TIMELINE_SECONDS, roundSeconds(value))
+}
+
+function clampDuration(value: number): number {
+  return Math.max(MIN_DURATION_SECONDS, roundSeconds(value))
+}
+
+function clampMidi(value: number): number {
+  return Math.max(0, Math.min(127, Math.round(value)))
+}
+
+function clampVolume(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function midiToLabel(midi: number | null): string {
+  if (midi === null || !Number.isFinite(midi)) {
+    return 'Rest'
+  }
+  const pitch = clampMidi(midi)
+  const octave = Math.floor(pitch / 12) - 1
+  return `${NOTE_NAMES[pitch % 12]}${octave}`
+}
+
+function beatSeconds(bpm: number): number {
+  return 60 / Math.max(1, bpm)
+}
+
+function startBeatForEvent(event: RegionEditorDraftEvent, draft: RegionEditorDraft, bpm: number): number {
+  return roundSeconds(1 + ((event.start_seconds - draft.start_seconds) / beatSeconds(bpm)))
+}
+
+function durationBeatsForEvent(event: RegionEditorDraftEvent, bpm: number): number {
+  return roundSeconds(event.duration_seconds / beatSeconds(bpm))
+}
+
+function createDraft(region: ArrangementRegion): RegionEditorDraft {
+  return {
+    duration_seconds: roundSeconds(region.duration_seconds),
+    events: region.pitch_events
+      .slice()
+      .sort((left, right) => left.start_seconds - right.start_seconds || left.event_id.localeCompare(right.event_id))
+      .map((event) => ({
+        duration_seconds: roundSeconds(event.duration_seconds),
+        event_id: event.event_id,
+        is_rest: event.is_rest,
+        label: event.label,
+        pitch_midi: event.pitch_midi,
+        start_seconds: roundSeconds(event.start_seconds),
+      })),
+    source_label: region.source_label ?? '',
+    start_seconds: roundSeconds(region.start_seconds),
+    target_track_slot_id: region.track_slot_id,
+    volume_percent: region.volume_percent,
+  }
+}
+
+function draftSignature(draft: RegionEditorDraft | null): string {
+  if (!draft) {
+    return ''
+  }
+  return JSON.stringify({
+    ...draft,
+    events: draft.events.map((event) => ({
+      ...event,
+      duration_seconds: roundSeconds(event.duration_seconds),
+      start_seconds: roundSeconds(event.start_seconds),
+    })),
+  })
+}
+
+function readStoredDraft(
+  storageKey: string | null,
+  sourceDraft: RegionEditorDraft | null,
+  sourceSignature: string,
+): RegionEditorDraft | null {
+  if (!storageKey || !sourceDraft || typeof window === 'undefined') {
+    return sourceDraft
+  }
+  try {
+    const raw = window.sessionStorage.getItem(storageKey)
+    if (!raw) {
+      return sourceDraft
+    }
+    const parsed = JSON.parse(raw) as StoredRegionDraft
+    if (parsed.base_signature !== sourceSignature || !isRegionEditorDraft(parsed.draft)) {
+      return sourceDraft
+    }
+    return parsed.draft
+  } catch {
+    return sourceDraft
+  }
+}
+
+function writeStoredDraft(storageKey: string | null, sourceSignature: string, draft: RegionEditorDraft | null) {
+  if (!storageKey || !draft || typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.sessionStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        base_signature: sourceSignature,
+        draft,
+      } satisfies StoredRegionDraft),
+    )
+  } catch {
+    // Session draft is a convenience. Failing to persist it must not block editing.
+  }
+}
+
+function clearStoredDraft(storageKey: string | null) {
+  if (!storageKey || typeof window === 'undefined') {
+    return
+  }
+  window.sessionStorage.removeItem(storageKey)
+}
+
+function isRegionEditorDraft(value: unknown): value is RegionEditorDraft {
+  if (!isRecord(value) || !Array.isArray(value.events)) {
+    return false
+  }
+  return (
+    typeof value.target_track_slot_id === 'number' &&
+    typeof value.start_seconds === 'number' &&
+    typeof value.duration_seconds === 'number' &&
+    typeof value.volume_percent === 'number' &&
+    typeof value.source_label === 'string' &&
+    value.events.every(isRegionEditorDraftEvent)
+  )
+}
+
+function isRegionEditorDraftEvent(value: unknown): value is RegionEditorDraftEvent {
+  if (!isRecord(value)) {
+    return false
+  }
+  return (
+    typeof value.event_id === 'string' &&
+    typeof value.label === 'string' &&
+    (typeof value.pitch_midi === 'number' || value.pitch_midi === null) &&
+    typeof value.start_seconds === 'number' &&
+    typeof value.duration_seconds === 'number' &&
+    typeof value.is_rest === 'boolean'
+  )
+}
+
+function parseNumber(value: string, fallback: number): number {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getRevisionHistory(region: ArrangementRegion | null): RegionRevisionEntry[] {
+  if (!region) {
+    return []
+  }
+  const editor = region.diagnostics.region_editor
+  if (!isRecord(editor)) {
+    return []
+  }
+  const history = editor.revision_history
+  if (!Array.isArray(history)) {
+    return []
+  }
+  return history.flatMap((entry) => {
+    if (!isRecord(entry)) {
+      return []
+    }
+    const revisionId = entry.revision_id
+    const label = entry.label
+    const createdAt = entry.created_at
+    const summary = entry.summary
+    if (
+      typeof revisionId !== 'string' ||
+      typeof label !== 'string' ||
+      typeof createdAt !== 'string' ||
+      typeof summary !== 'string'
+    ) {
+      return []
+    }
+    return [{ created_at: createdAt, label, revision_id: revisionId, summary }]
+  })
+}
+
+function selectedTrackName(tracks: TrackSlot[], slotId: number): string {
+  const track = tracks.find((item) => item.slot_id === slotId)
+  return formatTrackName(track?.name ?? `Track ${slotId}`)
+}
+
+function FieldNumber({
+  disabled = false,
+  label,
+  max,
+  min,
+  step,
+  value,
+  onChange,
+}: {
+  disabled?: boolean
+  label: string
+  max?: number
+  min?: number
+  step: number
+  value: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <label className="editor-field">
+      <span>{label}</span>
+      <input
+        disabled={disabled}
+        inputMode="decimal"
+        max={max}
+        min={min}
+        step={step}
+        type="number"
+        value={Number(value.toFixed(3))}
+        onChange={(event) => onChange(parseNumber(event.currentTarget.value, value))}
+      />
+    </label>
+  )
 }
 
 export function RegionTools({
   disabled,
   disabledReason,
-  gridSeconds,
   region,
-  tracks,
   onCopyRegion,
   onDeleteRegion,
-  onMoveRegion,
   onSplitRegion,
 }: {
   disabled: boolean
@@ -57,57 +319,34 @@ export function RegionTools({
   tracks: TrackSlot[]
   onCopyRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
   onDeleteRegion: (region: ArrangementRegion) => void
-  onMoveRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
   onSplitRegion: (region: ArrangementRegion, splitSeconds: number) => void
 }) {
   if (!region) {
     return <p className="piano-roll-panel__hint">편집할 구간을 선택하세요.</p>
   }
 
-  const canMoveUp = region.track_slot_id > Math.min(...tracks.map((track) => track.slot_id))
-  const canMoveDown = region.track_slot_id < Math.max(...tracks.map((track) => track.slot_id))
   const midpoint = region.start_seconds + region.duration_seconds / 2
 
   return (
-    <div className="region-tools" aria-label="구간 편집 도구">
+    <div className="region-tools" aria-label="구간 구조 도구">
       {disabled && disabledReason ? <p className="region-tools__hint">{disabledReason}</p> : null}
+      <span className="region-tools__summary">
+        {formatTrackName(region.track_name)} · {formatDurationSeconds(region.start_seconds)} -{' '}
+        {formatDurationSeconds(region.start_seconds + region.duration_seconds)}
+      </span>
       <button
         disabled={disabled}
         type="button"
-        onClick={() => onMoveRegion(region, region.track_slot_id, clampTimelineStart(region.start_seconds - gridSeconds))}
+        onClick={() => onSplitRegion(region, midpoint)}
       >
-        왼쪽 이동
-      </button>
-      <button
-        disabled={disabled}
-        type="button"
-        onClick={() => onMoveRegion(region, region.track_slot_id, clampTimelineStart(region.start_seconds + gridSeconds))}
-      >
-        오른쪽 이동
-      </button>
-      <button disabled={disabled} type="button" onClick={() => onSplitRegion(region, midpoint)}>
-        자르기
+        중간 자르기
       </button>
       <button
         disabled={disabled}
         type="button"
         onClick={() => onCopyRegion(region, region.track_slot_id, region.start_seconds + region.duration_seconds)}
       >
-        복사
-      </button>
-      <button
-        disabled={disabled || !canMoveUp}
-        type="button"
-        onClick={() => onMoveRegion(region, region.track_slot_id - 1, region.start_seconds)}
-      >
-        위 트랙
-      </button>
-      <button
-        disabled={disabled || !canMoveDown}
-        type="button"
-        onClick={() => onMoveRegion(region, region.track_slot_id + 1, region.start_seconds)}
-      >
-        아래 트랙
+        뒤에 복사
       </button>
       <button className="region-tools__danger" disabled={disabled} type="button" onClick={() => onDeleteRegion(region)}>
         삭제
@@ -116,183 +355,493 @@ export function RegionTools({
   )
 }
 
-export function PianoRollPanel({
-  disabled,
-  disabledReason,
-  focusedEventId,
-  gridSeconds,
-  region,
-  selectedEventId,
-  onSelectEvent,
-  onUpdateEvent,
-}: {
+type PianoRollPanelProps = {
+  bpm: number
+  draftStorageKey?: string | null
   disabled: boolean
   disabledReason: string | null
   focusedEventId?: string | null
   gridSeconds: number
   region: ArrangementRegion | null
   selectedEventId: string | null
+  tracks: TrackSlot[]
+  onRestoreRevision: (region: ArrangementRegion, revisionId: string) => void
+  onSaveDraft: (region: ArrangementRegion, draft: RegionEditorDraft, revisionLabel: string | null) => void
   onSelectEvent: (eventId: string) => void
-  onUpdateEvent: (region: ArrangementRegion, event: PitchEvent, patch: UpdatePitchEventRequest) => void
-}) {
-  const events = region ? getPitchedEvents(region.pitch_events) : []
+}
+
+type PianoRollPanelContentProps = PianoRollPanelProps & {
+  initialDraft: RegionEditorDraft | null
+  revisionHistory: RegionRevisionEntry[]
+  sourceDraft: RegionEditorDraft | null
+  sourceSignature: string
+}
+
+export function PianoRollPanel(props: PianoRollPanelProps) {
+  const sourceDraft = props.region ? createDraft(props.region) : null
+  const sourceSignature = draftSignature(sourceDraft)
+  const initialDraft = readStoredDraft(props.draftStorageKey ?? null, sourceDraft, sourceSignature)
+  const revisionHistory = getRevisionHistory(props.region)
+  const editorKey = `${props.region?.region_id ?? 'empty'}:${sourceSignature}:${draftSignature(initialDraft)}`
+
+  return (
+    <PianoRollPanelContent
+      {...props}
+      key={editorKey}
+      initialDraft={initialDraft}
+      revisionHistory={revisionHistory}
+      sourceDraft={sourceDraft}
+      sourceSignature={sourceSignature}
+    />
+  )
+}
+
+function PianoRollPanelContent({
+  bpm,
+  draftStorageKey,
+  disabled,
+  disabledReason,
+  focusedEventId,
+  gridSeconds,
+  region,
+  selectedEventId,
+  tracks,
+  onRestoreRevision,
+  onSaveDraft,
+  onSelectEvent,
+  initialDraft,
+  revisionHistory,
+  sourceDraft,
+  sourceSignature,
+}: PianoRollPanelContentProps) {
+  const [draft, setDraft] = useState<RegionEditorDraft | null>(initialDraft)
+  const [undoStack, setUndoStack] = useState<RegionEditorDraft[]>([])
+  const [redoStack, setRedoStack] = useState<RegionEditorDraft[]>([])
+  const [revisionLabel, setRevisionLabel] = useState('음표 편집 저장')
+  const [selectedRevisionId, setSelectedRevisionId] = useState(revisionHistory[0]?.revision_id ?? '')
+
+  const hasDirtyChanges = draftSignature(draft) !== sourceSignature
+  const events = getRenderableMiniEvents(draft?.events ?? [])
   const selectedEvent =
     events.find((event) => event.event_id === selectedEventId) ??
     events.find((event) => event.event_id === focusedEventId) ??
     events[0] ??
     null
-  const pitchRange = getPitchEventRange(events)
-  const pitchLabels = Array.from({ length: 5 }, (_, index) => {
-    const midi = Math.round(
-      pitchRange.maxMidi - ((pitchRange.maxMidi - pitchRange.minMidi) / 4) * index,
-    )
-    return `M${midi}`
-  })
+  const pitchLabels = ['높음', '', '중간', '', '낮음']
 
-  function updateSelectedEvent(patch: UpdatePitchEventRequest) {
-    if (!region || !selectedEvent) {
+  function replaceDraft(nextDraft: RegionEditorDraft) {
+    setDraft((previousDraft) => {
+      if (previousDraft && draftSignature(previousDraft) !== draftSignature(nextDraft)) {
+        setUndoStack((stack) => [...stack.slice(-(MAX_UNDO_STEPS - 1)), previousDraft])
+        setRedoStack([])
+      }
+      return nextDraft
+    })
+  }
+
+  function patchDraft(patch: Partial<RegionEditorDraft>) {
+    if (!draft) {
       return
     }
-    onUpdateEvent(region, selectedEvent, patch)
+    replaceDraft({ ...draft, ...patch })
   }
+
+  function patchEvent(eventId: string, patch: Partial<RegionEditorDraftEvent>) {
+    if (!draft) {
+      return
+    }
+    replaceDraft({
+      ...draft,
+      events: draft.events.map((event) => (event.event_id === eventId ? { ...event, ...patch } : event)),
+    })
+  }
+
+  function moveRegionStart(nextStartSeconds: number) {
+    if (!draft) {
+      return
+    }
+    const nextStart = clampTimelineStart(nextStartSeconds)
+    const deltaSeconds = nextStart - draft.start_seconds
+    replaceDraft({
+      ...draft,
+      events: draft.events.map((event) => ({
+        ...event,
+        start_seconds: clampTimelineStart(event.start_seconds + deltaSeconds),
+      })),
+      start_seconds: nextStart,
+    })
+  }
+
+  function undoDraft() {
+    const previousDraft = undoStack.at(-1)
+    if (!previousDraft || !draft) {
+      return
+    }
+    setUndoStack((stack) => stack.slice(0, -1))
+    setRedoStack((stack) => [...stack, draft])
+    setDraft(previousDraft)
+  }
+
+  function redoDraft() {
+    const nextDraft = redoStack.at(-1)
+    if (!nextDraft || !draft) {
+      return
+    }
+    setRedoStack((stack) => stack.slice(0, -1))
+    setUndoStack((stack) => [...stack, draft])
+    setDraft(nextDraft)
+  }
+
+  function resetDraft() {
+    clearStoredDraft(draftStorageKey ?? null)
+    setDraft(sourceDraft)
+    setUndoStack([])
+    setRedoStack([])
+  }
+
+  function snapSelectedEvent() {
+    if (!draft || !selectedEvent) {
+      return
+    }
+    patchEvent(selectedEvent.event_id, {
+      duration_seconds: Math.max(gridSeconds, roundSeconds(roundToGrid(selectedEvent.duration_seconds, gridSeconds))),
+      start_seconds: clampTimelineStart(roundToGrid(selectedEvent.start_seconds, gridSeconds)),
+    })
+  }
+
+  function saveDraft() {
+    if (!region || !draft) {
+      return
+    }
+    onSaveDraft(region, draft, revisionLabel.trim() || null)
+  }
+
+  useEffect(() => {
+    if (!draftStorageKey) {
+      return
+    }
+    if (!draft || !hasDirtyChanges) {
+      clearStoredDraft(draftStorageKey)
+      return
+    }
+    writeStoredDraft(draftStorageKey, sourceSignature, draft)
+  }, [draft, draftStorageKey, hasDirtyChanges, sourceSignature])
 
   return (
     <section className="piano-roll-panel" aria-label="음표 세부 편집기">
       <header>
         <div>
           <p className="eyebrow">세부 편집</p>
-          <h3>{region ? `${formatTrackName(region.track_name)} 음표 편집` : '음표 편집'}</h3>
+          <h3>{region ? `${selectedTrackName(tracks, draft?.target_track_slot_id ?? region.track_slot_id)} 음표 편집` : '음표 편집'}</h3>
         </div>
-        <div className="piano-roll-panel__tools" aria-label="음표 편집 도구">
+        <div className="piano-roll-panel__tools" aria-label="편집 저장 도구">
           {disabled && disabledReason ? <span className="piano-roll-panel__lock">{disabledReason}</span> : null}
-          <button
-            disabled={disabled || !selectedEvent}
-            type="button"
-            onClick={() => {
-              if (selectedEvent?.pitch_midi !== null && selectedEvent?.pitch_midi !== undefined) {
-                updateSelectedEvent({ pitch_midi: Math.max(0, selectedEvent.pitch_midi - 1) })
-              }
-            }}
-          >
-            음정 -
+          <button disabled={disabled || !hasDirtyChanges} type="button" onClick={saveDraft} data-testid="save-region-draft-button">
+            저장
           </button>
-          <button
-            disabled={disabled || !selectedEvent}
-            type="button"
-            onClick={() => {
-              if (selectedEvent?.pitch_midi !== null && selectedEvent?.pitch_midi !== undefined) {
-                updateSelectedEvent({ pitch_midi: Math.min(127, selectedEvent.pitch_midi + 1) })
-              }
-            }}
-          >
-            음정 +
+          <button disabled={!hasDirtyChanges} type="button" onClick={resetDraft}>
+            초기화
           </button>
-          <button
-            disabled={disabled || !selectedEvent}
-            type="button"
-            onClick={() =>
-              selectedEvent
-                ? updateSelectedEvent({
-                    start_seconds: clampTimelineStart(selectedEvent.start_seconds - gridSeconds),
-                  })
-                : undefined
-            }
-          >
-            당기기
+          <button disabled={undoStack.length === 0} type="button" onClick={undoDraft}>
+            되돌리기
           </button>
-          <button
-            disabled={disabled || !selectedEvent}
-            type="button"
-            onClick={() =>
-              selectedEvent
-                ? updateSelectedEvent({
-                    start_seconds: clampTimelineStart(selectedEvent.start_seconds + gridSeconds),
-                  })
-                : undefined
-            }
-          >
-            밀기
-          </button>
-          <button
-            disabled={disabled || !selectedEvent}
-            type="button"
-            onClick={() =>
-              selectedEvent
-                ? updateSelectedEvent({
-                    duration_seconds: Math.max(0.08, selectedEvent.duration_seconds - gridSeconds),
-                  })
-                : undefined
-            }
-          >
-            짧게
-          </button>
-          <button
-            disabled={disabled || !selectedEvent}
-            type="button"
-            onClick={() =>
-              selectedEvent
-                ? updateSelectedEvent({
-                    duration_seconds: selectedEvent.duration_seconds + gridSeconds,
-                  })
-                : undefined
-            }
-          >
-            길게
-          </button>
-          <button
-            disabled={disabled || !selectedEvent}
-            type="button"
-            onClick={() =>
-              selectedEvent
-                ? updateSelectedEvent({
-                    duration_seconds: Math.max(gridSeconds, roundToGrid(selectedEvent.duration_seconds, gridSeconds)),
-                    start_seconds: clampTimelineStart(roundToGrid(selectedEvent.start_seconds, gridSeconds)),
-                  })
-                : undefined
-            }
-          >
-            스냅
+          <button disabled={redoStack.length === 0} type="button" onClick={redoDraft}>
+            다시 실행
           </button>
         </div>
       </header>
 
-      <div className="piano-roll">
-        <div className="piano-roll__keys" aria-hidden="true">
-          {pitchLabels.map((label) => (
-            <span key={label}>{label}</span>
-          ))}
-        </div>
-        <div className="piano-roll__grid">
-          {region && events.length > 0 ? (
-            events.map((event) => (
-              <button
-                aria-pressed={event.event_id === selectedEvent?.event_id}
-                className={`piano-roll__event ${
-                  event.event_id === focusedEventId || event.event_id === selectedEvent?.event_id
-                    ? 'is-focused'
-                    : ''
-                }`}
-                data-testid={`piano-event-${event.event_id}`}
-                key={event.event_id}
-                style={
-                  {
-                    '--event-left': `${getEventLeftPercent(event, region)}%`,
-                    '--event-top': `${getEventTopPercent(event, events)}%`,
-                    '--event-width': `${getEventWidthPercent(event, region)}%`,
-                  } as CSSProperties
-                }
-                title={`${event.label} - ${formatDurationSeconds(event.duration_seconds)}`}
-                type="button"
-                onClick={() => onSelectEvent(event.event_id)}
+      {hasDirtyChanges ? (
+        <p className="draft-save-notice">
+          저장 전 변경사항은 이 브라우저에 임시 저장됩니다. 저장하면 다른 화면의 timeline에도 반영되고, 초기화하면 마지막 저장 상태로 돌아갑니다.
+        </p>
+      ) : null}
+
+      {!region || !draft ? (
+        <p className="piano-roll-panel__hint">Region lane에서 구간을 선택하면 수치 편집기가 열립니다.</p>
+      ) : (
+        <>
+          <div className="region-draft-grid" aria-label="구간 수치 편집">
+            <label className="editor-field">
+              <span>트랙</span>
+              <select
+                disabled={disabled}
+                value={draft.target_track_slot_id}
+                onChange={(event) => patchDraft({ target_track_slot_id: Number(event.currentTarget.value) })}
               >
-                {event.label}
-              </button>
-            ))
-          ) : (
-            <p>음표가 있는 구간을 선택하세요.</p>
-          )}
-        </div>
-      </div>
+                {tracks.map((track) => (
+                  <option key={track.slot_id} value={track.slot_id}>
+                    {formatTrackName(track.name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FieldNumber
+              disabled={disabled}
+              label="구간 시작초"
+              min={MIN_TIMELINE_SECONDS}
+              step={0.001}
+              value={draft.start_seconds}
+              onChange={moveRegionStart}
+            />
+            <FieldNumber
+              disabled={disabled}
+              label="구간 길이초"
+              min={MIN_DURATION_SECONDS}
+              step={0.001}
+              value={draft.duration_seconds}
+              onChange={(value) => patchDraft({ duration_seconds: clampDuration(value) })}
+            />
+            <FieldNumber
+              disabled={disabled}
+              label="구간 음량%"
+              max={100}
+              min={0}
+              step={1}
+              value={draft.volume_percent}
+              onChange={(value) => patchDraft({ volume_percent: clampVolume(value) })}
+            />
+            <label className="editor-field editor-field--wide">
+              <span>구간 이름</span>
+              <input
+                disabled={disabled}
+                maxLength={180}
+                type="text"
+                value={draft.source_label}
+                onChange={(event) => patchDraft({ source_label: event.currentTarget.value })}
+              />
+            </label>
+          </div>
+
+          <div className="piano-roll">
+            <div className="piano-roll__keys" aria-hidden="true">
+              {pitchLabels.map((label, index) => (
+                <span key={`${index}-${label || 'guide'}`}>{label}</span>
+              ))}
+            </div>
+            <div className="piano-roll__grid">
+              {events.length > 0 ? (
+                events.map((event) => (
+                  <button
+                    aria-pressed={event.event_id === selectedEvent?.event_id}
+                    className={`piano-roll__event ${
+                      event.event_id === focusedEventId || event.event_id === selectedEvent?.event_id
+                        ? 'is-focused'
+                        : ''
+                    }`}
+                    data-testid={`piano-event-${event.event_id}`}
+                    key={event.event_id}
+                    style={
+                      {
+                        '--event-left': `${getEventLeftPercent(event, draft.start_seconds, draft.duration_seconds)}%`,
+                        '--event-top': `${getEventMiniTopPercent(event, events)}%`,
+                        '--event-width': `${getEventWidthPercent(event, draft.duration_seconds)}%`,
+                      } as CSSProperties
+                    }
+                    title={getEventMiniTitle(event)}
+                    aria-label={getEventMiniAriaLabel(event)}
+                    type="button"
+                    onClick={() => onSelectEvent(event.event_id)}
+                  >
+                    <span className="event-mini__sr">{event.label}</span>
+                  </button>
+                ))
+              ) : (
+                <p>음표가 있는 구간을 선택하세요.</p>
+              )}
+            </div>
+          </div>
+
+          {selectedEvent ? (
+            <section className="event-inspector" aria-label="선택 음표 수치 편집">
+              <header>
+                <div>
+                  <p className="eyebrow">선택 음표</p>
+                  <h4>{selectedEvent.label}</h4>
+                </div>
+                <div className="event-inspector__buttons">
+                  <button
+                    disabled={disabled || selectedEvent.pitch_midi === null}
+                    type="button"
+                    onClick={() => {
+                      if (selectedEvent.pitch_midi !== null) {
+                        const nextPitch = clampMidi(selectedEvent.pitch_midi - 1)
+                        patchEvent(selectedEvent.event_id, { label: midiToLabel(nextPitch), pitch_midi: nextPitch })
+                      }
+                    }}
+                  >
+                    음정 -
+                  </button>
+                  <button
+                    disabled={disabled || selectedEvent.pitch_midi === null}
+                    type="button"
+                    onClick={() => {
+                      if (selectedEvent.pitch_midi !== null) {
+                        const nextPitch = clampMidi(selectedEvent.pitch_midi + 1)
+                        patchEvent(selectedEvent.event_id, { label: midiToLabel(nextPitch), pitch_midi: nextPitch })
+                      }
+                    }}
+                  >
+                    음정 +
+                  </button>
+                  <button
+                    disabled={disabled}
+                    type="button"
+                    onClick={() =>
+                      patchEvent(selectedEvent.event_id, {
+                        start_seconds: clampTimelineStart(selectedEvent.start_seconds - gridSeconds),
+                      })
+                    }
+                  >
+                    당기기
+                  </button>
+                  <button
+                    disabled={disabled}
+                    type="button"
+                    onClick={() =>
+                      patchEvent(selectedEvent.event_id, {
+                        start_seconds: clampTimelineStart(selectedEvent.start_seconds + gridSeconds),
+                      })
+                    }
+                  >
+                    밀기
+                  </button>
+                  <button disabled={disabled} type="button" onClick={snapSelectedEvent}>
+                    스냅
+                  </button>
+                </div>
+              </header>
+              <div className="event-inspector__grid">
+                <label className="editor-field">
+                  <span>라벨</span>
+                  <input
+                    disabled={disabled}
+                    maxLength={32}
+                    type="text"
+                    value={selectedEvent.label}
+                    onChange={(event) => patchEvent(selectedEvent.event_id, { label: event.currentTarget.value })}
+                  />
+                </label>
+                <FieldNumber
+                  disabled={disabled}
+                  label="MIDI 높이"
+                  max={127}
+                  min={0}
+                  step={1}
+                  value={selectedEvent.pitch_midi ?? 60}
+                  onChange={(value) => {
+                    const nextPitch = clampMidi(value)
+                    patchEvent(selectedEvent.event_id, {
+                      is_rest: false,
+                      label: midiToLabel(nextPitch),
+                      pitch_midi: nextPitch,
+                    })
+                  }}
+                />
+                <FieldNumber
+                  disabled={disabled}
+                  label="시작초"
+                  min={MIN_TIMELINE_SECONDS}
+                  step={0.001}
+                  value={selectedEvent.start_seconds}
+                  onChange={(value) =>
+                    patchEvent(selectedEvent.event_id, { start_seconds: clampTimelineStart(value) })
+                  }
+                />
+                <FieldNumber
+                  disabled={disabled}
+                  label="길이초"
+                  min={MIN_DURATION_SECONDS}
+                  step={0.001}
+                  value={selectedEvent.duration_seconds}
+                  onChange={(value) =>
+                    patchEvent(selectedEvent.event_id, { duration_seconds: clampDuration(value) })
+                  }
+                />
+                <FieldNumber
+                  disabled={disabled}
+                  label="시작 beat"
+                  min={0}
+                  step={0.001}
+                  value={startBeatForEvent(selectedEvent, draft, bpm)}
+                  onChange={(value) =>
+                    patchEvent(selectedEvent.event_id, {
+                      start_seconds: clampTimelineStart(draft.start_seconds + ((value - 1) * beatSeconds(bpm))),
+                    })
+                  }
+                />
+                <FieldNumber
+                  disabled={disabled}
+                  label="길이 beat"
+                  min={0.001}
+                  step={0.001}
+                  value={durationBeatsForEvent(selectedEvent, bpm)}
+                  onChange={(value) =>
+                    patchEvent(selectedEvent.event_id, {
+                      duration_seconds: clampDuration(value * beatSeconds(bpm)),
+                    })
+                  }
+                />
+                <label className="editor-field editor-field--checkbox">
+                  <input
+                    checked={selectedEvent.is_rest}
+                    disabled={disabled}
+                    type="checkbox"
+                    onChange={(event) =>
+                      patchEvent(selectedEvent.event_id, {
+                        is_rest: event.currentTarget.checked,
+                        label: event.currentTarget.checked ? 'Rest' : midiToLabel(selectedEvent.pitch_midi ?? 60),
+                        pitch_midi: event.currentTarget.checked ? null : selectedEvent.pitch_midi ?? 60,
+                      })
+                    }
+                  />
+                  <span>쉼표</span>
+                </label>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="revision-panel" aria-label="저장 버전">
+            <div>
+              <p className="eyebrow">저장 버전</p>
+              <h4>{revisionHistory.length > 0 ? `${revisionHistory.length}개 복원 지점` : '아직 저장 버전 없음'}</h4>
+              <p>
+                저장할 때마다 직전 상태가 보관됩니다. 필요하면 이전 상태를 선택해 현재 region으로 복원합니다.
+              </p>
+            </div>
+            <label className="editor-field editor-field--wide">
+              <span>저장 라벨</span>
+              <input
+                maxLength={120}
+                type="text"
+                value={revisionLabel}
+                onChange={(event) => setRevisionLabel(event.currentTarget.value)}
+              />
+            </label>
+            {revisionHistory.length > 0 ? (
+              <div className="revision-panel__restore">
+                <select
+                  value={selectedRevisionId}
+                  onChange={(event) => setSelectedRevisionId(event.currentTarget.value)}
+                >
+                  {revisionHistory.map((revision) => (
+                    <option key={revision.revision_id} value={revision.revision_id}>
+                      {revision.label} · {formatDateTime(revision.created_at)} · {revision.summary}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  disabled={disabled || !selectedRevisionId}
+                  type="button"
+                  onClick={() => onRestoreRevision(region, selectedRevisionId)}
+                >
+                  선택 버전 복원
+                </button>
+              </div>
+            ) : null}
+          </section>
+        </>
+      )}
     </section>
   )
 }

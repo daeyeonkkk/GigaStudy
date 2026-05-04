@@ -6,13 +6,21 @@
 
 .composer-window {
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
   min-height: calc(100svh - 48px);
   border: 1px solid #7f8e9a;
   border-radius: 8px;
   background: #d8dde2;
   box-shadow: 0 16px 44px rgba(20, 31, 42, 0.18);
   overflow: hidden;
+}
+
+.composer-window--playback-panel {
+  grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr) auto;
+}
+
+.composer-window--editor {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
 }
 
 .composer-titlebar {
@@ -81,6 +89,12 @@
 .composer-menubar__item:hover:not(:disabled) {
   border-color: #9aa7b3;
   background: #ffffff;
+}
+
+.composer-menubar__item--active {
+  border-color: #8ca0b1;
+  background: #ffffff;
+  color: #0e1720;
 }
 
 .composer-menubar__item:disabled {
@@ -383,6 +397,10 @@
   overflow: auto;
 }
 
+.composer-arrange-viewport--editor {
+  max-height: calc(100svh - 136px);
+}
+
 .composer-arrange-paper {
   width: min(100%, 1360px);
   min-width: 880px;
@@ -393,6 +411,10 @@
   background: #ffffff;
   color: #111111;
   box-shadow: 0 1px 0 #ffffff, 0 18px 50px rgba(30, 38, 45, 0.14);
+}
+
+.composer-arrange-paper--editor {
+  min-height: 0;
 }
 
 .composer-arrange-heading {
@@ -414,6 +436,54 @@
 .composer-arrange-heading p {
   color: #4a5560;
   font-weight: 700;
+}
+
+.composer-page-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+  gap: 12px 18px;
+  align-items: center;
+  width: min(100%, 920px);
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-top: 1px solid #c8d1d8;
+  border-bottom: 1px solid #c8d1d8;
+  background: #f8fafb;
+  text-align: left;
+}
+
+.composer-page-brief div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.composer-page-brief span {
+  color: #9b4f00;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.composer-page-brief strong {
+  color: #101922;
+  font-size: 1rem;
+}
+
+.composer-page-brief p {
+  grid-column: 1;
+  margin: 0;
+  color: #4f5d68;
+  font-size: 0.84rem;
+  line-height: 1.42;
+}
+
+.composer-page-brief__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  grid-column: 2;
+  grid-row: 1 / 3;
 }
 
 .studio-step-button,
@@ -525,6 +595,20 @@
 
   .composer-arrange-heading h1 {
     font-size: clamp(1.55rem, 10vw, 2.4rem);
+  }
+
+  .composer-page-brief {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-page-brief p,
+  .composer-page-brief__actions {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .composer-page-brief__actions {
+    justify-content: flex-start;
   }
 
   .studio-tracks__header,

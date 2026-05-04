@@ -1,6 +1,6 @@
 ﻿import { useMemo, useState } from 'react'
 import { useRef } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { CandidateReviewPanel } from '../components/studio/CandidateReviewPanel'
 import { ExtractionJobsPanel } from '../components/studio/ExtractionJobsPanel'
@@ -23,8 +23,6 @@ import {
   deleteRegion,
   getDocumentJobSourcePreviewUrl,
   splitRegion,
-  updatePitchEvent,
-  updateRegion,
 } from '../lib/api'
 import {
   DEFAULT_METER,
@@ -35,15 +33,14 @@ import {
 } from '../lib/studio'
 import type {
   ArrangementRegion,
-  PitchEvent,
   Studio,
   TrackSlot,
-  UpdatePitchEventRequest,
 } from '../types/studio'
 import './StudioPage.css'
 
 export function StudioPage() {
   const { studioId } = useParams()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const focusedRegionId = searchParams.get('region')
   const focusedEventId = searchParams.get('event')
@@ -275,23 +272,6 @@ export function StudioPage() {
         ? '녹음 중에는 일반 재생을 잠시 멈춥니다.'
         : null
 
-  async function handleMoveRegion(region: ArrangementRegion, targetSlotId: number, startSeconds: number) {
-    if (!studio) {
-      return
-    }
-    const targetTrack = studio.tracks.find((track) => track.slot_id === targetSlotId)
-    const targetName = targetTrack?.name ?? `Track ${targetSlotId}`
-    await runStudioAction(
-      () =>
-        updateRegion(studio.studio_id, region.region_id, {
-          start_seconds: Math.max(0, Math.round(startSeconds * 1000) / 1000),
-          target_track_slot_id: targetSlotId,
-        }),
-      `${formatTrackName(region.track_name)} 구간을 이동하는 중입니다.`,
-      `${targetName} 위치로 구간을 이동했습니다.`,
-    )
-  }
-
   async function handleCopyRegion(region: ArrangementRegion, targetSlotId: number, startSeconds: number) {
     if (!studio) {
       return
@@ -334,19 +314,17 @@ export function StudioPage() {
     )
   }
 
-  async function handleUpdateEvent(
-    region: ArrangementRegion,
-    event: PitchEvent,
-    patch: UpdatePitchEventRequest,
-  ) {
+  function handleOpenRegionEditor(region: ArrangementRegion) {
     if (!studio) {
       return
     }
-    await runStudioAction(
-      () => updatePitchEvent(studio.studio_id, region.region_id, event.event_id, patch),
-      `${event.label} 음표를 저장하는 중입니다.`,
-      `${event.label} 음표를 업데이트했습니다.`,
-    )
+    const params = new URLSearchParams()
+    params.set('region', region.region_id)
+    const firstEventId = region.pitch_events.find((event) => event.is_rest !== true)?.event_id ?? region.pitch_events[0]?.event_id
+    if (firstEventId) {
+      params.set('event', firstEventId)
+    }
+    navigate(`/studios/${studio.studio_id}/edit?${params.toString()}`)
   }
 
   if (!studioId) {
@@ -383,7 +361,10 @@ export function StudioPage() {
 
   return (
     <main className="app-shell studio-page">
-      <section className="composer-window" aria-label="GigaStudy composer studio">
+      <section
+        className={`composer-window ${playbackPickerOpen || globalPlaying ? 'composer-window--playback-panel' : ''}`}
+        aria-label="GigaStudy composer studio"
+      >
         <StudioToolbar
           actionState={actionState}
           globalPlaying={globalPlaying}
@@ -424,6 +405,21 @@ export function StudioPage() {
                 {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}
                 {registeredTracks.length}/6 · 리포트 {studio.reports.length}
               </p>
+              <section className="composer-page-brief" aria-label="스튜디오 화면 역할">
+                <div>
+                  <span>이 화면의 역할</span>
+                  <strong>6개 track을 채우고 shared timeline에 맞춥니다.</strong>
+                </div>
+                <p>세부 음표 수정은 음표 편집에서, reference playback 연습은 연습 화면에서 이어갑니다.</p>
+                <div className="composer-page-brief__actions">
+                  <Link className="app-button app-button--secondary" to={`/studios/${studio.studio_id}/edit`}>
+                    음표 편집
+                  </Link>
+                  <Link className="app-button app-button--secondary" to={`/studios/${studio.studio_id}/practice`}>
+                    연습
+                  </Link>
+                </div>
+              </section>
             </div>
 
             <TrackBoard
@@ -451,16 +447,13 @@ export function StudioPage() {
               }
               onDeleteRegion={(region) => void handleDeleteRegion(region)}
               onGenerate={(track) => void handleGenerate(track)}
-              onMoveRegion={(region, targetSlotId, startSeconds) =>
-                void handleMoveRegion(region, targetSlotId, startSeconds)
-              }
+              onOpenRegionEditor={handleOpenRegionEditor}
               onOpenScore={openScoreSession}
               onRecord={(track) => void handleRecord(track)}
               onSplitRegion={(region, splitSeconds) => void handleSplitRegion(region, splitSeconds)}
               onStopPlayback={stopTrackPlayback}
               onSync={(track, nextOffset) => void handleSync(track, nextOffset)}
               onTogglePlayback={(track) => void toggleTrackPlayback(track)}
-              onUpdateEvent={(region, event, patch) => void handleUpdateEvent(region, event, patch)}
               onUpload={(track, file) => void handleUpload(track, file)}
               onVolumeChange={(track, nextVolume) => void handleVolume(track, nextVolume)}
             />

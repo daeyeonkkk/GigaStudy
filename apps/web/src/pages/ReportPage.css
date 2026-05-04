@@ -59,6 +59,29 @@
   text-align: right;
 }
 
+.report-purpose {
+  display: grid;
+  gap: 4px;
+  margin: 0 24px;
+  padding: 12px 14px;
+  border-top: 1px solid #c8d1d8;
+  border-bottom: 1px solid #c8d1d8;
+  background: #ffffff;
+}
+
+.report-purpose strong {
+  color: #101922;
+  font-size: 0.98rem;
+}
+
+.report-purpose p {
+  margin: 0;
+  color: #54616c;
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.38;
+}
+
 .report-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

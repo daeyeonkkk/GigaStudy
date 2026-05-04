@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { formatTrackName, type PlaybackSourceMode } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
+import { StudioPurposeNav } from './StudioPurposeNav'
 
 type ActionState =
   | { phase: 'idle' }
@@ -147,6 +148,12 @@ export function StudioToolbar({
         </div>
       </header>
 
+      <StudioPurposeNav
+        active="studio"
+        note="트랙을 채우고 sync를 맞춘 뒤, 선택한 track을 같은 timeline에서 재생해 ensemble 상태를 확인합니다."
+        studioId={studioId}
+      />
+
       <nav className="composer-menubar" aria-label="스튜디오 메뉴">
         <Link className="composer-menubar__item" to="/" title="스튜디오 목록으로 이동">
           파일
@@ -159,6 +166,13 @@ export function StudioToolbar({
         >
           트랙
         </button>
+        <Link
+          className="composer-menubar__item"
+          to={`/studios/${studioId}/edit`}
+          title="region과 음표를 세부 편집합니다."
+        >
+          음표 편집
+        </Link>
         <button
           className="composer-menubar__item"
           disabled={!globalPlaying && (transportDisabled || registeredTrackCount === 0)}
@@ -196,6 +210,13 @@ export function StudioToolbar({
       <div className="composer-toolbar" aria-label="전체 트랙 재생 제어">
         <Link className="composer-tool composer-tool--home" to="/" aria-label="홈으로">
           홈
+        </Link>
+        <Link
+          className="composer-tool composer-tool--text"
+          data-testid="note-editor-link"
+          to={`/studios/${studioId}/edit`}
+        >
+          음표 편집
         </Link>
         <Link
           className="composer-tool composer-tool--text"

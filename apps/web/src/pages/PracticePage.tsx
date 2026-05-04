@@ -3,6 +3,13 @@ import type { CSSProperties } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { StudioRouteState } from '../components/studio/StudioRouteState'
+import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
+import {
+  getEventMiniAriaLabel,
+  getEventMiniTitle,
+  getEventMiniTopPercent,
+  getRenderableMiniEvents,
+} from '../components/studio/eventMiniLayout'
 import type { StudioActionState } from '../components/studio/studioActionState'
 import { useStudioPlayback } from '../components/studio/useStudioPlayback'
 import { useStudioResource } from '../components/studio/useStudioResource'
@@ -11,7 +18,6 @@ import {
   formatDurationSeconds,
   formatTrackName,
   getPitchEventRange,
-  getPitchedEvents,
   getStudioMeter,
 } from '../lib/studio'
 import type { ArrangementRegion, PitchEvent, TrackSlot } from '../types/studio'
@@ -50,7 +56,7 @@ function getTimelineBounds(regions: ArrangementRegion[], playheadSeconds: number
 
 function getWaterfallEvents(regions: ArrangementRegion[]): WaterfallEvent[] {
   return regions
-    .flatMap((region) => getPitchedEvents(region.pitch_events).map((event) => ({ event, region })))
+    .flatMap((region) => getRenderableMiniEvents(region.pitch_events).map((event) => ({ event, region })))
     .sort(
       (left, right) =>
         left.event.start_seconds - right.event.start_seconds ||
@@ -74,14 +80,18 @@ function getEventHue(event: PitchEvent): number {
 
 function getEventStyle(
   item: WaterfallEvent,
+  eventsByTrack: Map<number, WaterfallEvent[]>,
   minSeconds: number,
   maxSeconds: number,
 ): CSSProperties {
   const { event, region } = item
+  const laneHeightPercent = 100 / 6
+  const trackEvents = (eventsByTrack.get(region.track_slot_id) ?? []).map((trackItem) => trackItem.event)
+  const pitchTopPercent = getEventMiniTopPercent(event, trackEvents)
   return {
     '--event-hue': getEventHue(event),
-    '--event-lane-index': region.track_slot_id - 1,
     '--event-left': `${getTimelinePercent(event.start_seconds, minSeconds, maxSeconds)}%`,
+    '--event-top': `${((region.track_slot_id - 1) * laneHeightPercent) + ((pitchTopPercent / 100) * laneHeightPercent)}%`,
     '--event-width': `${Math.max(1.4, (event.duration_seconds / Math.max(0.25, maxSeconds - minSeconds)) * 100)}%`,
   } as CSSProperties
 }
@@ -123,6 +133,15 @@ function PracticeWaterfallStage({
   tracks: TrackSlot[]
 }) {
   const events = useMemo(() => getWaterfallEvents(regions), [regions])
+  const eventsByTrack = useMemo(() => {
+    const next = new Map<number, WaterfallEvent[]>()
+    for (const item of events) {
+      const trackEvents = next.get(item.region.track_slot_id) ?? []
+      trackEvents.push(item)
+      next.set(item.region.track_slot_id, trackEvents)
+    }
+    return next
+  }, [events])
   const pitchRange = useMemo(
     () => getPitchEventRange(events.map((item) => item.event)),
     [events],
@@ -157,13 +176,13 @@ function PracticeWaterfallStage({
         ) : (
           events.map((item) => (
             <i
-              aria-label={`${formatTrackName(item.region.track_name)} ${item.event.label}`}
+              aria-label={getEventMiniAriaLabel(item.event, item.region.track_name)}
               className="practice-stage__event"
               key={`${item.region.region_id}-${item.event.event_id}`}
-              style={getEventStyle(item, minSeconds, maxSeconds)}
-              title={`${formatTrackName(item.region.track_name)} - ${item.event.label}`}
+              style={getEventStyle(item, eventsByTrack, minSeconds, maxSeconds)}
+              title={getEventMiniTitle(item.event, item.region.track_name)}
             >
-              <span>{item.event.label}</span>
+              <span className="event-mini__sr">{item.event.label}</span>
             </i>
           ))
         )}
@@ -263,8 +282,25 @@ export function PracticePage() {
           </div>
         </header>
 
+        <StudioPurposeNav
+          active="practice"
+          note="선택한 reference track을 들으며 waterfall에서 entrance와 duration을 확인하는 연습 전용 화면입니다."
+          studioId={studio.studio_id}
+        />
+
+        <section className="practice-page-brief" aria-label="연습 화면 역할">
+          <div>
+            <p className="eyebrow">연습</p>
+            <h1>{studio.title}</h1>
+          </div>
+          <p>Track 선택, 재생 방식, metronome을 정한 뒤 같은 scheduled timeline에서 연습합니다.</p>
+        </section>
+
         <div className="practice-toolbar" aria-label="연습 재생 제어">
           <Link className="composer-tool composer-tool--text" to={`/studios/${studio.studio_id}`}>
+            스튜디오
+          </Link>
+          <Link className="composer-tool composer-tool--text" to={`/studios/${studio.studio_id}/edit`}>
             편집
           </Link>
           <button
@@ -325,22 +361,22 @@ export function PracticePage() {
         </div>
 
         <section className="practice-track-picker" aria-label="연습 트랙 선택">
-          {registeredTracks.length === 0 ? (
-            <p>등록된 트랙이 아직 없습니다.</p>
-          ) : (
-            registeredTracks.map((track) => (
-              <label key={track.slot_id}>
+          {studio.tracks.map((track) => {
+            const isRegistered = registeredSlotIds.includes(track.slot_id)
+            return (
+              <label className={isRegistered ? '' : 'is-empty'} key={track.slot_id}>
                 <input
-                  checked={selectedPlaybackSlotIds.has(track.slot_id)}
+                  checked={isRegistered && selectedPlaybackSlotIds.has(track.slot_id)}
                   data-testid={`practice-track-checkbox-${track.slot_id}`}
-                  disabled={globalPlaying || actionBusy}
+                  disabled={!isRegistered || globalPlaying || actionBusy}
                   type="checkbox"
                   onChange={() => togglePlaybackSelection(track.slot_id)}
                 />
                 <span>{formatTrackName(track.name)}</span>
+                {!isRegistered ? <em>이벤트 없음</em> : null}
               </label>
-            ))
-          )}
+            )
+          })}
         </section>
 
         <PracticeStatus actionState={actionState} />
@@ -355,7 +391,7 @@ export function PracticePage() {
 
         <footer className="composer-statusbar">
           <span>{globalPlaying ? '재생 중' : '준비 완료'}</span>
-          <span>{selectedTrackCount}/{registeredTracks.length} 트랙</span>
+          <span>{selectedTrackCount}/{studio.tracks.length} 트랙</span>
           <span>{playbackSource === 'audio' ? '원음 우선 재생' : '연주음만 재생'}</span>
           <span>
             {formatDurationSeconds(playheadSeconds ?? 0)} /{' '}

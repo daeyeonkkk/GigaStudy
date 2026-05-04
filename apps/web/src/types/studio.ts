@@ -76,6 +76,15 @@ export type UpdatePitchEventRequest = {
   is_rest?: boolean | null
 }
 
+export type SaveRegionEventPatch = UpdatePitchEventRequest & {
+  event_id: string
+}
+
+export type SaveRegionRevisionRequest = UpdateRegionRequest & {
+  events?: SaveRegionEventPatch[]
+  revision_label?: string | null
+}
+
 export type CandidateRegion = {
   region_id: string
   suggested_slot_id: number

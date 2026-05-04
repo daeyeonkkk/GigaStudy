@@ -7,6 +7,7 @@ import type {
   CopyRegionRequest,
   PitchEvent,
   ScoreMode,
+  SaveRegionRevisionRequest,
   SplitRegionRequest,
   Studio,
   StudioListItem,
@@ -333,6 +334,33 @@ export function updateRegion(
       body: JSON.stringify(payload),
     },
     '구간을 저장하지 못했습니다.',
+)
+}
+
+export function saveRegionRevision(
+  studioId: string,
+  regionId: string,
+  payload: SaveRegionRevisionRequest,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/regions/${regionId}/revision`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+    '편집 내용을 저장하지 못했습니다.',
+  )
+}
+
+export function restoreRegionRevision(
+  studioId: string,
+  regionId: string,
+  revisionId: string,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/regions/${regionId}/revision-history/${revisionId}/restore`,
+    { method: 'POST' },
+    '이전 버전을 복원하지 못했습니다.',
   )
 }
 

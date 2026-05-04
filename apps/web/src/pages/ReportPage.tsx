@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
 import { getStudio } from '../lib/api'
 import {
   describeReferences,
@@ -138,7 +139,7 @@ function getIssueFocusPath(studioId: string, issue: ReportIssue): string | null 
   if (issue.expected_beat !== null) {
     params.set('beat', String(issue.expected_beat))
   }
-  return `/studios/${studioId}?${params.toString()}`
+  return `/studios/${studioId}/edit?${params.toString()}`
 }
 
 function ReportRouteState({
@@ -254,6 +255,12 @@ export function ReportPage() {
           </Link>
         </header>
 
+        <StudioPurposeNav
+          active="report"
+          note="채점 결과를 확인하고, 고쳐야 할 answer-side issue는 음표 편집 화면으로 바로 보냅니다."
+          studioId={studio.studio_id}
+        />
+
         <section className="report-hero">
           <div>
             <span>{formatDateTime(report.created_at)}</span>
@@ -262,6 +269,11 @@ export function ReportPage() {
             <p>{getReportSummary(report)}</p>
           </div>
           <strong>{formatScore(report.overall_score)}</strong>
+        </section>
+
+        <section className="report-purpose" aria-label="리포트 화면 역할">
+          <strong>이 화면은 scoring evidence를 읽고 다음 수정 지점을 찾는 곳입니다.</strong>
+          <p>Region/event가 있는 issue는 음표 편집으로 연결되고, 새 take를 녹음하려면 스튜디오에서 채점을 다시 시작합니다.</p>
         </section>
 
         <section className="report-metrics" aria-label="리포트 지표">

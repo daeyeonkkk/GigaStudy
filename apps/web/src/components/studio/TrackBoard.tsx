@@ -19,12 +19,17 @@ import type {
   PitchEvent,
   TrackExtractionJob,
   TrackSlot,
-  UpdatePitchEventRequest,
 } from '../../types/studio'
-import { PianoRollPanel, RegionTools } from './TrackBoardEditor'
-import { getGridSeconds } from './TrackBoardEditorGrid'
-import { PracticeWaterfall } from './TrackBoardTimeline'
 import {
+  getEventMiniAriaLabel,
+  getEventMiniTitle,
+  getEventMiniTopPercent,
+  getRenderableMiniEvents,
+} from './eventMiniLayout'
+import { PianoRollPanel, RegionTools, type RegionEditorDraft } from './TrackBoardEditor'
+import { getGridSeconds } from './TrackBoardEditorGrid'
+import {
+  getDurationPercent,
   getMeasureStarts,
   getRegionLaneStyle,
   getRegionStyle,
@@ -43,10 +48,17 @@ type TrackCountInState = {
   totalPulses: number
 }
 
+type TrackMiniEvent = {
+  event: PitchEvent
+  region: ArrangementRegion
+}
+
 type TrackBoardProps = {
   activeJobSlotIds: Set<number>
   beatsPerMeasure: number
   bpm: number
+  draftStorageScope?: string
+  mode?: 'studio' | 'editor'
   editDisabled: boolean
   editDisabledReason: string | null
   metronomeEnabled: boolean
@@ -66,14 +78,15 @@ type TrackBoardProps = {
   onCopyRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
   onDeleteRegion: (region: ArrangementRegion) => void
   onGenerate: (track: TrackSlot) => void
-  onMoveRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
+  onOpenRegionEditor?: (region: ArrangementRegion) => void
   onOpenScore: (track: TrackSlot) => void
   onRecord: (track: TrackSlot) => void
+  onRestoreRegionRevision?: (region: ArrangementRegion, revisionId: string) => void
+  onSaveRegionDraft?: (region: ArrangementRegion, draft: RegionEditorDraft, revisionLabel: string | null) => void
   onSplitRegion: (region: ArrangementRegion, splitSeconds: number) => void
   onStopPlayback: (track: TrackSlot) => void
   onSync: (track: TrackSlot, nextOffset: number) => void
   onTogglePlayback: (track: TrackSlot) => void
-  onUpdateEvent: (region: ArrangementRegion, event: PitchEvent, patch: UpdatePitchEventRequest) => void
   onUpload: (track: TrackSlot, file: File | null) => void
   onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }
@@ -105,6 +118,28 @@ function getTrackActiveJob(track: TrackSlot, jobs: TrackExtractionJob[]): TrackE
           job.status === 'failed'),
     ) ?? null
   )
+}
+
+function getTrackMiniEvents(regions: ArrangementRegion[]): TrackMiniEvent[] {
+  return regions.flatMap((region) =>
+    getRenderableMiniEvents(region.pitch_events).map((event) => ({
+      event,
+      region,
+    })),
+  )
+}
+
+function getTrackMiniStyle(
+  item: TrackMiniEvent,
+  trackMiniEvents: TrackMiniEvent[],
+  timelineBounds: { durationSeconds: number; maxSeconds: number; minSeconds: number },
+): CSSProperties {
+  const trackEvents = trackMiniEvents.map((miniEvent) => miniEvent.event)
+  return {
+    '--event-left': `${getTimelinePercent(item.event.start_seconds, timelineBounds)}%`,
+    '--event-top': `${getEventMiniTopPercent(item.event, trackEvents)}%`,
+    '--event-width': `${Math.max(1.2, getDurationPercent(item.event.duration_seconds, timelineBounds.durationSeconds))}%`,
+  } as CSSProperties
 }
 
 function TrackVolumeControl({
@@ -195,6 +230,8 @@ export function TrackBoard({
   activeJobSlotIds,
   beatsPerMeasure,
   bpm,
+  draftStorageScope,
+  mode = 'studio',
   editDisabled,
   editDisabledReason,
   metronomeEnabled,
@@ -214,14 +251,15 @@ export function TrackBoard({
   onCopyRegion,
   onDeleteRegion,
   onGenerate,
-  onMoveRegion,
+  onOpenRegionEditor,
   onOpenScore,
   onRecord,
+  onRestoreRegionRevision,
+  onSaveRegionDraft,
   onSplitRegion,
   onStopPlayback,
   onSync,
   onTogglePlayback,
-  onUpdateEvent,
   onUpload,
   onVolumeChange,
 }: TrackBoardProps) {
@@ -285,13 +323,18 @@ export function TrackBoard({
   const selectedRegionDisabledReason = selectedRegionJobLocked
     ? `${formatTrackName(selectedRegion?.track_name)} 추출 작업이 끝난 뒤 편집할 수 있습니다.`
     : editDisabledReason
+  const isEditorMode = mode === 'editor'
+  const selectedRegionTrack = selectedRegion
+    ? tracks.find((track) => track.slot_id === selectedRegion.track_slot_id)
+    : null
+  const canOpenSelectedRegionEditor = Boolean(selectedRegion && !isEditorMode && onOpenRegionEditor)
 
   return (
-    <section className="studio-tracks" aria-label="6트랙 편집기">
+    <section className={`studio-tracks studio-tracks--${mode}`} aria-label={isEditorMode ? '음표 편집기' : '6트랙 스튜디오'}>
       <div className="studio-tracks__header">
         <div>
-          <p className="eyebrow">편곡</p>
-          <h2>트랙 편집</h2>
+          <p className="eyebrow">{isEditorMode ? '세부 편집' : '스튜디오'}</p>
+          <h2>{isEditorMode ? 'Region 음표 편집' : '트랙 스튜디오'}</h2>
         </div>
         <div className="studio-tracks__summary">
           <span>등록 {registeredTracks.length}</span>
@@ -327,6 +370,7 @@ export function TrackBoard({
             ? `${formatTrackName(track.name)} 트랙은 추출 작업이 끝난 뒤 편집할 수 있습니다.`
             : editDisabledReason
           const trackRegions = regionsByTrack.get(track.slot_id) ?? []
+          const trackMiniEvents = getTrackMiniEvents(trackRegions)
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
@@ -382,38 +426,73 @@ export function TrackBoard({
                   <i className="track-card__playhead" aria-hidden="true" />
                 ) : null}
                 {trackRegions.length > 0 ? (
-                  trackRegions.map((region, index) => (
-                    <button
-                      aria-label={`${formatTrackName(track.name)} 구간 ${index + 1}`}
-                      aria-pressed={selectedRegion?.region_id === region.region_id}
-                      className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
-                      data-region-id={region.region_id}
-                      data-testid={index === 0 ? `track-region-${track.slot_id}` : `track-region-${track.slot_id}-${index + 1}`}
-                      key={region.region_id}
-                      style={getRegionStyle(region, timelineBounds, index)}
-                      type="button"
-                      onClick={() => {
-                        setSelectedRegionId(region.region_id)
-                        setSelectedEventId(region.pitch_events[0]?.event_id ?? null)
-                      }}
-                      onDoubleClick={() => {
-                        setSelectedRegionId(region.region_id)
-                        setSelectedEventId(region.pitch_events[0]?.event_id ?? null)
-                      }}
-                    >
-                      <span>{region.source_label ? formatSourceLabel(region.source_label) : formatTrackName(track.name)}</span>
-                      <strong>{getPitchedEvents(region.pitch_events).length}개 음표</strong>
-                      <em>
-                        {formatDurationSeconds(region.start_seconds)} -{' '}
-                        {formatDurationSeconds(region.start_seconds + region.duration_seconds)}
-                      </em>
-                    </button>
-                  ))
+                  <>
+                    {trackRegions.map((region, index) => (
+                      <button
+                        aria-label={`${formatTrackName(track.name)} 구간 ${index + 1}`}
+                        aria-pressed={selectedRegion?.region_id === region.region_id}
+                        className={`track-card__region-block ${focusedRegionId === region.region_id ? 'is-focused' : ''}`}
+                        data-region-id={region.region_id}
+                        data-testid={index === 0 ? `track-region-${track.slot_id}` : `track-region-${track.slot_id}-${index + 1}`}
+                        key={region.region_id}
+                        style={getRegionStyle(region, timelineBounds, index)}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRegionId(region.region_id)
+                          setSelectedEventId(getRenderableMiniEvents(region.pitch_events)[0]?.event_id ?? null)
+                        }}
+                        onDoubleClick={() => {
+                          setSelectedRegionId(region.region_id)
+                          setSelectedEventId(getRenderableMiniEvents(region.pitch_events)[0]?.event_id ?? null)
+                          onOpenRegionEditor?.(region)
+                        }}
+                      >
+                        <span>{region.source_label ? formatSourceLabel(region.source_label) : formatTrackName(track.name)}</span>
+                        <strong>{getPitchedEvents(region.pitch_events).length}개 음표</strong>
+                        <em>
+                          {formatDurationSeconds(region.start_seconds)} -{' '}
+                          {formatDurationSeconds(region.start_seconds + region.duration_seconds)}
+                        </em>
+                      </button>
+                    ))}
+                    {trackMiniEvents.map((item) => (
+                      <button
+                        aria-label={getEventMiniAriaLabel(item.event, track.name)}
+                        aria-pressed={
+                          item.event.event_id === effectiveSelectedEventId ||
+                          item.event.event_id === focusedEventId
+                        }
+                        className={`track-card__event-mini ${
+                          item.event.event_id === effectiveSelectedEventId ||
+                          item.event.event_id === focusedEventId
+                            ? 'is-focused'
+                            : ''
+                        }`}
+                        data-testid={`track-event-mini-${item.event.event_id}`}
+                        key={`${item.region.region_id}-${item.event.event_id}`}
+                        style={getTrackMiniStyle(item, trackMiniEvents, timelineBounds)}
+                        title={getEventMiniTitle(item.event, track.name)}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRegionId(item.region.region_id)
+                          setSelectedEventId(item.event.event_id)
+                        }}
+                        onDoubleClick={() => {
+                          setSelectedRegionId(item.region.region_id)
+                          setSelectedEventId(item.event.event_id)
+                          onOpenRegionEditor?.(item.region)
+                        }}
+                      >
+                        <span className="event-mini__sr">{item.event.label}</span>
+                      </button>
+                    ))}
+                  </>
                 ) : (
                   <p>{needsReview ? '검토할 후보가 있습니다' : '아직 비어 있음'}</p>
                 )}
               </div>
 
+              {!isEditorMode ? (
               <div className="track-card__controls">
                 <div className="track-card__primary-actions">
                   <button
@@ -531,12 +610,45 @@ export function TrackBoard({
                   </div>
                 ) : null}
               </div>
+              ) : null}
             </article>
           )
         })}
       </div>
 
-      <div className="editor-panels">
+      {!isEditorMode ? (
+        <section className="studio-tracks__purpose-actions" aria-label="선택 구간 작업">
+          <div>
+            <p className="eyebrow">음표 편집</p>
+            <h3>
+              {selectedRegion
+                ? `${formatTrackName(selectedRegionTrack?.name ?? selectedRegion.track_name)} 구간 선택됨`
+                : '편집할 region을 선택하세요'}
+            </h3>
+            <p>
+              {selectedRegion
+                ? 'Studio 화면은 등록, sync, 재생, 후보 검토에 집중합니다. 세부 음표 수정은 전용 편집 화면에서 이어갑니다.'
+                : 'Region lane에서 구간을 선택하면 전용 음표 편집 화면으로 이동할 수 있습니다.'}
+            </p>
+          </div>
+          <button
+            className="app-button app-button--secondary"
+            data-testid="open-note-editor-button"
+            disabled={!canOpenSelectedRegionEditor}
+            type="button"
+            onClick={() => {
+              if (selectedRegion) {
+                onOpenRegionEditor?.(selectedRegion)
+              }
+            }}
+          >
+            음표 편집 열기
+          </button>
+        </section>
+      ) : null}
+
+      {isEditorMode ? (
+      <div className="editor-panels editor-panels--note-editor">
         <div className="piano-roll-shell">
           <RegionTools
             disabled={selectedRegionEditDisabled}
@@ -546,26 +658,29 @@ export function TrackBoard({
             tracks={tracks}
             onCopyRegion={onCopyRegion}
             onDeleteRegion={onDeleteRegion}
-            onMoveRegion={onMoveRegion}
             onSplitRegion={onSplitRegion}
           />
           <PianoRollPanel
+            bpm={bpm}
+            draftStorageKey={
+              selectedRegion
+                ? `gigastudy.regionDraft.v1:${draftStorageScope ?? 'local'}:${selectedRegion.region_id}`
+                : null
+            }
             disabled={selectedRegionEditDisabled}
             disabledReason={selectedRegionDisabledReason}
             focusedEventId={focusedEventId}
             gridSeconds={gridSeconds}
             region={selectedRegion}
             selectedEventId={effectiveSelectedEventId}
+            tracks={tracks}
+            onRestoreRevision={onRestoreRegionRevision ?? (() => undefined)}
+            onSaveDraft={onSaveRegionDraft ?? (() => undefined)}
             onSelectEvent={setSelectedEventId}
-            onUpdateEvent={onUpdateEvent}
           />
         </div>
-        <PracticeWaterfall
-          playheadSeconds={playheadSeconds}
-          regions={regions}
-          timelineBounds={timelineBounds}
-        />
       </div>
+      ) : null}
     </section>
   )
 }

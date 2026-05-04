@@ -588,6 +588,33 @@
   white-space: nowrap;
 }
 
+.editor-field__entry {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.editor-field__entry input {
+  flex: 1 1 auto;
+}
+
+.editor-field__companion {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #9aa7b3;
+  border-radius: 4px;
+  background: #f3f6f8;
+  color: #1d2b36;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
 .editor-field input,
 .editor-field select,
 .revision-panel__restore select {

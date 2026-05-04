@@ -271,6 +271,8 @@ function selectedTrackName(tracks: TrackSlot[], slotId: number): string {
 }
 
 function FieldNumber({
+  companionTestId,
+  companionText,
   disabled = false,
   label,
   max,
@@ -279,6 +281,8 @@ function FieldNumber({
   value,
   onChange,
 }: {
+  companionTestId?: string
+  companionText?: string
   disabled?: boolean
   label: string
   max?: number
@@ -290,16 +294,24 @@ function FieldNumber({
   return (
     <label className="editor-field">
       <span>{label}</span>
-      <input
-        disabled={disabled}
-        inputMode="decimal"
-        max={max}
-        min={min}
-        step={step}
-        type="number"
-        value={Number(value.toFixed(3))}
-        onChange={(event) => onChange(parseNumber(event.currentTarget.value, value))}
-      />
+      <div className="editor-field__entry">
+        <input
+          aria-label={label}
+          disabled={disabled}
+          inputMode="decimal"
+          max={max}
+          min={min}
+          step={step}
+          type="number"
+          value={Number(value.toFixed(3))}
+          onChange={(event) => onChange(parseNumber(event.currentTarget.value, value))}
+        />
+        {companionText ? (
+          <span className="editor-field__companion" data-testid={companionTestId}>
+            {companionText}
+          </span>
+        ) : null}
+      </div>
     </label>
   )
 }
@@ -723,6 +735,8 @@ function PianoRollPanelContent({
                   />
                 </label>
                 <FieldNumber
+                  companionTestId="selected-midi-note-name"
+                  companionText={midiToLabel(selectedEvent.pitch_midi ?? 60)}
                   disabled={disabled}
                   label="음높이"
                   max={127}

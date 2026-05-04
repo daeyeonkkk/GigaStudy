@@ -124,6 +124,7 @@ test('document upload flows through studio, region editor, and practice waterfal
   await page.getByLabel('시작 위치', { exact: true }).fill('0.25')
   await page.locator('.region-draft-grid').getByLabel('길이', { exact: true }).fill('2.25')
   await page.getByLabel('음높이').fill('73')
+  await expect(page.getByTestId('selected-midi-note-name')).toHaveText('C#5')
   await expect(page.locator('.piano-roll__event[title*="C#5"]')).toBeVisible()
 
   await page.getByTestId('purpose-nav-practice').click()

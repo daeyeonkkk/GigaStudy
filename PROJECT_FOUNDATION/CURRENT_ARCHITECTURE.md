@@ -131,6 +131,11 @@ is excluded from persistence and remains an adapter detail.
   metronome phase alignment, strict sung-segment cleanup, and a narrow rescue
   pass for short stable sung contours. Rescued material is marked in event
   warnings and diagnostics.
+- `apps/api/src/gigastudy_api/services/engine/symbolic.py`
+  MusicXML/MIDI parsing and track-to-slot mapping. MIDI parsing splits
+  channel-packed tracks into per-channel parsed parts, records MIDI program/name
+  diagnostics, and flags generic or non-vocal MIDI starts for candidate review
+  instead of silent registration.
 - `apps/api/src/gigastudy_api/services/registration_context.py`
   The single provider for region-aware registration context. Registration
   cleanup, LLM review, and ensemble gates use this instead of reading
@@ -229,10 +234,12 @@ flowchart TD
    score-file seeding, while each track row exposes recording-file upload for
    audio extraction.
 2. Browser sends the file via direct upload or inline fallback.
-3. API creates an extraction job.
-4. Engine queue runs document/audio/MIDI extraction.
-5. Extracted material becomes reviewable candidates with candidate-region
-   previews.
+3. API either registers clearly assigned symbolic seed parts directly or creates
+   an extraction job/candidate review path for ambiguous material.
+4. Engine queue runs document/audio extraction when asynchronous extraction is
+   needed.
+5. Extracted or ambiguous material becomes reviewable candidates with
+   candidate-region previews.
 6. User approval registers candidates into explicit target-track regions and
    clears target track event shadows. Bulk document approval registers every
    unblocked valid part it can, leaves overwrite-blocked or failed parts

@@ -146,6 +146,11 @@ the same change.
   Individual track rows expose `recording file upload` for user-recorded audio
   only. Backend adapters may still support additional import paths, but
   user-facing labels must not collapse them into one vague upload action.
+- Studio-start MIDI may register directly only when singer-role assignment is
+  clear enough, such as named S/A/T/Baritone/Bass parts or vocal-program hints.
+  Generic MIDI tracks, channel-packed type-0 MIDI, and non-vocal instrument
+  program hints should become review candidates instead of being silently
+  written into the six public tracks.
 - Bulk approval should register every unblocked valid candidate it can. If some
   parts would overwrite existing tracks or fail registration, keep those
   candidates reviewable, report the skipped/failed tracks, and return the studio

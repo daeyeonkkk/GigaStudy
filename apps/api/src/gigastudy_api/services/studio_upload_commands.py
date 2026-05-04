@@ -20,6 +20,7 @@ from gigastudy_api.services.engine.candidate_diagnostics import track_duration_s
 from gigastudy_api.services.engine.symbolic import (
     SymbolicParseError,
     parse_symbolic_file_with_metadata,
+    symbolic_seed_review_reasons,
 )
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.studio_assets import StudioAssetService
@@ -254,6 +255,34 @@ class StudioUploadCommands:
             if parsed_symbolic.has_time_signature:
                 studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
                 studio.time_signature_denominator = parsed_symbolic.time_signature_denominator
+            review_reasons = symbolic_seed_review_reasons(parsed_symbolic, source_suffix=suffix)
+            if review_reasons:
+                review_reason_text = ", ".join(review_reasons)
+                diagnostics_by_slot = {
+                    track.slot_id: dict(track.diagnostics)
+                    for track in parsed_symbolic.tracks
+                    if track.slot_id in parsed_symbolic.mapped_events
+                }
+                for slot_id, events in parsed_symbolic.mapped_events.items():
+                    self._repository._append_initial_candidate(
+                        studio,
+                        suggested_slot_id=slot_id,
+                        source_kind=registered_source_kind,
+                        source_label=source_filename,
+                        method="midi_seed_review",
+                        confidence=0.68,
+                        events=events,
+                        message=(
+                            "MIDI parts need review before registration because the file does not "
+                            f"clearly label singer roles ({review_reason_text})."
+                        ),
+                        source_diagnostics={
+                            **diagnostics_by_slot.get(slot_id, {}),
+                            "seed_review_reasons": review_reasons,
+                            "source_suffix": suffix,
+                        },
+                    )
+                return studio
             timestamp = self._now()
             registrations = self._repository._prepare_registration_batch(
                 studio,

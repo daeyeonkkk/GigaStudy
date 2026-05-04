@@ -126,6 +126,9 @@ export function getPitchEventPlaybackFrequency(event: PitchEvent): number | null
   if (event.pitch_midi === 35 || event.label.toLowerCase().includes('kick')) {
     return getPercussionFrequency(event.label)
   }
+  if (typeof event.pitch_midi === 'number' && Number.isFinite(event.pitch_midi)) {
+    return 440 * 2 ** ((event.pitch_midi - 69) / 12)
+  }
   return getPitchLabelFrequency(event.label)
 }
 

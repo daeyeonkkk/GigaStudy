@@ -6,6 +6,7 @@ import {
   getSustainedPitchEvents,
 } from '../../apps/web/src/components/studio/studioPlaybackHelpers'
 import {
+  getPitchEventPlaybackFrequency,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
 } from '../../apps/web/src/lib/studio/playback'
@@ -83,6 +84,17 @@ describe('studio playback scheduling helpers', () => {
     expect(getVolumeScaleFromPercent(37.6)).toBe(0.38)
     expect(getTrackVolumeScale(track)).toBe(0.38)
     expect(getVolumeScaleFromPercent(Number.NaN)).toBe(1)
+  })
+
+  it('can synthesize MIDI-backed events even when label and pitch_hz are missing', () => {
+    const event = {
+      is_rest: false,
+      label: 'Imported pitch',
+      pitch_hz: null,
+      pitch_midi: 69,
+    } as PitchEvent
+
+    expect(getPitchEventPlaybackFrequency(event)).toBeCloseTo(440)
   })
 
   it('collapses vocal playback events to one active pitch at a time', () => {

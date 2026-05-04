@@ -17,6 +17,7 @@ from gigastudy_api.services.engine.music_theory import (
     measure_index_from_beat,
     quarter_beats_per_measure,
     rank_slot_candidates,
+    slot_id_from_name,
     slot_assignment_diagnostics,
 )
 from gigastudy_api.services.engine.event_normalization import (
@@ -54,6 +55,10 @@ class SymbolicParseError(ValueError):
     pass
 
 
+MIDI_VOCAL_PROGRAMS_ZERO_BASED = {52, 53, 54, 85, 91}
+MIDI_GENERIC_TRACK_PREFIXES = ("midi track", "track", "part", "channel", "ch")
+
+
 def parse_symbolic_file(path: Path, *, bpm: int, target_slot_id: int | None = None) -> dict[int, list[TrackPitchEvent]]:
     return parse_symbolic_file_with_metadata(path, bpm=bpm, target_slot_id=target_slot_id).mapped_events
 
@@ -88,6 +93,45 @@ def parse_symbolic_file_with_metadata(
         source_bpm=parsed_document.source_bpm,
         tempo_changes=parsed_document.tempo_changes,
     )
+
+
+def symbolic_seed_review_reasons(parsed_symbolic: ParsedSymbolicFile, *, source_suffix: str) -> list[str]:
+    """Return reasons a studio-start symbolic upload should stay reviewable.
+
+    Named score parts can be registered directly. Generic MIDI tracks are weaker:
+    they often represent accompaniment instruments or channel-packed stems, not
+    singer roles. Those should become candidates so the user can pick the real
+    vocal material before it becomes the shared arrangement truth.
+    """
+
+    if source_suffix.lower() not in {".mid", ".midi"}:
+        return []
+
+    mapped_slots = set(parsed_symbolic.mapped_events)
+    mapped_tracks = [
+        track
+        for track in parsed_symbolic.tracks
+        if track.slot_id in mapped_slots and track.events
+    ]
+    reasons: list[str] = []
+    for track in mapped_tracks:
+        if track.diagnostics.get("midi_seed_review_required") is True:
+            reason = str(track.diagnostics.get("midi_seed_review_reason") or "midi_track_ambiguous")
+            if reason not in reasons:
+                reasons.append(reason)
+
+    if (
+        len(mapped_tracks) > 1
+        and mapped_tracks
+        and all(
+            not bool(track.diagnostics.get("slot_name_match"))
+            and not bool(track.diagnostics.get("midi_vocal_program_hint"))
+            for track in mapped_tracks
+        )
+    ):
+        reasons.append("midi_parts_have_no_vocal_labels")
+
+    return reasons
 
 
 def map_tracks_to_slots(
@@ -336,9 +380,11 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         position = 0
         absolute_tick = 0
         active_midi_pitches: dict[tuple[int, int], int] = {}
-        events: list[TrackPitchEvent] = []
+        events_by_channel: dict[int, list[TrackPitchEvent]] = {}
         channels_seen: set[int] = set()
+        programs_by_channel: dict[int, set[int]] = {}
         current_time_signature = document_time_signature
+        instrument_name: str | None = None
 
         while position < len(chunk):
             delta, position = _read_vlq(chunk, position)
@@ -366,6 +412,8 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                 position += length
                 if meta_type == 0x03 and payload:
                     track_name = payload.decode("utf-8", errors="ignore").strip() or track_name
+                elif meta_type == 0x04 and payload:
+                    instrument_name = payload.decode("utf-8", errors="ignore").strip() or instrument_name
                 elif meta_type == 0x51 and len(payload) == 3:
                     raw_tempo_events.append((absolute_tick, _tempo_payload_to_bpm(payload)))
                 elif meta_type == 0x58 and len(payload) >= 2:
@@ -391,7 +439,9 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                 break
 
             channels_seen.add(channel)
-            if event_type == 0x90:
+            if event_type == 0xC0:
+                programs_by_channel.setdefault(channel, set()).add(event_data[0])
+            elif event_type == 0x90:
                 pitch_number = event_data[0]
                 velocity = event_data[1]
                 key = (channel, pitch_number)
@@ -399,7 +449,7 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                     active_midi_pitches[key] = absolute_tick
                 else:
                     _append_midi_event(
-                        events,
+                        events_by_channel.setdefault(channel, []),
                         key=key,
                         start_tick=active_midi_pitches.pop(key, absolute_tick),
                         end_tick=absolute_tick,
@@ -412,7 +462,7 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                 pitch_number = event_data[0]
                 key = (channel, pitch_number)
                 _append_midi_event(
-                    events,
+                    events_by_channel.setdefault(channel, []),
                     key=key,
                     start_tick=active_midi_pitches.pop(key, absolute_tick),
                     end_tick=absolute_tick,
@@ -422,8 +472,16 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
                     time_signature_denominator=current_time_signature[1],
                 )
 
-        slot_id = 6 if 9 in channels_seen else infer_slot_id(track_name, events, fallback=track_index + 1)
-        tracks.append(ParsedTrack(name=track_name, events=events, slot_id=slot_id))
+        tracks.extend(
+            _midi_parsed_tracks_from_channels(
+                track_name=track_name,
+                instrument_name=instrument_name,
+                events_by_channel=events_by_channel,
+                channels_seen=channels_seen,
+                programs_by_channel=programs_by_channel,
+                source_track_index=track_index,
+            )
+        )
 
     source_bpm, tempo_changes = _midi_tempo_map_from_events(
         raw_tempo_events,
@@ -440,6 +498,125 @@ def parse_midi_document(path: Path, *, bpm: int) -> ParsedSymbolicFile:
         source_bpm=source_bpm,
         tempo_changes=tempo_changes,
     )
+
+
+def _midi_parsed_tracks_from_channels(
+    *,
+    track_name: str,
+    instrument_name: str | None,
+    events_by_channel: dict[int, list[TrackPitchEvent]],
+    channels_seen: set[int],
+    programs_by_channel: dict[int, set[int]],
+    source_track_index: int,
+) -> list[ParsedTrack]:
+    non_empty_channels = [
+        (channel, events)
+        for channel, events in sorted(events_by_channel.items())
+        if events
+    ]
+    if not non_empty_channels:
+        return [
+            ParsedTrack(
+                name=track_name,
+                events=[],
+                slot_id=None,
+                diagnostics={
+                    "midi_source_track_index": source_track_index + 1,
+                    "midi_channels": sorted(channel + 1 for channel in channels_seen),
+                },
+            )
+        ]
+
+    split_by_channel = len(non_empty_channels) > 1
+    parsed_tracks: list[ParsedTrack] = []
+    for split_index, (channel, events) in enumerate(non_empty_channels):
+        channel_programs = programs_by_channel.get(channel, set())
+        display_name = _midi_display_track_name(
+            track_name=track_name,
+            instrument_name=instrument_name,
+            channel=channel,
+            split_by_channel=split_by_channel,
+        )
+        fallback = min(source_track_index + split_index + 1, 6)
+        slot_id = 6 if channel == 9 else infer_slot_id(display_name, events, fallback=fallback)
+        parsed_tracks.append(
+            ParsedTrack(
+                name=display_name,
+                events=events,
+                slot_id=slot_id,
+                diagnostics=_midi_track_diagnostics(
+                    name=display_name,
+                    events=events,
+                    channels={channel},
+                    programs=channel_programs,
+                    source_track_index=source_track_index,
+                    split_by_channel=split_by_channel,
+                ),
+            )
+        )
+    return parsed_tracks
+
+
+def _midi_display_track_name(
+    *,
+    track_name: str,
+    instrument_name: str | None,
+    channel: int,
+    split_by_channel: bool,
+) -> str:
+    base_name = instrument_name if _is_generic_midi_track_name(track_name) and instrument_name else track_name
+    if not split_by_channel:
+        return base_name
+    return f"{base_name} ch {channel + 1}"
+
+
+def _midi_track_diagnostics(
+    *,
+    name: str,
+    events: list[TrackPitchEvent],
+    channels: set[int],
+    programs: set[int],
+    source_track_index: int,
+    split_by_channel: bool,
+) -> dict[str, Any]:
+    has_named_role = slot_id_from_name(name) is not None
+    generic_name = _is_generic_midi_track_name(name)
+    has_vocal_program = any(program in MIDI_VOCAL_PROGRAMS_ZERO_BASED for program in programs)
+    review_required = not has_named_role and (generic_name or split_by_channel or not has_vocal_program)
+    reason = "midi_track_ambiguous"
+    if generic_name and not has_vocal_program:
+        reason = "generic_midi_track_name"
+    elif split_by_channel and not has_named_role:
+        reason = "midi_channel_split_needs_review"
+    elif programs and not has_vocal_program:
+        reason = "midi_program_not_voice"
+
+    return {
+        "midi_source_track_index": source_track_index + 1,
+        "midi_channels": sorted(channel + 1 for channel in channels),
+        "midi_programs": sorted(program + 1 for program in programs),
+        "midi_generic_track_name": generic_name,
+        "midi_split_from_multichannel_track": split_by_channel,
+        "midi_vocal_program_hint": has_vocal_program,
+        "midi_named_voice_role": has_named_role,
+        "midi_seed_review_required": review_required,
+        "midi_seed_review_reason": reason if review_required else None,
+        "midi_raw_event_count": len(events),
+    }
+
+
+def _is_generic_midi_track_name(name: str | None) -> bool:
+    normalized = " ".join(
+        "".join(character.lower() if character.isalnum() else " " for character in (name or "")).split()
+    )
+    if not normalized:
+        return True
+    tokens = normalized.split()
+    if len(tokens) >= 2 and tokens[0] in MIDI_GENERIC_TRACK_PREFIXES and tokens[-1].isdigit():
+        return True
+    if len(tokens) >= 3 and tokens[0] == "midi" and tokens[1] == "track" and tokens[-1].isdigit():
+        return True
+    return normalized in {"midi", "track", "part", "untitled", "unknown"}
 
 
 def _append_midi_event(

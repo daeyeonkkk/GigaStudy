@@ -4,6 +4,7 @@ from gigastudy_api.services.engine.symbolic import (
     parse_midi_file,
     parse_musicxml_file,
     parse_symbolic_file_with_metadata,
+    symbolic_seed_review_reasons,
 )
 from gigastudy_api.services.engine.music_theory import infer_slot_id, event_from_pitch
 
@@ -261,6 +262,46 @@ def test_midi_mapping_collapses_vocal_tracks_to_monophonic_lines(tmp_path: Path)
     assert notes[0].beat + notes[0].duration_beats <= notes[1].beat
     assert "polyphonic_onset_collapsed" in notes[0].quality_warnings
     assert "monophonic_overlap_resolved" in notes[1].quality_warnings
+
+
+def test_midi_parser_splits_generic_channel_packed_tracks_for_review(tmp_path: Path) -> None:
+    track_events = b"".join(
+        [
+            b"\x00\xff\x03\x0cMIDI track 1",
+            b"\x00\xc0\x00",  # Channel 1 acoustic piano program.
+            b"\x00\xc1\x00",  # Channel 2 acoustic piano program.
+            b"\x00\x90\x48\x64",
+            b"\x00\x91\x30\x64",
+            _vlq(480) + b"\x80\x48\x40",
+            b"\x00\x81\x30\x40",
+            b"\x00\xff\x2f\x00",
+        ]
+    )
+    midi_payload = b"".join(
+        [
+            b"MThd",
+            (6).to_bytes(4, "big"),
+            (0).to_bytes(2, "big"),
+            (1).to_bytes(2, "big"),
+            (480).to_bytes(2, "big"),
+            b"MTrk",
+            len(track_events).to_bytes(4, "big"),
+            track_events,
+        ]
+    )
+    midi_path = tmp_path / "generic-type-zero.mid"
+    midi_path.write_bytes(midi_payload)
+
+    parsed = parse_symbolic_file_with_metadata(midi_path, bpm=120)
+    parsed_tracks = [track for track in parsed.tracks if track.events]
+
+    assert len(parsed_tracks) == 2
+    assert {tuple(track.diagnostics["midi_channels"]) for track in parsed_tracks} == {(1,), (2,)}
+    assert all(track.diagnostics["midi_split_from_multichannel_track"] is True for track in parsed_tracks)
+    assert symbolic_seed_review_reasons(parsed, source_suffix=".mid") == [
+        "generic_midi_track_name",
+        "midi_parts_have_no_vocal_labels",
+    ]
 
 
 def test_symbolic_mapping_uses_pitch_range_when_part_names_are_generic(tmp_path: Path) -> None:

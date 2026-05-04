@@ -293,6 +293,35 @@ def build_polyphonic_vocal_midi_bytes(*, bpm: int = 113) -> bytes:
     )
 
 
+def build_generic_channel_packed_midi_bytes(*, bpm: int = 113) -> bytes:
+    tempo_microseconds = int(round(60_000_000 / bpm))
+    track_events = b"".join(
+        [
+            b"\x00\xff\x03\x0cMIDI track 1",
+            b"\x00\xff\x51\x03" + tempo_microseconds.to_bytes(3, "big"),
+            b"\x00\xc0\x00",
+            b"\x00\xc1\x00",
+            b"\x00\x90\x48\x64",
+            b"\x00\x91\x30\x64",
+            _vlq(480) + b"\x80\x48\x40",
+            b"\x00\x81\x30\x40",
+            b"\x00\xff\x2f\x00",
+        ]
+    )
+    return b"".join(
+        [
+            b"MThd",
+            (6).to_bytes(4, "big"),
+            (0).to_bytes(2, "big"),
+            (1).to_bytes(2, "big"),
+            (480).to_bytes(2, "big"),
+            b"MTrk",
+            len(track_events).to_bytes(4, "big"),
+            track_events,
+        ]
+    )
+
+
 def _vlq(value: int) -> bytes:
     values = [value & 0x7F]
     value >>= 7
@@ -590,6 +619,31 @@ def test_upload_start_applies_shared_monophonic_contract_to_midi_tracks(tmp_path
     assert events[0]["duration_beats"] == 0.5
     assert events[0]["onset_seconds"] + events[0]["duration_seconds"] <= events[1]["onset_seconds"]
     assert "polyphonic_onset_collapsed" in events[0]["quality_warnings"]
+
+
+def test_upload_start_keeps_generic_midi_parts_reviewable(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_generic_channel_packed_midi_bytes(bpm=113)).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "Generic MIDI needs review",
+            "start_mode": "upload",
+            "source_kind": "document",
+            "source_filename": "generic.mid",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    pending_candidates = [candidate for candidate in payload["candidates"] if candidate["status"] == "pending"]
+    assert len(pending_candidates) == 2
+    assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 0
+    assert {candidate["suggested_slot_id"] for candidate in pending_candidates} == {1, 5}
+    assert all(candidate["method"] == "midi_seed_review" for candidate in pending_candidates)
+    assert "clearly label singer roles" in pending_candidates[0]["message"]
 
 
 def test_studio_response_sanitizes_legacy_explicit_polyphonic_regions() -> None:

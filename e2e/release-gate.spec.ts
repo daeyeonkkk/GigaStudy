@@ -120,6 +120,11 @@ test('document upload flows through studio, region editor, and practice waterfal
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+\/edit\?/)
   await expect(page.getByTestId('track-region-1')).toHaveClass(/is-focused/)
   await expect(page.getByTestId(c5EventTestId)).toHaveClass(/is-focused/)
+  await expect(page.getByText('음 이름')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '앞당기기' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '늦추기' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '박자 맞춤' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '음 제거' })).toBeVisible()
 
   await page.getByLabel('시작 위치', { exact: true }).fill('0.25')
   await page.locator('.region-draft-grid').getByLabel('길이', { exact: true }).fill('2.25')

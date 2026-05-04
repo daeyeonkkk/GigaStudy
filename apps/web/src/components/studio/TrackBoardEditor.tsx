@@ -674,6 +674,7 @@ function PianoRollPanelContent({
                 <div className="event-inspector__buttons">
                   <button
                     disabled={disabled || selectedEvent.pitch_midi === null}
+                    title="선택한 음을 반음 낮춥니다."
                     type="button"
                     onClick={() => {
                       if (selectedEvent.pitch_midi !== null) {
@@ -686,6 +687,7 @@ function PianoRollPanelContent({
                   </button>
                   <button
                     disabled={disabled || selectedEvent.pitch_midi === null}
+                    title="선택한 음을 반음 높입니다."
                     type="button"
                     onClick={() => {
                       if (selectedEvent.pitch_midi !== null) {
@@ -698,6 +700,7 @@ function PianoRollPanelContent({
                   </button>
                   <button
                     disabled={disabled}
+                    title={`선택한 음의 시작을 ${formatDurationSeconds(gridSeconds)} 앞당깁니다.`}
                     type="button"
                     onClick={() =>
                       patchEvent(selectedEvent.event_id, {
@@ -705,10 +708,11 @@ function PianoRollPanelContent({
                       })
                     }
                   >
-                    앞으로
+                    앞당기기
                   </button>
                   <button
                     disabled={disabled}
+                    title={`선택한 음의 시작을 ${formatDurationSeconds(gridSeconds)} 늦춥니다.`}
                     type="button"
                     onClick={() =>
                       patchEvent(selectedEvent.event_id, {
@@ -716,24 +720,33 @@ function PianoRollPanelContent({
                       })
                     }
                   >
-                    뒤로
+                    늦추기
                   </button>
-                  <button disabled={disabled} type="button" onClick={snapSelectedEvent}>
-                    격자 맞춤
+                  <button
+                    disabled={disabled}
+                    title={`시작과 길이를 가장 가까운 ${formatDurationSeconds(gridSeconds)} 단위로 맞춥니다.`}
+                    type="button"
+                    onClick={snapSelectedEvent}
+                  >
+                    박자 맞춤
+                  </button>
+                  <button
+                    disabled={disabled}
+                    title="선택한 음을 소리 나지 않게 합니다. 저장 전에는 되돌리기로 복구할 수 있습니다."
+                    type="button"
+                    onClick={() =>
+                      patchEvent(selectedEvent.event_id, {
+                        is_rest: true,
+                        label: 'Rest',
+                        pitch_midi: null,
+                      })
+                    }
+                  >
+                    음 제거
                   </button>
                 </div>
               </header>
               <div className="event-inspector__grid">
-                <label className="editor-field">
-                  <span>음 이름</span>
-                  <input
-                    disabled={disabled}
-                    maxLength={32}
-                    type="text"
-                    value={selectedEvent.label}
-                    onChange={(event) => patchEvent(selectedEvent.event_id, { label: event.currentTarget.value })}
-                  />
-                </label>
                 <FieldNumber
                   companionTestId="selected-midi-note-name"
                   companionText={midiToLabel(selectedEvent.pitch_midi ?? 60)}
@@ -796,21 +809,6 @@ function PianoRollPanelContent({
                     })
                   }
                 />
-                <label className="editor-field editor-field--checkbox">
-                  <input
-                    checked={selectedEvent.is_rest}
-                    disabled={disabled}
-                    type="checkbox"
-                    onChange={(event) =>
-                      patchEvent(selectedEvent.event_id, {
-                        is_rest: event.currentTarget.checked,
-                        label: event.currentTarget.checked ? 'Rest' : midiToLabel(selectedEvent.pitch_midi ?? 60),
-                        pitch_midi: event.currentTarget.checked ? null : selectedEvent.pitch_midi ?? 60,
-                      })
-                    }
-                  />
-                  <span>쉼표로 표시</span>
-                </label>
               </div>
             </section>
           ) : null}

@@ -576,12 +576,6 @@
   grid-column: span 2;
 }
 
-.editor-field--checkbox {
-  display: flex;
-  align-items: center;
-  min-height: 54px;
-}
-
 .editor-field span {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -154,6 +154,7 @@ def prepare_events_for_track_registration(
         if _requires_noise_filter(source_kind, events):
             working_events, filter_actions = _filter_voice_noise(events)
             actions.extend(filter_actions)
+        merge_same_pitch_on_grid = _allows_voice_sustain_rewrite(source_kind, working_events)
         normalized_events = normalize_track_events(
             working_events,
             bpm=bpm,
@@ -161,7 +162,7 @@ def prepare_events_for_track_registration(
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
             quantization_grid=VOICE_QUANTIZATION_GRID_BEATS,
-            merge_adjacent_same_pitch=True,
+            merge_adjacent_same_pitch=merge_same_pitch_on_grid,
         )
         actions.append("fixed_bpm_grid_normalization")
         if _has_dense_voice_measures(
@@ -182,7 +183,7 @@ def prepare_events_for_track_registration(
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 quantization_grid=VOICE_DENSITY_SIMPLIFICATION_GRID,
-                merge_adjacent_same_pitch=True,
+                merge_adjacent_same_pitch=merge_same_pitch_on_grid,
             )
             actions.append("dense_voice_measure_simplification")
         normalized_events, polish_actions = _polish_voice_events(
@@ -194,17 +195,24 @@ def prepare_events_for_track_registration(
             quantization_grid=normalized_events[0].quantization_grid or VOICE_QUANTIZATION_GRID_BEATS
             if normalized_events
             else VOICE_QUANTIZATION_GRID_BEATS,
+            collapse_pitch_blips=merge_same_pitch_on_grid,
+            remove_isolated_artifacts=merge_same_pitch_on_grid,
+            bridge_short_phrase_gaps=merge_same_pitch_on_grid,
+            bridge_measure_tail_gaps=merge_same_pitch_on_grid,
+            collapse_short_event_clusters=merge_same_pitch_on_grid,
+            sustain_repetitions=merge_same_pitch_on_grid,
         )
         actions.extend(polish_actions)
-        normalized_events, optimizer_actions = _choose_readable_voice_candidate(
-            working_events,
-            current_events=normalized_events,
-            bpm=bpm,
-            slot_id=slot_id,
-            time_signature_numerator=time_signature_numerator,
-            time_signature_denominator=time_signature_denominator,
-        )
-        actions.extend(optimizer_actions)
+        if merge_same_pitch_on_grid:
+            normalized_events, optimizer_actions = _choose_readable_voice_candidate(
+                working_events,
+                current_events=normalized_events,
+                bpm=bpm,
+                slot_id=slot_id,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            )
+            actions.extend(optimizer_actions)
         prepared_events = normalized_events
     else:
         repaired_events = _repair_symbolic_timing_metadata(
@@ -234,10 +242,11 @@ def prepare_events_for_track_registration(
         merged_events = merge_contiguous_same_pitch_events(
             prepared_events,
             bpm=bpm,
+            merge_policy="tied_contiguous",
         )
         if _event_identity(merged_events) != _event_identity(prepared_events):
             prepared_events = merged_events
-            actions.append("symbolic_same_pitch_contiguous_merge")
+            actions.append("symbolic_same_pitch_tie_merge")
 
     prepared_events = _deduplicate_and_sort(prepared_events)
     alignment = _align_to_reference_tracks(
@@ -347,11 +356,15 @@ def apply_registration_review_instruction(
     )
     if _instruction_bool(instruction_data, "simplify_dense_measures"):
         quantization_grid = max(quantization_grid, VOICE_DENSITY_SIMPLIFICATION_GRID)
-    merge_adjacent_same_pitch = _instruction_bool(
-        instruction_data,
-        "merge_adjacent_same_pitch",
-        default=True,
-    ) or _instruction_bool(instruction_data, "sustain_repeated_events")
+    allow_same_pitch_sustain = _allows_voice_sustain_rewrite(source_kind, events)
+    merge_adjacent_same_pitch = allow_same_pitch_sustain and (
+        _instruction_bool(
+            instruction_data,
+            "merge_adjacent_same_pitch",
+            default=True,
+        )
+        or _instruction_bool(instruction_data, "sustain_repeated_events")
+    )
     preferred_key = _instruction_key_signature(instruction_data)
 
     if _requires_grid_rewrite(source_kind, events):
@@ -390,7 +403,7 @@ def apply_registration_review_instruction(
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
                 quantization_grid=VOICE_DENSITY_SIMPLIFICATION_GRID,
-                merge_adjacent_same_pitch=True,
+                merge_adjacent_same_pitch=merge_adjacent_same_pitch,
             )
             actions.append("llm_dense_voice_measure_simplification")
         prepared_events, polish_actions = _polish_voice_events(
@@ -400,39 +413,44 @@ def apply_registration_review_instruction(
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
             quantization_grid=quantization_grid,
-            collapse_pitch_blips=_instruction_bool(instruction_data, "collapse_pitch_blips", default=True),
+            collapse_pitch_blips=_instruction_bool(
+                instruction_data,
+                "collapse_pitch_blips",
+                default=allow_same_pitch_sustain,
+            ),
             remove_isolated_artifacts=_instruction_bool(
                 instruction_data,
                 "remove_isolated_artifacts",
-                default=True,
+                default=allow_same_pitch_sustain,
             ),
             bridge_short_phrase_gaps=_instruction_bool(
                 instruction_data,
                 "bridge_short_phrase_gaps",
-                default=True,
+                default=allow_same_pitch_sustain,
             ),
             bridge_measure_tail_gaps=_instruction_bool(
                 instruction_data,
                 "bridge_measure_tail_gaps",
-                default=True,
+                default=allow_same_pitch_sustain,
             ),
             collapse_short_event_clusters=_instruction_bool(
                 instruction_data,
                 "collapse_short_event_clusters",
-                default=True,
+                default=allow_same_pitch_sustain,
             ),
             sustain_repetitions=merge_adjacent_same_pitch,
         )
         actions.extend(f"llm_{action}" for action in polish_actions)
-        prepared_events, optimizer_actions = _choose_readable_voice_candidate(
-            working_events,
-            current_events=prepared_events,
-            bpm=bpm,
-            slot_id=slot_id,
-            time_signature_numerator=time_signature_numerator,
-            time_signature_denominator=time_signature_denominator,
-        )
-        actions.extend(f"llm_{action}" for action in optimizer_actions)
+        if allow_same_pitch_sustain:
+            prepared_events, optimizer_actions = _choose_readable_voice_candidate(
+                working_events,
+                current_events=prepared_events,
+                bpm=bpm,
+                slot_id=slot_id,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            )
+            actions.extend(f"llm_{action}" for action in optimizer_actions)
     else:
         repaired_events = _repair_symbolic_timing_metadata(
             events,
@@ -534,6 +552,10 @@ def _requires_grid_rewrite(source_kind: SourceKind, events: list[TrackPitchEvent
 def _requires_noise_filter(source_kind: SourceKind, events: list[TrackPitchEvent]) -> bool:
     if source_kind in EVENT_GENERATION_SOURCE_KINDS:
         return False
+    return source_kind in VOICE_LIKE_SOURCE_KINDS or any(event.source in VOICE_LIKE_EVENT_SOURCES for event in events)
+
+
+def _allows_voice_sustain_rewrite(source_kind: SourceKind, events: list[TrackPitchEvent]) -> bool:
     return source_kind in VOICE_LIKE_SOURCE_KINDS or any(event.source in VOICE_LIKE_EVENT_SOURCES for event in events)
 
 
@@ -701,7 +723,7 @@ def _polish_voice_events(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
         quantization_grid=quantization_grid,
-        merge_adjacent_same_pitch=True,
+        merge_adjacent_same_pitch=sustain_repetitions,
     )
     return normalized, actions
 
@@ -1462,9 +1484,10 @@ def _enforce_registration_event_contract(
         contract_events,
         bpm=bpm,
         gap_epsilon_beats=minimum_note_beats - 0.0001,
+        merge_policy="tied_contiguous",
     )
     if _event_identity(merged_events) != _event_identity(contract_events):
-        actions.append("event_contract_same_pitch_contiguous_merge")
+        actions.append("event_contract_same_pitch_tie_merge")
     contract_events = merged_events
     if _has_measure_crossing_events(
         contract_events,
@@ -1494,9 +1517,10 @@ def _enforce_registration_event_contract(
             contract_events,
             bpm=bpm,
             gap_epsilon_beats=minimum_note_beats - 0.0001,
+            merge_policy="tied_contiguous",
         )
         if _event_identity(merged_events) != _event_identity(contract_events):
-            actions.append("event_contract_same_pitch_contiguous_merge")
+            actions.append("event_contract_same_pitch_tie_merge")
     contract_events = merged_events
     gap_filled_events, gap_fill_count = _fill_subdivision_gaps(
         contract_events,

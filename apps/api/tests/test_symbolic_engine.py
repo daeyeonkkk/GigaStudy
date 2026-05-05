@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 from gigastudy_api.services.engine.symbolic import (
     ParsedSymbolicFile,
@@ -481,6 +481,55 @@ def test_symbolic_seed_review_keeps_generic_polyphonic_accompaniment_reviewable(
     parsed = ParsedSymbolicFile(tracks=[track], mapped_events=mapped)
 
     assert symbolic_seed_review_reasons(parsed, source_suffix=".mid") == ["midi_polyphonic_accompaniment"]
+
+
+def test_symbolic_seed_review_flags_any_unmapped_named_source_part() -> None:
+    tracks = [
+        ParsedTrack(
+            name="Soprano",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=72,
+                )
+            ],
+        ),
+        ParsedTrack(name="Alto", events=[]),
+    ]
+    mapped = map_tracks_to_slots([tracks[0]], bpm=113)
+    parsed = ParsedSymbolicFile(tracks=tracks, mapped_events=mapped)
+
+    assert "midi_named_part_unmapped" in symbolic_seed_review_reasons(parsed, source_suffix=".mid")
+
+
+def test_symbolic_seed_review_flags_any_silent_source_part_drop() -> None:
+    tracks = [
+        ParsedTrack(
+            name=f"Staff {index}",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=pitch,
+                )
+            ],
+        )
+        for index, pitch in enumerate([76, 72, 67, 62, 57, 52, 47], start=1)
+    ]
+    mapped = map_tracks_to_slots(tracks, bpm=113)
+    parsed = ParsedSymbolicFile(tracks=tracks, mapped_events=mapped)
+
+    reasons = symbolic_seed_review_reasons(parsed, source_suffix=".mid")
+
+    assert "midi_source_part_mapping_incomplete" in reasons
+    assert len(mapped) == 5
 
 
 def test_slot_inference_recognizes_nwc_and_korean_voice_names() -> None:

@@ -53,6 +53,7 @@ MIDI_VOCAL_PROGRAMS_ZERO_BASED = {52, 53, 54, 85, 91}
 MIDI_GENERIC_TRACK_PREFIXES = ("midi track", "track", "part", "channel", "ch")
 VOICE_SLOT_IDS = (1, 2, 3, 4, 5)
 PERCUSSION_SLOT_ID = 6
+TRACK_SLOT_IDS = (*VOICE_SLOT_IDS, PERCUSSION_SLOT_ID)
 MIDI_PERCUSSION_CHANNEL_ONE_BASED = 10
 ROLE_ASSIGNMENT_NAME_HINT_REDUCTION = 6.5
 
@@ -129,8 +130,76 @@ def symbolic_seed_review_reasons(parsed_symbolic: ParsedSymbolicFile, *, source_
             reason = str(track.diagnostics.get("midi_seed_review_reason") or "midi_track_ambiguous")
             if reason not in reasons:
                 reasons.append(reason)
+    for reason in _midi_seed_structure_review_reasons(parsed_symbolic):
+        if reason not in reasons:
+            reasons.append(reason)
 
     return reasons
+
+
+def _midi_seed_structure_review_reasons(parsed_symbolic: ParsedSymbolicFile) -> list[str]:
+    mapped_slots = {
+        slot_id
+        for slot_id, events in parsed_symbolic.mapped_events.items()
+        if 1 <= slot_id <= PERCUSSION_SLOT_ID and events
+    }
+    source_tracks = [track for track in parsed_symbolic.tracks if track.events]
+    named_empty_slots = {
+        named_slot
+        for track in parsed_symbolic.tracks
+        if not track.events and (named_slot := slot_id_from_name(track.name)) in TRACK_SLOT_IDS
+    }
+    if not mapped_slots and not source_tracks and not named_empty_slots:
+        return []
+
+    source_voice_tracks = [
+        track
+        for track in source_tracks
+        if not _track_has_percussion_identity(track)
+    ]
+    mapped_source_tracks = [
+        track
+        for track in source_tracks
+        if _source_track_has_mapped_slot(track, mapped_slots=mapped_slots)
+    ]
+
+    reasons: list[str] = []
+    if len(mapped_source_tracks) < min(len(source_tracks), len(TRACK_SLOT_IDS)):
+        reasons.append("midi_source_part_mapping_incomplete")
+
+    named_slots = {
+        named_slot
+        for track in source_tracks
+        if (named_slot := slot_id_from_name(track.name)) in TRACK_SLOT_IDS
+    }
+    if (named_slots | named_empty_slots) - mapped_slots:
+        reasons.append("midi_named_part_unmapped")
+
+    if _has_uncertain_voice_register_assignment(source_voice_tracks, mapped_slots=mapped_slots):
+        reasons.append("midi_voice_role_assignment_uncertain")
+
+    return reasons
+
+
+def _has_uncertain_voice_register_assignment(
+    source_voice_tracks: list[ParsedTrack],
+    *,
+    mapped_slots: set[int],
+) -> bool:
+    for track in source_voice_tracks:
+        if track.slot_id not in mapped_slots:
+            continue
+        range_fit = track.diagnostics.get("slot_range_fit_ratio")
+        if isinstance(range_fit, int | float) and range_fit < 0.72:
+            return True
+    return False
+
+
+def _source_track_has_mapped_slot(track: ParsedTrack, *, mapped_slots: set[int]) -> bool:
+    return track.slot_id in mapped_slots and (
+        "role_assignment_strategy" in track.diagnostics
+        or "slot_range_fit_ratio" in track.diagnostics
+    )
 
 
 def map_tracks_to_slots(

@@ -14,6 +14,7 @@ from gigastudy_api.services.engine.music_theory import (
 )
 
 TrackPitchRegister = Literal["upper_voice", "tenor_voice", "lower_voice", "percussion"]
+SamePitchMergePolicy = Literal["any_contiguous", "tied_contiguous"]
 
 VOICE_QUANTIZATION_GRID_BEATS = 0.25
 MIN_EVENT_DURATION_BEATS = 0.25
@@ -238,11 +239,13 @@ def merge_contiguous_same_pitch_events(
     *,
     bpm: int,
     gap_epsilon_beats: float = SAME_PITCH_MERGE_EPSILON_BEATS,
+    merge_policy: SamePitchMergePolicy = "any_contiguous",
 ) -> list[TrackPitchEvent]:
     """Merge same-pitch event fragments only when they touch or overlap.
 
-    This preserves real empty time. A positive gap larger than the rounding
-    epsilon remains a visible gap in the registered timeline.
+    MIDI/PDF repeated notes are new attacks even when pitch and timing touch.
+    Use ``tied_contiguous`` for symbolic registration so only actual tie or
+    measure-split fragments are rejoined.
     """
 
     if len(events) < 2:
@@ -269,6 +272,7 @@ def merge_contiguous_same_pitch_events(
             and previous_pitch is not None
             and previous_pitch == event_pitch
             and gap <= gap_epsilon_beats
+            and _same_pitch_merge_allowed(previous, event, merge_policy=merge_policy)
         ):
             end_beat = max(previous_end, round(event.beat + event.duration_beats, 4))
             duration_beats = round(max(MONOPHONIC_MIN_DURATION_BEATS, end_beat - previous.beat), 4)
@@ -287,6 +291,30 @@ def merge_contiguous_same_pitch_events(
 
         merged.append(event)
     return merged
+
+
+def _same_pitch_merge_allowed(
+    previous: TrackPitchEvent,
+    event: TrackPitchEvent,
+    *,
+    merge_policy: SamePitchMergePolicy,
+) -> bool:
+    if merge_policy == "any_contiguous":
+        return True
+    if previous.is_tied and event.is_tied:
+        return True
+    previous_warnings = set(previous.quality_warnings)
+    event_warnings = set(event.quality_warnings)
+    if "measure_boundary_tie" not in previous_warnings or "measure_boundary_tie" not in event_warnings:
+        return False
+    return _split_fragment_root(previous.id) == _split_fragment_root(event.id)
+
+
+def _split_fragment_root(event_id: str) -> str:
+    root, separator, suffix = event_id.rpartition("-q")
+    if separator and suffix.isdigit():
+        return root
+    return event_id
 
 
 def enforce_monophonic_vocal_events(

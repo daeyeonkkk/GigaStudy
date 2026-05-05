@@ -201,7 +201,11 @@ def build_arrangement_region_from_track_events(
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
-    region_events = merge_contiguous_same_pitch_events(region_events, bpm=bpm)
+    region_events = merge_contiguous_same_pitch_events(
+        region_events,
+        bpm=bpm,
+        merge_policy="tied_contiguous",
+    )
     pitch_events = [
         _pitch_event_from_track_event(event, track=track, region_id=region_id, bpm=bpm)
         for event in sorted(region_events, key=lambda item: (item.beat, item.id))
@@ -294,6 +298,7 @@ def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
     candidate_events = merge_contiguous_same_pitch_events(
         candidate_events,
         bpm=_bpm_from_events(candidate.events),
+        merge_policy="tied_contiguous",
     )
     pitch_events = [
         _candidate_pitch_event_from_track_event(event, candidate=candidate, region_id=region_id)

@@ -169,10 +169,10 @@ def test_registration_quality_keeps_symbolic_sustain_continuous_and_annotated() 
     assert all(entry.pitch_register == "tenor_voice" for entry in result.events)
     assert all(entry.key_signature for entry in result.events)
     assert result.diagnostics["cross_measure_event_count"] == 1
-    assert "symbolic_same_pitch_contiguous_merge" in result.diagnostics["actions"]
+    assert "symbolic_same_pitch_tie_merge" in result.diagnostics["actions"]
 
 
-def test_registration_quality_merges_symbolic_same_pitch_without_filling_gaps() -> None:
+def test_registration_quality_preserves_repeated_symbolic_same_pitch_attacks() -> None:
     notes = [
         event_from_pitch(beat=1, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
         event_from_pitch(beat=1.5, duration_beats=0.5, bpm=120, source="midi", extraction_method="test", pitch_midi=60),
@@ -189,10 +189,35 @@ def test_registration_quality_merges_symbolic_same_pitch_without_filling_gaps() 
     )
 
     assert [(entry.beat, entry.duration_beats) for entry in result.events] == [
-        (1.0, 1.0),
+        (1.0, 0.5),
+        (1.5, 0.5),
         (2.25, 0.5),
     ]
-    assert "symbolic_same_pitch_contiguous_merge" in result.diagnostics["actions"]
+    assert "symbolic_same_pitch_tie_merge" not in result.diagnostics["actions"]
+
+
+def test_registration_quality_preserves_generated_repeated_same_pitch_attacks() -> None:
+    notes = [
+        event_from_pitch(beat=1.02, duration_beats=0.23, bpm=113, source="ai", extraction_method="test", pitch_midi=64),
+        event_from_pitch(beat=1.27, duration_beats=0.24, bpm=113, source="ai", extraction_method="test", pitch_midi=64),
+        event_from_pitch(beat=1.52, duration_beats=0.24, bpm=113, source="ai", extraction_method="test", pitch_midi=64),
+    ]
+
+    result = prepare_events_for_track_registration(
+        notes,
+        bpm=113,
+        slot_id=2,
+        source_kind="ai",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    assert [(entry.beat, entry.duration_beats) for entry in result.events] == [
+        (1.0, 0.25),
+        (1.25, 0.25),
+        (1.5, 0.25),
+    ]
+    assert "voice_sustain_merge" not in " ".join(result.diagnostics["actions"])
 
 
 def test_registration_quality_quantizes_all_automatic_sources_to_rhythm_grid() -> None:
@@ -257,10 +282,48 @@ def test_registration_quality_absorbs_symbolic_micro_gaps_on_sixteenth_grid() ->
 
     assert result.diagnostics["event_contract"]["minimum_note_beats"] == 0.25
     assert [(event.pitch_midi, event.beat, event.duration_beats) for event in result.events] == [
-        (60, 1.0, 1.0),
+        (60, 1.0, 0.5),
+        (60, 1.5, 0.5),
         (62, 2.0, 0.25),
     ]
     assert min(event.duration_beats for event in result.events) >= 0.25
+
+
+def test_registration_quality_merges_symbolic_tied_same_pitch_fragments() -> None:
+    notes = [
+        event_from_pitch(
+            beat=1,
+            duration_beats=0.5,
+            bpm=120,
+            source="midi",
+            extraction_method="test",
+            pitch_midi=60,
+            is_tied=True,
+        ),
+        event_from_pitch(
+            beat=1.5,
+            duration_beats=0.5,
+            bpm=120,
+            source="midi",
+            extraction_method="test",
+            pitch_midi=60,
+            is_tied=True,
+        ),
+    ]
+
+    result = prepare_events_for_track_registration(
+        notes,
+        bpm=120,
+        slot_id=2,
+        source_kind="midi",
+        time_signature_numerator=4,
+        time_signature_denominator=4,
+    )
+
+    assert [(event.pitch_midi, event.beat, event.duration_beats) for event in result.events] == [
+        (60, 1.0, 1.0),
+    ]
+    assert "symbolic_same_pitch_tie_merge" in result.diagnostics["actions"]
 
 
 def test_registration_quality_fills_symbolic_rests_shorter_than_sixteenth_note() -> None:

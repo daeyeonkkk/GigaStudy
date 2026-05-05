@@ -24,10 +24,10 @@ TrackStatus = Literal[
     "registered",
     "failed",
 ]
-SourceKind = Literal["recording", "audio", "midi", "document", "music", "ai"]
+SourceKind = Literal["recording", "audio", "midi", "document", "ai"]
 ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
-SeedSourceKind = Literal["document", "music"]
+SeedSourceKind = Literal["document"]
 ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
 ExtractionJobType = Literal["document", "voice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]

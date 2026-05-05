@@ -39,7 +39,6 @@ const sourceDecisionLabels: Record<SourceKind, string> = {
   audio: '오디오 추출',
   midi: 'MIDI 가져오기',
   document: '문서 추출',
-  music: '음악 파일 추출',
   ai: 'AI 화음',
 }
 
@@ -460,6 +459,9 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   const llmPlanConfidence = getDiagnosticNumber(diagnostics, 'llm_plan_confidence')
   const llmRevisionCycles = getDiagnosticNumber(diagnostics, 'llm_revision_cycles')
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
+  const emptyMidiPartSummary = formatMidiNamedEmptyParts(
+    getDiagnosticRecordList(diagnostics, 'midi_named_empty_parts'),
+  )
 
   if (llmProfile) {
     metrics.push({ label: '생성 방향', value: formatVoiceLeadingProfile(llmProfile) })
@@ -487,6 +489,9 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   }
   if (riskTags.length > 0) {
     metrics.push({ label: '검토 신호', value: riskTags.join(', ') })
+  }
+  if (emptyMidiPartSummary) {
+    metrics.push({ label: '빈 MIDI 파트', value: emptyMidiPartSummary })
   }
 
   const documentPageCount = getDiagnosticNumber(diagnostics, 'document_page_count')
@@ -615,6 +620,33 @@ function getDiagnosticStringList(diagnostics: Record<string, unknown>, key: stri
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : []
+}
+
+function getDiagnosticRecordList(diagnostics: Record<string, unknown>, key: string): Record<string, unknown>[] {
+  const value = diagnostics[key]
+  return Array.isArray(value) ? value.filter(isDiagnosticRecord) : []
+}
+
+function isDiagnosticRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function formatMidiNamedEmptyParts(parts: Record<string, unknown>[]): string | null {
+  const labels = parts.map(formatMidiNamedEmptyPartLabel).filter((label) => label.length > 0)
+  if (labels.length === 0) {
+    return null
+  }
+  return `${labels.join(', ')}: MIDI 트랙 이름은 있지만 note 이벤트가 없어 후보를 만들지 못했습니다.`
+}
+
+function formatMidiNamedEmptyPartLabel(part: Record<string, unknown>): string {
+  const trackName = getDiagnosticString(part, 'track_name')
+  const sourceLabel = getDiagnosticString(part, 'source_label')
+  const slotId = getDiagnosticNumber(part, 'slot_id')
+  if (trackName && sourceLabel && trackName.toLocaleLowerCase() !== sourceLabel.toLocaleLowerCase()) {
+    return `${trackName}(${sourceLabel})`
+  }
+  return trackName ?? sourceLabel ?? (slotId !== null ? `Track ${slotId}` : '')
 }
 
 function formatVoiceLeadingProfile(profileName: string): string {

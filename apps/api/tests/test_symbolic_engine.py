@@ -4,6 +4,7 @@ from gigastudy_api.services.engine.symbolic import (
     ParsedSymbolicFile,
     ParsedTrack,
     map_tracks_to_slots,
+    midi_seed_empty_named_parts,
     parse_midi_file,
     parse_musicxml_file,
     parse_symbolic_file_with_metadata,
@@ -504,6 +505,41 @@ def test_symbolic_seed_review_flags_any_unmapped_named_source_part() -> None:
     parsed = ParsedSymbolicFile(tracks=tracks, mapped_events=mapped)
 
     assert "midi_named_part_unmapped" in symbolic_seed_review_reasons(parsed, source_suffix=".mid")
+
+
+def test_midi_seed_empty_named_parts_describes_silent_named_tracks() -> None:
+    tracks = [
+        ParsedTrack(
+            name="Soprano",
+            events=[
+                event_from_pitch(
+                    beat=1,
+                    duration_beats=1,
+                    bpm=113,
+                    source="midi",
+                    extraction_method="test",
+                    pitch_midi=72,
+                )
+            ],
+        ),
+        ParsedTrack(
+            name="베이스",
+            events=[],
+            diagnostics={"midi_source_track_index": 5, "midi_channels": []},
+        ),
+    ]
+    mapped = map_tracks_to_slots([tracks[0]], bpm=113)
+    parsed = ParsedSymbolicFile(tracks=tracks, mapped_events=mapped)
+
+    assert midi_seed_empty_named_parts(parsed) == [
+        {
+            "slot_id": 5,
+            "track_name": "Bass",
+            "source_label": "베이스",
+            "source_track_index": 5,
+            "midi_channels": [],
+        }
+    ]
 
 
 def test_symbolic_seed_review_flags_any_silent_source_part_drop() -> None:

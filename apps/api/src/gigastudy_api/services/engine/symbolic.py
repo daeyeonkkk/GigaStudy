@@ -20,6 +20,7 @@ from gigastudy_api.services.engine.music_theory import (
     rank_slot_candidates,
     slot_id_from_name,
     slot_assignment_diagnostics,
+    track_name,
 )
 from gigastudy_api.services.engine.event_normalization import (
     annotate_track_events_for_slot,
@@ -137,6 +138,33 @@ def symbolic_seed_review_reasons(parsed_symbolic: ParsedSymbolicFile, *, source_
     return reasons
 
 
+def midi_seed_empty_named_parts(parsed_symbolic: ParsedSymbolicFile) -> list[dict[str, Any]]:
+    empty_parts: list[dict[str, Any]] = []
+    for track in parsed_symbolic.tracks:
+        if track.events:
+            continue
+        slot_id = slot_id_from_name(track.name)
+        if slot_id not in TRACK_SLOT_IDS:
+            continue
+
+        part: dict[str, Any] = {
+            "slot_id": slot_id,
+            "track_name": track_name(slot_id),
+            "source_label": track.name,
+        }
+        source_track_index = track.diagnostics.get("midi_source_track_index")
+        if isinstance(source_track_index, int):
+            part["source_track_index"] = source_track_index
+        midi_channels = track.diagnostics.get("midi_channels")
+        if (
+            isinstance(midi_channels, list)
+            and all(isinstance(channel, int) for channel in midi_channels)
+        ):
+            part["midi_channels"] = midi_channels
+        empty_parts.append(part)
+    return empty_parts
+
+
 def _midi_seed_structure_review_reasons(parsed_symbolic: ParsedSymbolicFile) -> list[str]:
     mapped_slots = {
         slot_id
@@ -144,11 +172,7 @@ def _midi_seed_structure_review_reasons(parsed_symbolic: ParsedSymbolicFile) -> 
         if 1 <= slot_id <= PERCUSSION_SLOT_ID and events
     }
     source_tracks = [track for track in parsed_symbolic.tracks if track.events]
-    named_empty_slots = {
-        named_slot
-        for track in parsed_symbolic.tracks
-        if not track.events and (named_slot := slot_id_from_name(track.name)) in TRACK_SLOT_IDS
-    }
+    named_empty_slots = {part["slot_id"] for part in midi_seed_empty_named_parts(parsed_symbolic)}
     if not mapped_slots and not source_tracks and not named_empty_slots:
         return []
 

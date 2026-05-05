@@ -123,7 +123,7 @@ export function createStudio(payload: CreateStudioRequest): Promise<Studio> {
 }
 
 export function createStudioUploadTarget(payload: {
-  source_kind: 'document' | 'music'
+  source_kind: 'document'
   filename: string
   size_bytes: number
   content_type?: string

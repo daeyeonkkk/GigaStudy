@@ -35,7 +35,7 @@ from gigastudy_api.services.engine.event_normalization import (
     spell_midi_label,
 )
 
-VOICE_LIKE_SOURCE_KINDS: set[str] = {"recording", "audio", "music"}
+VOICE_LIKE_SOURCE_KINDS: set[str] = {"recording", "audio"}
 VOICE_LIKE_EVENT_SOURCES: set[str] = {"voice", "recording", "audio"}
 EVENT_GENERATION_SOURCE_KINDS: set[str] = {"ai"}
 MAX_VOICE_EVENTS_PER_MEASURE_FACTOR = 2.0

@@ -271,6 +271,40 @@ def build_single_note_midi_bytes(*, bpm: int = 113, pitch: int = 72, duration_ti
     )
 
 
+def build_midi_with_named_empty_bass_bytes(*, bpm: int = 113) -> bytes:
+    tempo_microseconds = int(round(60_000_000 / bpm))
+    soprano_events = b"".join(
+        [
+            b"\x00\xff\x03\x07Soprano",
+            b"\x00\xff\x51\x03" + tempo_microseconds.to_bytes(3, "big"),
+            b"\x00\x90\x48\x64",
+            _vlq(480) + b"\x80\x48\x40",
+            b"\x00\xff\x2f\x00",
+        ]
+    )
+    bass_events = b"".join(
+        [
+            b"\x00\xff\x03\x04Bass",
+            b"\x00\xff\x2f\x00",
+        ]
+    )
+    return b"".join(
+        [
+            b"MThd",
+            (6).to_bytes(4, "big"),
+            (1).to_bytes(2, "big"),
+            (2).to_bytes(2, "big"),
+            (480).to_bytes(2, "big"),
+            b"MTrk",
+            len(soprano_events).to_bytes(4, "big"),
+            soprano_events,
+            b"MTrk",
+            len(bass_events).to_bytes(4, "big"),
+            bass_events,
+        ]
+    )
+
+
 def build_polyphonic_vocal_midi_bytes(*, bpm: int = 113) -> bytes:
     tempo_microseconds = int(round(60_000_000 / bpm))
     track_events = b"".join(
@@ -677,6 +711,40 @@ def test_upload_start_registers_generic_midi_parts_when_register_order_is_clear(
     assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 2
     assert [event["label"] for event in _track_region_events(payload, 1)] == ["C5"]
     assert [event["label"] for event in _track_region_events(payload, 5)] == ["C3"]
+
+
+def test_upload_start_midi_review_reports_named_empty_parts(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_midi_with_named_empty_bass_bytes(bpm=113)).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "Named empty MIDI part",
+            "start_mode": "upload",
+            "source_kind": "document",
+            "source_filename": "named-empty.mid",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = _created_studio_payload(client, response)
+    pending_candidates = [candidate for candidate in payload["candidates"] if candidate["status"] == "pending"]
+    assert len(pending_candidates) == 1
+    candidate = pending_candidates[0]
+    assert candidate["suggested_slot_id"] == 1
+    assert candidate["diagnostics"]["seed_review_reasons"] == ["midi_named_part_unmapped"]
+    assert candidate["diagnostics"]["midi_named_empty_parts"] == [
+        {
+            "slot_id": 5,
+            "track_name": "Bass",
+            "source_label": "Bass",
+            "source_track_index": 2,
+            "midi_channels": [],
+        }
+    ]
+    assert _track_region_events(payload, 5) == []
 
 
 def test_upload_start_applies_llm_midi_role_review_when_enabled(tmp_path: Path, monkeypatch) -> None:
@@ -1893,40 +1961,7 @@ def test_audio_upload_normalizes_non_wav_for_analysis_and_playback(tmp_path: Pat
     assert audio_response.content == decoded_bytes
 
 
-def test_upload_start_music_normalizes_non_wav_audio_candidate(tmp_path: Path, monkeypatch) -> None:
-    decoded_bytes = b"RIFF....WAVEfmt seed decoded audio"
-
-    def fake_prepare_voice_analysis_wav(source_path: Path, *, timeout_seconds: int):
-        assert source_path.suffix == ".mp3"
-        decoded_path = source_path.with_suffix(".decoded.wav")
-        decoded_path.write_bytes(decoded_bytes)
-        return VoiceAnalysisAudio(path=decoded_path, converted=True, original_suffix=".mp3")
-
-    def fake_transcribe_voice_file(path: Path, *args, **kwargs):
-        assert path.suffix == ".wav"
-        return [
-            TrackPitchEvent(
-                pitch_midi=72,
-                pitch_hz=261.63,
-                label="C5",
-                onset_seconds=0,
-                duration_seconds=1,
-                beat=1,
-                duration_beats=1,
-                confidence=0.9,
-                source="voice",
-                extraction_method="test_voice",
-            )
-        ]
-
-    monkeypatch.setattr(
-        "gigastudy_api.services.studio_upload_commands.prepare_voice_analysis_wav",
-        fake_prepare_voice_analysis_wav,
-    )
-    monkeypatch.setattr(
-        "gigastudy_api.services.studio_repository.transcribe_voice_file",
-        fake_transcribe_voice_file,
-    )
+def test_upload_start_rejects_music_audio_source_kind(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     encoded = base64.b64encode(b"fake mp3 bytes").decode("ascii")
 
@@ -1941,18 +1976,8 @@ def test_upload_start_music_normalizes_non_wav_audio_candidate(tmp_path: Path, m
         },
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["tracks"][0]["status"] == "needs_review"
-    assert len(payload["candidates"]) == 1
-    candidate = payload["candidates"][0]
-    assert candidate["audio_source_path"].endswith("-normalized.wav")
-    assert candidate["audio_source_label"] == "lead.mp3"
-    assert candidate["audio_mime_type"] == "audio/wav"
-    assert candidate["diagnostics"]["audio_decode"] == {
-        "converted_to_wav": True,
-        "source_suffix": ".mp3",
-    }
+    assert response.status_code == 422
+    assert "source_kind" in response.text
 
 
 def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypatch) -> None:

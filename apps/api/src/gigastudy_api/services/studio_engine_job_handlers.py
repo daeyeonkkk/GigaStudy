@@ -13,7 +13,11 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
 )
 from gigastudy_api.services.engine.document_results import mark_events_as_document
 from gigastudy_api.services.engine.event_normalization import annotate_track_events_for_slot
-from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, symbolic_seed_review_reasons
+from gigastudy_api.services.engine.symbolic import (
+    ParsedSymbolicFile,
+    midi_seed_empty_named_parts,
+    symbolic_seed_review_reasons,
+)
 from gigastudy_api.services.engine_queue import EngineQueueJob
 from gigastudy_api.services.document_extraction_pipeline import (
     DocumentExtractionPipelineError,
@@ -359,11 +363,13 @@ def _symbolic_seed_diagnostics_by_slot(
     review_reasons: list[str],
     source_suffix: str,
 ) -> dict[int, dict[str, Any]]:
+    empty_named_parts = midi_seed_empty_named_parts(parsed_symbolic)
     return {
         track.slot_id: {
             **dict(track.diagnostics),
             "seed_review_reasons": review_reasons,
             "source_suffix": source_suffix,
+            "midi_named_empty_parts": empty_named_parts,
         }
         for track in parsed_symbolic.tracks
         if track.slot_id is not None and track.slot_id in parsed_symbolic.mapped_events

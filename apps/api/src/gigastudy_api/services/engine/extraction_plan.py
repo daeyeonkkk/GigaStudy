@@ -58,7 +58,7 @@ def default_voice_extraction_plan(
     context_event_count = sum(len(events) for events in (context_tracks_by_slot or {}).values())
     slower_piece = bpm <= 72
     fast_piece = bpm >= 144
-    strict_source = source_kind in {"recording", "audio", "music"}
+    strict_source = source_kind in {"recording", "audio"}
 
     quantization_grid: ExtractionGrid = 0.25
     min_segment_seconds = 0.15

@@ -16,22 +16,19 @@ from gigastudy_api.api.schemas.studios import (
     UploadTrackRequest,
 )
 from gigastudy_api.services.engine.candidate_diagnostics import track_duration_seconds
-from gigastudy_api.services.engine.audio_decode import cleanup_voice_analysis_audio, prepare_voice_analysis_wav
 from gigastudy_api.services.engine.symbolic import (
     SymbolicParseError,
+    midi_seed_empty_named_parts,
     parse_symbolic_file_with_metadata,
     symbolic_seed_review_reasons,
 )
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_documents import register_track_material, track_has_content
-from gigastudy_api.services.studio_home_audio_import import extract_home_audio_candidate
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.upload_policy import (
-    AUDIO_SOURCE_SUFFIXES,
     DOCUMENT_IMAGE_SOURCE_SUFFIXES,
     SYMBOLIC_SOURCE_SUFFIXES,
-    guess_audio_mime_type,
     validate_studio_seed_upload_filename,
     validate_track_upload_filename,
 )
@@ -271,6 +268,7 @@ class StudioUploadCommands:
             review_reasons = symbolic_seed_review_reasons(parsed_symbolic, source_suffix=suffix)
             if review_reasons:
                 review_reason_text = ", ".join(review_reasons)
+                empty_named_parts = midi_seed_empty_named_parts(parsed_symbolic)
                 diagnostics_by_slot = {
                     track.slot_id: dict(track.diagnostics)
                     for track in parsed_symbolic.tracks
@@ -293,6 +291,7 @@ class StudioUploadCommands:
                             **diagnostics_by_slot.get(slot_id, {}),
                             "seed_review_reasons": review_reasons,
                             "source_suffix": suffix,
+                            "midi_named_empty_parts": empty_named_parts,
                         },
                     )
                 return studio
@@ -316,52 +315,6 @@ class StudioUploadCommands:
                     registration_diagnostics=registration.diagnostics,
                 )
             studio.updated_at = timestamp
-            return studio
-
-        if source_kind == "music" and suffix in AUDIO_SOURCE_SUFFIXES:
-            try:
-                analysis_audio = prepare_voice_analysis_wav(
-                    source_path,
-                    timeout_seconds=get_settings().engine_processing_timeout_seconds,
-                )
-                try:
-                    suggested_slot_id, transcription, confidence = extract_home_audio_candidate(
-                        studio,
-                        analysis_audio.path,
-                        transcribe_with_alignment=self._repository._transcribe_voice_file_with_alignment,
-                    )
-                    audio_source_path = self._assets.relative_data_asset_path(source_path)
-                    retained_audio_path, retained_mime_type = self._assets.persist_voice_analysis_wav(
-                        relative_audio_path=audio_source_path,
-                        analysis_wav_path=analysis_audio.path,
-                        source_label=source_filename,
-                        audio_mime_type=guess_audio_mime_type(source_filename),
-                        transcription=transcription,
-                    )
-                finally:
-                    cleanup_voice_analysis_audio(analysis_audio)
-            except VoiceTranscriptionError as error:
-                raise HTTPException(status_code=422, detail=str(error)) from error
-            self._repository._append_initial_candidate(
-                studio,
-                suggested_slot_id=suggested_slot_id,
-                source_kind="audio",
-                source_label=source_filename,
-                method="home_voice_transcription_review",
-                confidence=confidence,
-                events=transcription.events,
-                message="Audio upload produced a reviewable track candidate.",
-                audio_source_path=retained_audio_path,
-                audio_source_label=source_filename,
-                audio_mime_type=retained_mime_type,
-                source_diagnostics={
-                    **(transcription.diagnostics or {}),
-                    "audio_decode": {
-                        "converted_to_wav": analysis_audio.converted,
-                        "source_suffix": analysis_audio.original_suffix,
-                    },
-                },
-            )
             return studio
 
         raise HTTPException(status_code=422, detail="Unsupported upload processing path.")

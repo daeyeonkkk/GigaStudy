@@ -596,7 +596,7 @@ def _build_quality_options(
             time_signature_denominator=time_signature_denominator,
         )
     ]
-    if source_kind in {"recording", "audio", "music", "ai"} and original_events:
+    if source_kind in {"recording", "audio", "ai"} and original_events:
         coarse_events = normalize_track_events(
             original_events,
             bpm=bpm,

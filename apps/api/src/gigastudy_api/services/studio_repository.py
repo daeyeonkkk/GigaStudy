@@ -1138,7 +1138,7 @@ class StudioRepository:
             timestamp = _now()
             source_kind: SourceKind = "audio" if record.job_type == "voice" else "document"
             payload_source_kind = record.payload.get("source_kind")
-            if payload_source_kind in {"recording", "audio", "midi", "document", "music", "ai"}:
+            if payload_source_kind in {"recording", "audio", "midi", "document", "ai"}:
                 source_kind = payload_source_kind
             source_label = str(record.payload.get("source_label") or "recovered-upload")
             audio_mime_type_value = record.payload.get("audio_mime_type")

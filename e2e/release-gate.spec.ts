@@ -26,9 +26,12 @@ const sopranoMusicXml = `<?xml version="1.0" encoding="UTF-8"?>
 </score-partwise>
 `
 
+const studioPassword = 'release-gate-password'
+
 async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await page.goto('/')
   await page.getByTestId('studio-title-input').fill(title)
+  await page.getByTestId('studio-password-input').fill(studioPassword)
   await page.getByTestId('studio-bpm-input').fill(bpm)
   await page.getByTestId('start-blank-button').click()
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
@@ -39,16 +42,27 @@ async function createBlankStudio(page: Page, title: string, bpm = '120') {
   await expect(page.getByTestId('playback-source-audio')).toHaveText('원음 우선')
   await expect(page.getByTestId('playback-source-events')).toHaveText('연주음만')
   await expect(page.getByTestId('track-card-1')).toBeVisible()
+  await expect(page.locator('[data-testid="track-card-1"] input[type="file"]')).toHaveAttribute(
+    'accept',
+    '.wav,.mp3,.m4a,.ogg,.flac',
+  )
   await expect(page.locator('[data-testid^="track-score-"]')).toHaveCount(0)
 }
 
-async function uploadSopranoMusicXml(page: Page, slotId = 1) {
-  await page.locator(`[data-testid="track-card-${slotId}"] input[type="file"]`).setInputFiles({
+async function createStudioFromSopranoMusicXml(page: Page, title: string) {
+  await page.goto('/')
+  await page.getByTestId('studio-title-input').fill(title)
+  await page.getByTestId('studio-password-input').fill(studioPassword)
+  await page.getByTestId('studio-source-input').setInputFiles({
     name: 'soprano.musicxml',
     mimeType: 'application/vnd.recordare.musicxml+xml',
     buffer: Buffer.from(sopranoMusicXml, 'utf-8'),
   })
-  await expect(page.getByTestId('candidate-review')).toContainText('소프라노')
+  await page.getByTestId('upload-and-start-button').click()
+  await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
+  await expect(page.getByRole('heading', { name: title })).toBeVisible()
+  await expect(page.getByTestId('purpose-nav-studio')).toHaveAttribute('aria-current', 'page')
+  await expectRegisteredRegion(page, 1, ['C5', 'G5'])
 }
 
 async function approveFirstCandidate(page: Page) {
@@ -101,11 +115,8 @@ test('blank studio opens the region editor and independent practice route', asyn
   await expect(page.getByText('음표 없음')).toBeVisible()
 })
 
-test('document upload flows through studio, region editor, and practice waterfall', async ({ page }) => {
-  await createBlankStudio(page, 'Region import session', '104')
-  await uploadSopranoMusicXml(page)
-  await expect(page.locator('[data-testid^="candidate-region-"]').first()).toContainText('C5')
-  await approveFirstCandidate(page)
+test('document-start studio flows through studio, region editor, and practice waterfall', async ({ page }) => {
+  await createStudioFromSopranoMusicXml(page, 'Region import session')
 
   await expectRegisteredRegion(page, 1, ['C5', 'G5'])
   await expect(page.locator('[data-testid^="track-event-mini-"]').first()).toBeVisible()
@@ -170,14 +181,11 @@ test('document upload flows through studio, region editor, and practice waterfal
 })
 
 test('AI generation registers a second editable region', async ({ page }) => {
-  await createBlankStudio(page, 'Region AI session')
-  await uploadSopranoMusicXml(page)
-  await approveFirstCandidate(page)
+  await createStudioFromSopranoMusicXml(page, 'Region AI session')
 
   await expect(page.getByTestId('track-generate-2')).toBeEnabled()
   await page.getByTestId('track-generate-2').click()
   await expect(page.getByTestId('candidate-review')).toContainText('후보')
-  await expect(page.locator('[data-testid^="candidate-region-"]').first()).toContainText('E4')
   await approveFirstCandidate(page)
 
   await expectRegisteredRegion(page, 2, ['E4', 'G4'])

@@ -8,7 +8,7 @@ type TrackStatus =
   | 'registered'
   | 'failed'
 
-export type SourceKind = 'recording' | 'audio' | 'midi' | 'document' | 'music' | 'ai'
+export type SourceKind = 'recording' | 'audio' | 'midi' | 'document' | 'ai'
 export type PitchEventSource = 'musicxml' | 'midi' | 'document' | 'voice' | 'ai' | 'recording' | 'audio'
 export type ScoreMode = 'answer' | 'harmony'
 
@@ -257,7 +257,7 @@ export type CreateStudioRequest = {
   time_signature_numerator?: number
   time_signature_denominator?: number
   start_mode: 'blank' | 'upload'
-  source_kind?: 'document' | 'music'
+  source_kind?: 'document'
   source_filename?: string
   source_content_base64?: string
   source_asset_path?: string

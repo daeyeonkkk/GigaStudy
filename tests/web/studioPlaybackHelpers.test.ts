@@ -151,6 +151,81 @@ describe('studio playback scheduling helpers', () => {
     expect(scheduled[1].startSeconds).toBeCloseTo(0.5)
   })
 
+  it('keeps repeated symbolic notes as separate playback attacks', () => {
+    const baseEvent = {
+      beat_in_measure: null,
+      confidence: 1,
+      duration_beats: 1,
+      extraction_method: 'test',
+      is_rest: false,
+      label: 'E4',
+      measure_index: null,
+      pitch_hz: null,
+      pitch_midi: 64,
+      quality_warnings: [],
+      region_id: 'region-1',
+      source: 'midi',
+      start_beat: 1,
+      track_slot_id: 1,
+    } satisfies Partial<PitchEvent>
+    const events = [
+      {
+        ...baseEvent,
+        duration_seconds: 0.5,
+        event_id: 'repeat-1',
+        start_seconds: 0,
+      },
+      {
+        ...baseEvent,
+        duration_seconds: 0.5,
+        event_id: 'repeat-2',
+        start_seconds: 0.5,
+      },
+    ] as PitchEvent[]
+
+    const scheduled = getSustainedPitchEvents(events, false, STUDIO_TIME_PRECISION_SECONDS, 1)
+
+    expect(scheduled.map((event) => event.event.event_id)).toEqual(['repeat-1', 'repeat-2'])
+  })
+
+  it('still sustains measure-split tie fragments across a barline', () => {
+    const baseEvent = {
+      beat_in_measure: null,
+      confidence: 1,
+      duration_beats: 1,
+      extraction_method: 'test',
+      is_rest: false,
+      label: 'E4',
+      measure_index: null,
+      pitch_hz: null,
+      pitch_midi: 64,
+      quality_warnings: ['measure_boundary_tie'],
+      region_id: 'region-1',
+      source: 'midi',
+      start_beat: 1,
+      track_slot_id: 1,
+    } satisfies Partial<PitchEvent>
+    const events = [
+      {
+        ...baseEvent,
+        duration_seconds: 0.5,
+        event_id: 'sustain-q1',
+        start_seconds: 0,
+      },
+      {
+        ...baseEvent,
+        duration_seconds: 0.5,
+        event_id: 'sustain-q2',
+        start_seconds: 0.5,
+      },
+    ] as PitchEvent[]
+
+    const scheduled = getSustainedPitchEvents(events, false, STUDIO_TIME_PRECISION_SECONDS, 1)
+
+    expect(scheduled.map((event) => event.event.event_id)).toEqual(['sustain-q1'])
+    expect(scheduled[0].durationSeconds).toBeCloseTo(1)
+  })
+
   it('keeps playback duration at studio precision instead of the readable import grid', () => {
     const readableImportUnitSeconds = getSixteenthNoteSeconds(113)
     const schedule = getPitchEventSchedule({

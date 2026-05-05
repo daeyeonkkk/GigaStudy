@@ -28,7 +28,7 @@ is excluded from persistence and remains an adapter detail.
 ### Web
 
 - `apps/web/src/pages/LaunchPage.tsx`
-  Creates a blank studio or seeds one from document/music input.
+  Creates a blank studio or seeds one from PDF/MIDI/MusicXML document input.
 - `apps/web/src/pages/StudioPage.tsx`
   Owns loaded studio state, transport state, recording state, candidate review
   state, and action status for the studio assembly surface. It is the place for
@@ -153,11 +153,12 @@ is excluded from persistence and remains an adapter detail.
   warnings and diagnostics.
 - `apps/api/src/gigastudy_api/services/engine/audio_decode.py`
   Server-side audio normalization for voice analysis. Track recording uploads
-  and studio-start music audio may arrive as WAV/MP3/M4A/OGG/FLAC, but non-WAV
-  files are decoded through ffmpeg into temporary WAV before the voice engine
-  runs. When a retained audio clip was decoded or aligned, `studio_assets`
-  writes a normalized WAV asset and exposes that path/MIME to playback instead
-  of pointing a track at mismatched original bytes.
+  may arrive as WAV/MP3/M4A/OGG/FLAC, but non-WAV files are decoded through
+  ffmpeg into temporary WAV before the voice engine runs. Studio-start uploads
+  are score/document sources only, not music audio. When a retained audio clip
+  was decoded or aligned, `studio_assets` writes a normalized WAV asset and
+  exposes that path/MIME to playback instead of pointing a track at mismatched
+  original bytes.
 - `apps/api/src/gigastudy_api/services/document_extraction_pipeline.py` and
   `apps/api/src/gigastudy_api/services/studio_engine_job_handlers.py`
   Shared queued import path for studio-start score files. PDF/image inputs run

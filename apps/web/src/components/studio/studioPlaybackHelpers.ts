@@ -79,7 +79,7 @@ export function getSustainedPitchEvents(
         current.event.pitch_midi !== undefined &&
         current.event.pitch_midi === previous.event.pitch_midi)
     const smallGap = current.startSeconds <= previousEndSeconds + timelinePrecisionSeconds
-    if (samePitch && smallGap) {
+    if (samePitch && smallGap && isMeasureBoundaryTieContinuation(previous.event, current.event)) {
       previous.durationSeconds = Math.max(previous.durationSeconds, currentEndSeconds - previous.startSeconds)
       continue
     }
@@ -87,6 +87,19 @@ export function getSustainedPitchEvents(
     merged.push({ ...current })
   }
   return enforceMonophonicPlaybackLine(merged, slotId, timelinePrecisionSeconds)
+}
+
+function isMeasureBoundaryTieContinuation(previous: PitchEvent, current: PitchEvent): boolean {
+  return (
+    previous.quality_warnings.includes('measure_boundary_tie') &&
+    current.quality_warnings.includes('measure_boundary_tie') &&
+    splitFragmentRoot(previous.event_id) === splitFragmentRoot(current.event_id)
+  )
+}
+
+function splitFragmentRoot(eventId: string): string {
+  const match = /-q\d+$/.exec(eventId)
+  return match ? eventId.slice(0, match.index) : eventId
 }
 
 function enforceMonophonicPlaybackLine(

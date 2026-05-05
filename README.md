@@ -3,7 +3,7 @@
 GigaStudy is a six-track a cappella practice studio.
 The product is now centered on three user flows:
 
-1. Create a studio from a document/music upload or from an empty six-track board.
+1. Create a studio from a score/document upload or from an empty six-track board.
 2. Complete six fixed tracks: Soprano, Alto, Tenor, Baritone, Bass, and Percussion.
 3. Arrange with region lanes and piano-roll events, then practice in the dedicated waterfall view.
 4. Score a singer against selected reference tracks and append a timing/pitch report to the studio feed.

@@ -10,6 +10,7 @@ import { ReportFeed } from '../components/studio/ReportFeed'
 import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { StudioToolbar } from '../components/studio/StudioToolbar'
 import { TrackBoard } from '../components/studio/TrackBoard'
+import { TrackArchiveDialog } from '../components/studio/TrackArchiveDialog'
 import type { StudioActionState } from '../components/studio/studioActionState'
 import { useCandidateReviewState } from '../components/studio/useCandidateReviewState'
 import { useStudioPlayback } from '../components/studio/useStudioPlayback'
@@ -22,6 +23,7 @@ import {
   deleteRegion,
   getDocumentJobSourcePreviewUrl,
   getStudioMidiExportUrl,
+  restoreTrackArchive,
   splitRegion,
 } from '../lib/api'
 import {
@@ -34,6 +36,7 @@ import {
 import type {
   ArrangementRegion,
   Studio,
+  TrackMaterialArchiveSummary,
   TrackSlot,
 } from '../types/studio'
 import './StudioPage.css'
@@ -45,6 +48,7 @@ export function StudioPage() {
   const focusedRegionId = searchParams.get('region')
   const focusedEventId = searchParams.get('event')
   const [actionState, setActionState] = useState<StudioActionState>({ phase: 'idle' })
+  const [archiveDialogSlotId, setArchiveDialogSlotId] = useState<number | null>(null)
   const studioActionInFlightRef = useRef(false)
   const {
     activeExtractionJobs,
@@ -66,6 +70,17 @@ export function StudioPage() {
     [studio],
   )
   const studioBeatsPerMeasure = studioMeter.beatsPerMeasure
+  const archiveDialogTrack = useMemo(
+    () => studio?.tracks.find((track) => track.slot_id === archiveDialogSlotId) ?? null,
+    [archiveDialogSlotId, studio],
+  )
+  const archiveDialogArchives = useMemo(
+    () =>
+      (studio?.track_material_archives ?? []).filter(
+        (archive) => archive.track_slot_id === archiveDialogSlotId,
+      ),
+    [archiveDialogSlotId, studio],
+  )
   const {
     changePlaybackSource,
     globalPlaying,
@@ -300,6 +315,24 @@ export function StudioPage() {
     navigate(`/studios/${studio.studio_id}/edit?${params.toString()}`)
   }
 
+  async function handleRestoreTrackArchive(archive: TrackMaterialArchiveSummary) {
+    if (!studio) {
+      return
+    }
+    if (!window.confirm('현재 트랙은 보관 후 교체됩니다. 보관본으로 복원할까요?')) {
+      return
+    }
+    const targetTrack = studio.tracks.find((track) => track.slot_id === archive.track_slot_id)
+    const success = await runStudioAction(
+      () => restoreTrackArchive(studio.studio_id, archive.archive_id),
+      `${formatTrackName(targetTrack?.name ?? archive.track_name)} 보관본을 복원하는 중입니다.`,
+      `${formatTrackName(targetTrack?.name ?? archive.track_name)} 보관본을 복원했습니다.`,
+    )
+    if (success) {
+      setArchiveDialogSlotId(null)
+    }
+  }
+
   if (!studioId) {
     return (
       <StudioRouteState
@@ -405,6 +438,7 @@ export function StudioPage() {
               trackCountIn={trackCountIn}
               recordingSlotId={recordingSlotId}
               trackRecordingMeter={trackRecordingMeter}
+              trackMaterialArchives={studio.track_material_archives ?? []}
               tracks={studio.tracks}
               onCopyRegion={(region, targetSlotId, startSeconds) =>
                 void handleCopyRegion(region, targetSlotId, startSeconds)
@@ -412,6 +446,7 @@ export function StudioPage() {
               onDeleteRegion={(region) => void handleDeleteRegion(region)}
               onGenerate={(track) => void handleGenerate(track)}
               onOpenRegionEditor={handleOpenRegionEditor}
+              onOpenTrackArchive={(track) => setArchiveDialogSlotId(track.slot_id)}
               onRecord={(track) => void handleRecord(track)}
               onSplitRegion={(region, splitSeconds) => void handleSplitRegion(region, splitSeconds)}
               onStopPlayback={stopTrackPlayback}
@@ -476,6 +511,16 @@ export function StudioPage() {
           onSelectAllTracks={selectAllRecordingReferences}
           onStart={() => void startRecordingFromSetup()}
           onToggleTrack={toggleRecordingReference}
+        />
+      ) : null}
+
+      {archiveDialogTrack && archiveDialogArchives.length > 0 ? (
+        <TrackArchiveDialog
+          archives={archiveDialogArchives}
+          busy={actionState.phase === 'busy'}
+          track={archiveDialogTrack}
+          onClose={() => setArchiveDialogSlotId(null)}
+          onRestore={(archive) => void handleRestoreTrackArchive(archive)}
         />
       ) : null}
 

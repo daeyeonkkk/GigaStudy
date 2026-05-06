@@ -45,6 +45,10 @@ the same change.
   data. `TrackSlot.events` may remain only as an internal input, migration
   fallback, or short-lived storage shadow; it must not be the canonical
   registered arrangement after a save.
+- Track material archives are inactive restore snapshots. They are not a second
+  active timeline and playback, practice, scoring, candidate review, and AI
+  generation must ignore them until the user explicitly restores one into
+  `Studio.regions`.
 - Do not reintroduce old `notes` or pre-region compatibility paths unless a
   migration task explicitly requires them.
 - Every playback, scoring, generation, candidate-review, and practice surface
@@ -164,6 +168,11 @@ the same change.
   when track assignment or musical interpretation is ambiguous.
 - Candidate approval is a product tool, not an excuse for weak extraction.
   Candidate cards should explain musical role, fit, risk, and overwrite impact.
+- Any registration path that can overwrite an existing track must archive the
+  currently active material first. The first MIDI/MusicXML/PDF seeded material
+  for that slot is pinned as the original score; later recording, audio upload,
+  AI generation, or import overwrites keep bounded non-pinned snapshots for
+  restore.
 - One failed extraction part must not block all other parts. Multi-part import
   should try every identifiable track and report per-track results.
 - Studio creation upload and per-track upload are different product contracts.

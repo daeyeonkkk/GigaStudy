@@ -35,6 +35,7 @@ from gigastudy_api.api.schemas.studios import (
     StudioSeedUploadRequest,
     SyncTrackRequest,
     TrackExtractionJob,
+    TrackMaterialArchive,
     TrackSlot,
     UpdatePitchEventRequest,
     UpdateRegionRequest,
@@ -100,9 +101,11 @@ from gigastudy_api.services.studio_track_settings import (
 )
 from gigastudy_api.services.track_registration import TrackRegistrationPreparer
 from gigastudy_api.services.studio_documents import (
+    archive_current_track_material,
     empty_tracks as _empty_tracks,
     encode_studio_payload,
     register_track_material as _register_track_material,
+    restore_track_material_archive,
     sync_studio_arrangement_regions,
     studio_list_item_from_payload as _studio_list_item_from_payload,
     track_has_content as _track_has_content,
@@ -724,6 +727,39 @@ class StudioRepository:
             revision_id,
             owner_token=owner_token,
         )
+
+    def restore_track_archive(
+        self,
+        studio_id: str,
+        archive_id: str,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            archive = self._find_track_material_archive(studio, archive_id)
+            track = self._find_track(studio, archive.track_slot_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {track.slot_id},
+                action_label="Track archive restore",
+            )
+            timestamp = _now()
+            archive_current_track_material(
+                studio,
+                track,
+                timestamp=timestamp,
+                force_reason="before_overwrite",
+                force_pinned=False,
+            )
+            restore_track_material_archive(studio, track, archive)
+            track.updated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+        return studio
 
     def copy_region(
         self,
@@ -1387,6 +1423,12 @@ class StudioRepository:
             if track.slot_id == slot_id:
                 return track
         raise HTTPException(status_code=404, detail="Track slot not found.")
+
+    def _find_track_material_archive(self, studio: Studio, archive_id: str) -> TrackMaterialArchive:
+        for archive in studio.track_material_archives:
+            if archive.archive_id == archive_id:
+                return archive
+        raise HTTPException(status_code=404, detail="Track archive not found.")
 
     def _find_candidate(self, studio: Studio, candidate_id: str) -> ExtractionCandidate:
         for candidate in studio.candidates:

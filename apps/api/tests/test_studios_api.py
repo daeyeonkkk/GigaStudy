@@ -108,6 +108,36 @@ OWNER_TOKEN_A = "a" * 32
 OWNER_TOKEN_B = "b" * 32
 
 
+def musicxml_upload_with_pitches(first: tuple[str, int], second: tuple[str, int]) -> str:
+    first_step, first_octave = first
+    second_step, second_octave = second
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>{first_step}</step><octave>{first_octave}</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>{second_step}</step><octave>{second_octave}</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
 def build_preview_pdf_bytes() -> bytes:
     document = fitz.open()
     page = document.new_page(width=320, height=240)
@@ -1659,6 +1689,109 @@ def test_upload_musicxml_registers_parsed_track_region_events(tmp_path: Path, mo
     assert [note["label"] for note in soprano_events] == ["C5", "G5"]
     assert soprano_events[0]["source"] == "musicxml"
     assert soprano_events[0]["pitch_midi"] == 72
+
+
+def test_track_overwrite_archives_original_score_and_restore_recovers_it(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Archive restore",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    original_payload = upload_musicxml_track(
+        client,
+        studio_id,
+        filename="original.musicxml",
+    ).json()
+    assert [event["label"] for event in _track_region_events(original_payload, 1)] == ["C5", "G5"]
+
+    replacement_xml = musicxml_upload_with_pitches(("D", 5), ("A", 5))
+    overwrite_payload = upload_musicxml_track(
+        client,
+        studio_id,
+        xml=replacement_xml,
+        filename="recorded-take.musicxml",
+        allow_overwrite=True,
+    ).json()
+
+    assert [event["label"] for event in _track_region_events(overwrite_payload, 1)] == ["D5", "A5"]
+    archives = overwrite_payload["track_material_archives"]
+    assert len(archives) == 1
+    original_archive = archives[0]
+    assert "region_snapshot" not in original_archive
+    assert original_archive["track_slot_id"] == 1
+    assert original_archive["source_label"] == "original.musicxml"
+    assert original_archive["reason"] == "original_score"
+    assert original_archive["pinned"] is True
+    assert original_archive["event_count"] == 2
+
+    restore_response = client.post(
+        f"/api/studios/{studio_id}/track-archives/{original_archive['archive_id']}/restore"
+    )
+
+    assert restore_response.status_code == 200
+    restored_payload = restore_response.json()
+    assert [event["label"] for event in _track_region_events(restored_payload, 1)] == ["C5", "G5"]
+    assert restored_payload["tracks"][0]["source_label"] == "original.musicxml"
+    restored_archives = restored_payload["track_material_archives"]
+    assert any(
+        archive["reason"] == "original_score"
+        and archive["pinned"] is True
+        and archive["source_label"] == "original.musicxml"
+        for archive in restored_archives
+    )
+    assert any(
+        archive["reason"] == "before_overwrite"
+        and archive["pinned"] is False
+        and archive["source_label"] == "recorded-take.musicxml"
+        for archive in restored_archives
+    )
+
+
+def test_track_archive_keeps_pinned_original_while_pruning_previous_versions(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Archive pruning",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id, filename="original.musicxml")
+
+    payload = {}
+    steps = ["C", "D", "E", "F", "G", "A", "B"]
+    for index in range(8):
+        first_step = steps[index % len(steps)]
+        second_step = steps[(index + 2) % len(steps)]
+        payload = upload_musicxml_track(
+            client,
+            studio_id,
+            xml=musicxml_upload_with_pitches((first_step, 5), (second_step, 5)),
+            filename=f"version-{index}.musicxml",
+            allow_overwrite=True,
+        ).json()
+
+    archives = payload["track_material_archives"]
+    pinned_archives = [
+        archive
+        for archive in archives
+        if archive["track_slot_id"] == 1 and archive["pinned"]
+    ]
+    non_pinned_archives = [
+        archive
+        for archive in archives
+        if archive["track_slot_id"] == 1 and not archive["pinned"]
+    ]
+    assert [archive["source_label"] for archive in pinned_archives] == ["original.musicxml"]
+    assert len(non_pinned_archives) == 6
+    assert "version-0.musicxml" not in {archive["source_label"] for archive in non_pinned_archives}
 
 
 def test_studio_midi_export_uses_registered_region_events(tmp_path: Path, monkeypatch) -> None:

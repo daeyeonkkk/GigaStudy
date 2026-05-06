@@ -327,6 +327,22 @@ def restore_region_revision(
     )
 
 
+@router.post("/{studio_id}/track-archives/{archive_id}/restore", response_model=StudioResponse)
+def restore_track_archive(
+    studio_id: str,
+    archive_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.restore_track_archive(
+            studio_id,
+            archive_id,
+            owner_token=owner_token,
+        )
+    )
+
+
 @router.post("/{studio_id}/regions/{region_id}/copy", response_model=StudioResponse)
 def copy_region(
     studio_id: str,

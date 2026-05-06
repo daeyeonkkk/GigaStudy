@@ -28,6 +28,7 @@ SourceKind = Literal["recording", "audio", "midi", "document", "ai"]
 ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["document"]
+TrackMaterialArchiveReason = Literal["original_score", "before_overwrite"]
 ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
 ExtractionJobType = Literal["document", "voice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
@@ -72,6 +73,32 @@ class ArrangementRegion(SourceKindModel):
     volume_percent: int = Field(default=100, ge=0, le=100)
     pitch_events: list[PitchEvent] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
+class TrackMaterialArchive(SourceKindModel):
+    archive_id: str
+    track_slot_id: int
+    track_name: str
+    source_kind: SourceKind | None = None
+    source_label: str | None = None
+    archived_at: str
+    reason: TrackMaterialArchiveReason
+    pinned: bool = False
+    region_snapshot: ArrangementRegion
+
+
+class TrackMaterialArchiveSummary(SourceKindModel):
+    archive_id: str
+    track_slot_id: int
+    track_name: str
+    source_kind: SourceKind | None = None
+    source_label: str | None = None
+    archived_at: str
+    reason: TrackMaterialArchiveReason
+    pinned: bool = False
+    duration_seconds: float
+    event_count: int
+    has_audio: bool = False
 
 
 class CandidateRegion(SourceKindModel):
@@ -447,6 +474,7 @@ class Studio(BaseModel):
     time_signature_denominator: TimeSignatureDenominator = 4
     tracks: list[TrackSlot]
     regions: list[ArrangementRegion] = Field(default_factory=list)
+    track_material_archives: list[TrackMaterialArchive] = Field(default_factory=list)
     reports: list[ScoringReport]
     jobs: list[TrackExtractionJob] = Field(default_factory=list)
     candidates: list[ExtractionCandidate] = Field(default_factory=list)
@@ -501,6 +529,7 @@ class StudioResponse(BaseModel):
     time_signature_denominator: TimeSignatureDenominator = 4
     tracks: list[TrackSlotResponse]
     regions: list[ArrangementRegion]
+    track_material_archives: list[TrackMaterialArchiveSummary] = Field(default_factory=list)
     reports: list[ScoringReport]
     jobs: list[TrackExtractionJob] = Field(default_factory=list)
     candidates: list[ExtractionCandidateResponse] = Field(default_factory=list)
@@ -681,6 +710,34 @@ def sync_studio_candidate_regions(studio: Studio) -> list[CandidateRegion]:
     return [sync_extraction_candidate_region(candidate) for candidate in studio.candidates]
 
 
+def track_material_archive_summaries(studio: Studio) -> list[TrackMaterialArchiveSummary]:
+    summaries = [
+        TrackMaterialArchiveSummary(
+            archive_id=archive.archive_id,
+            track_slot_id=archive.track_slot_id,
+            track_name=archive.track_name,
+            source_kind=archive.source_kind,
+            source_label=archive.source_label,
+            archived_at=archive.archived_at,
+            reason=archive.reason,
+            pinned=archive.pinned,
+            duration_seconds=archive.region_snapshot.duration_seconds,
+            event_count=len(archive.region_snapshot.pitch_events),
+            has_audio=archive.region_snapshot.audio_source_path is not None,
+        )
+        for archive in studio.track_material_archives
+    ]
+    return sorted(
+        summaries,
+        key=lambda archive: (
+            archive.track_slot_id,
+            not archive.pinned,
+            archive.archived_at,
+            archive.archive_id,
+        ),
+    )
+
+
 def build_studio_response(studio: Studio) -> StudioResponse:
     return StudioResponse(
         studio_id=studio.studio_id,
@@ -695,6 +752,7 @@ def build_studio_response(studio: Studio) -> StudioResponse:
             for track in studio.tracks
         ],
         regions=studio_arrangement_regions(studio),
+        track_material_archives=track_material_archive_summaries(studio),
         reports=studio.reports,
         jobs=studio.jobs,
         candidates=[

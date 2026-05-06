@@ -383,6 +383,17 @@ export function restoreRegionRevision(
   )
 }
 
+export function restoreTrackArchive(
+  studioId: string,
+  archiveId: string,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/track-archives/${archiveId}/restore`,
+    { method: 'POST' },
+    '보관본을 복원하지 못했습니다.',
+  )
+}
+
 export function copyRegion(
   studioId: string,
   regionId: string,

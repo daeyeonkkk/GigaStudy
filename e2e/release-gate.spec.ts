@@ -192,6 +192,32 @@ test('AI generation registers a second editable region', async ({ page }) => {
   await expect(page.locator('.studio-tracks__summary')).toContainText('등록 2')
 })
 
+test('overwriting a score-backed track exposes a restore archive', async ({ page }) => {
+  await createStudioFromSopranoMusicXml(page, 'Archive restore session')
+
+  await page.getByTestId('track-generate-2').click()
+  await approveFirstCandidate(page)
+
+  await page.getByTestId('track-generate-1').click()
+  const overwriteCheckbox = page.locator('[data-testid^="candidate-overwrite-"]').first()
+  await expect(overwriteCheckbox).toBeVisible()
+  await overwriteCheckbox.check()
+  await page.locator('[data-testid^="candidate-approve-"]').first().click()
+  await expect(page.getByTestId('candidate-review')).toBeHidden()
+
+  await expect(page.getByTestId('track-archives-1')).toBeVisible()
+  await page.getByTestId('track-archives-1').click()
+  await expect(page.getByTestId('track-archive-dialog')).toBeVisible()
+  await expect(page.getByText('원본 악보')).toBeVisible()
+
+  page.once('dialog', (dialog) => {
+    void dialog.accept()
+  })
+  await page.getByRole('button', { name: '복원' }).first().click()
+  await expect(page.getByTestId('track-archive-dialog')).toBeHidden()
+  await expectRegisteredRegion(page, 1, ['C5', 'G5'])
+})
+
 test('track recording chooses reference playback before count-in', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Chromium uses fake microphone input for recording gates')
 

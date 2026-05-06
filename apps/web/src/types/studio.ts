@@ -11,6 +11,7 @@ type TrackStatus =
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'document' | 'ai'
 export type PitchEventSource = 'musicxml' | 'midi' | 'document' | 'voice' | 'ai' | 'recording' | 'audio'
 export type ScoreMode = 'answer' | 'harmony'
+export type TrackMaterialArchiveReason = 'original_score' | 'before_overwrite'
 
 export type PitchEvent = {
   event_id: string
@@ -155,6 +156,20 @@ export type TrackSlot = {
   updated_at: string
 }
 
+export type TrackMaterialArchiveSummary = {
+  archive_id: string
+  track_slot_id: number
+  track_name: string
+  source_kind: SourceKind | null
+  source_label: string | null
+  archived_at: string
+  reason: TrackMaterialArchiveReason
+  pinned: boolean
+  duration_seconds: number
+  event_count: number
+  has_audio: boolean
+}
+
 export type ReportIssue = {
   at_seconds: number
   issue_type:
@@ -233,6 +248,7 @@ export type Studio = {
   time_signature_denominator: number
   tracks: TrackSlot[]
   regions: ArrangementRegion[]
+  track_material_archives: TrackMaterialArchiveSummary[]
   reports: ScoringReport[]
   jobs: TrackExtractionJob[]
   candidates: ExtractionCandidate[]

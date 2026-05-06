@@ -14,6 +14,7 @@ import {
 import type {
   ArrangementRegion,
   PitchEvent,
+  TrackMaterialArchiveSummary,
   TrackExtractionJob,
   TrackSlot,
 } from '../../types/studio'
@@ -74,11 +75,13 @@ type TrackBoardProps = {
   syncStepSeconds: number
   trackCountIn: TrackCountInState | null
   trackRecordingMeter: TrackRecordingMeter
+  trackMaterialArchives?: TrackMaterialArchiveSummary[]
   tracks: TrackSlot[]
   onCopyRegion: (region: ArrangementRegion, targetSlotId: number, startSeconds: number) => void
   onDeleteRegion: (region: ArrangementRegion) => void
   onGenerate: (track: TrackSlot) => void
   onOpenRegionEditor?: (region: ArrangementRegion) => void
+  onOpenTrackArchive?: (track: TrackSlot) => void
   onRecord: (track: TrackSlot) => void
   onRestoreRegionRevision?: (region: ArrangementRegion, revisionId: string) => void
   onSaveRegionDraft?: (region: ArrangementRegion, draft: RegionEditorDraft, revisionLabel: string | null) => void
@@ -262,11 +265,13 @@ export function TrackBoard({
   syncStepSeconds,
   trackCountIn,
   trackRecordingMeter,
+  trackMaterialArchives = [],
   tracks,
   onCopyRegion,
   onDeleteRegion,
   onGenerate,
   onOpenRegionEditor,
+  onOpenTrackArchive,
   onRecord,
   onRestoreRegionRevision,
   onSaveRegionDraft,
@@ -391,6 +396,9 @@ export function TrackBoard({
             : editDisabledReason
           const trackRegions = regionsByTrack.get(track.slot_id) ?? []
           const trackMiniEvents = getTrackMiniEvents(trackRegions)
+          const trackArchiveCount = trackMaterialArchives.filter(
+            (archive) => archive.track_slot_id === track.slot_id,
+          ).length
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
@@ -549,6 +557,18 @@ export function TrackBoard({
                     <span aria-hidden="true">AI</span>
                     생성
                   </button>
+                  {trackArchiveCount > 0 && onOpenTrackArchive ? (
+                    <button
+                      className="app-button app-button--secondary"
+                      data-testid={`track-archives-${track.slot_id}`}
+                      disabled={trackEditDisabled}
+                      type="button"
+                      title={trackEditDisabledReason ?? undefined}
+                      onClick={() => onOpenTrackArchive(track)}
+                    >
+                      보관본 {trackArchiveCount}
+                    </button>
+                  ) : null}
                 </div>
 
                 {isRegistered ? (

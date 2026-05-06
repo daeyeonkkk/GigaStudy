@@ -72,6 +72,11 @@ is excluded from persistence and remains an adapter detail.
   visible lanes plus selected-region tools and piano-roll editing. Empty tracks
   remain visible as lanes with no event minis. Practice waterfall rendering
   belongs to `PracticePage`.
+- `apps/web/src/components/studio/TrackArchiveDialog.tsx`
+  Restore-only track material archive dialog. It is opened from a track row
+  only when inactive snapshots exist, labels pinned score material as original
+  score, and restores by replacing the active track material after confirming
+  that the current material will be archived first.
 - `apps/web/src/components/studio/eventMiniLayout.ts`
   Shared event-mini presentation helper for filtering renderable events,
   positioning minis by pitch, sizing dense lanes by pitch span, and generating
@@ -116,8 +121,10 @@ is excluded from persistence and remains an adapter detail.
   internal inputs before registration. `ExtractionCandidate.events` remains a
   candidate-review shadow until approval. They accept only the current event
   shape; obsolete pre-region payloads are rejected with the rest of the obsolete
-  storage shape. Studio routes return `StudioResponse`, whose tracks and
-  candidates omit internal event arrays.
+  storage shape. `Studio.track_material_archives` stores inactive restore
+  snapshots for overwritten track material. Studio routes return
+  `StudioResponse`, whose tracks and candidates omit internal event arrays and
+  whose archive payload exposes summaries only, not stored event snapshots.
   `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
   arrangement data flow. Document imports use `source_kind: "document"`;
   `"score"` is no longer accepted as a source-kind alias. `PitchEvent` carries
@@ -259,7 +266,7 @@ flowchart TD
 1. Web calls `GET /api/studios/{studio_id}`.
 2. API loads a `Studio` from `StudioStore`.
 3. API builds a `StudioResponse`, stripping internal event shadows from tracks
-   and candidates.
+   and candidates, and exposing only track material archive summaries.
 4. `StudioResponse.regions` uses persisted explicit regions and derives a
    fallback region from registered track event shadows only for older payloads
    that have not yet been saved through the explicit-region path.
@@ -296,7 +303,10 @@ flowchart TD
    clears target track event shadows. Bulk document approval registers every
    unblocked valid part it can, leaves overwrite-blocked or failed parts
    reviewable, and records the per-track outcome on the extraction job.
-7. Reloaded studio response exposes the registered track from `Studio.regions`.
+7. If registration overwrites an existing track, API stores the previous active
+   material as an inactive track archive before replacing `Studio.regions`.
+   Original MIDI/MusicXML/PDF score material is pinned for that slot.
+8. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
 
@@ -311,7 +321,9 @@ flowchart TD
    count-in-only path: metronome if selected, or silent visual count-in if not.
 4. The stopped take stays pending until the user registers or discards it.
 5. API stores retained audio and starts voice extraction after registration.
-6. Extracted pitch material becomes a candidate or registered track.
+6. Extracted pitch material becomes a candidate or registered track. If the
+   target slot already had score/imported/generated material, the active
+   material is archived before the recording replaces it.
 7. Region and pitch-event views update from the studio response.
 
 ### Scoring
@@ -341,6 +353,9 @@ flowchart TD
    readable grid as imported material.
 5. Generated candidates remain reviewable until approved.
 6. Approved material becomes a region in the target track.
+7. If approval overwrites an active target track, the overwritten material is
+   archived first; generation, playback, and scoring still consume only the
+   restored or newly active `Studio.regions`.
 
 ### Playback
 
@@ -396,6 +411,9 @@ The rebuild now follows the intended separation:
 
 - Product truth: `Studio.regions`, `ArrangementRegion.pitch_events`, and
   `CandidateRegion.pitch_events`.
+- Restore snapshots: `Studio.track_material_archives` is inactive storage for
+  restoration only and is not consumed by playback, scoring, practice, or AI
+  generation.
 - Product surfaces: region lanes, selected-region piano roll, waterfall
   practice, playback, and report focus consume region/event payloads only.
 - Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,

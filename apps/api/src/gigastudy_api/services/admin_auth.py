@@ -71,10 +71,9 @@ def _decode_admin_password(encoded_password: str) -> str | None:
         return None
 
 
-def _is_admin_password(submitted_password: str | None, configured_password: str) -> bool:
-    if submitted_password is None:
+def _is_admin_password(submitted_password: str | None, configured_password: str | None) -> bool:
+    if submitted_password is None or configured_password is None:
         return False
     normalized = unicodedata.normalize("NFC", submitted_password.strip())
     configured = unicodedata.normalize("NFC", configured_password)
-    alpha_aliases = {"eodus123", "daeyeon123"}
-    return normalized == configured or normalized in alpha_aliases
+    return normalized == configured

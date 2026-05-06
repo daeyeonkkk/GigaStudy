@@ -2,7 +2,7 @@ import json
 from functools import lru_cache
 from typing import Annotated
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     storage_root: str = "./storage"
     admin_token: str | None = None
     admin_username: str = "admin"
-    admin_password: str = "\ub300\uc5f0123"
+    admin_password: str | None = None
     studio_access_policy: str = "public"
     database_url: str | None = None
     storage_backend: str = "local"
@@ -38,9 +38,27 @@ class Settings(BaseSettings):
     engine_job_lease_seconds: int = 10 * 60
     engine_drain_max_jobs: int = 3
     audiveris_bin: str | None = None
-    document_extraction_backend: str = "auto"
-    document_preprocess_mode: str = "retry"
-    document_preprocess_dpi: int = 300
+    document_extraction_backend: str = Field(
+        default="auto",
+        validation_alias=AliasChoices(
+            "GIGASTUDY_API_DOCUMENT_EXTRACTION_BACKEND",
+            "GIGASTUDY_API_OMR_BACKEND",
+        ),
+    )
+    document_preprocess_mode: str = Field(
+        default="retry",
+        validation_alias=AliasChoices(
+            "GIGASTUDY_API_DOCUMENT_PREPROCESS_MODE",
+            "GIGASTUDY_API_OMR_PREPROCESS_MODE",
+        ),
+    )
+    document_preprocess_dpi: int = Field(
+        default=300,
+        validation_alias=AliasChoices(
+            "GIGASTUDY_API_DOCUMENT_PREPROCESS_DPI",
+            "GIGASTUDY_API_OMR_PREPROCESS_DPI",
+        ),
+    )
     voice_transcription_backend: str = "auto"
     engine_processing_timeout_seconds: int = 120
     deepseek_harmony_enabled: bool = False

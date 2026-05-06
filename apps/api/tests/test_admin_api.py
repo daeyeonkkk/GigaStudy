@@ -27,9 +27,19 @@ def admin_headers(password: str) -> dict[str, str]:
     }
 
 
-def build_client(tmp_path: Path, monkeypatch, *, admin_token: str | None = None) -> TestClient:
+def build_client(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    admin_password: str | None = ADMIN_PASSWORD,
+    admin_token: str | None = None,
+) -> TestClient:
     monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", str(tmp_path))
     monkeypatch.setenv("GIGASTUDY_API_STUDIO_ACCESS_POLICY", "public")
+    if admin_password is None:
+        monkeypatch.delenv("GIGASTUDY_API_ADMIN_PASSWORD", raising=False)
+    else:
+        monkeypatch.setenv("GIGASTUDY_API_ADMIN_PASSWORD", admin_password)
     if admin_token is None:
         monkeypatch.delenv("GIGASTUDY_API_ADMIN_TOKEN", raising=False)
     else:
@@ -71,7 +81,7 @@ def _track_notes(payload: dict, slot_id: int) -> list[dict]:
     return []
 
 
-def test_admin_storage_accepts_default_admin_login(tmp_path: Path, monkeypatch) -> None:
+def test_admin_storage_accepts_configured_admin_login(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
 
     response = client.get("/api/admin/storage", headers=ADMIN_HEADERS)
@@ -79,12 +89,20 @@ def test_admin_storage_accepts_default_admin_login(tmp_path: Path, monkeypatch) 
     assert response.status_code == 200
 
 
-def test_admin_storage_accepts_keyboard_alias_for_alpha_login(tmp_path: Path, monkeypatch) -> None:
+def test_admin_storage_rejects_keyboard_alias_for_alpha_login(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
 
     response = client.get("/api/admin/storage", headers=admin_headers("eodus123"))
 
-    assert response.status_code == 200
+    assert response.status_code == 401
+
+
+def test_admin_storage_rejects_password_when_not_configured(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch, admin_password=None)
+
+    response = client.get("/api/admin/storage", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 401
 
 
 def test_admin_storage_rejects_wrong_login(tmp_path: Path, monkeypatch) -> None:

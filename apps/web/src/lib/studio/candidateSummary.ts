@@ -125,7 +125,7 @@ export function getCandidateDecisionSummary(
   const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
   const diagnostics = getCandidateDiagnostics(candidate)
   const reviewHint = getReviewHintSummary(candidate)
-  const llmInsight = getDeepSeekDecisionInsight(candidate)
+  const llmInsight = getGeneratedCandidateInsight(candidate)
 
   if (events.length === 0) {
     return {
@@ -418,7 +418,7 @@ function getCandidatePhrasePreview(candidate: ExtractionCandidate): string {
   return `${labels.join(' → ')}${suffix}`
 }
 
-function getDeepSeekDecisionInsight(candidate: ExtractionCandidate): {
+function getGeneratedCandidateInsight(candidate: ExtractionCandidate): {
   headline: string | null
   profileLabel: string
   riskTags: string[]
@@ -456,8 +456,6 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   const llmGoal = getDiagnosticString(diagnostics, 'llm_goal')
   const llmRhythmPolicy = getDiagnosticString(diagnostics, 'llm_rhythm_policy')
   const llmPhraseSummary = getDiagnosticString(diagnostics, 'llm_phrase_summary')
-  const llmPlanConfidence = getDiagnosticNumber(diagnostics, 'llm_plan_confidence')
-  const llmRevisionCycles = getDiagnosticNumber(diagnostics, 'llm_revision_cycles')
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
   const emptyMidiPartSummary = formatMidiNamedEmptyParts(
     getDiagnosticRecordList(diagnostics, 'midi_named_empty_parts'),
@@ -480,12 +478,6 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   }
   if (llmPhraseSummary) {
     metrics.push({ label: '프레이즈 흐름', value: llmPhraseSummary })
-  }
-  if (llmPlanConfidence !== null) {
-    metrics.push({ label: '계획 신뢰도', value: formatRatio(llmPlanConfidence) })
-  }
-  if (llmRevisionCycles !== null && llmRevisionCycles > 0) {
-    metrics.push({ label: '내부 보정', value: `${llmRevisionCycles}회` })
   }
   if (riskTags.length > 0) {
     metrics.push({ label: '검토 신호', value: riskTags.join(', ') })
@@ -538,6 +530,10 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
   if (!hint) {
     return null
   }
+  return reviewHintSummaryFromKey(hint)
+}
+
+function reviewHintSummaryFromKey(hint: string): { tag: string; sentence: string } | null {
   return (
     {
       few_events: {
@@ -575,32 +571,16 @@ function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; se
 function getTechnicalDiagnostics(candidate: ExtractionCandidate): CandidateMetric[] {
   const diagnostics = candidate.diagnostics ?? {}
   return [
-    getDiagnosticString(diagnostics, 'engine')
-      ? { label: '진단 엔진', value: getDiagnosticString(diagnostics, 'engine') ?? '' }
-      : null,
-    getDiagnosticString(diagnostics, 'candidate_method')
-      ? { label: '후보 방식', value: getDiagnosticString(diagnostics, 'candidate_method') ?? '' }
-      : null,
     getDiagnosticString(diagnostics, 'part_name')
-      ? { label: '파트 이름', value: getDiagnosticString(diagnostics, 'part_name') ?? '' }
+      ? { label: '원본 파트', value: getDiagnosticString(diagnostics, 'part_name') ?? '' }
       : null,
     getDiagnosticString(diagnostics, 'review_hint')
-      ? { label: '검토 힌트', value: getDiagnosticString(diagnostics, 'review_hint') ?? '' }
-      : null,
-    getDiagnosticString(diagnostics, 'llm_provider')
-      ? { label: 'LLM 공급자', value: getDiagnosticString(diagnostics, 'llm_provider') ?? '' }
-      : null,
-    getDiagnosticString(diagnostics, 'llm_model')
-      ? { label: 'LLM 모델', value: getDiagnosticString(diagnostics, 'llm_model') ?? '' }
-      : null,
-    getDiagnosticString(diagnostics, 'llm_key')
-      ? { label: 'LLM 키', value: getDiagnosticString(diagnostics, 'llm_key') ?? '' }
-      : null,
-    getDiagnosticString(diagnostics, 'llm_mode')
-      ? { label: 'LLM 모드', value: getDiagnosticString(diagnostics, 'llm_mode') ?? '' }
-      : null,
-    getDiagnosticStringList(diagnostics, 'llm_warnings').length > 0
-      ? { label: 'LLM 경고', value: getDiagnosticStringList(diagnostics, 'llm_warnings').join(', ') }
+      ? {
+          label: '확인할 점',
+          value:
+            reviewHintSummaryFromKey(getDiagnosticString(diagnostics, 'review_hint') ?? '')?.sentence ??
+            '승인 전 원본과 후보 흐름을 확인하세요.',
+        }
       : null,
   ].filter((metric): metric is CandidateMetric => metric !== null)
 }

@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
-import { scoreTrack } from '../../lib/api'
+import {
+  createScoringUploadTarget,
+  putDirectUpload,
+  scoreTrack,
+} from '../../lib/api'
 import {
   beginMicrophoneCapture,
+  dataUrlToBlob,
   startMicrophoneRecorder,
   stopMicrophoneRecorder,
   type MicrophoneRecorder,
@@ -450,12 +455,35 @@ export function useStudioScoring({
         })
         return
       }
+      const performanceFilename = `${scoreTargetTrack?.name ?? 'track'}-score-take.wav`
+      let performancePayload:
+        | { performance_asset_path: string; performance_audio_base64?: never }
+        | { performance_audio_base64: string; performance_asset_path?: never } = {
+        performance_audio_base64: performanceAudioBase64,
+      }
+      try {
+        const performanceBlob = dataUrlToBlob(performanceAudioBase64)
+        const uploadTarget = await createScoringUploadTarget(studio.studio_id, session.targetSlotId, {
+          source_kind: 'audio',
+          filename: performanceFilename,
+          size_bytes: performanceBlob.size,
+          content_type: performanceBlob.type || 'audio/wav',
+        })
+        await putDirectUpload(uploadTarget, performanceBlob)
+        performancePayload = {
+          performance_asset_path: uploadTarget.asset_path,
+        }
+      } catch {
+        performancePayload = {
+          performance_audio_base64: performanceAudioBase64,
+        }
+      }
       const nextStudio = await scoreTrack(studio.studio_id, session.targetSlotId, {
         score_mode: session.scoreMode,
         reference_slot_ids: session.selectedReferenceIds,
         include_metronome: session.includeMetronome,
-        performance_audio_base64: performanceAudioBase64,
-        performance_filename: `${scoreTargetTrack?.name ?? 'track'}-score-take.wav`,
+        performance_filename: performanceFilename,
+        ...performancePayload,
       })
       setStudio(nextStudio)
       setScoreSession(null)

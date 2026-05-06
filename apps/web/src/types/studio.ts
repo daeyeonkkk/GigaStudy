@@ -257,6 +257,25 @@ export type Studio = {
   updated_at: string
 }
 
+export type StudioActivity = {
+  studio_id: string
+  updated_at: string
+  jobs: TrackExtractionJob[]
+  pending_candidate_count: number
+  report_count: number
+  registered_track_count: number
+}
+
+export type TrackVolumeMinimalResponse = {
+  studio_id: string
+  updated_at: string
+  track: {
+    slot_id: number
+    volume_percent: number
+  }
+  affected_region_ids: string[]
+}
+
 export type StudioListItem = {
   studio_id: string
   title: string

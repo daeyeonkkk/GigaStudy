@@ -9,8 +9,8 @@ import {
   DEFAULT_PERCUSSION_INSTRUMENT,
   DEFAULT_SYNC_STEP_SECONDS,
   disposePlaybackSession,
-  fetchAudioArrayBuffer,
   formatTrackName,
+  getCachedDecodedAudioBuffer,
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
   getSixteenthNoteSeconds,
@@ -327,8 +327,13 @@ export function useStudioPlayback({
         const decodedAudioTracks = await Promise.all(
           audioTracks.map(async (track) => {
             const audioUrl = getTrackAudioUrl(studio.studio_id, track.slot_id)
-            const arrayBuffer = await fetchAudioArrayBuffer(audioUrl)
-            const buffer = await activeContext.decodeAudioData(arrayBuffer.slice(0))
+            const cacheKey = [
+              studio.studio_id,
+              track.slot_id,
+              track.audio_source_path ?? track.audio_source_label ?? 'audio',
+              track.updated_at,
+            ].join(':')
+            const buffer = await getCachedDecodedAudioBuffer(activeContext, cacheKey, audioUrl)
             return {
               buffer,
               track,

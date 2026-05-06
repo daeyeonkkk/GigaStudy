@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
-import { getStudio } from '../../lib/api'
-import type { Studio, TrackExtractionJob } from '../../types/studio'
+import { getStudio, getStudioActivity } from '../../lib/api'
+import type { Studio, StudioActivity, TrackExtractionJob } from '../../types/studio'
 
 type StudioLoadState =
   | { phase: 'loading' }
@@ -22,29 +22,66 @@ type StudioResourceState = {
   visibleExtractionJobs: Studio['jobs']
 }
 
-function activeJobs(jobs: TrackExtractionJob[]): TrackExtractionJob[] {
+export function activeJobs(jobs: TrackExtractionJob[]): TrackExtractionJob[] {
   return jobs.filter((job) => job.status === 'queued' || job.status === 'running')
+}
+
+export function getActivityPollingDelayMs(jobs: TrackExtractionJob[], pollCount: number): number {
+  const active = activeJobs(jobs)
+  if (active.some((job) => job.status === 'running')) {
+    return 1200
+  }
+  if (active.some((job) => job.status === 'queued')) {
+    return pollCount >= 4 ? 5000 : 2500
+  }
+  return 0
+}
+
+export function shouldRefreshStudioFromActivity(
+  currentStudio: Studio | null,
+  activity: StudioActivity,
+  previousActiveJobCount: number,
+): boolean {
+  if (!currentStudio || currentStudio.studio_id !== activity.studio_id) {
+    return true
+  }
+  if (
+    activity.pending_candidate_count !==
+    currentStudio.candidates.filter((candidate) => candidate.status === 'pending').length
+  ) {
+    return true
+  }
+  if (activity.report_count !== currentStudio.reports.length) {
+    return true
+  }
+  if (
+    activity.registered_track_count !==
+    currentStudio.tracks.filter((track) => track.status === 'registered').length
+  ) {
+    return true
+  }
+  return previousActiveJobCount > 0 && activeJobs(activity.jobs).length === 0
 }
 
 function jobTargetLabel(job: TrackExtractionJob): string {
   if (job.parse_all_parts) {
-    return '전체 문서'
+    return '악보 파일'
   }
   return `Track ${job.slot_id}`
 }
 
 function describeJobActivity(jobs: TrackExtractionJob[]): string {
   if (jobs.length === 0) {
-    return '추출 작업이 끝났습니다. 준비된 후보를 검토해 주세요.'
+    return '분석이 끝났습니다. 준비된 결과를 확인해 주세요.'
   }
 
   const runningJobs = jobs.filter((job) => job.status === 'running')
   const queuedJobs = jobs.filter((job) => job.status === 'queued')
   const leadJob = runningJobs[0] ?? queuedJobs[0]
-  const verb = leadJob.status === 'running' ? '처리 중' : '대기 중'
-  const kind = leadJob.job_type === 'voice' ? '음성 추출' : '문서 분석'
+  const verb = leadJob.status === 'running' ? '분석 중' : '대기 중'
+  const kind = leadJob.job_type === 'voice' ? '녹음 분석' : '악보 분석'
   const queueTail = jobs.length > 1 ? `, 남은 작업 ${jobs.length - 1}개` : ''
-  return `${jobTargetLabel(leadJob)} ${kind} ${verb}입니다${queueTail}. 완료되면 후보 검토 목록에 표시됩니다.`
+  return `${jobTargetLabel(leadJob)} ${kind} ${verb}입니다${queueTail}.`
 }
 
 export function useStudioResource(
@@ -57,6 +94,7 @@ export function useStudioResource(
   const pollingErrorRef = useRef(onPollingError)
   const jobActivityRef = useRef(onJobActivity)
   const previousActiveJobCountRef = useRef(0)
+  const studioRef = useRef<Studio | null>(null)
 
   useEffect(() => {
     pollingErrorRef.current = onPollingError
@@ -65,6 +103,10 @@ export function useStudioResource(
   useEffect(() => {
     jobActivityRef.current = onJobActivity
   }, [onJobActivity])
+
+  useEffect(() => {
+    studioRef.current = studio
+  }, [studio])
 
   useEffect(() => {
     let ignore = false
@@ -113,46 +155,91 @@ export function useStudioResource(
     () => activeJobs(studio?.jobs ?? []),
     [studio],
   )
+  const activeExtractionJobCount = activeExtractionJobs.length
   const visibleExtractionJobs = useMemo(
     () => studio?.jobs.slice().reverse() ?? [],
     [studio],
   )
 
   useEffect(() => {
-    if (!studioId || activeExtractionJobs.length === 0) {
+    if (!studioId || activeExtractionJobCount === 0) {
       return undefined
     }
 
     let ignore = false
-    const intervalId = window.setInterval(() => {
-      getStudio(studioId)
-        .then((nextStudio) => {
+    let timeoutId = 0
+    let pollCount = 0
+
+    const scheduleNextPoll = (jobs: TrackExtractionJob[]) => {
+      const delayMs = getActivityPollingDelayMs(jobs, pollCount)
+      if (delayMs <= 0 || ignore) {
+        return
+      }
+      timeoutId = window.setTimeout(pollActivity, delayMs)
+    }
+
+    const pollActivity = () => {
+      pollCount += 1
+      getStudioActivity(studioId)
+        .then(async (activity) => {
           if (ignore) {
             return
           }
-          const nextActiveJobs = activeJobs(nextStudio.jobs)
-          setStudio(nextStudio)
+          const needsFullRefresh = shouldRefreshStudioFromActivity(
+            studioRef.current,
+            activity,
+            previousActiveJobCountRef.current,
+          )
+          if (needsFullRefresh) {
+            const nextStudio = await getStudio(studioId)
+            if (ignore) {
+              return
+            }
+            const nextActiveJobs = activeJobs(nextStudio.jobs)
+            setStudio(nextStudio)
+            if (nextActiveJobs.length > 0) {
+              jobActivityRef.current?.(describeJobActivity(nextActiveJobs), 'busy')
+            } else if (previousActiveJobCountRef.current > 0) {
+              jobActivityRef.current?.(describeJobActivity(nextActiveJobs), 'success')
+            }
+            previousActiveJobCountRef.current = nextActiveJobs.length
+            scheduleNextPoll(nextStudio.jobs)
+            return
+          }
+
+          const nextActiveJobs = activeJobs(activity.jobs)
+          setStudio((current) =>
+            current && current.studio_id === activity.studio_id
+              ? {
+                  ...current,
+                  jobs: activity.jobs,
+                  updated_at: activity.updated_at,
+                }
+              : current,
+          )
           if (nextActiveJobs.length > 0) {
             jobActivityRef.current?.(describeJobActivity(nextActiveJobs), 'busy')
-          } else if (previousActiveJobCountRef.current > 0) {
-            jobActivityRef.current?.(describeJobActivity(nextActiveJobs), 'success')
           }
           previousActiveJobCountRef.current = nextActiveJobs.length
+          scheduleNextPoll(activity.jobs)
         })
         .catch(() => {
           if (!ignore) {
             pollingErrorRef.current(
-              '추출 작업 상태를 새로고침하지 못했습니다. 스튜디오를 확인한 뒤 다시 시도해 주세요.',
+              '작업 상태를 새로고침하지 못했습니다. 잠시 뒤 다시 확인해 주세요.',
             )
+            scheduleNextPoll(studioRef.current?.jobs ?? [])
           }
         })
-    }, 1200)
+    }
+
+    scheduleNextPoll(activeJobs(studioRef.current?.jobs ?? []))
 
     return () => {
       ignore = true
-      window.clearInterval(intervalId)
+      window.clearTimeout(timeoutId)
     }
-  }, [activeExtractionJobs.length, studioId])
+  }, [activeExtractionJobCount, studioId])
 
   return {
     activeExtractionJobs,

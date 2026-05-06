@@ -1,3 +1,5 @@
+import type { Dispatch, SetStateAction } from 'react'
+
 import {
   createTrackRecordingUploadTarget,
   generateTrack,
@@ -5,7 +7,7 @@ import {
   readFileAsDataUrl,
   shiftRegisteredTrackSyncs,
   updateTrackSync,
-  updateTrackVolume,
+  updateTrackVolumeMinimal,
   uploadTrackRecordingFile,
 } from '../../lib/api'
 import { prepareAudioFileForUpload } from '../../lib/audio'
@@ -24,6 +26,7 @@ type UseStudioTrackActionsArgs = {
   runStudioAction: RunStudioAction
   setActionState: SetStudioActionState
   setActiveTrackVolume: (slotId: number, volumePercent: number) => void
+  setStudio: Dispatch<SetStateAction<Studio | null>>
   stopPlaybackSession: () => void
   studio: Studio | null
 }
@@ -35,6 +38,7 @@ export function useStudioTrackActions({
   runStudioAction,
   setActionState,
   setActiveTrackVolume,
+  setStudio,
   stopPlaybackSession,
   studio,
 }: UseStudioTrackActionsArgs) {
@@ -87,8 +91,7 @@ export function useStudioTrackActions({
         try {
           await putDirectUpload(uploadTarget, preparedUpload.blob)
         } catch {
-          const fallbackContentBase64 =
-            preparedUpload.contentBase64 ?? (await readFileAsDataUrl(file))
+          const fallbackContentBase64 = await readFileAsDataUrl(file)
           return uploadTrackRecordingFile(studio.studio_id, track.slot_id, {
             source_kind: sourceKind,
             filename: preparedUpload.filename,
@@ -187,13 +190,42 @@ export function useStudioTrackActions({
     const volumePercent = Math.max(0, Math.min(100, Math.round(nextVolumePercent)))
     const trackLabel = formatTrackName(track.name)
     setActiveTrackVolume(track.slot_id, volumePercent)
-    const saved = await runStudioAction(
-      () => updateTrackVolume(studio.studio_id, track.slot_id, volumePercent),
-      `${trackLabel} 음량을 저장하는 중입니다.`,
-      `${trackLabel} 음량을 ${volumePercent}%로 맞췄습니다.`,
-    )
-    if (!saved) {
+    setActionState({ phase: 'busy', message: `${trackLabel} 음량을 저장하는 중입니다.` })
+    try {
+      const result = await updateTrackVolumeMinimal(studio.studio_id, track.slot_id, volumePercent)
+      setStudio((current) => {
+        if (!current || current.studio_id !== result.studio_id) {
+          return current
+        }
+        return {
+          ...current,
+          updated_at: result.updated_at,
+          tracks: current.tracks.map((candidate) =>
+            candidate.slot_id === result.track.slot_id
+              ? {
+                  ...candidate,
+                  updated_at: result.updated_at,
+                  volume_percent: result.track.volume_percent,
+                }
+              : candidate,
+          ),
+          regions: current.regions.map((region) =>
+            region.track_slot_id === result.track.slot_id
+              ? {
+                  ...region,
+                  volume_percent: result.track.volume_percent,
+                }
+              : region,
+          ),
+        }
+      })
+      setActionState({ phase: 'success', message: `${trackLabel} 음량을 ${volumePercent}%로 맞췄습니다.` })
+    } catch (error) {
       setActiveTrackVolume(track.slot_id, track.volume_percent)
+      setActionState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : '트랙 음량을 저장하지 못했습니다.',
+      })
     }
   }
 

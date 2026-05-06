@@ -11,7 +11,9 @@ import type {
   SaveRegionRevisionRequest,
   SplitRegionRequest,
   Studio,
+  StudioActivity,
   StudioListItem,
+  TrackVolumeMinimalResponse,
   UpdatePitchEventRequest,
   UpdateRegionRequest,
 } from '../types/studio'
@@ -141,6 +143,14 @@ export function getStudio(studioId: string): Promise<Studio> {
   return requestJson<Studio>(`/api/studios/${studioId}`, {}, '스튜디오를 불러오지 못했습니다.')
 }
 
+export function getStudioActivity(studioId: string): Promise<StudioActivity> {
+  return requestJson<StudioActivity>(
+    `/api/studios/${studioId}/activity`,
+    {},
+    '스튜디오 작업 상태를 불러오지 못했습니다.',
+  )
+}
+
 export function getTrackAudioUrl(studioId: string, slotId: number): string {
   const url = new URL(`/api/studios/${studioId}/tracks/${slotId}/audio`, apiBaseUrl)
   const ownerToken = getOwnerToken()
@@ -186,6 +196,26 @@ export function createTrackRecordingUploadTarget(
       body: JSON.stringify(payload),
     },
     '업로드 준비 정보를 만들지 못했습니다.',
+  )
+}
+
+export function createScoringUploadTarget(
+  studioId: string,
+  slotId: number,
+  payload: {
+    source_kind: 'audio'
+    filename: string
+    size_bytes: number
+    content_type?: string
+  },
+): Promise<DirectUploadTarget> {
+  return requestJson<DirectUploadTarget>(
+    `/api/studios/${studioId}/tracks/${slotId}/scoring-upload-target`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    '채점 녹음 업로드 준비 정보를 만들지 못했습니다.',
   )
 }
 
@@ -359,6 +389,21 @@ export function updateTrackVolume(
 )
 }
 
+export function updateTrackVolumeMinimal(
+  studioId: string,
+  slotId: number,
+  volumePercent: number,
+): Promise<TrackVolumeMinimalResponse> {
+  return requestJson<TrackVolumeMinimalResponse>(
+    `/api/studios/${studioId}/tracks/${slotId}/volume?response=minimal`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ volume_percent: volumePercent }),
+    },
+    '트랙 음량을 저장하지 못했습니다.',
+  )
+}
+
 export function updateRegion(
   studioId: string,
   regionId: string,
@@ -475,6 +520,7 @@ export function scoreTrack(
     include_metronome: boolean
     performance_events?: PitchEvent[]
     performance_audio_base64?: string
+    performance_asset_path?: string
     performance_filename?: string
   },
 ): Promise<Studio> {

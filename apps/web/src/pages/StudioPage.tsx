@@ -154,6 +154,7 @@ export function StudioPage() {
     runStudioAction,
     setActionState,
     setActiveTrackVolume,
+    setStudio,
     stopPlaybackSession,
     studio,
   })

@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { uploadTrackRecordingFile } from '../../lib/api'
+import {
+  createTrackRecordingUploadTarget,
+  putDirectUpload,
+  uploadTrackRecordingFile,
+} from '../../lib/api'
 import {
   beginMicrophoneCapture,
+  dataUrlToBlob,
   startMicrophoneRecorder,
   stopMicrophoneRecorder,
   type MicrophoneRecorder,
@@ -547,14 +552,33 @@ export function useStudioRecording({
     const pendingRecording = pendingTrackRecording
     const trackLabel = formatTrackName(pendingRecording.trackName)
     const succeeded = await runStudioAction(
-      () =>
-        uploadTrackRecordingFile(studio.studio_id, pendingRecording.slotId, {
+      async () => {
+        const recordingBlob = dataUrlToBlob(pendingRecording.audioDataUrl)
+        let uploadPayload:
+          | { asset_path: string; content_base64?: never }
+          | { content_base64: string; asset_path?: never } = {
+          content_base64: pendingRecording.audioDataUrl,
+        }
+        try {
+          const uploadTarget = await createTrackRecordingUploadTarget(studio.studio_id, pendingRecording.slotId, {
+            source_kind: 'audio',
+            filename: pendingRecording.filename,
+            size_bytes: recordingBlob.size,
+            content_type: recordingBlob.type || 'audio/wav',
+          })
+          await putDirectUpload(uploadTarget, recordingBlob)
+          uploadPayload = { asset_path: uploadTarget.asset_path }
+        } catch {
+          uploadPayload = { content_base64: pendingRecording.audioDataUrl }
+        }
+        return uploadTrackRecordingFile(studio.studio_id, pendingRecording.slotId, {
           source_kind: 'audio',
           filename: pendingRecording.filename,
-          content_base64: pendingRecording.audioDataUrl,
           review_before_register: false,
           allow_overwrite: pendingRecording.allowOverwrite,
-        }),
+          ...uploadPayload,
+        })
+      },
       `${trackLabel} 녹음 파일을 서버에 올리고 추출 대기열에 등록하는 중입니다.`,
       `${trackLabel} 녹음을 대기열에 등록했습니다. 앞선 작업이 끝나면 자동으로 음성 추출을 시작합니다.`,
       [

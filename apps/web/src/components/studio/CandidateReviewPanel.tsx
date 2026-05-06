@@ -38,6 +38,14 @@ type CandidateVerdict = {
   tone: 'recommended' | 'review' | 'retry'
 }
 
+type GeneratedCandidateSegment = {
+  count: number
+  densityPercent: number
+  hasEvents: boolean
+  label: string
+  pitchPercent: number
+}
+
 function getEventTimelinePercent(seconds: number, startSeconds: number, durationSeconds: number): number {
   return Math.max(
     0,
@@ -72,6 +80,110 @@ function getCandidateEventStyle(
   } as CSSProperties
 }
 
+function getApproveButtonLabel(wouldOverwrite: boolean, allowOverwrite: boolean): string {
+  if (!wouldOverwrite) {
+    return '이 후보 등록'
+  }
+  return allowOverwrite ? '이 후보로 교체' : '교체 확인 필요'
+}
+
+function CandidateTargetControls({
+  busy,
+  candidate,
+  selectedSlotId,
+  targetTrack,
+  tracks,
+  wouldOverwrite,
+  allowOverwrite,
+  onUpdateCandidateOverwriteApproval,
+  onUpdateCandidateTargetSlot,
+}: {
+  busy: boolean
+  candidate: ExtractionCandidate
+  selectedSlotId: number
+  targetTrack: TrackSlot | undefined
+  tracks: TrackSlot[]
+  wouldOverwrite: boolean
+  allowOverwrite: boolean
+  onUpdateCandidateOverwriteApproval: (candidate: ExtractionCandidate, allowOverwrite: boolean) => void
+  onUpdateCandidateTargetSlot: (candidate: ExtractionCandidate, targetSlotId: number) => void
+}) {
+  const targetName = formatTrackName(targetTrack?.name ?? `트랙 ${selectedSlotId}`)
+
+  return (
+    <div className="candidate-review__target">
+      <label>
+        <span>등록할 트랙</span>
+        <select
+          data-testid={`candidate-target-${candidate.candidate_id}`}
+          disabled={busy}
+          value={selectedSlotId}
+          onChange={(event) => onUpdateCandidateTargetSlot(candidate, Number(event.target.value))}
+        >
+          {tracks.map((track) => (
+            <option key={track.slot_id} value={track.slot_id}>
+              {String(track.slot_id).padStart(2, '0')} {formatTrackName(track.name)} - {statusLabels[track.status]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {wouldOverwrite ? (
+        <label className="candidate-review__overwrite">
+          <input
+            checked={allowOverwrite}
+            data-testid={`candidate-overwrite-${candidate.candidate_id}`}
+            disabled={busy}
+            type="checkbox"
+            onChange={(event) => onUpdateCandidateOverwriteApproval(candidate, event.target.checked)}
+          />
+          <span>{targetName}의 현재 내용을 이 후보로 바꾸기</span>
+        </label>
+      ) : null}
+    </div>
+  )
+}
+
+function CandidateActions({
+  allowOverwrite,
+  approveDisabled,
+  busy,
+  candidate,
+  wouldOverwrite,
+  onApproveCandidate,
+  onRejectCandidate,
+}: {
+  allowOverwrite: boolean
+  approveDisabled: boolean
+  busy: boolean
+  candidate: ExtractionCandidate
+  wouldOverwrite: boolean
+  onApproveCandidate: (candidate: ExtractionCandidate) => void
+  onRejectCandidate: (candidate: ExtractionCandidate) => void
+}) {
+  return (
+    <div className="candidate-review__actions">
+      <button
+        className="app-button"
+        data-testid={`candidate-approve-${candidate.candidate_id}`}
+        disabled={approveDisabled}
+        type="button"
+        onClick={() => onApproveCandidate(candidate)}
+      >
+        {getApproveButtonLabel(wouldOverwrite, allowOverwrite)}
+      </button>
+      <button
+        className="app-button app-button--secondary"
+        data-testid={`candidate-reject-${candidate.candidate_id}`}
+        disabled={busy}
+        type="button"
+        onClick={() => onRejectCandidate(candidate)}
+      >
+        거절
+      </button>
+    </div>
+  )
+}
+
 function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate }) {
   const events = getPitchedEvents(candidate.region.pitch_events)
 
@@ -94,6 +206,214 @@ function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate 
       </div>
     </div>
   )
+}
+
+function GeneratedCandidateReview({
+  allowOverwrite,
+  approveDisabled,
+  busy,
+  candidate,
+  decisionSummary,
+  selectedSlotId,
+  targetTrack,
+  tracks,
+  verdict,
+  wouldOverwrite,
+  onApproveCandidate,
+  onRejectCandidate,
+  onUpdateCandidateOverwriteApproval,
+  onUpdateCandidateTargetSlot,
+}: {
+  allowOverwrite: boolean
+  approveDisabled: boolean
+  busy: boolean
+  candidate: ExtractionCandidate
+  decisionSummary: ReturnType<typeof getCandidateDecisionSummary>
+  selectedSlotId: number
+  targetTrack: TrackSlot | undefined
+  tracks: TrackSlot[]
+  verdict: CandidateVerdict
+  wouldOverwrite: boolean
+  onApproveCandidate: (candidate: ExtractionCandidate) => void
+  onRejectCandidate: (candidate: ExtractionCandidate) => void
+  onUpdateCandidateOverwriteApproval: (candidate: ExtractionCandidate, allowOverwrite: boolean) => void
+  onUpdateCandidateTargetSlot: (candidate: ExtractionCandidate, targetSlotId: number) => void
+}) {
+  const targetName = formatTrackName(targetTrack?.name ?? `트랙 ${selectedSlotId}`)
+  const facts = getGeneratedCandidateFacts(decisionSummary)
+
+  return (
+    <>
+      <div className="generated-candidate__hero">
+        <span>
+          AI 생성
+          {candidate.variant_label ? ` · ${formatGeneratedLabel(candidate.variant_label)}` : ''}
+        </span>
+        <h3>{wouldOverwrite ? `${targetName} 교체 후보` : `${targetName}에 넣을 새 후보`}</h3>
+        <div className={`candidate-review__verdict candidate-review__verdict--${verdict.tone}`}>
+          <strong>{verdict.label}</strong>
+          <span>{verdict.reason}</span>
+        </div>
+      </div>
+
+      <GeneratedCandidatePhraseMap candidate={candidate} />
+
+      <dl className="generated-candidate__facts">
+        {facts.map((metric) => (
+          <div key={`${candidate.candidate_id}-generated-${metric.label}`}>
+            <dt>{metric.label}</dt>
+            <dd>{metric.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="generated-candidate__summary">
+        <strong>{decisionSummary.title}</strong>
+        <p>{decisionSummary.headline}</p>
+        <ul aria-label="AI 후보 특징">
+          {decisionSummary.tags.slice(0, 6).map((tag) => (
+            <li key={`${candidate.candidate_id}-generated-tag-${tag}`}>{tag}</li>
+          ))}
+        </ul>
+      </div>
+
+      <CandidateTargetControls
+        allowOverwrite={allowOverwrite}
+        busy={busy}
+        candidate={candidate}
+        selectedSlotId={selectedSlotId}
+        targetTrack={targetTrack}
+        tracks={tracks}
+        wouldOverwrite={wouldOverwrite}
+        onUpdateCandidateOverwriteApproval={onUpdateCandidateOverwriteApproval}
+        onUpdateCandidateTargetSlot={onUpdateCandidateTargetSlot}
+      />
+
+      <CandidateActions
+        allowOverwrite={allowOverwrite}
+        approveDisabled={approveDisabled}
+        busy={busy}
+        candidate={candidate}
+        wouldOverwrite={wouldOverwrite}
+        onApproveCandidate={onApproveCandidate}
+        onRejectCandidate={onRejectCandidate}
+      />
+    </>
+  )
+}
+
+function GeneratedCandidatePhraseMap({ candidate }: { candidate: ExtractionCandidate }) {
+  const segments = getGeneratedCandidateSegments(candidate)
+  const activeSegmentCount = segments.filter((segment) => segment.hasEvents).length
+  const totalEventCount = candidate.region.pitch_events.filter((event) => event.is_rest !== true).length
+
+  return (
+    <div className="generated-candidate__map" aria-label="AI 후보 곡 안 분포">
+      <div className="generated-candidate__map-header">
+        <span>곡 안 분포</span>
+        <strong>{activeSegmentCount}구간 · 음표 {totalEventCount}개</strong>
+      </div>
+      <div className="generated-candidate__phrase-map">
+        {segments.map((segment) => (
+          <i
+            className={segment.hasEvents ? 'is-active' : ''}
+            key={`${candidate.candidate_id}-segment-${segment.label}`}
+            style={
+              {
+                '--candidate-segment-density': `${segment.densityPercent}%`,
+                '--candidate-segment-pitch': `${segment.pitchPercent}%`,
+              } as CSSProperties
+            }
+            title={`${segment.label}구간: 음표 ${segment.count}개`}
+          />
+        ))}
+      </div>
+      <div className="generated-candidate__map-labels" aria-hidden="true">
+        <span>앞</span>
+        <span>중간</span>
+        <span>뒤</span>
+      </div>
+    </div>
+  )
+}
+
+function getGeneratedCandidateFacts(
+  decisionSummary: ReturnType<typeof getCandidateDecisionSummary>,
+): Array<{ label: string; value: string }> {
+  const labelMap: Record<string, string> = {
+    대상: '등록 위치',
+    분량: '길이',
+    움직임: '움직임',
+    리듬: '리듬',
+    음역: '음역',
+    구간: '시작/끝',
+  }
+  const preferredOrder = ['대상', '분량', '음역', '움직임']
+  return preferredOrder
+    .map((label) => decisionSummary.metrics.find((metric) => metric.label === label))
+    .filter((metric): metric is { label: string; value: string } => Boolean(metric))
+    .map((metric) => ({
+      label: labelMap[metric.label] ?? metric.label,
+      value: metric.value,
+    }))
+}
+
+function getGeneratedCandidateSegments(candidate: ExtractionCandidate): GeneratedCandidateSegment[] {
+  const segmentCount = 12
+  const events = getPitchedEvents(candidate.region.pitch_events)
+    .slice()
+    .sort((left, right) => left.start_seconds - right.start_seconds || left.event_id.localeCompare(right.event_id))
+  if (events.length === 0) {
+    return Array.from({ length: segmentCount }, (_, index) => ({
+      count: 0,
+      densityPercent: 0,
+      hasEvents: false,
+      label: String(index + 1),
+      pitchPercent: 50,
+    }))
+  }
+
+  const eventStart = Math.min(...events.map((event) => event.start_seconds))
+  const eventEnd = Math.max(...events.map((event) => event.start_seconds + Math.max(0, event.duration_seconds)))
+  const timelineStart = Math.min(candidate.region.start_seconds, eventStart)
+  const timelineDuration = Math.max(
+    STUDIO_TIME_PRECISION_SECONDS,
+    candidate.region.duration_seconds,
+    eventEnd - timelineStart,
+  )
+  const pitchRange = getPitchEventRange(events)
+  const midiSpan = Math.max(1, pitchRange.maxMidi - pitchRange.minMidi)
+  const rawSegments = Array.from({ length: segmentCount }, (_, index) => {
+    const segmentStart = timelineStart + (timelineDuration / segmentCount) * index
+    const segmentEnd = timelineStart + (timelineDuration / segmentCount) * (index + 1)
+    const segmentEvents = events.filter(
+      (event) =>
+        event.start_seconds < segmentEnd &&
+        event.start_seconds + Math.max(0, event.duration_seconds) > segmentStart,
+    )
+    const midiEvents = segmentEvents.filter((event) => typeof event.pitch_midi === 'number')
+    const averageMidi =
+      midiEvents.length > 0
+        ? midiEvents.reduce((sum, event) => sum + (event.pitch_midi ?? pitchRange.minMidi), 0) / midiEvents.length
+        : (pitchRange.minMidi + pitchRange.maxMidi) / 2
+    return {
+      averageMidi,
+      count: segmentEvents.length,
+      label: String(index + 1),
+    }
+  })
+  const maxCount = Math.max(1, ...rawSegments.map((segment) => segment.count))
+
+  return rawSegments.map((segment) => ({
+    count: segment.count,
+    densityPercent: Math.max(8, Math.min(100, (segment.count / maxCount) * 100)),
+    hasEvents: segment.count > 0,
+    label: segment.label,
+    pitchPercent: Math.max(
+      8,
+      Math.min(92, 100 - ((segment.averageMidi - pitchRange.minMidi) / midiSpan) * 84),
+    ),
+  }))
 }
 
 export function CandidateReviewPanel({
@@ -120,7 +440,7 @@ export function CandidateReviewPanel({
       <div className="candidate-review__header">
         <div>
           <p className="eyebrow">검토 대기열</p>
-          <h2>후보 선택 / 승인</h2>
+          <h2>후보 확인</h2>
         </div>
         <strong>{candidates.length}개 대기</strong>
       </div>
@@ -135,12 +455,38 @@ export function CandidateReviewPanel({
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
           const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
           const contourPoints = getCandidateContourPoints(candidate)
-          const verdict = getCandidateVerdict(candidate, wouldOverwrite)
+          const verdict = getCandidateVerdict(candidate, wouldOverwrite, targetTrack)
           const sourcePreviewUrl =
             candidate.job_id && shouldShowSourcePreview(candidate) && getJobSourcePreviewUrl
               ? getJobSourcePreviewUrl(candidate.job_id)
               : null
           const approveDisabled = busy || targetLocked || (wouldOverwrite && !allowOverwrite)
+
+          if (candidate.source_kind === 'ai') {
+            return (
+              <article
+                className="candidate-review__item candidate-review__item--generated"
+                key={candidate.candidate_id}
+              >
+                <GeneratedCandidateReview
+                  allowOverwrite={allowOverwrite}
+                  approveDisabled={approveDisabled}
+                  busy={busy}
+                  candidate={candidate}
+                  decisionSummary={decisionSummary}
+                  selectedSlotId={selectedSlotId}
+                  targetTrack={targetTrack}
+                  tracks={tracks}
+                  verdict={verdict}
+                  wouldOverwrite={wouldOverwrite}
+                  onApproveCandidate={onApproveCandidate}
+                  onRejectCandidate={onRejectCandidate}
+                  onUpdateCandidateOverwriteApproval={onUpdateCandidateOverwriteApproval}
+                  onUpdateCandidateTargetSlot={onUpdateCandidateTargetSlot}
+                />
+              </article>
+            )
+          }
 
           return (
             <article className="candidate-review__item" key={candidate.candidate_id}>
@@ -210,35 +556,17 @@ export function CandidateReviewPanel({
                 ))}
               </dl>
 
-              <div className="candidate-review__target">
-                <label>
-                  <span>대상 트랙</span>
-                  <select
-                    data-testid={`candidate-target-${candidate.candidate_id}`}
-                    disabled={busy}
-                    value={selectedSlotId}
-                    onChange={(event) => onUpdateCandidateTargetSlot(candidate, Number(event.target.value))}
-                  >
-                    {tracks.map((track) => (
-                      <option key={track.slot_id} value={track.slot_id}>
-                        {String(track.slot_id).padStart(2, '0')} {formatTrackName(track.name)} - {statusLabels[track.status]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {wouldOverwrite ? (
-                  <label className="candidate-review__overwrite">
-                    <input
-                      checked={allowOverwrite}
-                      data-testid={`candidate-overwrite-${candidate.candidate_id}`}
-                      disabled={busy}
-                      type="checkbox"
-                      onChange={(event) => onUpdateCandidateOverwriteApproval(candidate, event.target.checked)}
-                    />
-                    <span>{formatTrackName(targetTrack?.name)} 덮어쓰기 확인</span>
-                  </label>
-                ) : null}
-              </div>
+              <CandidateTargetControls
+                allowOverwrite={allowOverwrite}
+                busy={busy}
+                candidate={candidate}
+                selectedSlotId={selectedSlotId}
+                targetTrack={targetTrack}
+                tracks={tracks}
+                wouldOverwrite={wouldOverwrite}
+                onUpdateCandidateOverwriteApproval={onUpdateCandidateOverwriteApproval}
+                onUpdateCandidateTargetSlot={onUpdateCandidateTargetSlot}
+              />
 
               <div className="candidate-review__preview">
                 <span>흐름</span>
@@ -260,26 +588,15 @@ export function CandidateReviewPanel({
                 </details>
               ) : null}
 
-              <div className="candidate-review__actions">
-                <button
-                  className="app-button"
-                  data-testid={`candidate-approve-${candidate.candidate_id}`}
-                  disabled={approveDisabled}
-                  type="button"
-                  onClick={() => onApproveCandidate(candidate)}
-                >
-                  승인
-                </button>
-                <button
-                  className="app-button app-button--secondary"
-                  data-testid={`candidate-reject-${candidate.candidate_id}`}
-                  disabled={busy}
-                  type="button"
-                  onClick={() => onRejectCandidate(candidate)}
-                >
-                  거절
-                </button>
-              </div>
+              <CandidateActions
+                allowOverwrite={allowOverwrite}
+                approveDisabled={approveDisabled}
+                busy={busy}
+                candidate={candidate}
+                wouldOverwrite={wouldOverwrite}
+                onApproveCandidate={onApproveCandidate}
+                onRejectCandidate={onRejectCandidate}
+              />
             </article>
           )
         })}
@@ -288,10 +605,15 @@ export function CandidateReviewPanel({
   )
 }
 
-function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boolean): CandidateVerdict {
+function getCandidateVerdict(
+  candidate: ExtractionCandidate,
+  wouldOverwrite: boolean,
+  targetTrack?: TrackSlot,
+): CandidateVerdict {
+  const targetName = formatTrackName(targetTrack?.name ?? `트랙 ${candidate.suggested_slot_id}`)
   if (candidate.region.pitch_events.length === 0) {
     return {
-      label: candidate.source_kind === 'ai' ? '생성 실패' : '재시도 권장',
+      label: candidate.source_kind === 'ai' ? '등록할 수 없음' : '재시도 권장',
       reason:
         candidate.source_kind === 'ai'
           ? '이 방향은 등록할 음표를 만들지 못했습니다. 거절하고 다시 생성하세요.'
@@ -311,16 +633,16 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   if (candidate.source_kind === 'ai') {
     if (wouldOverwrite || riskTags.length > 0) {
       return {
-        label: '검토 필요',
+        label: wouldOverwrite ? '교체 전 확인' : '들어보고 선택',
         reason: wouldOverwrite
-          ? '기존 트랙을 덮어씁니다. 대상 트랙과 후보 흐름을 확인하세요.'
-          : '생성 방향에 확인할 음악적 지점이 있습니다. 들어본 뒤 승인하세요.',
+          ? `${targetName}에 이미 등록된 내용이 있습니다. 체크하면 현재 음표와 연주음이 이 후보로 바뀝니다.`
+          : 'AI가 만든 후보입니다. 음역과 움직임이 파트에 맞는지 들어본 뒤 등록하세요.',
         tone: 'review',
       }
     }
     return {
-      label: '추천',
-      reason: '등록 가능한 생성 후보입니다. 들어보고 가장 자연스러운 흐름을 선택하세요.',
+      label: '새 후보',
+      reason: `${targetName}에 넣을 수 있는 AI 생성안입니다. 들어보고 마음에 들면 등록하세요.`,
       tone: 'recommended',
     }
   }
@@ -343,9 +665,9 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
     (density !== null && density > 11)
   ) {
     return {
-      label: '검토 필요',
+      label: wouldOverwrite ? '교체 전 확인' : '확인 후 등록',
       reason: wouldOverwrite
-        ? '기존 트랙을 덮어씁니다. 대상 트랙과 후보 흐름을 확인하세요.'
+        ? `${targetName}에 이미 등록된 내용이 있습니다. 체크하면 현재 음표와 연주음이 이 후보로 바뀝니다.`
         : '음역, 박자, 반복 중 확인할 지점이 있습니다.',
       tone: 'review',
     }

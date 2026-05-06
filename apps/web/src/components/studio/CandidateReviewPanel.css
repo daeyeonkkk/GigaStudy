@@ -45,6 +45,12 @@
   background: #ffffff;
 }
 
+.candidate-review__item--generated {
+  grid-template-columns: minmax(260px, 0.95fr) minmax(360px, 1.35fr) minmax(260px, 0.9fr);
+  border-left-color: #247563;
+  background: #fbfdfc;
+}
+
 .candidate-review__identity {
   display: grid;
   gap: 5px;
@@ -121,6 +127,180 @@
   border-radius: 999px;
   background: #fff8e8;
   color: #704400;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.generated-candidate__hero {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.generated-candidate__hero > span,
+.generated-candidate__map-header span {
+  color: #246556;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.generated-candidate__hero h3 {
+  color: #111111;
+  font-size: 1.12rem;
+  line-height: 1.25;
+}
+
+.generated-candidate__map {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.generated-candidate__map-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.generated-candidate__map-header strong {
+  color: #1c2c3a;
+  font-size: 0.82rem;
+}
+
+.generated-candidate__phrase-map {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 3px;
+  min-height: 118px;
+  padding: 8px;
+  border: 1px solid #cbd8d4;
+  border-radius: 5px;
+  background:
+    linear-gradient(#edf3f1 0 1px, transparent 1px) 0 50% / 100% 1px no-repeat,
+    #ffffff;
+}
+
+.generated-candidate__phrase-map i {
+  position: relative;
+  display: block;
+  min-width: 0;
+  border-radius: 3px;
+  background: #f2f5f4;
+}
+
+.generated-candidate__phrase-map i::before {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 58%;
+  height: var(--candidate-segment-density);
+  min-height: 6px;
+  max-height: calc(100% - 12px);
+  border-radius: 999px 999px 3px 3px;
+  background: #c8d1cf;
+  content: '';
+  transform: translateX(-50%);
+}
+
+.generated-candidate__phrase-map i.is-active::before {
+  background: #62b58f;
+}
+
+.generated-candidate__phrase-map i::after {
+  position: absolute;
+  top: var(--candidate-segment-pitch);
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #8c9894;
+  box-shadow: 0 0 0 1px #6d7975;
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.generated-candidate__phrase-map i.is-active::after {
+  background: #145f4d;
+  box-shadow: 0 0 0 1px #145f4d;
+}
+
+.generated-candidate__map-labels {
+  display: flex;
+  justify-content: space-between;
+  color: #64717c;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.generated-candidate__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.generated-candidate__facts div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #d6e0dd;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.generated-candidate__facts dt {
+  color: #54616c;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.generated-candidate__facts dd {
+  margin: 0;
+  color: #111111;
+  font-size: 0.9rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.generated-candidate__summary {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #d6e0dd;
+  border-radius: 5px;
+  background: #ffffff;
+}
+
+.generated-candidate__summary strong {
+  color: #111111;
+  font-size: 1rem;
+}
+
+.generated-candidate__summary p {
+  color: #384652;
+  line-height: 1.45;
+}
+
+.generated-candidate__summary ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generated-candidate__summary li {
+  padding: 3px 7px;
+  border: 1px solid #b7d4cb;
+  border-radius: 999px;
+  background: #eef8f5;
+  color: #145f4d;
   font-size: 0.72rem;
   font-weight: 900;
 }
@@ -383,5 +563,17 @@
   flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .generated-candidate__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .generated-candidate__phrase-map {
+    gap: 2px;
+    min-height: 90px;
+    padding: 6px;
+  }
 }
 

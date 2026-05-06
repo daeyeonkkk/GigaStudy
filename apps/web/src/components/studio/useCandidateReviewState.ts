@@ -100,7 +100,7 @@ export function useCandidateReviewState({
     const targetTrack = getSelectedCandidateTrack(candidate)
     const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
     if (candidateWouldOverwrite(candidate) && !allowOverwrite) {
-      setActionError(`${formatTrackName(targetTrack?.name ?? '선택한 트랙')}에 이미 등록된 내용이 있습니다. 덮어쓰기 확인을 체크해 주세요.`)
+      setActionError(`${formatTrackName(targetTrack?.name ?? '선택한 트랙')}에 이미 등록된 내용이 있습니다. 교체 확인을 체크해 주세요.`)
       return
     }
     const targetTrackLabel = formatTrackName(targetTrack?.name ?? '선택한 트랙')
@@ -133,8 +133,8 @@ export function useCandidateReviewState({
       () => approveJobCandidates(studio.studio_id, jobId, allowOverwrite),
       '문서 분석 결과를 각 트랙에 등록하는 중입니다.',
       allowOverwrite
-        ? '문서 분석 결과를 제안된 트랙에 등록했습니다.'
-        : '처리 결과를 반영했습니다. 남은 후보가 있으면 검토 목록에서 이어서 처리할 수 있습니다.',
+        ? '후보를 제안된 트랙에 등록하고, 확인한 트랙은 새 후보로 교체했습니다.'
+        : '비어 있는 트랙에 후보를 등록했습니다. 교체가 필요한 후보는 검토 목록에서 이어서 확인할 수 있습니다.',
     )
   }
 

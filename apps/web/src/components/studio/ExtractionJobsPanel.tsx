@@ -230,7 +230,7 @@ export function ExtractionJobsPanel({
                         type="checkbox"
                         onChange={(event) => onUpdateJobOverwriteApproval(job.job_id, event.target.checked)}
                       />
-                      기존 트랙도 덮어쓰기
+                      이미 등록된 트랙도 새 후보로 바꾸기
                     </label>
                   ) : null}
                   <button
@@ -240,7 +240,7 @@ export function ExtractionJobsPanel({
                     type="button"
                     onClick={() => onApproveJobCandidates(job.job_id)}
                   >
-                    {wouldOverwrite && !allowOverwrite ? '등록 가능한 트랙 등록' : '후보 등록'}
+                    {wouldOverwrite && !allowOverwrite ? '비어 있는 트랙만 등록' : '후보 등록'}
                   </button>
                 </div>
               ) : null}
@@ -273,13 +273,12 @@ function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: Track
   return candidates
     .map((candidate) => {
       const track = tracks.find((item) => item.slot_id === candidate.suggested_slot_id)
-      const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
       const measureCount = getCandidateDiagnosticNumber(candidate, 'measure_count')
       const eventCount =
         getCandidateDiagnosticNumber(candidate, 'event_count') ??
         candidate.region.pitch_events.length
       const measureLabel = measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'
-      return `${formatTrackName(track?.name ?? `트랙 ${candidate.suggested_slot_id}`)} ${confidence} / ${measureLabel} / ${eventCount}개`
+      return `${formatTrackName(track?.name ?? `트랙 ${candidate.suggested_slot_id}`)}: ${measureLabel}, 음표 ${eventCount}개`
     })
     .join(' | ')
 }
@@ -298,8 +297,8 @@ function getJobStateHint(job: TrackExtractionJob): string {
   }
   if (job.status === 'needs_review') {
     return job.parse_all_parts
-      ? '여러 파트 후보가 준비되었습니다. 트랙 배정과 덮어쓰기 여부를 확인한 뒤 등록하세요.'
-      : '후보가 준비되었습니다. 등록하면 해당 트랙의 음표와 연주음에 반영됩니다.'
+      ? '후보가 준비되었습니다. 비어 있는 트랙은 바로 등록할 수 있고, 이미 등록된 트랙은 교체 확인이 필요합니다.'
+      : '후보가 준비되었습니다. 등록하면 선택한 트랙에 새 음표와 연주음이 들어갑니다.'
   }
   if (job.status === 'completed') {
     return '처리가 완료되었습니다.'

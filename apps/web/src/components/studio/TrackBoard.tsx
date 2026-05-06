@@ -28,10 +28,12 @@ import {
 import { PianoRollPanel, RegionTools, type RegionEditorDraft } from './TrackBoardEditor'
 import { getGridSeconds } from './TrackBoardEditorGrid'
 import {
+  getBeatUnitWidthPixels,
   getDurationPercent,
   getMeasureStarts,
   getRegionHitAreaStyle,
   getRegionLaneStyle,
+  getTimelineWidthPixels,
   getTimelinePercent,
 } from './TrackBoardTimelineLayout'
 import './TrackBoard.css'
@@ -320,10 +322,10 @@ export function TrackBoard({
     [beatsPerMeasure, bpm, timelineBounds],
   )
   const timelineWidthPixels = useMemo(() => {
-    const measureCount = Math.max(1, measureStarts.length - 1)
-    return Math.min(12000, Math.max(900, measureCount * 58))
-  }, [measureStarts.length])
+    return getTimelineWidthPixels(timelineBounds.durationSeconds, bpm)
+  }, [bpm, timelineBounds.durationSeconds])
   const timelineStyle = {
+    '--timeline-beat-width': `${getBeatUnitWidthPixels()}px`,
     '--timeline-width': `${timelineWidthPixels}px`,
   } as CSSProperties
   const gridSeconds = getGridSeconds(bpm)

@@ -17,7 +17,11 @@ import {
   getEventMiniTopPercent,
   getRenderableMiniEvents,
 } from './eventMiniLayout'
-import { getDurationPercent } from './TrackBoardTimelineLayout'
+import {
+  getBeatUnitWidthPixels,
+  getDurationPercent,
+  getTimelineWidthPixels,
+} from './TrackBoardTimelineLayout'
 
 const MIN_TIMELINE_SECONDS = -30
 const MIN_DURATION_SECONDS = STUDIO_TIME_PRECISION_SECONDS
@@ -441,6 +445,10 @@ function PianoRollPanelContent({
     events.find((event) => event.event_id === focusedEventId) ??
     events[0] ??
     null
+  const pianoRollStyle = {
+    '--piano-roll-grid-width': `${getTimelineWidthPixels(draft?.duration_seconds ?? 0, bpm, 720)}px`,
+    '--timeline-beat-width': `${getBeatUnitWidthPixels()}px`,
+  } as CSSProperties
   const pitchLabels = ['높음', '', '중간', '', '낮음']
 
   function replaceDraft(nextDraft: RegionEditorDraft) {
@@ -627,7 +635,7 @@ function PianoRollPanelContent({
             </label>
           </div>
 
-          <div className="piano-roll">
+          <div className="piano-roll" style={pianoRollStyle}>
             <div className="piano-roll__keys" aria-hidden="true">
               {pitchLabels.map((label, index) => (
                 <span key={`${index}-${label || 'guide'}`}>{label}</span>

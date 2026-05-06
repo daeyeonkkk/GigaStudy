@@ -198,12 +198,13 @@
 
 .practice-stage__grid {
   position: relative;
-  min-width: 720px;
+  width: var(--timeline-width, 900px);
+  min-width: var(--timeline-width, 900px);
   min-height: calc(var(--practice-lane-height, 70px) * 6);
   border: 1px solid #7f8e9a;
   background:
     linear-gradient(#d7dee4 0 1px, transparent 1px) 0 0 / 100% var(--practice-lane-height, 70px),
-    linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / 48px 100%,
+    linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / var(--timeline-beat-width, 50px) 100%,
     #ffffff;
   overflow: hidden;
 }
@@ -312,7 +313,7 @@
   }
 
   .practice-stage__grid {
-    min-width: 660px;
+    min-width: var(--timeline-width, 900px);
     min-height: 360px;
   }
 

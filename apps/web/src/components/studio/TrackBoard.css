@@ -46,7 +46,7 @@
   border: 1px solid #aeb8c1;
   border-radius: 4px 4px 0 0;
   background:
-    linear-gradient(90deg, rgba(84, 97, 108, 0.18) 0 1px, transparent 1px) 0 0 / 48px 100%,
+    linear-gradient(90deg, rgba(84, 97, 108, 0.18) 0 1px, transparent 1px) 0 0 / var(--timeline-beat-width, 50px) 100%,
     #f8fafb;
   overflow: hidden;
 }
@@ -199,7 +199,7 @@
   min-height: var(--lane-min-height, 94px);
   padding: 12px;
   background:
-    linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / 48px 100%,
+    linear-gradient(90deg, rgba(84, 97, 108, 0.12) 0 1px, transparent 1px) 0 0 / var(--timeline-beat-width, 50px) 100%,
     #fbfcfd;
   overflow: hidden;
 }
@@ -641,10 +641,11 @@
 
 .piano-roll {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(var(--piano-roll-grid-width, 720px), 1fr);
   min-height: 250px;
   border: 1px solid #8e9aa4;
   background: #ffffff;
+  overflow-x: auto;
 }
 
 .piano-roll__keys {
@@ -669,7 +670,7 @@
   min-width: 0;
   background:
     linear-gradient(#dce3e8 0 1px, transparent 1px) 0 0 / 100% 20%,
-    linear-gradient(90deg, rgba(84, 97, 108, 0.22) 0 1px, transparent 1px) 0 0 / 48px 100%,
+    linear-gradient(90deg, rgba(84, 97, 108, 0.22) 0 1px, transparent 1px) 0 0 / var(--timeline-beat-width, 50px) 100%,
     #ffffff;
   overflow: hidden;
 }

@@ -87,9 +87,12 @@ is excluded from persistence and remains an adapter detail.
   the vertical position, not the bar thickness.
 - `apps/web/src/components/studio/TrackBoardTimeline.tsx` and
   `apps/web/src/components/studio/TrackBoardTimelineLayout.ts`
-  Waterfall practice preview rendering plus shared track-board timeline math
-  and region lane positioning. TrackBoard uses these instead of owning timeline
-  layout details inline.
+  Waterfall practice preview rendering plus shared track-board timeline math,
+  fixed beat-width scaling, and region lane positioning. Studio lanes,
+  selected-region piano roll, and practice waterfall use 50 pixels per
+  quarter-note beat so BPM changes playhead speed rather than visual measure
+  width. TrackBoard uses these helpers instead of owning timeline layout
+  details inline.
 - `apps/web/src/components/studio/TrackBoardEditor.tsx` and
   `apps/web/src/components/studio/TrackBoardEditorGrid.ts`
   Region and pitch-event editing controls for the selected arrangement region.

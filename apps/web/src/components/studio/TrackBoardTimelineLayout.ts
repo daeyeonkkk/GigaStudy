@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-import { STUDIO_TIME_PRECISION_SECONDS } from '../../lib/studio'
+import { getBeatSeconds, STUDIO_TIME_PRECISION_SECONDS } from '../../lib/studio'
 import type { ArrangementRegion } from '../../types/studio'
 
 export type TimelineBounds = {
@@ -12,6 +12,26 @@ export type TimelineBounds = {
 export type MeasureStart = {
   measureIndex: number
   seconds: number
+}
+
+const BEAT_UNIT_WIDTH_PIXELS = 50
+const MIN_TIMELINE_WIDTH_PIXELS = 900
+
+export function getBeatUnitWidthPixels(): number {
+  return BEAT_UNIT_WIDTH_PIXELS
+}
+
+export function getMeasureWidthPixels(beatsPerMeasure: number): number {
+  return Math.max(0.25, beatsPerMeasure) * BEAT_UNIT_WIDTH_PIXELS
+}
+
+export function getTimelineWidthPixels(
+  durationSeconds: number,
+  bpm: number,
+  minimumPixels = MIN_TIMELINE_WIDTH_PIXELS,
+): number {
+  const durationBeats = Math.max(STUDIO_TIME_PRECISION_SECONDS, durationSeconds) / getBeatSeconds(bpm)
+  return Math.max(minimumPixels, durationBeats * BEAT_UNIT_WIDTH_PIXELS)
 }
 
 export function getMeasureStarts(

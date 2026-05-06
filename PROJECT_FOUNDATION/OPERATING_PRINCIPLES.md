@@ -338,6 +338,10 @@ the same change.
 - Event-mini width is the event duration divided by the visible shared timeline
   duration. Pitch changes are shown by vertical position, not by changing the
   bar thickness.
+- Studio lanes, region piano roll, and practice waterfall use a fixed visual
+  rhythm scale of 50 pixels per quarter-note beat. A 4/4 measure is therefore
+  200 pixels wide, and faster BPM makes the playhead move faster on screen
+  instead of shrinking the measure.
 - Playback and UI previews must use the persisted event start and duration
   exactly, within studio time precision. They may not stretch short events to
   the registration rhythm unit just to make them easier to hear or see.

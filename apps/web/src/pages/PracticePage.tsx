@@ -14,6 +14,10 @@ import {
   getRenderableMiniEvents,
 } from '../components/studio/eventMiniLayout'
 import type { StudioActionState } from '../components/studio/studioActionState'
+import {
+  getBeatUnitWidthPixels,
+  getTimelineWidthPixels,
+} from '../components/studio/TrackBoardTimelineLayout'
 import { useStudioPlayback } from '../components/studio/useStudioPlayback'
 import { useStudioResource } from '../components/studio/useStudioResource'
 import { useStudioScoring } from '../components/studio/useStudioScoring'
@@ -106,9 +110,12 @@ function getPlayheadStyle(
   minSeconds: number,
   maxSeconds: number,
   laneHeight: number,
+  timelineWidthPixels: number,
 ): CSSProperties {
   return {
     '--practice-lane-height': `${laneHeight}px`,
+    '--timeline-beat-width': `${getBeatUnitWidthPixels()}px`,
+    '--timeline-width': `${timelineWidthPixels}px`,
     '--playhead-left': `${getTimelinePercent(playheadSeconds ?? minSeconds, minSeconds, maxSeconds)}%`,
   } as CSSProperties
 }
@@ -137,6 +144,7 @@ function PracticeStatus({ actionState }: { actionState: StudioActionState }) {
 }
 
 function PracticeWaterfallStage({
+  bpm,
   maxSeconds,
   minSeconds,
   playheadSeconds,
@@ -145,6 +153,7 @@ function PracticeWaterfallStage({
 }: {
   maxSeconds: number
   minSeconds: number
+  bpm: number
   playheadSeconds: number | null
   regions: ArrangementRegion[]
   tracks: TrackSlot[]
@@ -164,6 +173,10 @@ function PracticeWaterfallStage({
     [events],
   )
   const laneHeight = useMemo(() => getPracticeLaneHeight(eventsByTrack), [eventsByTrack])
+  const timelineWidthPixels = useMemo(
+    () => getTimelineWidthPixels(maxSeconds - minSeconds, bpm),
+    [bpm, maxSeconds, minSeconds],
+  )
 
   return (
     <section className="practice-stage" aria-label="연습 화면">
@@ -177,7 +190,7 @@ function PracticeWaterfallStage({
       <div
         className="practice-stage__grid"
         data-testid="practice-waterfall-stage"
-        style={getPlayheadStyle(playheadSeconds, minSeconds, maxSeconds, laneHeight)}
+        style={getPlayheadStyle(playheadSeconds, minSeconds, maxSeconds, laneHeight, timelineWidthPixels)}
       >
         <i className="practice-stage__playhead" aria-hidden="true" />
         {tracks.map((track) => (
@@ -468,6 +481,7 @@ export function PracticePage() {
         <PracticeStatus actionState={actionState} />
 
         <PracticeWaterfallStage
+          bpm={studio.bpm}
           maxSeconds={playbackTimeline?.maxSeconds ?? timelineBounds.maxSeconds}
           minSeconds={playbackTimeline?.minSeconds ?? timelineBounds.minSeconds}
           playheadSeconds={playheadSeconds}

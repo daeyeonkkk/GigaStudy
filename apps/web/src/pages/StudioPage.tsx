@@ -146,6 +146,7 @@ export function StudioPage() {
     handleSync,
     handleUpload,
     handleVolume,
+    handleVolumePreview,
   } = useStudioTrackActions({
     globalPlaying,
     playingSlots,
@@ -476,6 +477,7 @@ export function StudioPage() {
               onSync={(track, nextOffset) => void handleSync(track, nextOffset)}
               onTogglePlayback={(track) => void toggleTrackPlayback(track)}
               onUpload={(track, file) => void handleUpload(track, file)}
+              onVolumePreview={handleVolumePreview}
               onVolumeChange={(track, nextVolume) => void handleVolume(track, nextVolume)}
             />
             <ExtractionJobsPanel

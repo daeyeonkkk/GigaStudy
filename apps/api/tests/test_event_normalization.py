@@ -11,7 +11,47 @@ from gigastudy_api.services.engine.event_normalization import (
     spell_midi_label,
 )
 from gigastudy_api.services.engine.event_quality import prepare_events_for_track_registration
+from gigastudy_api.services.engine.registration_policy import build_registration_grid_policy
 from gigastudy_api.services.engine.symbolic import parse_symbolic_file_with_metadata
+
+
+def _vlq(value: int) -> bytes:
+    values = [value & 0x7F]
+    value >>= 7
+    while value:
+        values.insert(0, (value & 0x7F) | 0x80)
+        value >>= 7
+    return bytes(values)
+
+
+def _midi_track(name: str, notes: list[tuple[int, int, int]], *, channel: int = 0) -> bytes:
+    name_bytes = name.encode("utf-8")
+    events: list[tuple[int, int, bytes]] = [(0, 0, b"\xff\x03" + _vlq(len(name_bytes)) + name_bytes)]
+    for start_tick, duration_ticks, pitch in notes:
+        events.append((start_tick, 1, bytes([0x90 + channel, pitch, 100])))
+        events.append((start_tick + duration_ticks, 0, bytes([0x80 + channel, pitch, 64])))
+
+    payload = bytearray()
+    previous_tick = 0
+    for tick, _order, event_payload in sorted(events):
+        payload.extend(_vlq(tick - previous_tick))
+        payload.extend(event_payload)
+        previous_tick = tick
+    payload.extend(b"\x00\xff\x2f\x00")
+    return b"MTrk" + len(payload).to_bytes(4, "big") + bytes(payload)
+
+
+def _midi_payload(tracks: list[bytes], *, ticks_per_quarter: int = 480) -> bytes:
+    return b"".join(
+        [
+            b"MThd",
+            (6).to_bytes(4, "big"),
+            (1).to_bytes(2, "big"),
+            len(tracks).to_bytes(2, "big"),
+            ticks_per_quarter.to_bytes(2, "big"),
+            *tracks,
+        ]
+    )
 
 
 def _is_on_grid(value: float, grid: float) -> bool:
@@ -31,13 +71,13 @@ def _assert_registration_rhythm_contract(events, grid: float) -> None:
             assert _is_on_grid(gap, grid)
 
 
-def test_optional_aroha_sample_registration_uses_readable_grid() -> None:
-    sample_path = Path(__file__).parents[3] / "giga_sample" / "아로하(2ND).mid"
+def _assert_optional_midi_sample_registration_uses_readable_grid(filename: str, *, bpm: int) -> None:
+    sample_path = Path(__file__).parents[3] / "giga_sample" / filename
     if not sample_path.exists():
-        pytest.skip("local giga_sample Aroha MIDI is not present")
+        pytest.skip(f"local giga_sample {filename} MIDI is not present")
 
-    parsed = parse_symbolic_file_with_metadata(sample_path, bpm=113)
-    bpm = parsed.source_bpm or 113
+    parsed = parse_symbolic_file_with_metadata(sample_path, bpm=bpm)
+    resolved_bpm = parsed.source_bpm or bpm
     grid = measure_sixteenth_note_beats(
         parsed.time_signature_numerator,
         parsed.time_signature_denominator,
@@ -47,7 +87,7 @@ def test_optional_aroha_sample_registration_uses_readable_grid() -> None:
     for slot_id, events in parsed.mapped_events.items():
         result = prepare_events_for_track_registration(
             events,
-            bpm=bpm,
+            bpm=resolved_bpm,
             slot_id=slot_id,
             source_kind="midi",
             time_signature_numerator=parsed.time_signature_numerator,
@@ -55,6 +95,76 @@ def test_optional_aroha_sample_registration_uses_readable_grid() -> None:
         )
         _assert_registration_rhythm_contract(result.events, grid)
         assert result.diagnostics["event_contract"]["rhythm_grid_aligned"] is True
+
+
+def test_optional_aroha_sample_registration_uses_readable_grid() -> None:
+    _assert_optional_midi_sample_registration_uses_readable_grid("아로하(2ND).mid", bpm=113)
+
+
+def test_optional_fish_sample_registration_uses_readable_grid() -> None:
+    _assert_optional_midi_sample_registration_uses_readable_grid("물 만난 물고기(SATB) (1).mid", bpm=101)
+
+
+def test_registration_policy_centralizes_grid_and_gap_rules() -> None:
+    policy = build_registration_grid_policy(
+        bpm=102,
+        time_signature_numerator=3,
+        time_signature_denominator=8,
+    )
+
+    assert policy.rhythm_grid_beats == 0.25
+    assert policy.rhythm_grid_seconds == pytest.approx((60 / 102) * 0.25)
+    assert policy.quantize_beat(1.13) == 1.25
+    assert policy.quantize_duration(0.11) == 0.25
+    assert policy.should_absorb_gap(0.249)
+    assert not policy.should_absorb_gap(0.25)
+    assert policy.diagnostics()["version"] == "registration_policy_v1"
+
+
+def test_nwc_style_midi_seed_registers_generic_parts_without_overlaps(tmp_path: Path) -> None:
+    midi_path = tmp_path / "nwc-style-generic.mid"
+    midi_path.write_bytes(
+        _midi_payload(
+            [
+                _midi_track(
+                    "Staff 1",
+                    [
+                        (0, 230, 76),
+                        (240, 230, 76),
+                        (480, 520, 77),
+                        (960, 240, 79),
+                    ],
+                    channel=0,
+                ),
+                _midi_track("Staff 2", [(0, 480, 69), (480, 480, 71)], channel=1),
+                _midi_track("Staff 3", [(0, 480, 60), (480, 480, 60)], channel=2),
+                _midi_track("Staff 4", [(0, 480, 48), (480, 480, 50)], channel=3),
+            ]
+        )
+    )
+
+    parsed = parse_symbolic_file_with_metadata(midi_path, bpm=113)
+
+    assert set(parsed.mapped_events) == {1, 2, 3, 5}
+    assert [event.pitch_midi for event in parsed.mapped_events[1]][0] == 76
+    assert [event.pitch_midi for event in parsed.mapped_events[5]][0] == 48
+
+    grid = measure_sixteenth_note_beats(
+        parsed.time_signature_numerator,
+        parsed.time_signature_denominator,
+    )
+    for slot_id, events in parsed.mapped_events.items():
+        result = prepare_events_for_track_registration(
+            events,
+            bpm=113,
+            slot_id=slot_id,
+            source_kind="midi",
+            time_signature_numerator=parsed.time_signature_numerator,
+            time_signature_denominator=parsed.time_signature_denominator,
+        )
+        _assert_registration_rhythm_contract(result.events, grid)
+        assert result.diagnostics["event_contract"]["non_overlapping"] is True
+        assert result.diagnostics["event_contract"]["rhythm_gaps_aligned"] is True
 
 
 def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:

@@ -20,27 +20,22 @@ from gigastudy_api.services.engine.music_theory import (
 from gigastudy_api.services.engine.event_normalization import (
     KEY_FIFTHS,
     MIN_EVENT_DURATION_BEATS,
-    VOICE_QUANTIZATION_GRID_BEATS,
     annotate_track_events_for_slot,
     accidental_for_key,
     enforce_monophonic_vocal_events,
     is_on_rhythm_grid,
-    measure_sixteenth_note_beats,
     merge_contiguous_same_pitch_events,
     normalize_track_events,
     pitch_label_octave_shift_for_slot,
     pitch_register_for_slot,
-    quantize_beat_to_rhythm_grid,
-    quantize_duration_to_rhythm_grid,
     spell_midi_label,
 )
-from gigastudy_api.services.engine.registration_policy import build_registration_grid_policy
+from gigastudy_api.services.engine.registration_policy import RegistrationPolicy, build_registration_grid_policy
 
 VOICE_LIKE_SOURCE_KINDS: set[str] = {"recording", "audio"}
 VOICE_LIKE_EVENT_SOURCES: set[str] = {"voice", "recording", "audio"}
 EVENT_GENERATION_SOURCE_KINDS: set[str] = {"ai"}
 MAX_VOICE_EVENTS_PER_MEASURE_FACTOR = 2.0
-VOICE_DENSITY_SIMPLIFICATION_GRID = 0.5
 VOICE_SUSTAIN_MERGE_GAP_BEATS = 0.25
 VOICE_NEIGHBOR_BLIP_MAX_DURATION_BEATS = 0.5
 VOICE_NEIGHBOR_BLIP_MAX_INTERVAL = 2
@@ -166,7 +161,7 @@ def prepare_events_for_track_registration(
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            quantization_grid=VOICE_QUANTIZATION_GRID_BEATS,
+            quantization_grid=registration_policy.voice_quantization_grid_beats,
             merge_adjacent_same_pitch=merge_same_pitch_on_grid,
         )
         actions.append("fixed_bpm_grid_normalization")
@@ -178,6 +173,7 @@ def prepare_events_for_track_registration(
             simplified_events = _simplify_dense_voice_measures(
                 normalized_events,
                 bpm=bpm,
+                dense_grid_beats=registration_policy.dense_voice_grid_beats,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
             )
@@ -187,7 +183,7 @@ def prepare_events_for_track_registration(
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
-                quantization_grid=VOICE_DENSITY_SIMPLIFICATION_GRID,
+                quantization_grid=registration_policy.dense_voice_grid_beats,
                 merge_adjacent_same_pitch=merge_same_pitch_on_grid,
             )
             actions.append("dense_voice_measure_simplification")
@@ -197,9 +193,9 @@ def prepare_events_for_track_registration(
             slot_id=slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            quantization_grid=normalized_events[0].quantization_grid or VOICE_QUANTIZATION_GRID_BEATS
+            quantization_grid=normalized_events[0].quantization_grid or registration_policy.voice_quantization_grid_beats
             if normalized_events
-            else VOICE_QUANTIZATION_GRID_BEATS,
+            else registration_policy.voice_quantization_grid_beats,
             collapse_pitch_blips=merge_same_pitch_on_grid,
             remove_isolated_artifacts=merge_same_pitch_on_grid,
             bridge_short_phrase_gaps=merge_same_pitch_on_grid,
@@ -213,6 +209,7 @@ def prepare_events_for_track_registration(
                 working_events,
                 current_events=normalized_events,
                 bpm=bpm,
+                dense_grid_beats=registration_policy.dense_voice_grid_beats,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
@@ -222,10 +219,9 @@ def prepare_events_for_track_registration(
     else:
         repaired_events = _repair_symbolic_timing_metadata(
             events,
-            bpm=bpm,
+            policy=registration_policy,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            minimum_duration_beats=minimum_note_beats,
         )
         prepared_events = annotate_track_events_for_slot(repaired_events, slot_id=slot_id)
         actions.append("symbolic_event_metadata_annotation")
@@ -359,11 +355,11 @@ def apply_registration_review_instruction(
     )
     minimum_note_beats = registration_policy.minimum_note_beats
     quantization_grid = max(
-        _instruction_grid(instruction_data) or VOICE_QUANTIZATION_GRID_BEATS,
+        _instruction_grid(instruction_data) or registration_policy.voice_quantization_grid_beats,
         minimum_note_beats,
     )
     if _instruction_bool(instruction_data, "simplify_dense_measures"):
-        quantization_grid = max(quantization_grid, VOICE_DENSITY_SIMPLIFICATION_GRID)
+        quantization_grid = max(quantization_grid, registration_policy.dense_voice_grid_beats)
     allow_same_pitch_sustain = _allows_voice_sustain_rewrite(source_kind, events)
     merge_adjacent_same_pitch = allow_same_pitch_sustain and (
         _instruction_bool(
@@ -401,6 +397,7 @@ def apply_registration_review_instruction(
             simplified_events = _simplify_dense_voice_measures(
                 prepared_events,
                 bpm=bpm,
+                dense_grid_beats=registration_policy.dense_voice_grid_beats,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
             )
@@ -410,7 +407,7 @@ def apply_registration_review_instruction(
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
-                quantization_grid=VOICE_DENSITY_SIMPLIFICATION_GRID,
+                quantization_grid=registration_policy.dense_voice_grid_beats,
                 merge_adjacent_same_pitch=merge_adjacent_same_pitch,
             )
             actions.append("llm_dense_voice_measure_simplification")
@@ -454,6 +451,7 @@ def apply_registration_review_instruction(
                 working_events,
                 current_events=prepared_events,
                 bpm=bpm,
+                dense_grid_beats=registration_policy.dense_voice_grid_beats,
                 slot_id=slot_id,
                 time_signature_numerator=time_signature_numerator,
                 time_signature_denominator=time_signature_denominator,
@@ -462,10 +460,9 @@ def apply_registration_review_instruction(
     else:
         repaired_events = _repair_symbolic_timing_metadata(
             events,
-            bpm=bpm,
+            policy=registration_policy,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            minimum_duration_beats=minimum_note_beats,
         )
         prepared_events = annotate_track_events_for_slot(repaired_events, slot_id=slot_id)
         actions.append("llm_symbolic_event_review_annotation")
@@ -627,6 +624,7 @@ def _simplify_dense_voice_measures(
     events: list[TrackPitchEvent],
     *,
     bpm: int,
+    dense_grid_beats: float,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> list[TrackPitchEvent]:
@@ -648,16 +646,16 @@ def _simplify_dense_voice_measures(
             time_signature_denominator=time_signature_denominator,
         )
         for event in pitched_events:
-            cell_index = max(0, floor((event.beat - measure_start) / VOICE_DENSITY_SIMPLIFICATION_GRID))
+            cell_index = max(0, floor((event.beat - measure_start) / dense_grid_beats))
             current = cells.get(cell_index)
             if current is None or _event_weight(event) > _event_weight(current):
-                cell_start = measure_start + cell_index * VOICE_DENSITY_SIMPLIFICATION_GRID
+                cell_start = measure_start + cell_index * dense_grid_beats
                 cells[cell_index] = event.model_copy(
                     update={
                         "beat": round(cell_start, 4),
-                        "duration_beats": VOICE_DENSITY_SIMPLIFICATION_GRID,
+                        "duration_beats": dense_grid_beats,
                         "onset_seconds": round(max(0, (cell_start - 1) * seconds_per_beat(bpm)), 4),
-                        "duration_seconds": round(VOICE_DENSITY_SIMPLIFICATION_GRID * seconds_per_beat(bpm), 4),
+                        "duration_seconds": round(dense_grid_beats * seconds_per_beat(bpm), 4),
                         "quality_warnings": _append_warning(event.quality_warnings, "dense_measure_simplified"),
                     }
                 )
@@ -1169,6 +1167,7 @@ def _choose_readable_voice_candidate(
     *,
     current_events: list[TrackPitchEvent],
     bpm: int,
+    dense_grid_beats: float,
     slot_id: int,
     time_signature_numerator: int,
     time_signature_denominator: int,
@@ -1182,7 +1181,7 @@ def _choose_readable_voice_candidate(
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
-        quantization_grid=VOICE_DENSITY_SIMPLIFICATION_GRID,
+        quantization_grid=dense_grid_beats,
         merge_adjacent_same_pitch=True,
     )
     coarse_events, polish_actions = _polish_voice_events(
@@ -1191,7 +1190,7 @@ def _choose_readable_voice_candidate(
         slot_id=slot_id,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
-        quantization_grid=VOICE_DENSITY_SIMPLIFICATION_GRID,
+        quantization_grid=dense_grid_beats,
     )
 
     current_score = _voice_readability_score(
@@ -1208,7 +1207,7 @@ def _choose_readable_voice_candidate(
     )
 
     if coarse_score + 0.75 < current_score:
-        return coarse_events, ["readability_grid_0.5", *polish_actions]
+        return coarse_events, [f"readability_grid_{dense_grid_beats:g}", *polish_actions]
     return current_events, []
 
 
@@ -1312,17 +1311,15 @@ def _extend_event_to_beat(event: TrackPitchEvent, *, end_beat: float, bpm: int, 
 def _repair_symbolic_timing_metadata(
     events: list[TrackPitchEvent],
     *,
-    bpm: int,
+    policy: RegistrationPolicy,
     time_signature_numerator: int,
     time_signature_denominator: int,
-    minimum_duration_beats: float,
 ) -> list[TrackPitchEvent]:
-    beat_seconds = seconds_per_beat(max(1, bpm))
-    minimum_note_beats = max(0.0001, minimum_duration_beats)
+    beat_seconds = policy.beat_seconds
     repaired: list[TrackPitchEvent] = []
     for event in events:
-        beat = quantize_beat_to_rhythm_grid(event.beat, minimum_note_beats)
-        duration_beats = quantize_duration_to_rhythm_grid(event.duration_beats, minimum_note_beats)
+        beat = policy.quantize_beat(event.beat)
+        duration_beats = policy.quantize_duration(event.duration_beats)
         pitch_midi = event.pitch_midi
         if pitch_midi is None and not event.is_rest:
             pitch_midi = label_to_midi(event.label)
@@ -1357,7 +1354,7 @@ def _fill_subdivision_gaps(
     events: list[TrackPitchEvent],
     *,
     bpm: int,
-    minimum_gap_beats: float,
+    policy: RegistrationPolicy,
 ) -> tuple[list[TrackPitchEvent], int]:
     if len(events) < 2:
         return events, 0
@@ -1372,7 +1369,7 @@ def _fill_subdivision_gaps(
         previous = filled[-1]
         previous_end = previous.beat + previous.duration_beats
         gap_beats = round(event.beat - previous_end, 4)
-        if 0 < gap_beats < minimum_gap_beats - 0.0001:
+        if policy.should_absorb_gap(gap_beats):
             filled[-1] = _extend_event_to_beat(
                 previous,
                 end_beat=event.beat,
@@ -1388,17 +1385,17 @@ def _retime_events_to_registration_grid(
     events: list[TrackPitchEvent],
     *,
     bpm: int,
-    rhythm_grid_beats: float,
+    policy: RegistrationPolicy,
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> tuple[list[TrackPitchEvent], int]:
-    beat_seconds = seconds_per_beat(max(1, bpm))
+    beat_seconds = policy.beat_seconds
     retimed: list[TrackPitchEvent] = []
     changed_count = 0
     for event in events:
-        beat = quantize_beat_to_rhythm_grid(event.beat, rhythm_grid_beats)
-        duration_beats = quantize_duration_to_rhythm_grid(event.duration_beats, rhythm_grid_beats)
-        quantization_grid = max(event.quantization_grid or rhythm_grid_beats, rhythm_grid_beats)
+        beat = policy.quantize_beat(event.beat)
+        duration_beats = policy.quantize_duration(event.duration_beats)
+        quantization_grid = max(event.quantization_grid or policy.minimum_note_beats, policy.minimum_note_beats)
         changed = (
             round(event.beat, 4) != beat
             or round(event.duration_beats, 4) != duration_beats
@@ -1474,7 +1471,7 @@ def _enforce_registration_event_contract(
     contract_events, rhythm_quantized_count = _retime_events_to_registration_grid(
         contract_events,
         bpm=bpm,
-        rhythm_grid_beats=minimum_note_beats,
+        policy=registration_policy,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
@@ -1494,7 +1491,7 @@ def _enforce_registration_event_contract(
     merged_events = merge_contiguous_same_pitch_events(
         contract_events,
         bpm=bpm,
-        gap_epsilon_beats=minimum_note_beats - 0.0001,
+        gap_epsilon_beats=registration_policy.same_pitch_merge_gap_beats,
         merge_policy="tied_contiguous",
     )
     if _event_identity(merged_events) != _event_identity(contract_events):
@@ -1518,7 +1515,7 @@ def _enforce_registration_event_contract(
         contract_events, rhythm_quantized_count = _retime_events_to_registration_grid(
             contract_events,
             bpm=bpm,
-            rhythm_grid_beats=minimum_note_beats,
+            policy=registration_policy,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
         )
@@ -1527,7 +1524,7 @@ def _enforce_registration_event_contract(
         merged_events = merge_contiguous_same_pitch_events(
             contract_events,
             bpm=bpm,
-            gap_epsilon_beats=minimum_note_beats - 0.0001,
+            gap_epsilon_beats=registration_policy.same_pitch_merge_gap_beats,
             merge_policy="tied_contiguous",
         )
         if _event_identity(merged_events) != _event_identity(contract_events):
@@ -1536,7 +1533,7 @@ def _enforce_registration_event_contract(
     gap_filled_events, gap_fill_count = _fill_subdivision_gaps(
         contract_events,
         bpm=bpm,
-        minimum_gap_beats=minimum_note_beats,
+        policy=registration_policy,
     )
     if gap_fill_count:
         actions.append(f"event_contract_subdivision_gap_absorbed_{gap_fill_count}")
@@ -1544,7 +1541,7 @@ def _enforce_registration_event_contract(
     contract_events, rhythm_quantized_count = _retime_events_to_registration_grid(
         contract_events,
         bpm=bpm,
-        rhythm_grid_beats=minimum_note_beats,
+        policy=registration_policy,
         time_signature_numerator=time_signature_numerator,
         time_signature_denominator=time_signature_denominator,
     )
@@ -1566,8 +1563,8 @@ def _enforce_registration_event_contract(
     enforced: list[TrackPitchEvent] = []
     changed_count = 0
     for event in annotated_events:
-        beat = quantize_beat_to_rhythm_grid(event.beat, minimum_note_beats)
-        duration_beats = quantize_duration_to_rhythm_grid(event.duration_beats, minimum_note_beats)
+        beat = registration_policy.quantize_beat(event.beat)
+        duration_beats = registration_policy.quantize_duration(event.duration_beats)
         pitch_midi = _resolve_pitch_midi(event)
         spelled_label = event.spelled_label
         accidental = event.accidental
@@ -1994,10 +1991,12 @@ def _registration_diagnostics(
     pitched_events = [event for event in events if not event.is_rest and _resolve_pitch_midi(event) is not None]
     low, high = SLOT_RANGES.get(slot_id, (0, 127))
     in_range_count = sum(1 for event in pitched_events if low <= (_resolve_pitch_midi(event) or 0) <= high)
-    rhythm_grid_beats = measure_sixteenth_note_beats(
-        time_signature_numerator,
-        time_signature_denominator,
+    registration_policy = build_registration_grid_policy(
+        bpm=1,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
     )
+    rhythm_grid_beats = registration_policy.rhythm_grid_beats
     grid_events = [
         event
         for event in events

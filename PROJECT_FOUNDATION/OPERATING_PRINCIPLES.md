@@ -89,6 +89,10 @@ the same change.
   rests. The shortest readable registration unit is the current meter's
   sixteenth-note subdivision. Timing cleanup must use beat-derived units, never
   arbitrary fixed seconds thresholds.
+- Automatic registration policy is a server-side product contract. MIDI,
+  MusicXML, PDF, voice/audio transcription, and AI-generated candidates must use
+  the same policy object for rhythm grid, minimum note length, same-pitch merge
+  gap, and micro-gap absorption before material becomes active regions.
 - This rhythm grid is a registration/generation contract only. User sync
   editing, manual region/event editing, playback scheduling, and scoring read
   the already registered material and must preserve user-visible timing at
@@ -356,6 +360,12 @@ the same change.
   may survive page navigation in browser session storage, but practice/studio
   pages must keep showing the last saved product timeline until the user
   explicitly saves.
+- Lightweight UI choices should stay local whenever they do not change product
+  truth. Candidate target choices, overwrite checkboxes, tempo drafts, playback
+  selection, recording reference selection, and live volume preview are client
+  state until the user commits an approval, save, registration, scoring, or
+  restore action. Track volume may update the active browser gain immediately,
+  but persistence happens only on commit.
 - Do not merge region editing and practice waterfall previews back into the
   studio assembly page unless the foundation is reopened first.
 - The home flow has two distinct starts:

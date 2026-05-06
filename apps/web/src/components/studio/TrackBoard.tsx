@@ -36,6 +36,11 @@ import {
   getTimelineWidthPixels,
   getTimelinePercent,
 } from './TrackBoardTimelineLayout'
+import {
+  clampTrackVolumePercent,
+  parseTrackVolumeDraft,
+  shouldSaveTrackVolumeDraft,
+} from './trackVolumeDraft'
 import './TrackBoard.css'
 
 type TrackRecordingMeter = {
@@ -92,6 +97,7 @@ type TrackBoardProps = {
   onSync: (track: TrackSlot, nextOffset: number) => void
   onTogglePlayback: (track: TrackSlot) => void
   onUpload: (track: TrackSlot, file: File | null) => void
+  onVolumePreview: (track: TrackSlot, nextVolumePercent: number) => void
   onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }
 
@@ -100,15 +106,8 @@ function formatSyncStep(seconds: number): string {
   return rounded.toString()
 }
 
-function clampVolumePercent(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 100
-  }
-  return Math.max(0, Math.min(100, Math.round(value)))
-}
-
 function getTrackVolumePercent(track: TrackSlot): number {
-  return clampVolumePercent(track.volume_percent)
+  return clampTrackVolumePercent(track.volume_percent)
 }
 
 function getTrackActiveJob(track: TrackSlot, jobs: TrackExtractionJob[]): TrackExtractionJob | null {
@@ -163,32 +162,43 @@ function getTrackLaneStyle(
 function TrackVolumeControl({
   disabled,
   track,
+  onVolumePreview,
   onVolumeChange,
 }: {
   disabled: boolean
   track: TrackSlot
+  onVolumePreview: (track: TrackSlot, nextVolumePercent: number) => void
   onVolumeChange: (track: TrackSlot, nextVolumePercent: number) => void
 }) {
   const volumePercent = getTrackVolumePercent(track)
   const [draftVolume, setDraftVolume] = useState(() => String(volumePercent))
-  const draftParsedVolume = Number.parseFloat(draftVolume)
-  const rangeVolume = Number.isFinite(draftParsedVolume)
-    ? clampVolumePercent(draftParsedVolume)
-    : volumePercent
+  const [lastCommittedVolume, setLastCommittedVolume] = useState(volumePercent)
+  const parsedDraftVolume = parseTrackVolumeDraft(draftVolume)
+  const rangeVolume = parsedDraftVolume ?? volumePercent
 
   useEffect(() => {
     setDraftVolume(String(volumePercent))
+    setLastCommittedVolume(volumePercent)
   }, [volumePercent])
 
+  function previewVolume(rawValue: string) {
+    setDraftVolume(rawValue)
+    const parsedValue = parseTrackVolumeDraft(rawValue)
+    if (parsedValue !== null) {
+      onVolumePreview(track, parsedValue)
+    }
+  }
+
   function commitVolume(rawValue = draftVolume) {
-    const parsedValue = Number.parseFloat(rawValue)
-    if (!Number.isFinite(parsedValue)) {
+    const parsedValue = parseTrackVolumeDraft(rawValue)
+    if (parsedValue === null) {
       setDraftVolume(String(volumePercent))
       return
     }
-    const nextVolumePercent = clampVolumePercent(parsedValue)
+    const nextVolumePercent = clampTrackVolumePercent(parsedValue)
     setDraftVolume(String(nextVolumePercent))
-    if (nextVolumePercent !== volumePercent) {
+    if (shouldSaveTrackVolumeDraft(nextVolumePercent, lastCommittedVolume)) {
+      setLastCommittedVolume(nextVolumePercent)
       onVolumeChange(track, nextVolumePercent)
     }
   }
@@ -205,17 +215,10 @@ function TrackVolumeControl({
         type="range"
         disabled={disabled}
         value={rangeVolume}
-        onChange={(event) => setDraftVolume(event.currentTarget.value)}
+        onBlur={() => commitVolume()}
+        onChange={(event) => previewVolume(event.currentTarget.value)}
         onKeyUp={(event) => {
-          if (
-            event.key === 'ArrowLeft' ||
-            event.key === 'ArrowRight' ||
-            event.key === 'Home' ||
-            event.key === 'End' ||
-            event.key === 'PageUp' ||
-            event.key === 'PageDown' ||
-            event.key === 'Enter'
-          ) {
+          if (event.key === 'Enter') {
             commitVolume(event.currentTarget.value)
           }
         }}
@@ -232,7 +235,7 @@ function TrackVolumeControl({
         disabled={disabled}
         value={draftVolume}
         onBlur={() => commitVolume()}
-        onChange={(event) => setDraftVolume(event.currentTarget.value)}
+        onChange={(event) => previewVolume(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             commitVolume(event.currentTarget.value)
@@ -282,6 +285,7 @@ export function TrackBoard({
   onSync,
   onTogglePlayback,
   onUpload,
+  onVolumePreview,
   onVolumeChange,
 }: TrackBoardProps) {
   const regions = useMemo(
@@ -595,7 +599,12 @@ export function TrackBoard({
                   >
                     +{formatSyncStep(syncStepSeconds)}
                   </button>
-                  <TrackVolumeControl disabled={trackVolumeDisabled} track={track} onVolumeChange={onVolumeChange} />
+                  <TrackVolumeControl
+                    disabled={trackVolumeDisabled}
+                    track={track}
+                    onVolumePreview={onVolumePreview}
+                    onVolumeChange={onVolumeChange}
+                  />
                   <button
                     aria-label={isPlaying ? `${formatTrackName(track.name)} 일시정지` : `${formatTrackName(track.name)} 재생`}
                     className="studio-icon-button"

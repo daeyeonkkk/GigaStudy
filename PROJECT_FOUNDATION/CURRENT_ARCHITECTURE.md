@@ -145,6 +145,13 @@ is excluded from persistence and remains an adapter detail.
   metadata, spelling, measure positions, and same-pitch contiguous fragment
   merging. It exposes the beat-derived sixteenth-note unit used by automatic
   registration, so cleanup is tied to BPM/meter rather than fixed seconds.
+- `apps/api/src/gigastudy_api/services/engine/registration_policy.py`
+  Shared automatic-registration policy. MIDI, MusicXML/PDF-derived material,
+  voice/audio transcription, and AI-generated candidates use it for
+  BPM/meter-derived grid size, minimum event length, same-pitch merge gap, and
+  micro-gap absorption. Manual editing, sync, playback, and scoring do not
+  apply this policy unless the user explicitly saves a registration-style
+  rewrite.
 - `apps/api/src/gigastudy_api/services/studio_region_commands.py`
   Manual region editing, split/copy, save, and revision restore preserve the
   user's explicit event fragments. They normalize IDs and timing fields but do
@@ -301,6 +308,10 @@ flowchart TD
    `Studio.regions`, so other pages continue to reflect the last saved product
    timeline; the API records the pre-save region material as a bounded restore
    point in `ArrangementRegion.diagnostics.region_editor`.
+8. Lightweight UI choices stay local until commit. Candidate target choices,
+   overwrite checkboxes, tempo drafts, playback selection, recording-reference
+   selection, and live volume preview do not call the API until the user
+   approves, saves, registers, scores, restores, or commits the volume value.
 
 ### Upload / Import
 

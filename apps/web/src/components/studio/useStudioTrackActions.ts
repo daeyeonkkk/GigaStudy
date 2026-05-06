@@ -187,11 +187,19 @@ export function useStudioTrackActions({
     const volumePercent = Math.max(0, Math.min(100, Math.round(nextVolumePercent)))
     const trackLabel = formatTrackName(track.name)
     setActiveTrackVolume(track.slot_id, volumePercent)
-    await runStudioAction(
+    const saved = await runStudioAction(
       () => updateTrackVolume(studio.studio_id, track.slot_id, volumePercent),
       `${trackLabel} 음량을 저장하는 중입니다.`,
       `${trackLabel} 음량을 ${volumePercent}%로 맞췄습니다.`,
     )
+    if (!saved) {
+      setActiveTrackVolume(track.slot_id, track.volume_percent)
+    }
+  }
+
+  function handleVolumePreview(track: TrackSlot, nextVolumePercent: number) {
+    const volumePercent = Math.max(0, Math.min(100, Math.round(nextVolumePercent)))
+    setActiveTrackVolume(track.slot_id, volumePercent)
   }
 
   return {
@@ -200,5 +208,6 @@ export function useStudioTrackActions({
     handleSync,
     handleUpload,
     handleVolume,
+    handleVolumePreview,
   }
 }

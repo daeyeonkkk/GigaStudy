@@ -293,6 +293,7 @@ export function StudioEditPage() {
               onSync={() => undefined}
               onTogglePlayback={() => undefined}
               onUpload={() => undefined}
+              onVolumePreview={() => undefined}
               onVolumeChange={() => undefined}
             />
           </div>

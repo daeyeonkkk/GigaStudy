@@ -13,9 +13,12 @@ import {
 } from './instruments'
 import type { ArrangementRegion, PitchEvent, TrackSlot } from '../../types/studio'
 
+export type { PlaybackNode } from './instruments'
+
 export type PlaybackSourceMode = 'audio' | 'events'
 
 export type PlaybackSession = {
+  closeContextOnDispose?: boolean
   context?: AudioContext
   firstPulseAtMs?: number
   nodes: PlaybackNode[]
@@ -260,30 +263,35 @@ export function disposePlaybackSession(session: PlaybackSession | null) {
   }
 
   session.timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
-  session.nodes.forEach(({ filters, oscillator, oscillators, source, gain, gains }) => {
-    try {
-      new Set([gain, ...(gains ?? [])]).forEach((currentGain) => {
-        currentGain?.gain.cancelScheduledValues(0)
-        currentGain?.gain.setValueAtTime(0.0001, session.context?.currentTime ?? 0)
-      })
-      oscillator?.stop()
-      oscillator?.disconnect()
-      oscillators?.forEach((currentOscillator) => {
-        currentOscillator.stop()
-        currentOscillator.disconnect()
-      })
-      source?.stop()
-      source?.disconnect()
-      gain?.disconnect()
-      gains?.forEach((currentGain) => currentGain.disconnect())
-      filters?.forEach((filter) => filter.disconnect())
-    } catch {
-      return
-    }
-  })
+  session.nodes.forEach((node) => disposePlaybackNode(node, session.context?.currentTime ?? 0))
 
-  if (session.context && session.context.state !== 'closed') {
+  if (session.context && session.closeContextOnDispose !== false && session.context.state !== 'closed') {
     void session.context.close().catch(() => undefined)
+  }
+}
+
+export function disposePlaybackNode(
+  { filters, oscillator, oscillators, source, gain, gains }: PlaybackNode,
+  currentTime = 0,
+) {
+  try {
+    new Set([gain, ...(gains ?? [])]).forEach((currentGain) => {
+      currentGain?.gain.cancelScheduledValues(0)
+      currentGain?.gain.setValueAtTime(0.0001, currentTime)
+    })
+    oscillator?.stop()
+    oscillator?.disconnect()
+    oscillators?.forEach((currentOscillator) => {
+      currentOscillator.stop()
+      currentOscillator.disconnect()
+    })
+    source?.stop()
+    source?.disconnect()
+    gain?.disconnect()
+    gains?.forEach((currentGain) => currentGain.disconnect())
+    filters?.forEach((filter) => filter.disconnect())
+  } catch {
+    return
   }
 }
 

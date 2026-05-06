@@ -24,6 +24,7 @@ import {
   formatTrackName,
   startLoopingMetronomeSession,
   type MeterContext,
+  type PlaybackRoute,
   type PlaybackSession,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
@@ -67,6 +68,7 @@ type UseStudioRecordingArgs = {
     options?: {
       onStartScheduled?: (scheduledStartAtMs: number) => void
       onScheduledStart?: () => void
+      route?: PlaybackRoute
       scheduledStartAtMs?: number
       scheduledStartLeadMs?: number
       startSeconds?: number
@@ -326,6 +328,7 @@ export function useStudioRecording({
       const playbackStarted = await startPlaybackSession(referenceTracks, includeMetronome, {
         onStartScheduled: scheduleVisibleCountIn,
         onScheduledStart: () => finishCountIn(false),
+        route: 'recording',
         scheduledStartLeadMs: countInLeadMilliseconds,
         startSeconds: 0,
       })

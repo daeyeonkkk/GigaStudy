@@ -24,6 +24,7 @@ import {
   getBeatSeconds,
   startLoopingMetronomeSession,
   type MeterContext,
+  type PlaybackRoute,
   type PlaybackSession,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
@@ -43,6 +44,7 @@ type UseStudioScoringArgs = {
     options?: {
       onStartScheduled?: (scheduledStartAtMs: number) => void
       onScheduledStart?: () => void
+      route?: PlaybackRoute
       scheduledStartAtMs?: number
       scheduledStartLeadMs?: number
       startSeconds?: number
@@ -375,6 +377,7 @@ export function useStudioScoring({
       if (!(await startPlaybackSession(referenceTracks, session.includeMetronome, {
         onStartScheduled: scheduleVisibleCountIn,
         onScheduledStart: () => finishScoreCountIn(referenceTracks.map((track) => track.slot_id), false),
+        route: 'scoring',
         scheduledStartLeadMs: countInLeadMilliseconds,
       }))) {
         scoreRunIdRef.current += 1

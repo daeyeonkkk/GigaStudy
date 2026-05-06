@@ -1,32 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { getTrackAudioUrl } from '../../lib/api'
-import { getBrowserAudioContextConstructor } from '../../lib/audio'
 import {
-  createAudioBufferPlayback,
-  createInstrumentPlayback,
-  createScheduledGuideTrackPlayback,
   DEFAULT_MELODIC_INSTRUMENT,
   DEFAULT_PERCUSSION_INSTRUMENT,
   DEFAULT_SYNC_STEP_SECONDS,
+  STUDIO_TIME_PRECISION_SECONDS,
   disposePlaybackSession,
   formatTrackName,
   getCachedDecodedAudioBuffer,
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
+  getSharedPlaybackAudioContext,
   getSixteenthNoteSeconds,
-  STUDIO_TIME_PRECISION_SECONDS,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
   loadCustomGuideInstrument,
-  scheduleMetronomeClicksFromTimeline,
   startLoopingMetronomeSession,
+  startPlaybackEngineSession,
   type MeterContext,
+  type PlaybackEngineAudioTrack,
+  type PlaybackEngineEvent,
+  type PlaybackEngineEventTrack,
   type PlaybackInstrument,
-  type PlaybackNode,
+  type PlaybackRoute,
   type PlaybackSession,
   type PlaybackSourceMode,
-  type ScheduledGuideTone,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
 import type { SetStudioActionState } from './studioActionState'
@@ -40,6 +39,8 @@ import {
 } from './studioPlaybackHelpers'
 
 type PlaybackTimeline = {
+  audioContext?: AudioContext
+  audioStartTime?: number
   maxSeconds: number
   minSeconds: number
   startSeconds: number
@@ -49,6 +50,7 @@ type PlaybackTimeline = {
 type PlaybackStartOptions = {
   onStartScheduled?: (scheduledStartAtMs: number) => void
   onScheduledStart?: () => void
+  route?: PlaybackRoute
   scheduledStartAtMs?: number
   scheduledStartLeadMs?: number
   startSeconds?: number
@@ -61,22 +63,6 @@ type UseStudioPlaybackArgs = {
   setActionState: SetStudioActionState
   studio: Studio | null
   studioMeter: MeterContext
-}
-
-type PendingSynthEvent = {
-  destination: AudioNode
-  durationSeconds: number
-  frequency: number
-  gridUnitSeconds: number
-  instrument: PlaybackInstrument
-  nextGapSeconds?: number
-  relativeStartSeconds: number
-  volume: number
-}
-
-type PendingGuideTrack = {
-  destination: AudioNode
-  tones: ScheduledGuideTone[]
 }
 
 const STABLE_GUIDE_TRACK_EVENT_THRESHOLD = 48
@@ -100,20 +86,7 @@ export function useStudioPlayback({
   const playbackSessionRef = useRef<PlaybackSession | null>(null)
   const playbackTrackGainsRef = useRef<Map<number, GainNode>>(new Map())
   const playbackRunIdRef = useRef(0)
-
-  function primeAudioContext(context: AudioContext) {
-    const oscillator = context.createOscillator()
-    const gain = context.createGain()
-    const startTime = context.currentTime + 0.005
-    gain.gain.setValueAtTime(0.0001, startTime)
-    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.02)
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(440, startTime)
-    oscillator.connect(gain)
-    gain.connect(context.destination)
-    oscillator.start(startTime)
-    oscillator.stop(startTime + 0.025)
-  }
+  const stopPlaybackSessionRef = useRef<() => void>(() => undefined)
 
   function disposeCurrentPlaybackSession() {
     disposePlaybackSession(playbackSessionRef.current)
@@ -135,6 +108,26 @@ export function useStudioPlayback({
   }
 
   useEffect(() => {
+    stopPlaybackSessionRef.current = stopPlaybackSession
+  })
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden' || !playbackSessionRef.current) {
+        return
+      }
+      stopPlaybackSessionRef.current()
+      setActionState({
+        phase: 'success',
+        message: '브라우저가 백그라운드로 전환되어 재생을 안전하게 중지했습니다.',
+      })
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [setActionState])
+
+  useEffect(() => {
     return () => {
       playbackRunIdRef.current += 1
       disposePlaybackSession(playbackSessionRef.current)
@@ -149,7 +142,12 @@ export function useStudioPlayback({
 
     let animationFrameId = 0
     const updatePlayhead = () => {
-      const elapsedSeconds = (performance.now() - playbackTimeline.startedAtMs) / 1000
+      const elapsedSeconds =
+        playbackTimeline.audioContext &&
+        playbackTimeline.audioContext.state !== 'closed' &&
+        playbackTimeline.audioStartTime !== undefined
+          ? Math.max(0, playbackTimeline.audioContext.currentTime - playbackTimeline.audioStartTime)
+          : Math.max(0, (performance.now() - playbackTimeline.startedAtMs) / 1000)
       const nextPlayheadSeconds = Math.min(
         playbackTimeline.maxSeconds,
         playbackTimeline.startSeconds + elapsedSeconds,
@@ -198,13 +196,12 @@ export function useStudioPlayback({
       regionsBySlot,
     )
     if (playableTracks.length === 0) {
-      setActionState({ phase: 'error', message: '재생할 수 있는 등록 트랙이 없습니다.' })
+      setActionState({ phase: 'error', message: '재생 가능한 등록 트랙이 없습니다.' })
       return false
     }
 
     const runId = playbackRunIdRef.current + 1
     playbackRunIdRef.current = runId
-
     disposeCurrentPlaybackSession()
 
     const beatSeconds = 60 / studio.bpm
@@ -215,34 +212,48 @@ export function useStudioPlayback({
       ...playableTracks.map((track) => track.sync_offset_seconds),
     )
     const startSeconds = Math.max(minTimelineSeconds, options.startSeconds ?? minTimelineSeconds)
-    let minimumStartDelaySeconds = 0.08
     const needsAudioContext = audioTracks.length > 0 || eventTracks.length > 0 || includeMetronome
-    const nodes: PlaybackNode[] = []
-    const timeoutIds: number[] = []
-    let latestStop = 0
+    let context: AudioContext | null = null
     let timelineEndSeconds = Math.max(startSeconds, minTimelineSeconds + 0.25)
     let maxBeat = 1
-    let context: AudioContext | undefined
-    let playbackStartAtMs = performance.now() + minimumStartDelaySeconds * 1000
-    let scheduledStart = 0
-    let scheduledStartDelaySeconds = minimumStartDelaySeconds
     const trackVolumeGains = new Map<number, GainNode>()
 
-    const AudioContextConstructor = getBrowserAudioContextConstructor()
     if (needsAudioContext) {
-      if (!AudioContextConstructor) {
-        setActionState({ phase: 'error', message: '연주음이나 메트로놈을 재생할 오디오 장치를 열 수 없습니다.' })
-        return false
-      }
       try {
-        context = new AudioContextConstructor()
-        scheduledStart = context.currentTime + minimumStartDelaySeconds
-        primeAudioContext(context)
-        await context.resume()
+        context = await getSharedPlaybackAudioContext()
       } catch {
-        setActionState({ phase: 'error', message: '오디오 장치를 열 수 없습니다. 브라우저 권한을 확인하세요.' })
+        context = null
+      }
+      if (!context) {
+        setActionState({ phase: 'error', message: '이 브라우저에서는 재생용 오디오 장치를 열 수 없습니다.' })
         return false
       }
+    }
+
+    const activeContext = context
+    const disposePreparedGains = () => {
+      trackVolumeGains.forEach((gain) => {
+        try {
+          gain.disconnect()
+        } catch {
+          return
+        }
+      })
+      trackVolumeGains.clear()
+    }
+    const getTrackOutput = (track: TrackSlot): AudioNode | null => {
+      if (!activeContext) {
+        return null
+      }
+      const existingGain = trackVolumeGains.get(track.slot_id)
+      if (existingGain) {
+        return existingGain
+      }
+      const trackGain = activeContext.createGain()
+      trackGain.gain.setValueAtTime(getTrackVolumeScale(track), activeContext.currentTime)
+      trackGain.connect(activeContext.destination)
+      trackVolumeGains.set(track.slot_id, trackGain)
+      return trackGain
     }
 
     try {
@@ -250,10 +261,8 @@ export function useStudioPlayback({
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
       const eventToneVolume =
         Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length)))) * 0.4
-      const activeContext = context
-      const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
-      const pendingSynthEvents: PendingSynthEvent[] = []
-      const pendingGuideTracks: PendingGuideTrack[] = []
+      const preparedAudioTracks: PlaybackEngineAudioTrack[] = []
+      const preparedEventTracks: PlaybackEngineEventTrack[] = []
       let melodicInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
       const eventPitchCount = eventTracks.reduce(
         (sum, track) =>
@@ -265,107 +274,25 @@ export function useStudioPlayback({
       )
       const preferStableGuidePlayback =
         eventTracks.length > 1 || eventPitchCount >= STABLE_GUIDE_TRACK_EVENT_THRESHOLD
-      if (preferStableGuidePlayback) {
-        minimumStartDelaySeconds = 0.18
-      }
-
-      function getTrackOutput(track: TrackSlot): AudioNode | null {
-        if (!activeContext) {
-          return null
-        }
-        const existingGain = trackVolumeGains.get(track.slot_id)
-        if (existingGain) {
-          return existingGain
-        }
-        const trackGain = activeContext.createGain()
-        trackGain.gain.setValueAtTime(getTrackVolumeScale(track), activeContext.currentTime)
-        trackGain.connect(activeContext.destination)
-        trackVolumeGains.set(track.slot_id, trackGain)
-        nodes.push({ gain: trackGain })
-        return trackGain
-      }
-
-      function schedulePendingSynthEvents() {
-        if (!activeContext || pendingSynthEvents.length === 0) {
-          return
-        }
-        pendingSynthEvents.sort((left, right) => left.relativeStartSeconds - right.relativeStartSeconds)
-        let nextEventIndex = 0
-        const scheduleAheadSeconds = Math.max(0.75, eventPrecisionSeconds * 6)
-        const lookaheadMilliseconds = 90
-
-        const scheduleChunk = () => {
-          if (activeContext.state === 'closed' || playbackRunIdRef.current !== runId) {
-            return
-          }
-          const currentRelativeSeconds = activeContext.currentTime - scheduledStart
-          const scheduleUntilSeconds = currentRelativeSeconds + scheduleAheadSeconds
-          while (
-            nextEventIndex < pendingSynthEvents.length &&
-            pendingSynthEvents[nextEventIndex].relativeStartSeconds <= scheduleUntilSeconds
-          ) {
-            const event = pendingSynthEvents[nextEventIndex]
-            nodes.push(
-              createInstrumentPlayback(
-                activeContext,
-                {
-                  destination: event.destination,
-                  duration: event.durationSeconds,
-                  frequency: event.frequency,
-                  gridUnitSeconds: event.gridUnitSeconds,
-                  instrument: event.instrument,
-                  nextGapSeconds: event.nextGapSeconds,
-                  startTime: scheduledStart + event.relativeStartSeconds,
-                  volume: event.volume,
-                },
-              ),
-            )
-            nextEventIndex += 1
-          }
-          if (nextEventIndex < pendingSynthEvents.length) {
-            timeoutIds.push(window.setTimeout(scheduleChunk, lookaheadMilliseconds))
-          }
-        }
-
-        scheduleChunk()
-      }
-
-      function schedulePendingGuideTracks() {
-        if (!activeContext || pendingGuideTracks.length === 0) {
-          return
-        }
-        pendingGuideTracks.forEach(({ destination, tones }) => {
-          const node = createScheduledGuideTrackPlayback(
-            activeContext,
-            tones.map((tone) => ({
-              ...tone,
-              startTime: scheduledStart + tone.startTime,
-            })),
-            destination,
-          )
-          if (node) {
-            nodes.push(node)
-          }
-        })
-      }
 
       if (audioTracks.length > 0) {
         if (!activeContext) {
-          throw new Error('원음 재생용 오디오 장치를 열 수 없습니다.')
+          throw new Error('오디오 재생 장치를 준비하지 못했습니다.')
         }
         const requiresSynchronizedStart = audioTracks.length > 1 || eventTracks.length > 0 || includeMetronome
         const synchronizedParts = [
-          `원음 ${audioTracks.length}개`,
-          eventTracks.length > 0 ? `음표 ${eventTracks.length}개` : null,
+          `오디오 ${audioTracks.length}개`,
+          eventTracks.length > 0 ? `연주음 ${eventTracks.length}개` : null,
           includeMetronome ? '메트로놈' : null,
         ].filter(Boolean)
         setActionState({
           phase: 'busy',
           message:
             requiresSynchronizedStart
-              ? `${synchronizedParts.join(', ')}를 한 번에 맞춰 재생하도록 불러오는 중입니다.`
-              : '원음 파일을 바로 재생할 수 있게 불러오는 중입니다.',
+              ? `${synchronizedParts.join(', ')}를 같은 오디오 시계에 맞춰 준비하는 중입니다.`
+              : '오디오 파일을 재생 준비하는 중입니다.',
         })
+
         const decodedAudioTracks = await Promise.all(
           audioTracks.map(async (track) => {
             const audioUrl = getTrackAudioUrl(studio.studio_id, track.slot_id)
@@ -383,17 +310,47 @@ export function useStudioPlayback({
             }
           }),
         )
-        preparedAudioTracks.push(...decodedAudioTracks)
+
+        decodedAudioTracks.forEach(({ buffer, track, trackStartSeconds }) => {
+          const trackSchedule = getAudioTrackSchedule({
+            bufferDurationSeconds: buffer.duration,
+            scheduledStart: 0,
+            startSeconds,
+            trackStartSeconds,
+          })
+          const destination = getTrackOutput(track)
+          if (!destination) {
+            return
+          }
+          preparedAudioTracks.push({
+            buffer,
+            destination,
+            relativeStartSeconds: trackSchedule.relativeStartSeconds,
+            sourceOffsetSeconds: trackSchedule.sourceOffsetSeconds,
+            timelineEndSeconds: trackSchedule.timelineEndSeconds,
+            volume: audioTrackVolume,
+          })
+          const trackRegions = regionsBySlot.get(track.slot_id)
+          const trackEndSeconds = Math.max(
+            trackSchedule.timelineEndSeconds,
+            getRegionsTimelineEndSeconds(trackRegions) || trackSchedule.timelineEndSeconds,
+          )
+          timelineEndSeconds = Math.max(timelineEndSeconds, trackEndSeconds)
+          maxBeat = Math.max(maxBeat, Math.ceil(trackEndSeconds / beatSeconds) + 1)
+          maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
+          scheduledAnyTrack = true
+        })
+
         if (requiresSynchronizedStart && playbackRunIdRef.current === runId) {
           setActionState({
             phase: 'busy',
-            message: `${synchronizedParts.join(', ')}를 같은 박자 그리드에 정렬하는 중입니다.`,
+            message: `${synchronizedParts.join(', ')}를 재생 타임라인에 정렬하는 중입니다.`,
           })
         }
       }
 
       if (playbackRunIdRef.current !== runId) {
-        disposePlaybackSession({ context, nodes, timeoutIds })
+        disposePreparedGains()
         return false
       }
 
@@ -405,62 +362,6 @@ export function useStudioPlayback({
           melodicInstrument = DEFAULT_MELODIC_INSTRUMENT
         }
       }
-
-      scheduledStartDelaySeconds = Math.max(
-        minimumStartDelaySeconds,
-        options.scheduledStartLeadMs !== undefined
-          ? options.scheduledStartLeadMs / 1000
-          : options.scheduledStartAtMs
-            ? (options.scheduledStartAtMs - performance.now()) / 1000
-            : minimumStartDelaySeconds,
-      )
-      playbackStartAtMs = performance.now() + scheduledStartDelaySeconds * 1000
-      scheduledStart = activeContext ? activeContext.currentTime + scheduledStartDelaySeconds : 0
-      if (activeContext) {
-        await activeContext.resume()
-        if (activeContext.state !== 'running') {
-          throw new Error('브라우저 오디오가 아직 시작되지 않았습니다. 재생 버튼을 다시 눌러주세요.')
-        }
-      }
-      options.onStartScheduled?.(playbackStartAtMs)
-
-      preparedAudioTracks.forEach(({ buffer, track, trackStartSeconds }) => {
-        if (!activeContext) {
-          return
-        }
-        const trackSchedule = getAudioTrackSchedule({
-          bufferDurationSeconds: buffer.duration,
-          scheduledStart,
-          startSeconds,
-          trackStartSeconds,
-        })
-        const node = createAudioBufferPlayback(
-          activeContext,
-          buffer,
-          trackSchedule.scheduledStartSeconds,
-          trackSchedule.sourceOffsetSeconds,
-          audioTrackVolume,
-          getTrackOutput(track) ?? activeContext.destination,
-        )
-        if (!node) {
-          return
-        }
-        nodes.push(node)
-        const trackRegions = regionsBySlot.get(track.slot_id)
-        const trackEndSeconds = Math.max(
-          trackSchedule.timelineEndSeconds,
-          getRegionsTimelineEndSeconds(trackRegions) || trackSchedule.timelineEndSeconds,
-        )
-        latestStop = Math.max(
-          latestStop,
-          Math.max(0, trackEndSeconds - startSeconds),
-        )
-        timelineEndSeconds = Math.max(timelineEndSeconds, trackEndSeconds)
-        maxBeat = Math.max(maxBeat, Math.ceil(trackEndSeconds / beatSeconds) + 1)
-        scheduledAnyTrack = true
-
-        maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
-      })
 
       eventTracks.forEach((track) => {
         const trackRegions = regionsBySlot.get(track.slot_id)
@@ -474,6 +375,10 @@ export function useStudioPlayback({
 
         const isPercussion = track.slot_id === 6
         maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
+        const destination = getTrackOutput(track)
+        if (!destination) {
+          return
+        }
         const trackPitchEvents = trackRegions.flatMap((region) => region.pitch_events)
         const scheduledPitchEvents = getSustainedPitchEvents(
           trackPitchEvents,
@@ -481,43 +386,26 @@ export function useStudioPlayback({
           eventPrecisionSeconds,
           track.slot_id,
         )
-        const stableGuideTones: ScheduledGuideTone[] = []
+        const engineEvents: PlaybackEngineEvent[] = []
         scheduledPitchEvents.forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }, eventIndex) => {
-          const duration = durationSeconds
-          const eventEndSeconds = eventStartSeconds + duration
+          const eventEndSeconds = eventStartSeconds + durationSeconds
           const nextPitchEvent = scheduledPitchEvents[eventIndex + 1]
           const nextGapSeconds = nextPitchEvent
             ? Math.max(0, nextPitchEvent.startSeconds - eventEndSeconds)
             : undefined
           timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
           const eventSchedule = getPitchEventSchedule({
-            durationSeconds: duration,
+            durationSeconds,
             eventStartSeconds,
             precisionSeconds: eventPrecisionSeconds,
-            scheduledStart,
+            scheduledStart: 0,
             startSeconds,
           })
           if (!eventSchedule) {
             return
           }
-          if (!isPercussion && preferStableGuidePlayback) {
-            stableGuideTones.push({
-              duration: eventSchedule.remainingDurationSeconds,
-              frequency,
-              gridUnitSeconds: eventGridUnitSeconds,
-              nextGapSeconds,
-              startTime: eventSchedule.relativeStartSeconds,
-              volume: eventToneVolume,
-            })
-            latestStop = Math.max(
-              latestStop,
-              eventSchedule.relativeStartSeconds + eventSchedule.remainingDurationSeconds,
-            )
-            scheduledAnyTrack = true
-            return
-          }
-          pendingSynthEvents.push({
-            destination: getTrackOutput(track) ?? activeContext.destination,
+          engineEvents.push({
+            destination,
             durationSeconds: eventSchedule.remainingDurationSeconds,
             frequency,
             gridUnitSeconds: eventGridUnitSeconds,
@@ -526,47 +414,87 @@ export function useStudioPlayback({
             relativeStartSeconds: eventSchedule.relativeStartSeconds,
             volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
           })
-          latestStop = Math.max(
-            latestStop,
-            eventSchedule.relativeStartSeconds + eventSchedule.remainingDurationSeconds,
-          )
           scheduledAnyTrack = true
         })
-        if (stableGuideTones.length > 0) {
-          pendingGuideTracks.push({
-            destination: getTrackOutput(track) ?? activeContext.destination,
-            tones: stableGuideTones,
+        if (engineEvents.length > 0) {
+          preparedEventTracks.push({
+            events: engineEvents,
+            slotId: track.slot_id,
           })
         }
       })
 
       if (!scheduledAnyTrack) {
-        disposePlaybackSession({ context, nodes, timeoutIds })
-        setActionState({ phase: 'error', message: '재생 가능한 녹음이나 음표가 없습니다.' })
+        disposePreparedGains()
+        setActionState({ phase: 'error', message: '재생 가능한 오디오나 연주음이 없습니다.' })
         return false
       }
 
-      schedulePendingGuideTracks()
-      schedulePendingSynthEvents()
-
-      if (includeMetronome && activeContext) {
+      if (includeMetronome) {
         timelineEndSeconds = Math.max(timelineEndSeconds, maxBeat * beatSeconds)
-        latestStop = Math.max(
-          latestStop,
-          scheduleMetronomeClicksFromTimeline(
-            activeContext,
-            nodes,
-            scheduledStart,
-            startSeconds,
-            maxBeat,
-            studio.bpm,
-            studioMeter,
-            0.035,
-          ),
-        )
       }
+
+      const engineResult = await startPlaybackEngineSession({
+        audioTracks: preparedAudioTracks,
+        bpm: studio.bpm,
+        eventTracks: preparedEventTracks,
+        includeMetronome,
+        maxBeat,
+        meter: studioMeter,
+        minTimelineSeconds,
+        onScheduledStart: () => {
+          if (playbackRunIdRef.current === runId) {
+            options.onScheduledStart?.()
+          }
+        },
+        onStartScheduled: (scheduledStartAtMs) => {
+          if (playbackRunIdRef.current === runId) {
+            options.onStartScheduled?.(scheduledStartAtMs)
+          }
+        },
+        route: options.route ?? 'studio',
+        scheduledStartAtMs: options.scheduledStartAtMs,
+        scheduledStartLeadMs: options.scheduledStartLeadMs,
+        startSeconds,
+        timelineEndSeconds,
+      })
+
+      if (playbackRunIdRef.current !== runId) {
+        disposePlaybackSession(engineResult.session)
+        disposePreparedGains()
+        return false
+      }
+
+      const playbackSession = engineResult.session
+      trackVolumeGains.forEach((gain) => playbackSession.nodes.push({ gain }))
+      const sessionDurationSeconds = Math.max(0.1, engineResult.maxTimelineSeconds - startSeconds + 0.45)
+      const clearUiTimeoutId = window.setTimeout(() => {
+        if (playbackSessionRef.current !== playbackSession) {
+          return
+        }
+
+        disposePlaybackSession(playbackSession)
+        playbackSessionRef.current = null
+        playbackTrackGainsRef.current = new Map()
+        setPlaybackTimeline(null)
+        setPlayheadSeconds(null)
+        clearPlaybackIndicators()
+      }, Math.ceil(Math.max(0, engineResult.scheduledStartAtMs - performance.now()) + sessionDurationSeconds * 1000))
+
+      playbackSession.timeoutIds.push(clearUiTimeoutId)
+      playbackSessionRef.current = playbackSession
+      playbackTrackGainsRef.current = trackVolumeGains
+      setPlaybackTimeline({
+        audioContext: engineResult.session.context,
+        audioStartTime: engineResult.scheduledStartTime,
+        maxSeconds: engineResult.maxTimelineSeconds,
+        minSeconds: engineResult.minTimelineSeconds,
+        startSeconds: engineResult.startSeconds,
+        startedAtMs: engineResult.scheduledStartAtMs,
+      })
+      return true
     } catch (error) {
-      disposePlaybackSession({ context, nodes, timeoutIds })
+      disposePreparedGains()
       setActionState({
         phase: 'error',
         message:
@@ -576,45 +504,6 @@ export function useStudioPlayback({
       })
       return false
     }
-
-    if (playbackRunIdRef.current !== runId) {
-      disposePlaybackSession({ context, nodes, timeoutIds })
-      return false
-    }
-
-    const playbackSession: PlaybackSession = { context, nodes, timeoutIds }
-    const sessionDurationSeconds = Math.max(0.1, latestStop + 0.45)
-    const timeoutId = window.setTimeout(() => {
-      if (playbackSessionRef.current !== playbackSession) {
-        return
-      }
-
-      disposePlaybackSession(playbackSession)
-      playbackSessionRef.current = null
-      setPlaybackTimeline(null)
-      setPlayheadSeconds(null)
-      clearPlaybackIndicators()
-    }, Math.ceil((scheduledStartDelaySeconds + sessionDurationSeconds) * 1000))
-
-    playbackSession.timeoutIds.push(timeoutId)
-    playbackSessionRef.current = playbackSession
-    playbackTrackGainsRef.current = trackVolumeGains
-    if (options.onScheduledStart) {
-      const scheduledStartCallbackId = window.setTimeout(() => {
-        if (playbackSessionRef.current !== playbackSession || playbackRunIdRef.current !== runId) {
-          return
-        }
-        options.onScheduledStart?.()
-      }, Math.max(0, Math.round(playbackStartAtMs - performance.now())))
-      playbackSession.timeoutIds.push(scheduledStartCallbackId)
-    }
-    setPlaybackTimeline({
-      maxSeconds: Math.max(timelineEndSeconds, startSeconds + latestStop),
-      minSeconds: minTimelineSeconds,
-      startSeconds,
-      startedAtMs: playbackStartAtMs,
-    })
-    return true
   }
 
   function togglePlaybackSelection(slotId: number) {
@@ -677,7 +566,7 @@ export function useStudioPlayback({
         getPlaybackRegionsBySlot(studio?.regions),
       ),
     })
-    if (await startPlaybackSession(selectedTracks, metronomeEnabled, { startSeconds })) {
+    if (await startPlaybackSession(selectedTracks, metronomeEnabled, { startSeconds, route: 'studio' })) {
       setPlaybackPickerOpen(true)
       setPlayingSlots(new Set(selectedTracks.map((track) => track.slot_id)))
       setGlobalPlaying(true)
@@ -719,7 +608,7 @@ export function useStudioPlayback({
         getPlaybackRegionsBySlot(studio?.regions),
       ),
     })
-    if (await startPlaybackSession(selectedTracks, metronomeEnabled)) {
+    if (await startPlaybackSession(selectedTracks, metronomeEnabled, { route: 'studio' })) {
       setPlayingSlots(new Set(selectedTracks.map((track) => track.slot_id)))
       setGlobalPlaying(true)
       setActionState({
@@ -747,7 +636,7 @@ export function useStudioPlayback({
     stopPlaybackSession()
     setActionState({
       phase: 'success',
-      message: '선택 트랙을 싱크가 반영된 0초 지점으로 되돌렸습니다.',
+      message: '선택 트랙 재생을 중지했습니다.',
     })
   }
 
@@ -765,7 +654,7 @@ export function useStudioPlayback({
 
   async function toggleTrackPlayback(track: TrackSlot) {
     if (track.status !== 'registered') {
-      setActionState({ phase: 'error', message: `${formatTrackName(track.name)}은 아직 등록되지 않았습니다.` })
+      setActionState({ phase: 'error', message: `${formatTrackName(track.name)}는 아직 등록되지 않았습니다.` })
       return
     }
 
@@ -779,7 +668,7 @@ export function useStudioPlayback({
       phase: 'busy',
       message: getPlaybackPreparationMessage([track], metronomeEnabled, playbackSource, getPlaybackRegionsBySlot(studio?.regions)),
     })
-    if (await startPlaybackSession([track])) {
+    if (await startPlaybackSession([track], metronomeEnabled, { route: 'studio' })) {
       setGlobalPlaying(false)
       setPlayingSlots(new Set([track.slot_id]))
       setActionState({
@@ -796,7 +685,7 @@ export function useStudioPlayback({
     stopPlaybackSession()
     setActionState({
       phase: 'success',
-      message: `${formatTrackName(track.name)}을 싱크가 반영된 0초 지점으로 되돌렸습니다.`,
+      message: `${formatTrackName(track.name)} 재생을 중지했습니다.`,
     })
   }
 

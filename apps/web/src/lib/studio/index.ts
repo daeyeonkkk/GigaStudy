@@ -1,6 +1,7 @@
 export * from './instruments'
 export * from './audioBufferCache'
 export * from './playback'
+export * from './playbackEngine'
 export * from './timing'
 export * from './uploadRouting'
 export * from './candidateSummary'

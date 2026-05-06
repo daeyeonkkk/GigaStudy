@@ -1,12 +1,12 @@
 import {
-  createTrackUploadTarget,
+  createTrackRecordingUploadTarget,
   generateTrack,
   putDirectUpload,
   readFileAsDataUrl,
   shiftRegisteredTrackSyncs,
   updateTrackSync,
   updateTrackVolume,
-  uploadTrack,
+  uploadTrackRecordingFile,
 } from '../../lib/api'
 import { prepareAudioFileForUpload } from '../../lib/audio'
 import {
@@ -77,7 +77,7 @@ export function useStudioTrackActions({
       async () => {
         const preparedUpload = await prepareAudioFileForUpload(file)
 
-        const uploadTarget = await createTrackUploadTarget(studio.studio_id, track.slot_id, {
+        const uploadTarget = await createTrackRecordingUploadTarget(studio.studio_id, track.slot_id, {
           source_kind: sourceKind,
           filename: preparedUpload.filename,
           size_bytes: preparedUpload.blob.size,
@@ -89,7 +89,7 @@ export function useStudioTrackActions({
         } catch {
           const fallbackContentBase64 =
             preparedUpload.contentBase64 ?? (await readFileAsDataUrl(file))
-          return uploadTrack(studio.studio_id, track.slot_id, {
+          return uploadTrackRecordingFile(studio.studio_id, track.slot_id, {
             source_kind: sourceKind,
             filename: preparedUpload.filename,
             content_base64: fallbackContentBase64,
@@ -97,7 +97,7 @@ export function useStudioTrackActions({
           })
         }
 
-        return uploadTrack(studio.studio_id, track.slot_id, {
+        return uploadTrackRecordingFile(studio.studio_id, track.slot_id, {
           source_kind: sourceKind,
           filename: preparedUpload.filename,
           asset_path: uploadTarget.asset_path,

@@ -281,7 +281,10 @@ flowchart TD
 1. Web requests an upload target. Studio creation exposes `PDF/MIDI/MusicXML`
    score-file seeding, while each track row exposes recording-file upload for
    audio extraction.
-2. Browser sends the file via direct upload or inline fallback.
+2. Browser sends the file via direct upload or inline fallback. Studio creation
+   requests include a browser-generated `client_request_id`; if the browser
+   loses the response and retries the same start data, the API returns the
+   existing studio instead of creating a duplicate.
 3. API either registers clearly assigned symbolic seed parts directly or creates
    an extraction job/candidate review path for ambiguous material. Audio
    extraction first normalizes non-WAV containers into a WAV analysis source.

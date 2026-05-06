@@ -88,6 +88,10 @@ def encode_studio_payload(studio: Studio) -> dict[str, Any]:
     payload = studio.model_dump(mode="json")
     if studio.owner_token_hash is not None:
         payload["owner_token_hash"] = studio.owner_token_hash
+    if studio.client_request_id is not None:
+        payload["client_request_id"] = studio.client_request_id
+    if studio.client_request_fingerprint is not None:
+        payload["client_request_fingerprint"] = studio.client_request_fingerprint
     return payload
 
 

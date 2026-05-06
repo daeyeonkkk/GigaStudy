@@ -253,6 +253,7 @@ export type StudioListItem = {
 
 export type CreateStudioRequest = {
   title: string
+  client_request_id?: string
   bpm?: number
   time_signature_numerator?: number
   time_signature_denominator?: number

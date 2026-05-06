@@ -51,9 +51,17 @@ function parseInteger(value: string): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null
 }
 
+function createClientRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
 export function LaunchPage() {
   const navigate = useNavigate()
   const sourceInputRef = useRef<HTMLInputElement | null>(null)
+  const creationRequestRef = useRef<{ fingerprint: string; id: string } | null>(null)
   const [title, setTitle] = useState('')
   const [studioPassword, setStudioPassword] = useState('')
   const [bpm, setBpm] = useState('92')
@@ -116,6 +124,36 @@ export function LaunchPage() {
     setSourceInputKey((currentKey) => currentKey + 1)
   }
 
+  function getCreationRequestId(fingerprint: string): string {
+    if (creationRequestRef.current?.fingerprint !== fingerprint) {
+      creationRequestRef.current = {
+        fingerprint,
+        id: createClientRequestId(),
+      }
+    }
+    return creationRequestRef.current.id
+  }
+
+  function blankCreationFingerprint(): string {
+    return [
+      'blank',
+      normalizedTitle,
+      parsedBpm ?? '',
+      parsedNumerator ?? '',
+      parsedDenominator ?? '',
+    ].join('|')
+  }
+
+  function uploadCreationFingerprint(file: File): string {
+    return [
+      'upload',
+      normalizedTitle,
+      file.name,
+      file.size,
+      file.lastModified,
+    ].join('|')
+  }
+
   async function startBlank() {
     if (submitState.phase === 'submitting') {
       return
@@ -143,8 +181,10 @@ export function LaunchPage() {
     setSubmitState({ phase: 'submitting', label: '새 스튜디오 생성 중' })
     try {
       await setOwnerTokenFromStudioPassword(studioPassword)
+      const clientRequestId = getCreationRequestId(blankCreationFingerprint())
       const studio = await createStudio({
         title: normalizedTitle,
+        client_request_id: clientRequestId,
         bpm: parsedBpm,
         time_signature_numerator: parsedNumerator,
         time_signature_denominator: parsedDenominator,
@@ -179,6 +219,7 @@ export function LaunchPage() {
     setSubmitState({ phase: 'submitting', label: '악보 파일 업로드와 분석 대기열 준비 중' })
     try {
       await setOwnerTokenFromStudioPassword(studioPassword)
+      const clientRequestId = getCreationRequestId(uploadCreationFingerprint(sourceFile))
       const preparedSource: PreparedLaunchSource = {
         filename: sourceFile.name,
         blob: sourceFile,
@@ -200,6 +241,7 @@ export function LaunchPage() {
         const contentBase64 = preparedSource.contentBase64 ?? (await readFileAsDataUrl(sourceFile))
         studio = await createStudio({
           title: normalizedTitle,
+          client_request_id: clientRequestId,
           start_mode: 'upload',
           source_kind: 'document',
           source_filename: preparedSource.filename,
@@ -209,6 +251,7 @@ export function LaunchPage() {
       if (uploadedAssetPath) {
         studio = await createStudio({
           title: normalizedTitle,
+          client_request_id: clientRequestId,
           start_mode: 'upload',
           source_kind: 'document',
           source_filename: preparedSource.filename,

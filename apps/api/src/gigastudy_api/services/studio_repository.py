@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -147,6 +148,35 @@ def _safe_export_filename(title: str) -> str:
     return normalized[:80] or "gigastudy-studio"
 
 
+def _studio_creation_fingerprint(
+    *,
+    title: str,
+    bpm: int | None,
+    start_mode: str,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+    source_kind: SeedSourceKind | None,
+    source_filename: str | None,
+    has_source_content: bool,
+    has_source_asset: bool,
+) -> str:
+    return json.dumps(
+        {
+            "bpm": bpm,
+            "has_source": has_source_content or has_source_asset,
+            "source_filename": (source_filename or "").strip(),
+            "source_kind": source_kind,
+            "start_mode": start_mode,
+            "time_signature_denominator": time_signature_denominator,
+            "time_signature_numerator": time_signature_numerator,
+            "title": title.strip(),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
 class StudioRepository:
     def __init__(self, storage_root: str) -> None:
         settings = get_settings()
@@ -252,6 +282,7 @@ class StudioRepository:
         self,
         *,
         title: str,
+        client_request_id: str | None = None,
         bpm: int | None,
         start_mode: str,
         time_signature_numerator: int = 4,
@@ -264,17 +295,42 @@ class StudioRepository:
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
         timestamp = _now()
-        with self._lock:
-            ensure_studio_capacity(self._count_studios())
         owner_hash = owner_hash_for_request(
             owner_token,
             allow_missing=not owner_policy_enabled(),
             honor_public_token=True,
         )
+        client_request_fingerprint = _studio_creation_fingerprint(
+            title=title,
+            bpm=bpm,
+            start_mode=start_mode,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            source_kind=source_kind,
+            source_filename=source_filename,
+            has_source_content=bool(source_content_base64),
+            has_source_asset=bool(source_asset_path),
+        )
+        with self._lock:
+            if client_request_id is not None:
+                existing_studio = self._find_studio_by_client_request_id(
+                    client_request_id,
+                    owner_token_hash=owner_hash,
+                )
+                if existing_studio is not None:
+                    if existing_studio.client_request_fingerprint != client_request_fingerprint:
+                        raise HTTPException(
+                            status_code=409,
+                            detail="Studio creation request id was already used for different start data.",
+                        )
+                    return existing_studio
+            ensure_studio_capacity(self._count_studios())
         resolved_bpm = bpm if bpm is not None else DEFAULT_UPLOAD_BPM
         studio = Studio(
             studio_id=uuid4().hex,
             owner_token_hash=owner_hash,
+            client_request_id=client_request_id,
+            client_request_fingerprint=client_request_fingerprint,
             title=title.strip(),
             bpm=resolved_bpm,
             time_signature_numerator=time_signature_numerator,
@@ -1422,6 +1478,22 @@ class StudioRepository:
     def _list_studios(self, *, limit: int, offset: int) -> list[Studio]:
         raw_rows = self._store.list_raw(limit=limit, offset=offset)
         return [Studio.model_validate(studio_payload) for _studio_id, studio_payload in raw_rows]
+
+    def _find_studio_by_client_request_id(
+        self,
+        client_request_id: str,
+        *,
+        owner_token_hash: str | None,
+    ) -> Studio | None:
+        for studio_payload in self._store.load_raw().values():
+            if not isinstance(studio_payload, dict):
+                continue
+            if studio_payload.get("client_request_id") != client_request_id:
+                continue
+            if studio_payload.get("owner_token_hash") != owner_token_hash:
+                continue
+            return Studio.model_validate(studio_payload)
+        return None
 
     def _count_studios(self) -> int:
         return self._store.count()

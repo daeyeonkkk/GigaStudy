@@ -170,11 +170,11 @@ export function getDocumentJobSourcePreviewUrl(studioId: string, jobId: string, 
   return url.toString()
 }
 
-export function createTrackUploadTarget(
+export function createTrackRecordingUploadTarget(
   studioId: string,
   slotId: number,
   payload: {
-    source_kind: 'audio' | 'midi' | 'document'
+    source_kind: 'audio'
     filename: string
     size_bytes: number
     content_type?: string
@@ -201,11 +201,11 @@ export async function putDirectUpload(target: DirectUploadTarget, blob: Blob): P
   }
 }
 
-export function uploadTrack(
+export function uploadTrackRecordingFile(
   studioId: string,
   slotId: number,
   payload: {
-    source_kind: 'audio' | 'midi' | 'document'
+    source_kind: 'audio'
     filename: string
     content_base64?: string
     asset_path?: string

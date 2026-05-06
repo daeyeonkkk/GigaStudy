@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { uploadTrack } from '../../lib/api'
+import { uploadTrackRecordingFile } from '../../lib/api'
 import {
   beginMicrophoneCapture,
   startMicrophoneRecorder,
@@ -377,7 +377,7 @@ export function useStudioRecording({
     const trackLabel = formatTrackName(pendingRecording.trackName)
     const succeeded = await runStudioAction(
       () =>
-        uploadTrack(studio.studio_id, pendingRecording.slotId, {
+        uploadTrackRecordingFile(studio.studio_id, pendingRecording.slotId, {
           source_kind: 'audio',
           filename: pendingRecording.filename,
           content_base64: pendingRecording.audioDataUrl,

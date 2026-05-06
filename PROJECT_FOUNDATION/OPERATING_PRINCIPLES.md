@@ -173,7 +173,9 @@ the same change.
   queues PDF/MIDI/MusicXML import; the job may then directly register clear
   singer-line material or leave review candidates when interpretation remains
   ambiguous. A browser/network failure after upload must not create a hidden
-  half-success state that only appears after refresh.
+  half-success state that only appears after refresh. Studio creation requests
+  should carry an idempotency key so retrying the same start data returns the
+  existing studio rather than creating a duplicate.
 - Per-track recording-file upload accepts common audio containers
   (WAV/MP3/M4A/OGG/FLAC). Non-WAV input must be decoded server-side into an
   analysis WAV before voice transcription, and the retained playback asset must

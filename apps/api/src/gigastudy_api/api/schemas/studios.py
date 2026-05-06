@@ -437,6 +437,8 @@ class ScoringReport(BaseModel):
 class Studio(BaseModel):
     studio_id: str
     owner_token_hash: str | None = Field(default=None, exclude=True)
+    client_request_id: str | None = Field(default=None, exclude=True)
+    client_request_fingerprint: str | None = Field(default=None, exclude=True)
     is_active: bool = True
     deactivated_at: str | None = None
     title: str
@@ -722,6 +724,12 @@ class StudioListItem(BaseModel):
 
 class CreateStudioRequest(SourceKindModel):
     title: str = Field(min_length=1, max_length=100)
+    client_request_id: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=120,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
     bpm: int | None = Field(default=None, ge=40, le=240)
     time_signature_numerator: int = Field(default=4, ge=1, le=32)
     time_signature_denominator: TimeSignatureDenominator = 4

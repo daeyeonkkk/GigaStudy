@@ -60,6 +60,7 @@ def create_studio(
     return _studio_response(
         repository.create_studio(
             title=request.title,
+            client_request_id=request.client_request_id,
             bpm=request.bpm,
             start_mode=request.start_mode,
             time_signature_numerator=request.time_signature_numerator,

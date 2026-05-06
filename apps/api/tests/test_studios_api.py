@@ -246,6 +246,87 @@ def upload_musicxml_track(
     return response
 
 
+def test_create_studio_client_request_id_returns_existing_blank_studio_on_retry(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    payload = {
+        "title": "Retry blank",
+        "client_request_id": "retry-blank-001",
+        "bpm": 120,
+        "start_mode": "blank",
+    }
+
+    first_response = client.post("/api/studios", json=payload)
+    retry_response = client.post("/api/studios", json=payload)
+
+    assert first_response.status_code == 200
+    assert retry_response.status_code == 200
+    assert retry_response.json()["studio_id"] == first_response.json()["studio_id"]
+    assert len(client.get("/api/studios").json()) == 1
+
+
+def test_create_studio_client_request_id_returns_existing_queued_upload_on_retry(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        studio_repository.StudioRepository,
+        "_schedule_engine_queue_processing",
+        lambda self, background_tasks: None,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_single_note_midi_bytes(bpm=113)).decode("ascii")
+    payload = {
+        "title": "Retry MIDI seed",
+        "client_request_id": "retry-midi-001",
+        "start_mode": "upload",
+        "source_kind": "document",
+        "source_filename": "source.mid",
+        "source_content_base64": encoded,
+    }
+
+    first_response = client.post("/api/studios", json=payload)
+    retry_response = client.post("/api/studios", json=payload)
+
+    assert first_response.status_code == 200
+    assert retry_response.status_code == 200
+    assert retry_response.json()["studio_id"] == first_response.json()["studio_id"]
+    retry_payload = retry_response.json()
+    assert retry_payload["jobs"][0]["status"] == "queued"
+    assert len(client.get("/api/studios").json()) == 1
+
+
+def test_create_studio_rejects_reused_client_request_id_for_different_start_data(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    first_response = client.post(
+        "/api/studios",
+        json={
+            "title": "First start",
+            "client_request_id": "retry-conflict-001",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    conflict_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Different start",
+            "client_request_id": "retry-conflict-001",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert conflict_response.status_code == 409
+    assert len(client.get("/api/studios").json()) == 1
+
+
 def build_single_note_midi_bytes(*, bpm: int = 113, pitch: int = 72, duration_ticks: int = 480) -> bytes:
     tempo_microseconds = int(round(60_000_000 / bpm))
     track_events = b"".join(

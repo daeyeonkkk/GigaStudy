@@ -35,6 +35,11 @@ is excluded from persistence and remains an adapter detail.
   track registration, upload/record/generate, sync, selected-track playback,
   candidate review, and report history. It does not render the piano-roll
   editor, practice waterfall, or scoring controls.
+- `apps/web/src/components/studio/useStudioResource.ts`
+  Loads the full studio once, then uses `/api/studios/{id}/activity` while
+  extraction jobs are active. Activity polling carries only job state and
+  visible counts, and the hook fetches the full studio once when jobs complete
+  or candidate/report/registered-track counts change.
 - `apps/web/src/pages/StudioEditPage.tsx`
   Dedicated region-editing surface for region selection, region structure
   actions, selected-region piano-roll editing, local draft save, and bounded
@@ -59,7 +64,9 @@ is excluded from persistence and remains an adapter detail.
   region grouping, playable track selection, sustained event merging, and
   metronome beat coverage. Long event-backed MIDI/MusicXML sessions schedule
   guide-tone events in rolling lookahead chunks instead of constructing every
-  oscillator at playback start.
+  oscillator at playback start. Original-audio playback uses a bounded decoded
+  `AudioBuffer` LRU keyed by studio, slot, source path, and track update time
+  so repeat playback does not refetch/redecode unchanged clips.
 - `apps/web/src/lib/studio/instruments.ts`
   Browser event synthesis. The default melodic event voice is a warm guide
   synth tuned to sit beside human singing instead of a sampled organ or choir
@@ -112,7 +119,10 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/api/routes/studios.py`
   FastAPI studio command/query endpoints, including single-field region/event
   mutation endpoints and the batch region revision save/restore endpoints used
-  by the region editor.
+  by the region editor. Job polling has a lightweight activity endpoint that
+  omits regions, candidates, reports, and archive detail. Track volume can
+  return a minimal patch response for live mix commits while the legacy full
+  response remains the default.
 - `apps/api/src/gigastudy_api/services/studio_repository.py`
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
@@ -357,7 +367,9 @@ flowchart TD
 3. If no reference tracks are selected, the browser keeps the existing
    count-in-only path: metronome if selected, or silent visual count-in if not.
 4. The stopped take stays pending until the user registers or discards it.
-5. API stores retained audio and starts voice extraction after registration.
+5. Registration uses direct upload for the pending take when available, falling
+   back to base64 JSON only if direct upload fails. API stores retained audio
+   and starts voice extraction after registration.
 6. Extracted pitch material becomes a candidate or registered track. If the
    target slot already had score/imported/generated material, the active
    material is archived before the recording replaces it.
@@ -370,7 +382,8 @@ flowchart TD
    selection is scoring input, while audible reference playback is practice UX.
 3. Browser records a take while selected audible references play on the shared
    scheduled timeline.
-4. Browser submits recorded audio or `performance_events`.
+4. Browser submits recorded audio by temporary direct upload when available, or
+   falls back to base64 JSON; it may also submit `performance_events`.
 5. API converts submitted performance events to the internal pitch-event adapter.
 6. Scoring compares those events with registered arrangement regions, preserving
    public answer-region focus IDs through the internal adapter boundary.
@@ -405,7 +418,9 @@ flowchart TD
    Dense MIDI-style event sessions are scheduled by lookahead chunks against
    the shared scheduled start so browser oscillator load does not mute playback.
    Playback uses persisted event durations within studio precision and does not
-   stretch events to the registration rhythm grid.
+   stretch events to the registration rhythm grid. Custom guide instrument
+   configuration is cached briefly, while decoded original-audio buffers are
+   cached until the source path or track update time changes.
 4. Sync offset and volume are applied per track. Negative sync is preserved as
    a user-visible timeline translation; barlines stay on the shared grid.
 5. Audio clips are scheduled from `TrackSlot.sync_offset_seconds`. Region pitch

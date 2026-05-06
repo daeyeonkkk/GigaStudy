@@ -274,6 +274,9 @@ the same change.
   selection is UX support; scoring reference selection is evaluation input.
 - Scoring should prefer offline alignment and clear reports over realtime
   strictness.
+- Scoring takes should use direct upload when available so large microphone
+  recordings do not travel as base64 JSON. Base64 is a compatibility fallback,
+  not the default web path.
 - Harmony scoring should separate useful tension from true collisions. It
   should be helpful, not punishing for every non-triad color.
 
@@ -297,6 +300,10 @@ the same change.
   back to the built-in warm guide synth if the file is missing or unsupported.
 - Selected-track playback must prepare all required audio buffers, synthesized
   instruments, and metronome scheduling before starting together.
+- Retained audio buffers may be decoded into a bounded browser memory cache so
+  repeated playback of the same track does not refetch and redecode unchanged
+  audio. The cache key must include studio, slot, source path, and track update
+  time so stale audio is not reused after registration changes.
 - Single-track audio playback may be fast, but if it is part of a synchronized
   session it should wait for the rest of the session and start on the shared
   scheduled time.
@@ -366,6 +373,10 @@ the same change.
   state until the user commits an approval, save, registration, scoring, or
   restore action. Track volume may update the active browser gain immediately,
   but persistence happens only on commit.
+- Active extraction/import polling should use a lightweight activity endpoint
+  while work is in progress and fetch the full studio only when jobs finish or
+  visible counts change. Small committed settings may return minimal patches
+  when the client can safely merge them into the current studio state.
 - Do not merge region editing and practice waterfall previews back into the
   studio assembly page unless the foundation is reopened first.
 - The home flow has two distinct starts:
@@ -384,6 +395,12 @@ the same change.
 - The alpha target is small-scale and cost-aware.
 - Favor pagination, direct upload, asset cleanup, and queue visibility over
   pretending a single Cloud Run lane is unlimited.
+- Large audio payloads should prefer direct upload. The browser should not
+  decode and re-encode MP3/M4A/OGG/FLAC just to submit a recording file; server
+  audio normalization owns analysis WAV creation.
+- Repeated playback should avoid unnecessary refetch/decode work through
+  bounded caches for original audio buffers and short-lived playback-instrument
+  configuration.
 - Local developer tools are global conveniences. Runtime engines and heavy ML
   dependencies should be pinned in project dependencies, Docker, or worker
   images when they become product requirements.

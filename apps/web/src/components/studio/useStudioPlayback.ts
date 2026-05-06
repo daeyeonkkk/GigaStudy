@@ -5,6 +5,7 @@ import { getBrowserAudioContextConstructor } from '../../lib/audio'
 import {
   createAudioBufferPlayback,
   createInstrumentPlayback,
+  createScheduledGuideTrackPlayback,
   DEFAULT_MELODIC_INSTRUMENT,
   DEFAULT_PERCUSSION_INSTRUMENT,
   DEFAULT_SYNC_STEP_SECONDS,
@@ -25,6 +26,7 @@ import {
   type PlaybackNode,
   type PlaybackSession,
   type PlaybackSourceMode,
+  type ScheduledGuideTone,
 } from '../../lib/studio'
 import type { Studio, TrackSlot } from '../../types/studio'
 import type { SetStudioActionState } from './studioActionState'
@@ -71,6 +73,13 @@ type PendingSynthEvent = {
   relativeStartSeconds: number
   volume: number
 }
+
+type PendingGuideTrack = {
+  destination: AudioNode
+  tones: ScheduledGuideTone[]
+}
+
+const STABLE_GUIDE_TRACK_EVENT_THRESHOLD = 48
 
 export function useStudioPlayback({
   metronomeEnabled,
@@ -206,7 +215,7 @@ export function useStudioPlayback({
       ...playableTracks.map((track) => track.sync_offset_seconds),
     )
     const startSeconds = Math.max(minTimelineSeconds, options.startSeconds ?? minTimelineSeconds)
-    const minimumStartDelaySeconds = 0.08
+    let minimumStartDelaySeconds = 0.08
     const needsAudioContext = audioTracks.length > 0 || eventTracks.length > 0 || includeMetronome
     const nodes: PlaybackNode[] = []
     const timeoutIds: number[] = []
@@ -244,7 +253,21 @@ export function useStudioPlayback({
       const activeContext = context
       const preparedAudioTracks: Array<{ buffer: AudioBuffer; track: TrackSlot; trackStartSeconds: number }> = []
       const pendingSynthEvents: PendingSynthEvent[] = []
+      const pendingGuideTracks: PendingGuideTrack[] = []
       let melodicInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
+      const eventPitchCount = eventTracks.reduce(
+        (sum, track) =>
+          sum + (regionsBySlot.get(track.slot_id)?.reduce(
+            (trackSum, region) => trackSum + region.pitch_events.length,
+            0,
+          ) ?? 0),
+        0,
+      )
+      const preferStableGuidePlayback =
+        eventTracks.length > 1 || eventPitchCount >= STABLE_GUIDE_TRACK_EVENT_THRESHOLD
+      if (preferStableGuidePlayback) {
+        minimumStartDelaySeconds = 0.18
+      }
 
       function getTrackOutput(track: TrackSlot): AudioNode | null {
         if (!activeContext) {
@@ -307,6 +330,25 @@ export function useStudioPlayback({
         scheduleChunk()
       }
 
+      function schedulePendingGuideTracks() {
+        if (!activeContext || pendingGuideTracks.length === 0) {
+          return
+        }
+        pendingGuideTracks.forEach(({ destination, tones }) => {
+          const node = createScheduledGuideTrackPlayback(
+            activeContext,
+            tones.map((tone) => ({
+              ...tone,
+              startTime: scheduledStart + tone.startTime,
+            })),
+            destination,
+          )
+          if (node) {
+            nodes.push(node)
+          }
+        })
+      }
+
       if (audioTracks.length > 0) {
         if (!activeContext) {
           throw new Error('원음 재생용 오디오 장치를 열 수 없습니다.')
@@ -355,7 +397,7 @@ export function useStudioPlayback({
         return false
       }
 
-      if (eventTracks.length > 0 && activeContext) {
+      if (eventTracks.length > 0 && activeContext && !preferStableGuidePlayback) {
         try {
           const customInstrument = await loadCustomGuideInstrument(activeContext)
           melodicInstrument = customInstrument ?? DEFAULT_MELODIC_INSTRUMENT
@@ -439,6 +481,7 @@ export function useStudioPlayback({
           eventPrecisionSeconds,
           track.slot_id,
         )
+        const stableGuideTones: ScheduledGuideTone[] = []
         scheduledPitchEvents.forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }, eventIndex) => {
           const duration = durationSeconds
           const eventEndSeconds = eventStartSeconds + duration
@@ -457,6 +500,22 @@ export function useStudioPlayback({
           if (!eventSchedule) {
             return
           }
+          if (!isPercussion && preferStableGuidePlayback) {
+            stableGuideTones.push({
+              duration: eventSchedule.remainingDurationSeconds,
+              frequency,
+              gridUnitSeconds: eventGridUnitSeconds,
+              nextGapSeconds,
+              startTime: eventSchedule.relativeStartSeconds,
+              volume: eventToneVolume,
+            })
+            latestStop = Math.max(
+              latestStop,
+              eventSchedule.relativeStartSeconds + eventSchedule.remainingDurationSeconds,
+            )
+            scheduledAnyTrack = true
+            return
+          }
           pendingSynthEvents.push({
             destination: getTrackOutput(track) ?? activeContext.destination,
             durationSeconds: eventSchedule.remainingDurationSeconds,
@@ -473,6 +532,12 @@ export function useStudioPlayback({
           )
           scheduledAnyTrack = true
         })
+        if (stableGuideTones.length > 0) {
+          pendingGuideTracks.push({
+            destination: getTrackOutput(track) ?? activeContext.destination,
+            tones: stableGuideTones,
+          })
+        }
       })
 
       if (!scheduledAnyTrack) {
@@ -481,6 +546,7 @@ export function useStudioPlayback({
         return false
       }
 
+      schedulePendingGuideTracks()
       schedulePendingSynthEvents()
 
       if (includeMetronome && activeContext) {

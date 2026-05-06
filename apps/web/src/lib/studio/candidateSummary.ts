@@ -25,6 +25,14 @@ type CandidateDecisionSummary = {
 
 type PitchedCandidateEvent = PitchEvent & { pitch_midi: number }
 
+type RhythmSummary = {
+  detail: string
+  eventsPerMeasure: number
+  label: string
+  measureSpan: number
+  tag: string
+}
+
 const TRACK_CENTER_MIDI: Record<number, number> = {
   1: 74,
   2: 67,
@@ -126,6 +134,25 @@ export function getCandidateDecisionSummary(
   const diagnostics = getCandidateDiagnostics(candidate)
   const reviewHint = getReviewHintSummary(candidate)
   const llmInsight = getGeneratedCandidateInsight(candidate)
+  const metrics =
+    candidate.source_kind === 'ai'
+      ? getGeneratedCandidateMetrics({
+          durationSeconds,
+          events,
+          movement,
+          range,
+          rhythm,
+          startEnd,
+          targetTrack,
+        })
+      : [
+          { label: '음역', value: `${range}${register.averageLabel ? ` - 중심 ${register.averageLabel}` : ''}` },
+          { label: '진행', value: `${movement.label} - 도약 ${movement.leapCount}회` },
+          { label: '리듬', value: rhythm.label },
+          { label: '시작/끝', value: startEnd },
+          { label: '신뢰도', value: confidence },
+          { label: '길이', value: `${durationSeconds.toFixed(2)}초 - 음표 ${events.length}개` },
+        ]
 
   if (events.length === 0) {
     return {
@@ -182,14 +209,7 @@ export function getCandidateDecisionSummary(
       reviewHint?.tag ?? '',
     ].filter((tag) => tag.length > 0),
     phrasePreview: getCandidatePhrasePreview(candidate),
-    metrics: [
-      { label: '음역', value: `${range}${register.averageLabel ? ` - 중심 ${register.averageLabel}` : ''}` },
-      { label: '진행', value: `${movement.label} - 도약 ${movement.leapCount}회` },
-      { label: '리듬', value: rhythm.label },
-      { label: '시작/끝', value: startEnd },
-      { label: '신뢰도', value: confidence },
-      { label: '길이', value: `${durationSeconds.toFixed(2)}초 - 음표 ${events.length}개` },
-    ],
+    metrics,
     diagnostics,
     technical: [
       { label: '엔진', value: candidate.method },
@@ -356,13 +376,17 @@ function getMovementSummary(midiEvents: PitchedCandidateEvent[]): {
 
 function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
   detail: string
+  eventsPerMeasure: number
   label: string
+  measureSpan: number
   tag: string
 } {
   if (events.length === 0) {
     return {
       detail: '리듬 데이터가 없습니다',
+      eventsPerMeasure: 0,
       label: '-',
+      measureSpan: 0,
       tag: '리듬 없음',
     }
   }
@@ -378,9 +402,64 @@ function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
     eventsPerMeasure >= 7 ? '촘촘한 리듬' : eventsPerMeasure >= 4 ? '보통 밀도 리듬' : '여유 있는 리듬'
   return {
     detail: `마디당 ${eventsPerMeasure.toFixed(1)}개 음표, 최단 길이 ${shortestDuration.toFixed(2)}박`,
+    eventsPerMeasure,
     label: `${densityLabel} - 마디당 ${eventsPerMeasure.toFixed(1)}개`,
+    measureSpan,
     tag: densityLabel,
   }
+}
+
+function getGeneratedCandidateMetrics({
+  durationSeconds,
+  events,
+  movement,
+  range,
+  rhythm,
+  startEnd,
+  targetTrack,
+}: {
+  durationSeconds: number
+  events: PitchEvent[]
+  movement: ReturnType<typeof getMovementSummary>
+  range: string
+  rhythm: RhythmSummary
+  startEnd: string
+  targetTrack: TrackSlot | null
+}): CandidateMetric[] {
+  const targetName = targetTrack ? formatTrackName(targetTrack.name) : null
+  const movementValue =
+    movement.leapCount >= 24
+      ? `큰 도약 ${movement.leapCount}회 - 듣고 확인`
+      : movement.leapCount > 0
+        ? `도약 ${movement.leapCount}회`
+        : '큰 도약 없음'
+
+  return [
+    {
+      label: '분량',
+      value: `${rhythm.measureSpan || 1}마디 - 음표 ${events.length}개`,
+    },
+    {
+      label: '대상',
+      value: targetName ? `${targetName}에 넣을 생성 후보` : '생성 후보',
+    },
+    {
+      label: '음역',
+      value: range,
+    },
+    {
+      label: '움직임',
+      value: movementValue,
+    },
+    {
+      label: '리듬',
+      value: `마디당 약 ${rhythm.eventsPerMeasure.toFixed(1)}개`,
+    },
+    {
+      label: '구간',
+      value: `${startEnd} · ${durationSeconds.toFixed(1)}초`,
+    },
+  ]
 }
 
 function getContourSummary(midiEvents: PitchedCandidateEvent[]): { tag: string } {
@@ -486,6 +565,10 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
     metrics.push({ label: '빈 MIDI 파트', value: emptyMidiPartSummary })
   }
 
+  if (candidate.source_kind === 'ai') {
+    return metrics
+  }
+
   const documentPageCount = getDiagnosticNumber(diagnostics, 'document_page_count')
   const candidatePageCount = getDiagnosticNumber(diagnostics, 'candidate_page_count')
   if (documentPageCount !== null || candidatePageCount !== null) {
@@ -526,6 +609,9 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
 }
 
 function getReviewHintSummary(candidate: ExtractionCandidate): { tag: string; sentence: string } | null {
+  if (candidate.source_kind === 'ai') {
+    return null
+  }
   const hint = getDiagnosticString(candidate.diagnostics ?? {}, 'review_hint')
   if (!hint) {
     return null

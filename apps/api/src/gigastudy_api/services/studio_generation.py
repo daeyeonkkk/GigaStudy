@@ -277,7 +277,7 @@ def select_diverse_generated_candidates(
             return selected
 
     for candidate in candidates:
-        if candidate not in selected:
+        if candidate and candidate not in selected:
             selected.append(candidate)
         if len(selected) >= requested_count:
             break

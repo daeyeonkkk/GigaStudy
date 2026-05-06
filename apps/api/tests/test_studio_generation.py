@@ -49,6 +49,21 @@ def test_select_diverse_generated_candidates_prefers_distinct_pitch_sequences() 
     assert generated_candidate_difference_score(selected[0], selected[1]) >= 0.18
 
 
+def test_select_diverse_generated_candidates_omits_empty_fallback_candidates() -> None:
+    selected = select_diverse_generated_candidates(
+        [
+            [],
+            _candidate("C4", "D4", "E4"),
+            [],
+        ],
+        requested_count=3,
+    )
+
+    assert [tuple(event.label for event in candidate) for candidate in selected] == [
+        ("C4", "D4", "E4"),
+    ]
+
+
 def test_generation_context_diagnostics_reports_context_and_sibling_diversity() -> None:
     candidate = _candidate("C4", "D4", "E4")
     diagnostics = generation_context_diagnostics(

@@ -100,4 +100,64 @@ describe('candidate decision summary', () => {
       value: 'Bass(베이스): MIDI 트랙 이름은 있지만 note 이벤트가 없어 후보를 만들지 못했습니다.',
     })
   })
+
+  it('keeps generated candidate summaries away from extraction confidence metrics', () => {
+    const summary = getCandidateDecisionSummary(
+      buildCandidate({
+        confidence: 0.87,
+        diagnostics: {
+          density_events_per_measure: 4.7,
+          event_count: 393,
+          measure_count: 83,
+          range_fit_ratio: 1,
+          review_hint: 'review_against_source',
+          timing_grid_ratio: 1,
+        },
+        region: {
+          ...buildCandidate().region,
+          pitch_events: [
+            buildPitchEvent({
+              duration_beats: 1,
+              duration_seconds: 0.6,
+              event_id: 'generated-1',
+              label: 'E2',
+              pitch_midi: 40,
+              source: 'ai',
+              start_beat: 5,
+              start_seconds: 2.4,
+            }),
+            buildPitchEvent({
+              duration_beats: 1,
+              duration_seconds: 0.6,
+              event_id: 'generated-2',
+              label: 'B3',
+              pitch_midi: 59,
+              source: 'ai',
+              start_beat: 9,
+              start_seconds: 4.8,
+            }),
+          ],
+          source_kind: 'ai',
+          source_label: 'AI generation',
+        },
+        source_kind: 'ai',
+        source_label: 'AI generation',
+      }),
+      { ...sopranoTrack, name: 'Bass', slot_id: 5 },
+      4,
+    )
+
+    expect(summary.diagnostics.map((metric) => metric.label)).not.toEqual(
+      expect.arrayContaining(['감지 결과', '음역 적합도', '리듬 그리드', '밀도']),
+    )
+    expect(summary.metrics.map((metric) => metric.label)).toEqual([
+      '분량',
+      '대상',
+      '음역',
+      '움직임',
+      '리듬',
+      '구간',
+    ])
+    expect(summary.tags).not.toContain('원본 대조')
+  })
 })

@@ -39,6 +39,15 @@ export type InstrumentPlaybackRequest = {
   volume: number
 }
 
+export type ScheduledGuideTone = {
+  duration: number
+  frequency: number
+  gridUnitSeconds?: number
+  nextGapSeconds?: number
+  startTime: number
+  volume: number
+}
+
 export type MelodicEnvelope = {
   attackSeconds: number
   endGainRatio: number
@@ -235,6 +244,91 @@ function createGuideSustainTone(
     oscillator.stop(holdEndTime + envelope.releaseSeconds + 0.04)
     oscillators.push(oscillator)
     gains.push(partialGain)
+  })
+
+  return {
+    filters: [filter],
+    gain: masterGain,
+    gains,
+    oscillators,
+  }
+}
+
+export function createScheduledGuideTrackPlayback(
+  context: AudioContext,
+  tones: ScheduledGuideTone[],
+  destination: AudioNode = context.destination,
+): PlaybackNode | null {
+  const scheduledTones = tones
+    .filter((tone) => Number.isFinite(tone.startTime) && Number.isFinite(tone.frequency) && tone.duration > 0)
+    .sort((left, right) => left.startTime - right.startTime)
+  if (scheduledTones.length === 0) {
+    return null
+  }
+
+  const filter = context.createBiquadFilter()
+  const masterGain = context.createGain()
+  const oscillators: OscillatorNode[] = []
+  const gains: GainNode[] = [masterGain]
+  const firstStartTime = scheduledTones[0].startTime
+  let stopTime = firstStartTime
+
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(3600, firstStartTime)
+  filter.Q.setValueAtTime(0.28, firstStartTime)
+  masterGain.gain.setValueAtTime(0.0001, Math.max(context.currentTime, firstStartTime - 0.01))
+  filter.connect(masterGain)
+  masterGain.connect(destination)
+
+  const partials: Array<{ detune: number; gain: number; ratio: number; type: OscillatorType }> = [
+    { detune: -2, gain: 0.82, ratio: 1, type: 'sine' },
+    { detune: 2, gain: 0.2, ratio: 1, type: 'triangle' },
+    { detune: 0, gain: 0.055, ratio: 2, type: 'sine' },
+  ]
+
+  partials.forEach((partial) => {
+    const oscillator = context.createOscillator()
+    const partialGain = context.createGain()
+    oscillator.type = partial.type
+    oscillator.detune.setValueAtTime(partial.detune, firstStartTime)
+    partialGain.gain.setValueAtTime(partial.gain, firstStartTime)
+    oscillator.connect(partialGain)
+    partialGain.connect(filter)
+    oscillators.push(oscillator)
+    gains.push(partialGain)
+  })
+
+  scheduledTones.forEach((tone, index) => {
+    const duration = getPlaybackDuration(tone.duration)
+    const envelope = computeMelodicEnvelope(duration, tone.gridUnitSeconds, tone.nextGapSeconds)
+    const startTime = tone.startTime
+    const attackEndTime = startTime + envelope.attackSeconds
+    const holdEndTime = startTime + duration
+    const nextStartTime = scheduledTones[index + 1]?.startTime
+    const shouldReleaseBeforeNext =
+      nextStartTime === undefined || nextStartTime > holdEndTime + STUDIO_TIME_PRECISION_SECONDS * 3
+    const releaseEndTime = shouldReleaseBeforeNext
+      ? holdEndTime + envelope.releaseSeconds
+      : holdEndTime
+
+    oscillators.forEach((oscillator, oscillatorIndex) => {
+      const partial = partials[oscillatorIndex]
+      oscillator.frequency.setValueAtTime(tone.frequency * partial.ratio, startTime)
+    })
+    filter.frequency.setValueAtTime(Math.min(4200, Math.max(1450, tone.frequency * 7.2)), startTime)
+
+    masterGain.gain.setValueAtTime(0.0001, startTime)
+    masterGain.gain.linearRampToValueAtTime(tone.volume * envelope.peakGainRatio, attackEndTime)
+    masterGain.gain.linearRampToValueAtTime(tone.volume * envelope.endGainRatio, holdEndTime)
+    if (shouldReleaseBeforeNext) {
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, releaseEndTime)
+    }
+    stopTime = Math.max(stopTime, releaseEndTime)
+  })
+
+  oscillators.forEach((oscillator) => {
+    oscillator.start(firstStartTime)
+    oscillator.stop(stopTime + 0.04)
   })
 
   return {

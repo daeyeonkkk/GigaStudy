@@ -291,8 +291,11 @@ export function CandidateReviewPanel({
 function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boolean): CandidateVerdict {
   if (candidate.region.pitch_events.length === 0) {
     return {
-      label: '재시도 권장',
-      reason: '등록할 수 있는 음표가 감지되지 않았습니다.',
+      label: candidate.source_kind === 'ai' ? '생성 실패' : '재시도 권장',
+      reason:
+        candidate.source_kind === 'ai'
+          ? '이 방향은 등록할 음표를 만들지 못했습니다. 거절하고 다시 생성하세요.'
+          : '등록할 수 있는 음표가 감지되지 않았습니다.',
       tone: 'retry',
     }
   }
@@ -304,6 +307,23 @@ function getCandidateVerdict(candidate: ExtractionCandidate, wouldOverwrite: boo
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
   const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
   const density = getDiagnosticNumber(diagnostics, 'density_events_per_measure')
+
+  if (candidate.source_kind === 'ai') {
+    if (wouldOverwrite || riskTags.length > 0) {
+      return {
+        label: '검토 필요',
+        reason: wouldOverwrite
+          ? '기존 트랙을 덮어씁니다. 대상 트랙과 후보 흐름을 확인하세요.'
+          : '생성 방향에 확인할 음악적 지점이 있습니다. 들어본 뒤 승인하세요.',
+        tone: 'review',
+      }
+    }
+    return {
+      label: '추천',
+      reason: '등록 가능한 생성 후보입니다. 들어보고 가장 자연스러운 흐름을 선택하세요.',
+      tone: 'recommended',
+    }
+  }
 
   if (confidence < 0.5 || reviewHint === 'few_events') {
     return {

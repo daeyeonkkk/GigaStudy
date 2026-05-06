@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
+    ApproveJobTempoRequest,
     CopyRegionRequest,
     CreateStudioRequest,
     DirectUploadRequest,
@@ -141,6 +142,26 @@ def get_document_job_source_preview(
             "Cache-Control": "private, max-age=300",
             "Content-Disposition": f'inline; filename="{filename}"',
         },
+    )
+
+
+@router.post("/{studio_id}/jobs/{job_id}/approve-tempo", response_model=StudioResponse)
+def approve_job_tempo(
+    studio_id: str,
+    job_id: str,
+    request: ApproveJobTempoRequest,
+    background_tasks: BackgroundTasks,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.approve_job_tempo(
+            studio_id,
+            job_id,
+            request,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
     )
 
 

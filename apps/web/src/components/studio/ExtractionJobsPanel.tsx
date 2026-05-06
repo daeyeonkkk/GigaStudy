@@ -16,6 +16,12 @@ type ExtractionJobsPanelProps = {
   getPendingJobCandidates: (jobId: string) => ExtractionCandidate[]
   jobWouldOverwrite: (jobId: string) => boolean
   onApproveJobCandidates: (jobId: string) => void
+  onApproveJobTempo: (
+    jobId: string,
+    bpm: number,
+    timeSignatureNumerator: number,
+    timeSignatureDenominator: number,
+  ) => void
   onRetryJob: (jobId: string) => void
   onUpdateJobOverwriteApproval: (jobId: string, allowOverwrite: boolean) => void
 }
@@ -30,10 +36,14 @@ export function ExtractionJobsPanel({
   getPendingJobCandidates,
   jobWouldOverwrite,
   onApproveJobCandidates,
+  onApproveJobTempo,
   onRetryJob,
   onUpdateJobOverwriteApproval,
 }: ExtractionJobsPanelProps) {
   const [jobFilter, setJobFilter] = useState<JobFilter>('attention')
+  const [tempoDrafts, setTempoDrafts] = useState<
+    Record<string, { bpm: string; denominator: string; numerator: string }>
+  >({})
   const attentionJobs = useMemo(
     () => visibleJobs.filter((job) => job.status !== 'completed'),
     [visibleJobs],
@@ -98,6 +108,7 @@ export function ExtractionJobsPanel({
           const jobTrack = tracks.find((track) => track.slot_id === job.slot_id)
           const jobCandidates = getPendingJobCandidates(job.job_id)
           const canRegisterJob = job.status === 'needs_review' && jobCandidates.length > 0
+          const canApproveTempo = job.status === 'tempo_review_required'
           const canRetryJob = job.status === 'failed'
           const wouldOverwrite = jobWouldOverwrite(job.job_id)
           const allowOverwrite = jobOverwriteApprovals[job.job_id] === true
@@ -111,6 +122,8 @@ export function ExtractionJobsPanel({
           const recoveryHint = getJobRecoveryHint(job)
           const attemptLabel =
             job.attempt_count > 0 ? `${job.attempt_count}/${job.max_attempts}회 시도` : '대기 중'
+          const tempoDraft = getTempoDraft(job, tempoDrafts[job.job_id])
+          const tempoValid = validateTempoDraft(tempoDraft)
 
           return (
             <article className="extraction-jobs__item" key={job.job_id}>
@@ -125,6 +138,81 @@ export function ExtractionJobsPanel({
               </span>
               <p className="extraction-jobs__state-hint">{getJobStateHint(job)}</p>
               {candidateSummary ? <p className="extraction-jobs__candidate-strip">{candidateSummary}</p> : null}
+              {canApproveTempo ? (
+                <div className="extraction-jobs__tempo-form">
+                  <div className="extraction-jobs__tempo-copy">
+                    <strong>등록 기준 확인</strong>
+                    <span>{getTempoEvidence(job)}</span>
+                  </div>
+                  <label>
+                    BPM
+                    <input
+                      data-testid={`job-tempo-bpm-${job.job_id}`}
+                      inputMode="numeric"
+                      min={40}
+                      max={240}
+                      value={tempoDraft.bpm}
+                      onChange={(event) =>
+                        setTempoDrafts((drafts) => ({
+                          ...drafts,
+                          [job.job_id]: { ...tempoDraft, bpm: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    박자
+                    <input
+                      data-testid={`job-tempo-numerator-${job.job_id}`}
+                      inputMode="numeric"
+                      min={1}
+                      max={32}
+                      value={tempoDraft.numerator}
+                      onChange={(event) =>
+                        setTempoDrafts((drafts) => ({
+                          ...drafts,
+                          [job.job_id]: { ...tempoDraft, numerator: event.target.value },
+                        }))
+                      }
+                    />
+                    <select
+                      data-testid={`job-tempo-denominator-${job.job_id}`}
+                      value={tempoDraft.denominator}
+                      onChange={(event) =>
+                        setTempoDrafts((drafts) => ({
+                          ...drafts,
+                          [job.job_id]: { ...tempoDraft, denominator: event.target.value },
+                        }))
+                      }
+                    >
+                      {[1, 2, 4, 8, 16, 32].map((denominator) => (
+                        <option key={denominator} value={denominator}>
+                          /{denominator}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="app-button"
+                    data-testid={`job-tempo-approve-${job.job_id}`}
+                    disabled={busy || !tempoValid}
+                    type="button"
+                    onClick={() => {
+                      if (!tempoValid) {
+                        return
+                      }
+                      onApproveJobTempo(
+                        job.job_id,
+                        Number.parseInt(tempoDraft.bpm, 10),
+                        Number.parseInt(tempoDraft.numerator, 10),
+                        Number.parseInt(tempoDraft.denominator, 10),
+                      )
+                    }}
+                  >
+                    이 기준으로 등록
+                  </button>
+                </div>
+              ) : null}
               {lockedByAnotherJob ? (
                 <p className="extraction-jobs__state-hint">
                   대상 트랙에 다른 추출 작업이 남아 있어 등록을 잠시 막았습니다.
@@ -197,6 +285,9 @@ function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: Track
 }
 
 function getJobStateHint(job: TrackExtractionJob): string {
+  if (job.status === 'tempo_review_required') {
+    return '악보를 등록하기 전에 BPM과 박자표를 확인하세요. 필요하면 값을 고친 뒤 등록을 시작합니다.'
+  }
   if (job.status === 'queued') {
     return '대기열에 올라와 있습니다. 앞선 문서/음성 작업이 끝나면 자동으로 시작합니다.'
   }
@@ -214,6 +305,57 @@ function getJobStateHint(job: TrackExtractionJob): string {
     return '처리가 완료되었습니다.'
   }
   return '처리에 실패했습니다. 안내를 확인한 뒤 같은 입력으로 다시 시도할 수 있습니다.'
+}
+
+function getTempoDraft(
+  job: TrackExtractionJob,
+  draft: { bpm: string; denominator: string; numerator: string } | undefined,
+): { bpm: string; denominator: string; numerator: string } {
+  if (draft) {
+    return draft
+  }
+  return {
+    bpm: String(getJobDiagnosticNumber(job, 'suggested_bpm') ?? 92),
+    numerator: String(getJobDiagnosticNumber(job, 'suggested_time_signature_numerator') ?? 4),
+    denominator: String(getJobDiagnosticNumber(job, 'suggested_time_signature_denominator') ?? 4),
+  }
+}
+
+function validateTempoDraft(draft: { bpm: string; denominator: string; numerator: string }): boolean {
+  const bpm = Number.parseInt(draft.bpm, 10)
+  const numerator = Number.parseInt(draft.numerator, 10)
+  const denominator = Number.parseInt(draft.denominator, 10)
+  return (
+    Number.isInteger(bpm) &&
+    bpm >= 40 &&
+    bpm <= 240 &&
+    Number.isInteger(numerator) &&
+    numerator >= 1 &&
+    numerator <= 32 &&
+    [1, 2, 4, 8, 16, 32].includes(denominator)
+  )
+}
+
+function getTempoEvidence(job: TrackExtractionJob): string {
+  const evidence = getJobDiagnosticStringList(job, 'tempo_evidence')
+  if (evidence.length > 0) {
+    return evidence.join(' · ')
+  }
+  const warnings = getJobDiagnosticStringList(job, 'tempo_warnings')
+  if (warnings.length > 0) {
+    return warnings.join(' · ')
+  }
+  return '파일에서 읽은 값이 애매하면 직접 수정해 주세요.'
+}
+
+function getJobDiagnosticNumber(job: TrackExtractionJob, key: string): number | null {
+  const value = job.diagnostics?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function getJobDiagnosticStringList(job: TrackExtractionJob, key: string): string[] {
+  const value = job.diagnostics?.[key]
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 function getJobRecoveryHint(job: TrackExtractionJob): string {

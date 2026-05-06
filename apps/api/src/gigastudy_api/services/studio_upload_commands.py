@@ -32,10 +32,8 @@ from gigastudy_api.services.upload_policy import (
     validate_track_upload_filename,
 )
 from gigastudy_api.config import get_settings
-from gigastudy_api.services.llm.midi_role_review import (
-    apply_midi_role_review_instruction,
-    review_midi_roles_with_deepseek,
-)
+from gigastudy_api.services.llm.midi_role_review import apply_midi_role_review_instruction
+from gigastudy_api.services.llm.provider import review_midi_roles
 
 
 class StudioUploadCommands:
@@ -170,7 +168,7 @@ class StudioUploadCommands:
         source_filename: str,
         source_content_base64: str | None,
         source_asset_path: str | None,
-        use_source_tempo: bool = True,
+        use_source_tempo: bool = False,
     ) -> Studio:
         source_path = self.prepare_studio_seed_upload(
             studio,
@@ -194,7 +192,7 @@ class StudioUploadCommands:
                 studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
                 studio.time_signature_denominator = parsed_symbolic.time_signature_denominator
             if suffix in {".mid", ".midi"}:
-                midi_role_instruction = review_midi_roles_with_deepseek(
+                midi_role_instruction = review_midi_roles(
                     settings=get_settings(),
                     title=studio.title,
                     source_label=source_filename,

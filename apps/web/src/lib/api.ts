@@ -16,11 +16,10 @@ import type {
   UpdateRegionRequest,
 } from '../types/studio'
 
-const defaultApiBaseUrl = import.meta.env.PROD
-  ? 'https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app'
-  : 'http://127.0.0.1:8000'
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || defaultApiBaseUrl
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const browserOrigin = typeof window === 'undefined' ? '' : window.location.origin
+const defaultApiBaseUrl = import.meta.env.DEV ? 'http://127.0.0.1:8000' : browserOrigin
+const apiBaseUrl = configuredApiBaseUrl || defaultApiBaseUrl || 'http://127.0.0.1:8000'
 const OWNER_TOKEN_STORAGE_KEY = 'gigastudy.ownerToken.v1'
 const ADMIN_SESSION_STORAGE_KEY = 'gigastudy.adminSession.v1'
 
@@ -264,6 +263,25 @@ export function approveJobCandidates(
       }),
     },
     '문서 분석 결과를 트랙에 등록하지 못했습니다.',
+  )
+}
+
+export function approveJobTempo(
+  studioId: string,
+  jobId: string,
+  payload: {
+    bpm: number
+    time_signature_denominator: number
+    time_signature_numerator: number
+  },
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/jobs/${jobId}/approve-tempo`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    'BPM과 박자표를 저장하지 못했습니다.',
   )
 }
 

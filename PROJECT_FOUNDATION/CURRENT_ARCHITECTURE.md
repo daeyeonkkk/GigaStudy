@@ -175,9 +175,16 @@ is excluded from persistence and remains an adapter detail.
   Audiveris or vector fallback and produce review candidates. MIDI, MusicXML,
   MXL, and XML inputs are parsed directly in the same engine queue; clear
   singer-line results register to regions, while ambiguous symbolic material
-  becomes review candidates. `TrackExtractionJob.use_source_tempo` lets queued
-  MIDI seeding use the source MIDI's initial tempo as the studio BPM when BPM
-  was omitted at studio creation; it does not persist a per-measure tempo map.
+  becomes review candidates. Studio-start score files first create a
+  `tempo_review_required` job with suggested BPM/meter diagnostics. Only after
+  user approval does the API enqueue the document job, and the approved studio
+  BPM/meter is passed through the registration path; source-file tempo is
+  evidence, not an automatic override.
+- `apps/api/src/gigastudy_api/services/studio_tempo_review.py`
+  Reads light BPM/meter evidence from symbolic score files before registration
+  starts. PDF/image inputs cannot reliably expose tempo at this stage, so the
+  helper keeps the fallback values and tells the UI that user confirmation is
+  required.
 - `apps/api/src/gigastudy_api/services/engine/symbolic.py`
   MusicXML/MIDI parsing and track-to-slot mapping. MIDI parsing splits
   channel-packed tracks into per-channel parsed parts, records MIDI program/name
@@ -204,6 +211,9 @@ is excluded from persistence and remains an adapter detail.
   may choose existing visible slots or mark an existing part for candidate
   review. It cannot create tracks, delete events, rewrite pitch material, or
   change BPM/meter; invalid or low-confidence responses are ignored.
+- LLM provider calls are an adapter boundary. DeepSeek/OpenRouter may be the
+  current low-cost implementation, but product services should depend on
+  bounded review/planning functions rather than provider internals.
 - `apps/api/src/gigastudy_api/services/studio_store.py`
   Studio persistence abstraction. Base studio payloads are kept small by
   sidecar-storing reports, candidates, and track material archives; concurrent
@@ -297,26 +307,29 @@ flowchart TD
 2. Browser sends the file via direct upload or inline fallback. Studio creation
    requests include a browser-generated `client_request_id`; if the browser
    loses the response and retries the same start data, the API returns the
-   existing studio instead of creating a duplicate. If that existing studio has
-   queued/running import jobs but the durable queue record is missing, retry
-   repairs the queue record and schedules processing again.
-3. API either registers clearly assigned symbolic seed parts directly or creates
+   existing studio instead of creating a duplicate.
+3. For score-file studio starts, API creates a `tempo_review_required` job and
+   keeps tracks empty. The user confirms or edits BPM/meter; approval updates
+   the studio clock and enqueues registration. If an approved queued/running
+   import job loses its durable queue record, retry repairs the queue record and
+   schedules processing again.
+4. API either registers clearly assigned symbolic seed parts directly or creates
    an extraction job/candidate review path for ambiguous material. Audio
    extraction first normalizes non-WAV containers into a WAV analysis source.
-4. Engine queue runs document/audio extraction when asynchronous extraction is
+5. Engine queue runs document/audio extraction when asynchronous extraction is
    needed.
-5. Extracted or ambiguous material becomes reviewable candidates with
+6. Extracted or ambiguous material becomes reviewable candidates with
    candidate-region previews.
-6. User approval registers candidates into explicit target-track regions and
+7. User approval registers candidates into explicit target-track regions and
    clears target track event shadows. Bulk document approval registers every
    unblocked valid part it can, leaves overwrite-blocked or failed parts
    reviewable, and records the per-track outcome on the extraction job.
-7. If registration overwrites an existing track, API stores the previous active
+8. If registration overwrites an existing track, API stores the previous active
    material as an inactive track archive before replacing `Studio.regions`.
    Original MIDI/MusicXML/PDF score material is pinned for that slot. Restore
    first archives the current active material, then replaces all active regions
    for the slot with the archived snapshots.
-8. Reloaded studio response exposes the registered track from `Studio.regions`.
+9. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
 
@@ -396,6 +409,9 @@ flowchart TD
    pitch-event material.
 3. Negative effective starts are shifted together at export time so exported
    MIDI begins at tick 0 without changing inter-track timing.
+4. Project JSON and audio mix export are future contracts. They must export the
+   public region/event timeline and restored active material only, not inactive
+   archives or internal `TrackPitchEvent` shadows.
 
 ## Removed Surface
 

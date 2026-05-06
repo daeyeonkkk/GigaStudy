@@ -10,9 +10,9 @@ from gigastudy_api.services.engine.event_quality import (
     enforce_registration_event_contract,
     prepare_events_for_track_registration,
 )
-from gigastudy_api.services.llm.registration_review import (
-    review_ensemble_registration_with_deepseek,
-    review_track_registration_with_deepseek,
+from gigastudy_api.services.llm.provider import (
+    review_ensemble_registration,
+    review_track_registration,
 )
 from gigastudy_api.services.registration_context import (
     registration_context_events_by_slot,
@@ -107,7 +107,7 @@ class TrackRegistrationPreparer:
                 reason="ai_candidate_generation",
             )
         settings = get_settings()
-        instruction = review_track_registration_with_deepseek(
+        instruction = review_track_registration(
             settings=settings,
             title=studio.title,
             bpm=studio.bpm,
@@ -174,7 +174,7 @@ class TrackRegistrationPreparer:
                 reason="ai_candidate_generation",
             )
         settings = get_settings()
-        instruction = review_ensemble_registration_with_deepseek(
+        instruction = review_ensemble_registration(
             settings=settings,
             title=studio.title,
             bpm=studio.bpm,

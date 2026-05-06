@@ -263,7 +263,43 @@ def build_client(tmp_path: Path, monkeypatch, *, studio_access_policy: str = "pu
 
 def _created_studio_payload(client: TestClient, response) -> dict:
     studio_id = response.json()["studio_id"]
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    tempo_job = next(
+        (job for job in payload["jobs"] if job["status"] == "tempo_review_required"),
+        None,
+    )
+    if tempo_job is not None:
+        approve_response = _approve_pending_tempo_job(client, payload, tempo_job)
+        assert approve_response.status_code == 200
     return client.get(f"/api/studios/{studio_id}").json()
+
+
+def _approve_pending_tempo_job(
+    client: TestClient,
+    studio_payload: dict,
+    job: dict,
+    *,
+    bpm: int | None = None,
+    numerator: int | None = None,
+    denominator: int | None = None,
+):
+    diagnostics = job.get("diagnostics") or {}
+    return client.post(
+        f"/api/studios/{studio_payload['studio_id']}/jobs/{job['job_id']}/approve-tempo",
+        json={
+            "bpm": bpm or diagnostics.get("suggested_bpm") or studio_payload["bpm"],
+            "time_signature_numerator": (
+                numerator
+                or diagnostics.get("suggested_time_signature_numerator")
+                or studio_payload["time_signature_numerator"]
+            ),
+            "time_signature_denominator": (
+                denominator
+                or diagnostics.get("suggested_time_signature_denominator")
+                or studio_payload["time_signature_denominator"]
+            ),
+        },
+    )
 
 
 def test_track_archive_migrates_legacy_single_region_snapshot() -> None:
@@ -451,7 +487,8 @@ def test_create_studio_client_request_id_returns_existing_queued_upload_on_retry
     assert retry_response.status_code == 200
     assert retry_response.json()["studio_id"] == first_response.json()["studio_id"]
     retry_payload = retry_response.json()
-    assert retry_payload["jobs"][0]["status"] == "queued"
+    assert retry_payload["jobs"][0]["status"] == "tempo_review_required"
+    assert retry_payload["jobs"][0]["diagnostics"]["suggested_bpm"] == 113
     assert len(client.get("/api/studios").json()) == 1
 
 
@@ -478,6 +515,12 @@ def test_create_studio_retry_repairs_missing_queue_record_for_existing_upload(
     first_response = client.post("/api/studios", json=payload)
     studio_id = first_response.json()["studio_id"]
     repository = studio_repository.get_studio_repository()
+    approve_response = _approve_pending_tempo_job(
+        client,
+        first_response.json(),
+        first_response.json()["jobs"][0],
+    )
+    assert approve_response.status_code == 200
     assert repository._engine_queue.delete_studio_jobs(studio_id) == 1
     assert repository._engine_queue.has_runnable(studio_id=studio_id) is False
 
@@ -930,9 +973,48 @@ def test_upload_start_symbolic_seed_is_queued_before_track_registration(tmp_path
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["jobs"][0]["status"] == "queued"
-    assert payload["tracks"][0]["status"] == "extracting"
+    assert payload["jobs"][0]["status"] == "tempo_review_required"
+    assert payload["jobs"][0]["diagnostics"]["suggested_bpm"] == 113
+    assert payload["tracks"][0]["status"] == "empty"
     assert sum(1 for track in payload["tracks"] if track["status"] == "registered") == 0
+
+
+def test_score_file_registration_uses_user_approved_bpm_and_meter(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_single_note_midi_bytes(bpm=113, duration_ticks=480)).decode("ascii")
+
+    response = client.post(
+        "/api/studios",
+        json={
+            "title": "User approved tempo",
+            "start_mode": "upload",
+            "source_kind": "document",
+            "source_filename": "source.mid",
+            "source_content_base64": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    tempo_job = payload["jobs"][0]
+    assert tempo_job["status"] == "tempo_review_required"
+    assert tempo_job["diagnostics"]["suggested_bpm"] == 113
+
+    approve_response = _approve_pending_tempo_job(
+        client,
+        payload,
+        tempo_job,
+        bpm=101,
+        numerator=3,
+        denominator=4,
+    )
+
+    assert approve_response.status_code == 200
+    approved_payload = client.get(f"/api/studios/{payload['studio_id']}").json()
+    assert approved_payload["bpm"] == 101
+    assert approved_payload["time_signature_numerator"] == 3
+    assert approved_payload["time_signature_denominator"] == 4
+    assert _track_region_events(approved_payload, 1)[0]["duration_seconds"] == 0.5941
 
 
 def test_upload_start_applies_shared_monophonic_contract_to_midi_tracks(tmp_path: Path, monkeypatch) -> None:
@@ -1038,7 +1120,7 @@ def test_upload_start_applies_llm_midi_role_review_when_enabled(tmp_path: Path, 
     monkeypatch.setenv("GIGASTUDY_API_DEEPSEEK_MIDI_ROLE_REVIEW_ENABLED", "true")
     monkeypatch.setenv("GIGASTUDY_API_DEEPSEEK_API_KEY", "test-key")
     monkeypatch.setattr(
-        "gigastudy_api.services.studio_engine_job_handlers.review_midi_roles_with_deepseek",
+        "gigastudy_api.services.studio_engine_job_handlers.review_midi_roles",
         fake_midi_role_review,
     )
     client = build_client(tmp_path, monkeypatch)
@@ -2275,6 +2357,10 @@ def test_upload_start_can_use_staged_direct_uploaded_pdf_for_document_extraction
     assert create_response.status_code == 200
     studio_id = create_response.json()["studio_id"]
     payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "tempo_review_required"
+    approve_response = _approve_pending_tempo_job(client, payload, payload["jobs"][0])
+    assert approve_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
     assert payload["jobs"][0]["status"] == "needs_review"
     assert payload["tracks"][0]["status"] == "needs_review"
     assert len(payload["candidates"]) == 1
@@ -2887,6 +2973,10 @@ def test_create_studio_with_pdf_starts_document_extraction_without_fixture_regis
     assert create_response.status_code == 200
     studio_id = create_response.json()["studio_id"]
     payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "tempo_review_required"
+    approve_response = _approve_pending_tempo_job(client, payload, payload["jobs"][0])
+    assert approve_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
     assert payload["jobs"][0]["status"] == "needs_review"
     assert payload["tracks"][0]["status"] == "needs_review"
     assert all(track["status"] != "registered" for track in payload["tracks"])
@@ -3427,11 +3517,11 @@ def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, mon
         raise AssertionError("AI candidate generation should not block on registration-review LLM calls.")
 
     monkeypatch.setattr(
-        "gigastudy_api.services.track_registration.review_track_registration_with_deepseek",
+        "gigastudy_api.services.track_registration.review_track_registration",
         fail_ai_registration_review,
     )
     monkeypatch.setattr(
-        "gigastudy_api.services.track_registration.review_ensemble_registration_with_deepseek",
+        "gigastudy_api.services.track_registration.review_ensemble_registration",
         fail_ai_registration_review,
     )
 

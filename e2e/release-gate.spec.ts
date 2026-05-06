@@ -62,7 +62,24 @@ async function createStudioFromSopranoMusicXml(page: Page, title: string) {
   await expect(page).toHaveURL(/\/studios\/[a-f0-9]+$/)
   await expect(page.getByRole('heading', { name: title })).toBeVisible()
   await expect(page.getByTestId('purpose-nav-studio')).toHaveAttribute('aria-current', 'page')
+  await approveTempoReview(page)
   await expectRegisteredRegion(page, 1, ['C5', 'G5'])
+}
+
+async function approveTempoReview(page: Page) {
+  const approveButton = page.locator('[data-testid^="job-tempo-approve-"]').first()
+  await expect(approveButton).toBeVisible()
+
+  const jobId = (await approveButton.getAttribute('data-testid'))?.replace('job-tempo-approve-', '')
+  if (!jobId) {
+    throw new Error('Expected tempo approval button to expose the job id')
+  }
+
+  await expect(page.getByTestId(`job-tempo-bpm-${jobId}`)).toBeVisible()
+  await page.getByTestId(`job-tempo-bpm-${jobId}`).fill('120')
+  await page.getByTestId(`job-tempo-numerator-${jobId}`).fill('4')
+  await page.getByTestId(`job-tempo-denominator-${jobId}`).selectOption('4')
+  await approveButton.click()
 }
 
 async function approveFirstCandidate(page: Page) {

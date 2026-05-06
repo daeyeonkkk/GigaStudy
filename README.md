@@ -45,13 +45,9 @@ Run the web client:
 npm run dev:web
 ```
 
-The web client expects the API at `http://127.0.0.1:8000` by default.
-Override it with `VITE_API_BASE_URL` if needed.
-
-Production web builds default to the live alpha Cloud Run API
-(`https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app`) unless
-`VITE_API_BASE_URL` is set. This keeps manual Pages builds from accidentally
-shipping a localhost API URL.
+The web client expects the API at `http://127.0.0.1:8000` in local dev.
+Set `VITE_API_BASE_URL` for preview/production builds; production has no
+hardcoded Cloud Run fallback.
 
 ## API
 
@@ -67,6 +63,7 @@ The API exposes the current product surface only:
 - `GET /api/studios/{studio_id}/tracks/{slot_id}/audio`
 - `GET /api/studios/{studio_id}/jobs/{job_id}/source-preview`
 - `GET /api/studios/{studio_id}/exports/midi`
+- `POST /api/studios/{studio_id}/jobs/{job_id}/approve-tempo`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/upload-target`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/upload` (recording audio only)
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/generate`
@@ -117,10 +114,12 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
 - Local API-proxy direct uploads use signed, expiring upload tokens. Owner-token
   mode also binds those proxy upload tokens to the studio owner hash before any
   bytes are written.
-- Document extraction quality/runtime can be tuned with `GIGASTUDY_API_OMR_BACKEND`
+- Document extraction quality/runtime can be tuned with
+  `GIGASTUDY_API_DOCUMENT_EXTRACTION_BACKEND`
   (`auto`, `audiveris`, `pdf_vector`, `vector_first`) plus
-  `GIGASTUDY_API_OMR_PREPROCESS_MODE` and
-  `GIGASTUDY_API_OMR_PREPROCESS_DPI` for scanned PDF/image retry.
+  `GIGASTUDY_API_DOCUMENT_PREPROCESS_MODE` and
+  `GIGASTUDY_API_DOCUMENT_PREPROCESS_DPI` for scanned PDF/image retry.
+  Older `GIGASTUDY_API_OMR_*` names remain accepted as migration aliases.
   - Voice transcription can be tuned with
     `GIGASTUDY_API_VOICE_TRANSCRIPTION_BACKEND`
     (`auto`, `basic_pitch`, `librosa`, `pyin`, `local`). The `basic_pitch` path

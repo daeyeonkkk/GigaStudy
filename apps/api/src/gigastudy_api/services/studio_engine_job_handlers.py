@@ -24,10 +24,8 @@ from gigastudy_api.services.document_extraction_pipeline import (
     DocumentExtractionPipelineResult,
     run_document_extraction_pipeline,
 )
-from gigastudy_api.services.llm.midi_role_review import (
-    apply_midi_role_review_instruction,
-    review_midi_roles_with_deepseek,
-)
+from gigastudy_api.services.llm.midi_role_review import apply_midi_role_review_instruction
+from gigastudy_api.services.llm.provider import review_midi_roles
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_documents import studio_has_active_track_material
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
@@ -105,12 +103,6 @@ class StudioEngineJobHandlers:
             )
             return
 
-        if parsed_symbolic.has_time_signature:
-            self._repository._update_time_signature(
-                record.studio_id,
-                parsed_symbolic.time_signature_numerator,
-                parsed_symbolic.time_signature_denominator,
-            )
         self._repository._mark_job_completed(
             record.studio_id,
             record.job_id,
@@ -174,7 +166,7 @@ class StudioEngineJobHandlers:
     ) -> None:
         source_suffix = Path(source_label).suffix.lower()
         if result.registered_source_kind == "midi":
-            midi_role_instruction = review_midi_roles_with_deepseek(
+            midi_role_instruction = review_midi_roles(
                 settings=get_settings(),
                 title=studio.title,
                 source_label=source_label,
@@ -211,13 +203,9 @@ class StudioEngineJobHandlers:
 
         self._repository._apply_symbolic_seed_clock(
             record.studio_id,
-            bpm=parsed_symbolic.source_bpm if bool(record.payload.get("use_source_tempo")) else None,
-            time_signature_numerator=(
-                parsed_symbolic.time_signature_numerator if parsed_symbolic.has_time_signature else None
-            ),
-            time_signature_denominator=(
-                parsed_symbolic.time_signature_denominator if parsed_symbolic.has_time_signature else None
-            ),
+            bpm=None,
+            time_signature_numerator=None,
+            time_signature_denominator=None,
         )
 
         review_reasons = symbolic_seed_review_reasons(parsed_symbolic, source_suffix=source_suffix)

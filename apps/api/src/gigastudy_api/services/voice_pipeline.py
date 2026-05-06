@@ -13,7 +13,7 @@ from gigastudy_api.services.engine.extraction_plan import default_voice_extracti
 from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 from gigastudy_api.services.engine.voice import VoiceTranscriptionResult
 from gigastudy_api.services.engine_queue import EngineQueueJob
-from gigastudy_api.services.llm.extraction_plan import plan_voice_extraction_with_deepseek
+from gigastudy_api.services.llm.provider import plan_voice_extraction
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ def run_voice_pipeline(
         source_kind=source_kind,
         context_tracks_by_slot=context_tracks_by_slot,
     )
-    llm_plan = plan_voice_extraction_with_deepseek(
+    llm_plan = plan_voice_extraction(
         settings=settings,
         base_plan=extraction_plan,
         title=studio.title,

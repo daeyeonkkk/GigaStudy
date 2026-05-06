@@ -12,7 +12,7 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
 )
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
 from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
-from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan, plan_harmony_with_deepseek
+from gigastudy_api.services.llm.provider import DeepSeekHarmonyPlan, plan_harmony
 
 DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT = 160
 DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 6.0
@@ -82,7 +82,7 @@ def generate_track_material(
         settings,
         context_event_count=len(context_events),
     )
-    llm_plan = plan_harmony_with_deepseek(
+    llm_plan = plan_harmony(
         settings=planning_settings,
         title=studio.title,
         bpm=studio.bpm,
@@ -124,16 +124,15 @@ def generate_track_material(
         "rule_based_percussion_candidates_v0"
         if target_slot_id == 6
         else (
-            "deepseek_guided_voice_leading_candidates_v1"
+            "llm_guided_voice_leading_candidates_v1"
             if llm_plan is not None
             else "rule_based_voice_leading_candidates_v1"
         )
     )
     message = (
-        "DeepSeek planner planned candidate directions; deterministic engine generated valid "
-        "pitch-event candidates."
+        "화음 계획을 바탕으로 결정론 엔진이 후보를 만들었습니다."
         if llm_plan is not None
-        else "Deterministic voice-leading generated multiple candidates. Approve one candidate to register it."
+        else "화성 진행 규칙으로 여러 후보를 만들었습니다. 하나를 승인하면 트랙에 등록됩니다."
     )
     return GeneratedTrackMaterial(
         candidate_events=candidate_events,

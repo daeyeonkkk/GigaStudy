@@ -35,6 +35,7 @@ const sourceLabelReplacements: Record<string, string> = {
 
 export function getJobStatusLabel(status: TrackExtractionJob['status']): string {
   const labels: Record<TrackExtractionJob['status'], string> = {
+    tempo_review_required: 'BPM 확인 필요',
     queued: '대기 중',
     running: '처리 중',
     needs_review: '검토 가능',

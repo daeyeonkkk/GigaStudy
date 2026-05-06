@@ -34,6 +34,7 @@ from gigastudy_api.services.engine.event_normalization import (
     quantize_duration_to_rhythm_grid,
     spell_midi_label,
 )
+from gigastudy_api.services.engine.registration_policy import build_registration_grid_policy
 
 VOICE_LIKE_SOURCE_KINDS: set[str] = {"recording", "audio"}
 VOICE_LIKE_EVENT_SOURCES: set[str] = {"voice", "recording", "audio"}
@@ -130,23 +131,27 @@ def prepare_events_for_track_registration(
     """
 
     original_count = len(events)
-    minimum_note_beats = measure_sixteenth_note_beats(
-        time_signature_numerator,
-        time_signature_denominator,
+    registration_policy = build_registration_grid_policy(
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
     )
+    minimum_note_beats = registration_policy.minimum_note_beats
     actions: list[str] = []
     if not events:
+        diagnostics = _registration_diagnostics(
+            [],
+            slot_id=slot_id,
+            original_count=0,
+            source_kind=source_kind,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            actions=["empty_input"],
+        )
+        diagnostics["registration_grid"] = registration_policy.diagnostics()
         return RegistrationQualityResult(
             events=[],
-            diagnostics=_registration_diagnostics(
-                [],
-                slot_id=slot_id,
-                original_count=0,
-                source_kind=source_kind,
-                time_signature_numerator=time_signature_numerator,
-                time_signature_denominator=time_signature_denominator,
-                actions=["empty_input"],
-            ),
+            diagnostics=diagnostics,
         )
 
     if _requires_grid_rewrite(source_kind, events):
@@ -278,6 +283,7 @@ def prepare_events_for_track_registration(
         time_signature_denominator=time_signature_denominator,
         actions=actions,
     )
+    diagnostics["registration_grid"] = registration_policy.diagnostics()
     if alignment["evaluated"]:
         diagnostics["reference_alignment"] = {
             key: value
@@ -346,10 +352,12 @@ def apply_registration_review_instruction(
         )
 
     actions = ["llm_registration_review_applied"]
-    minimum_note_beats = measure_sixteenth_note_beats(
-        time_signature_numerator,
-        time_signature_denominator,
+    registration_policy = build_registration_grid_policy(
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
     )
+    minimum_note_beats = registration_policy.minimum_note_beats
     quantization_grid = max(
         _instruction_grid(instruction_data) or VOICE_QUANTIZATION_GRID_BEATS,
         minimum_note_beats,
@@ -531,6 +539,7 @@ def apply_registration_review_instruction(
         "confidence": confidence,
         "instruction": _public_review_instruction(instruction_data),
     }
+    diagnostics["registration_grid"] = registration_policy.diagnostics()
     if alignment["evaluated"]:
         diagnostics["reference_alignment"] = {
             key: value
@@ -1454,10 +1463,12 @@ def _enforce_registration_event_contract(
             time_signature_denominator=time_signature_denominator,
         )
 
-    minimum_note_beats = measure_sixteenth_note_beats(
-        time_signature_numerator,
-        time_signature_denominator,
+    registration_policy = build_registration_grid_policy(
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
     )
+    minimum_note_beats = registration_policy.minimum_note_beats
     contract_events = events
     actions: list[str] = []
     contract_events, rhythm_quantized_count = _retime_events_to_registration_grid(
@@ -1550,7 +1561,7 @@ def _enforce_registration_event_contract(
     pitch_label_octave_shift = pitch_label_octave_shift_for_slot(slot_id)
     key_signature = shared_key_signature or _shared_key_signature(annotated_events) or "C"
     spelling_mode = "flat" if KEY_FIFTHS.get(key_signature, 0) < 0 else "sharp"
-    beat_seconds = seconds_per_beat(max(1, bpm))
+    beat_seconds = registration_policy.beat_seconds
 
     enforced: list[TrackPitchEvent] = []
     changed_count = 0
@@ -1636,10 +1647,12 @@ def _event_contract_diagnostics(
     time_signature_numerator: int,
     time_signature_denominator: int,
 ) -> dict[str, Any]:
-    minimum_note_beats = measure_sixteenth_note_beats(
-        time_signature_numerator,
-        time_signature_denominator,
+    registration_policy = build_registration_grid_policy(
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
     )
+    minimum_note_beats = registration_policy.minimum_note_beats
     if not events:
         return {
             "version": "event_contract_v1",
@@ -1654,12 +1667,13 @@ def _event_contract_diagnostics(
             "seconds_follow_beat_grid": True,
             "measure_metadata_consistent": True,
             "pitch_register_policy_consistent": True,
+            "registration_grid": registration_policy.diagnostics(),
         }
 
     voice_indices = {event.voice_index for event in events}
     key_signatures = {event.key_signature for event in events}
     pitch_registers = {event.pitch_register for event in events}
-    beat_seconds = seconds_per_beat(max(1, bpm))
+    beat_seconds = registration_policy.beat_seconds
     expected_pitch_register = pitch_register_for_slot(slot_id)
     ordered_events = sorted(events, key=lambda event: (event.beat, event.id))
     gaps = [
@@ -1718,6 +1732,7 @@ def _event_contract_diagnostics(
         "voice_index": next(iter(voice_indices)) if len(voice_indices) == 1 else None,
         "key_signature": next(iter(key_signatures)) if len(key_signatures) == 1 else None,
         "pitch_register": next(iter(pitch_registers)) if len(pitch_registers) == 1 else None,
+        "registration_grid": registration_policy.diagnostics(),
     }
 
 

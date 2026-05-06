@@ -1,3 +1,7 @@
+from pathlib import Path
+
+import pytest
+
 from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.engine.event_normalization import (
     accidental_for_key,
@@ -7,6 +11,7 @@ from gigastudy_api.services.engine.event_normalization import (
     spell_midi_label,
 )
 from gigastudy_api.services.engine.event_quality import prepare_events_for_track_registration
+from gigastudy_api.services.engine.symbolic import parse_symbolic_file_with_metadata
 
 
 def _is_on_grid(value: float, grid: float) -> bool:
@@ -24,6 +29,32 @@ def _assert_registration_rhythm_contract(events, grid: float) -> None:
         assert gap >= -0.001
         if gap > 0:
             assert _is_on_grid(gap, grid)
+
+
+def test_optional_aroha_sample_registration_uses_readable_grid() -> None:
+    sample_path = Path(__file__).parents[3] / "giga_sample" / "아로하(2ND).mid"
+    if not sample_path.exists():
+        pytest.skip("local giga_sample Aroha MIDI is not present")
+
+    parsed = parse_symbolic_file_with_metadata(sample_path, bpm=113)
+    bpm = parsed.source_bpm or 113
+    grid = measure_sixteenth_note_beats(
+        parsed.time_signature_numerator,
+        parsed.time_signature_denominator,
+    )
+
+    assert parsed.mapped_events
+    for slot_id, events in parsed.mapped_events.items():
+        result = prepare_events_for_track_registration(
+            events,
+            bpm=bpm,
+            slot_id=slot_id,
+            source_kind="midi",
+            time_signature_numerator=parsed.time_signature_numerator,
+            time_signature_denominator=parsed.time_signature_denominator,
+        )
+        _assert_registration_rhythm_contract(result.events, grid)
+        assert result.diagnostics["event_contract"]["rhythm_grid_aligned"] is True
 
 
 def test_event_normalization_uses_studio_bpm_as_absolute_grid() -> None:

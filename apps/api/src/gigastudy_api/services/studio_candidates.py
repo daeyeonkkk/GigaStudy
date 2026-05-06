@@ -122,11 +122,12 @@ def unique_candidates_by_suggested_slot(
 def mark_track_needs_review_if_empty(
     track: TrackSlot,
     *,
+    has_active_material: bool = False,
     source_kind: SourceKind,
     source_label: str,
     timestamp: str,
 ) -> None:
-    if track.status == "registered" or track.events:
+    if track.status == "registered" or track.events or has_active_material:
         return
     track.status = "needs_review"
     track.source_kind = source_kind
@@ -167,8 +168,12 @@ def release_review_track_if_no_pending_candidates(
     )
     if has_other_pending_candidate:
         return
-    track.status = "registered" if track.events else "empty"
-    if not track.events:
+    has_active_material = any(
+        region.track_slot_id == slot_id and (region.pitch_events or region.audio_source_path)
+        for region in studio.regions
+    ) or bool(track.events) or (track.status == "registered" and bool(track.audio_source_path))
+    track.status = "registered" if has_active_material else "empty"
+    if not has_active_material:
         track.source_kind = None
         track.source_label = None
         track.audio_source_path = None

@@ -103,7 +103,7 @@ export type TrackExtractionJob = {
   slot_id: number
   source_kind: SourceKind
   source_label: string
-  status: 'queued' | 'running' | 'needs_review' | 'completed' | 'failed'
+  status: 'tempo_review_required' | 'queued' | 'running' | 'needs_review' | 'completed' | 'failed'
   method: string
   message: string | null
   input_path: string | null
@@ -115,6 +115,7 @@ export type TrackExtractionJob = {
   review_before_register: boolean
   allow_overwrite: boolean
   audio_mime_type: string | null
+  diagnostics: Record<string, unknown>
   created_at: string
   updated_at: string
 }

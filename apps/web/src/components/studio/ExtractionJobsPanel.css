@@ -153,8 +153,58 @@
   accent-color: #082fbd;
 }
 
+.extraction-jobs__tempo-form {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid #d6ad55;
+  border-radius: 4px;
+  background: #fffaf0;
+}
+
+.extraction-jobs__tempo-copy {
+  flex: 1 1 280px;
+}
+
+.extraction-jobs__tempo-copy strong,
+.extraction-jobs__tempo-copy span {
+  display: block;
+}
+
+.extraction-jobs__tempo-form label {
+  display: grid;
+  gap: 4px;
+  color: #384652;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.extraction-jobs__tempo-form input,
+.extraction-jobs__tempo-form select {
+  min-height: 32px;
+  border: 1px solid #a9b4bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111111;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.extraction-jobs__tempo-form input {
+  width: 84px;
+  padding: 0 8px;
+}
+
+.extraction-jobs__tempo-form select {
+  padding: 0 6px;
+}
+
 .extraction-jobs__status--running,
-.extraction-jobs__status--queued {
+.extraction-jobs__status--queued,
+.extraction-jobs__status--tempo_review_required {
   border-color: #d6ad55;
   background: #fff8e8;
   color: #704400;

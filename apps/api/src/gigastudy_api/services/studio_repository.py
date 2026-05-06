@@ -19,6 +19,7 @@ from gigastudy_api.api.schemas.studios import (
     ArrangementRegion,
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
+    ApproveJobTempoRequest,
     CopyRegionRequest,
     DirectUploadRequest,
     DirectUploadTarget,
@@ -57,6 +58,8 @@ from gigastudy_api.services.studio_admin_commands import StudioAdminCommands
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_jobs import (
     clear_unmapped_document_placeholders,
+    document_queue_payload,
+    engine_queue_job_from_extraction,
     mark_extraction_job_completed,
     mark_extraction_job_failed,
     mark_extraction_job_running,
@@ -89,7 +92,7 @@ from gigastudy_api.services.studio_region_commands import StudioRegionCommands
 from gigastudy_api.services.studio_scoring_commands import StudioScoringCommands
 from gigastudy_api.services.studio_upload_commands import StudioUploadCommands
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
-from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
+from gigastudy_api.services.llm.provider import DeepSeekHarmonyPlan
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
 from gigastudy_api.services.studio_resource_commands import StudioResourceCommands
 from gigastudy_api.services.studio_track_settings import (
@@ -110,6 +113,7 @@ from gigastudy_api.services.studio_documents import (
     studio_has_active_track_material,
     studio_list_item_from_payload as _studio_list_item_from_payload,
 )
+from gigastudy_api.services.studio_tempo_review import build_seed_tempo_review
 from gigastudy_api.services.studio_access import (
     owner_hash_for_request,
     owner_policy_enabled,
@@ -366,6 +370,19 @@ class StudioRepository:
                     source_content_base64=source_content_base64,
                     source_asset_path=source_asset_path,
                 )
+                tempo_review = build_seed_tempo_review(
+                    source_path,
+                    fallback_bpm=resolved_bpm,
+                    fallback_time_signature_numerator=time_signature_numerator,
+                    fallback_time_signature_denominator=time_signature_denominator,
+                )
+                studio.bpm = int(tempo_review["suggested_bpm"])
+                set_studio_time_signature(
+                    studio,
+                    numerator=int(tempo_review["suggested_time_signature_numerator"]),
+                    denominator=int(tempo_review["suggested_time_signature_denominator"]),
+                    timestamp=timestamp,
+                )
                 with self._lock:
                     self._save_studio(studio)
                 return self._enqueue_document_job(
@@ -376,7 +393,9 @@ class StudioRepository:
                     source_path=source_path,
                     background_tasks=background_tasks,
                     parse_all_parts=True,
-                    use_source_tempo=bpm is None,
+                    require_tempo_review=True,
+                    tempo_diagnostics=tempo_review,
+                    use_source_tempo=False,
                 )
             studio = self._seed_from_upload(
                 studio,
@@ -384,7 +403,7 @@ class StudioRepository:
                 source_filename=source_label,
                 source_content_base64=source_content_base64,
                 source_asset_path=source_asset_path,
-                use_source_tempo=bpm is None,
+                use_source_tempo=False,
             )
 
         with self._lock:
@@ -408,6 +427,8 @@ class StudioRepository:
             raise HTTPException(status_code=404, detail="Studio not found.")
         if enforce_owner and not admin_bypass:
             require_studio_access(studio, owner_token)
+        if background_tasks is not None:
+            self._recover_existing_creation_jobs(studio, background_tasks)
         return studio
 
     def deactivate_studio(
@@ -921,6 +942,80 @@ class StudioRepository:
             owner_token=owner_token,
         )
 
+    def approve_job_tempo(
+        self,
+        studio_id: str,
+        job_id: str,
+        request: ApproveJobTempoRequest,
+        *,
+        owner_token: str | None = None,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            job = next((candidate_job for candidate_job in studio.jobs if candidate_job.job_id == job_id), None)
+            if job is None:
+                raise HTTPException(status_code=404, detail="Extraction job not found.")
+            if job.job_type != "document":
+                raise HTTPException(status_code=409, detail="Only score-file jobs can approve tempo.")
+            if job.status != "tempo_review_required":
+                raise HTTPException(status_code=409, detail="This job is not waiting for tempo approval.")
+            if not job.input_path:
+                raise HTTPException(status_code=409, detail="Extraction job has no stored input file.")
+
+            timestamp = _now()
+            placeholder_tracks = (
+                [track for track in studio.tracks if track.slot_id <= 5]
+                if job.parse_all_parts
+                else [self._find_track(studio, job.slot_id)]
+            )
+            ensure_no_active_extraction_jobs(
+                studio,
+                (track.slot_id for track in placeholder_tracks),
+                action_label="Score-file registration",
+            )
+            studio.bpm = request.bpm
+            set_studio_time_signature(
+                studio,
+                numerator=request.time_signature_numerator,
+                denominator=request.time_signature_denominator,
+                timestamp=timestamp,
+            )
+            job.status = "queued"
+            job.use_source_tempo = False
+            job.message = "BPM과 박자표를 확인했습니다. 악보 분석을 시작합니다."
+            job.diagnostics = {
+                **job.diagnostics,
+                "approved_bpm": request.bpm,
+                "approved_time_signature_numerator": request.time_signature_numerator,
+                "approved_time_signature_denominator": request.time_signature_denominator,
+                "tempo_approved_at": timestamp,
+            }
+            job.updated_at = timestamp
+            for track in placeholder_tracks:
+                if studio_has_active_track_material(studio, track.slot_id):
+                    continue
+                track.status = "extracting"
+                track.source_kind = job.source_kind
+                track.source_label = job.source_label
+                track.updated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+
+        self._engine_queue.enqueue(
+            engine_queue_job_from_extraction(
+                job,
+                payload=document_queue_payload(job),
+                studio_id=studio_id,
+                timestamp=timestamp,
+            )
+        )
+        self._schedule_engine_queue_processing(background_tasks)
+        return self.get_studio(studio_id, owner_token=owner_token, enforce_owner=owner_policy_enabled())
+
     def retry_extraction_job(
         self,
         studio_id: str,
@@ -1119,7 +1214,7 @@ class StudioRepository:
         source_filename: str,
         source_content_base64: str | None,
         source_asset_path: str | None,
-        use_source_tempo: bool = True,
+        use_source_tempo: bool = False,
     ) -> Studio:
         return self._uploads.seed_from_upload(
             studio,
@@ -1188,6 +1283,8 @@ class StudioRepository:
         source_path: Path,
         background_tasks: BackgroundTasks | None = None,
         parse_all_parts: bool = False,
+        require_tempo_review: bool = False,
+        tempo_diagnostics: dict[str, Any] | None = None,
         use_source_tempo: bool = False,
     ) -> Studio:
         return self._extraction_jobs.enqueue_document(
@@ -1198,6 +1295,8 @@ class StudioRepository:
             source_path=source_path,
             background_tasks=background_tasks,
             parse_all_parts=parse_all_parts,
+            require_tempo_review=require_tempo_review,
+            tempo_diagnostics=tempo_diagnostics,
             use_source_tempo=use_source_tempo,
         )
 

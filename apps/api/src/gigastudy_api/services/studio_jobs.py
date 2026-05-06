@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from gigastudy_api.api.schemas.studios import SourceKind, Studio, TrackExtractionJob, TrackSlot
+from gigastudy_api.api.schemas.studios import ExtractionJobStatus, SourceKind, Studio, TrackExtractionJob, TrackSlot
 from gigastudy_api.services.engine_queue import EngineQueueJob
 from gigastudy_api.services.studio_documents import studio_has_active_track_material
 
@@ -17,6 +17,9 @@ def create_document_extraction_job(
     source_kind: SourceKind,
     source_label: str,
     timestamp: str,
+    diagnostics: dict[str, Any] | None = None,
+    message: str | None = None,
+    status: ExtractionJobStatus = "queued",
     use_source_tempo: bool = False,
 ) -> TrackExtractionJob:
     return TrackExtractionJob(
@@ -25,12 +28,14 @@ def create_document_extraction_job(
         slot_id=slot_id,
         source_kind=source_kind,
         source_label=source_label,
-        status="queued",
+        status=status,
         method="audiveris_cli",
+        message=message,
         input_path=input_path,
         max_attempts=max_attempts,
         parse_all_parts=parse_all_parts,
         use_source_tempo=use_source_tempo,
+        diagnostics=diagnostics or {},
         created_at=timestamp,
         updated_at=timestamp,
     )

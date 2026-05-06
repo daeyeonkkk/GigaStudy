@@ -16,7 +16,7 @@ from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.engine.timeline import registered_region_events_for_slot
-from gigastudy_api.services.llm.extraction_plan import plan_voice_extraction_with_deepseek
+from gigastudy_api.services.llm.provider import plan_voice_extraction
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_scoring import (
     ScoringRequestError,
@@ -191,7 +191,7 @@ class StudioScoringCommands:
             source_kind="recording",
             context_tracks_by_slot=context_tracks_by_slot,
         )
-        llm_plan = plan_voice_extraction_with_deepseek(
+        llm_plan = plan_voice_extraction(
             settings=get_settings(),
             base_plan=extraction_plan,
             title=studio.title,

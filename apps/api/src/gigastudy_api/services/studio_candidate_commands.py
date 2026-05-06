@@ -19,7 +19,7 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     track_duration_seconds,
 )
 from gigastudy_api.services.engine.event_quality import RegistrationQualityResult
-from gigastudy_api.services.llm.deepseek import DeepSeekHarmonyPlan
+from gigastudy_api.services.llm.provider import DeepSeekHarmonyPlan
 from gigastudy_api.services.studio_access import require_studio_access
 from gigastudy_api.services.studio_candidates import (
     build_pending_candidate,
@@ -485,6 +485,7 @@ class StudioCandidateCommands:
                 track = self._repository._find_track(studio, slot_id)
                 mark_track_needs_review_if_empty(
                     track,
+                    has_active_material=studio_has_active_track_material(studio, slot_id),
                     source_kind=source_kind,
                     source_label=source_label,
                     timestamp=timestamp,
@@ -585,6 +586,7 @@ class StudioCandidateCommands:
             track = self._repository._find_track(studio, slot_id)
             mark_track_needs_review_if_empty(
                 track,
+                has_active_material=studio_has_active_track_material(studio, slot_id),
                 source_kind="ai",
                 source_label=source_label,
                 timestamp=timestamp,

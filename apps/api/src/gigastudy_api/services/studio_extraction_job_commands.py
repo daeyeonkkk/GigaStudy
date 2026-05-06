@@ -47,11 +47,14 @@ class StudioExtractionJobCommands:
         source_label: str,
         source_path: Path,
         background_tasks: BackgroundTasks | None = None,
+        require_tempo_review: bool = False,
         parse_all_parts: bool = False,
+        tempo_diagnostics: dict[str, Any] | None = None,
         use_source_tempo: bool = False,
     ) -> Studio:
         timestamp = self._now()
         settings = get_settings()
+        job_status = "tempo_review_required" if require_tempo_review else "queued"
         job = create_document_extraction_job(
             input_path=self._assets.relative_data_asset_path(source_path),
             max_attempts=settings.engine_job_max_attempts,
@@ -60,6 +63,13 @@ class StudioExtractionJobCommands:
             source_kind=source_kind,
             source_label=source_label,
             timestamp=timestamp,
+            status=job_status,
+            message=(
+                "BPM과 박자표를 확인한 뒤 악보 등록을 시작합니다."
+                if require_tempo_review
+                else None
+            ),
+            diagnostics=tempo_diagnostics,
             use_source_tempo=use_source_tempo,
         )
 
@@ -77,16 +87,20 @@ class StudioExtractionJobCommands:
                 (track.slot_id for track in placeholder_tracks),
                 action_label="Document extraction",
             )
-            for track in placeholder_tracks:
-                if studio_has_active_track_material(studio, track.slot_id):
-                    continue
-                track.status = "extracting"
-                track.source_kind = source_kind
-                track.source_label = source_label
-                track.updated_at = timestamp
+            if not require_tempo_review:
+                for track in placeholder_tracks:
+                    if studio_has_active_track_material(studio, track.slot_id):
+                        continue
+                    track.status = "extracting"
+                    track.source_kind = source_kind
+                    track.source_label = source_label
+                    track.updated_at = timestamp
             studio.jobs.append(job)
             studio.updated_at = timestamp
             self._repository._save_studio(studio)
+
+        if require_tempo_review:
+            return studio
 
         self._engine_queue.enqueue(
             engine_queue_job_from_extraction(

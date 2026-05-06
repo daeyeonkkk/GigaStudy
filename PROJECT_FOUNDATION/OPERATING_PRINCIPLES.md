@@ -122,10 +122,10 @@ the same change.
 ## Clock, Count-In, And Timing
 
 - Studio BPM and time signature are absolute.
-- In alpha, studio BPM is chosen only at studio creation. If a studio is seeded
-  from a MIDI file and the user did not provide BPM, the importer may use the
-  file's initial tempo as the studio BPM. After creation there is no user BPM
-  edit flow and no persisted per-measure tempo map.
+- In alpha, studio BPM and meter are chosen only at studio creation. Score-file
+  starts may suggest BPM/meter from MIDI/MusicXML metadata, but the user must
+  confirm or edit those values before any track registration starts. After that
+  approval there is no user BPM edit flow and no persisted per-measure tempo map.
 - Recording analysis may estimate latency, drift, or entrance offset, but must
   not rewrite studio BPM or meter.
 - The metronome toggle controls audible clicks only; the internal clock remains
@@ -185,9 +185,11 @@ the same change.
   user-facing labels must not collapse them into one vague upload action.
 - Studio-start score files must not make the create-studio request perform the
   full extraction/registration synchronously. Creation saves a usable studio and
-  queues PDF/MIDI/MusicXML import; the job may then directly register clear
-  singer-line material or leave review candidates when interpretation remains
-  ambiguous. A browser/network failure after upload must not create a hidden
+  creates a `tempo_review_required` import job. The UI must show the suggested
+  BPM/meter and evidence, let the user edit them, and only queue
+  PDF/MIDI/MusicXML registration after approval. The approved BPM/meter is the
+  studio clock used by the import; source-file tempo must not silently override
+  it. A browser/network failure after upload must not create a hidden
   half-success state that only appears after refresh. Studio creation requests
   should carry an idempotency key so retrying the same start data returns the
   existing studio rather than creating a duplicate.

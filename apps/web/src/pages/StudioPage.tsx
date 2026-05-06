@@ -19,6 +19,7 @@ import { useStudioResource } from '../components/studio/useStudioResource'
 import { useStudioTrackActions } from '../components/studio/useStudioTrackActions'
 
 import {
+  approveJobTempo,
   copyRegion,
   deleteRegion,
   getDocumentJobSourcePreviewUrl,
@@ -222,6 +223,28 @@ export function StudioPage() {
 
   async function handleRecord(track: TrackSlot) {
     await handleTrackRecording(track)
+  }
+
+  async function handleApproveJobTempo(
+    jobId: string,
+    bpm: number,
+    timeSignatureNumerator: number,
+    timeSignatureDenominator: number,
+  ) {
+    if (!studio) {
+      return
+    }
+    await runStudioAction(
+      () =>
+        approveJobTempo(studio.studio_id, jobId, {
+          bpm,
+          time_signature_numerator: timeSignatureNumerator,
+          time_signature_denominator: timeSignatureDenominator,
+        }),
+      'BPM과 박자표를 저장하는 중입니다.',
+      '악보 분석을 시작했습니다.',
+      ['업로드 파일을 등록 대기열에 올리고 있습니다.', '트랙을 비워 둔 채 등록 기준을 적용하고 있습니다.'],
+    )
   }
 
   const activeJobSlotIds = useMemo(() => {
@@ -465,6 +488,9 @@ export function StudioPage() {
               getPendingJobCandidates={getPendingJobCandidates}
               jobWouldOverwrite={jobWouldOverwrite}
               onApproveJobCandidates={(jobId) => void handleApproveJobCandidates(jobId)}
+              onApproveJobTempo={(jobId, bpm, numerator, denominator) =>
+                void handleApproveJobTempo(jobId, bpm, numerator, denominator)
+              }
               onRetryJob={(jobId) => void handleRetryJob(jobId)}
               onUpdateJobOverwriteApproval={updateJobOverwriteApproval}
             />

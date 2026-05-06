@@ -29,7 +29,14 @@ ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["document"]
 TrackMaterialArchiveReason = Literal["original_score", "before_overwrite"]
-ExtractionJobStatus = Literal["queued", "running", "needs_review", "completed", "failed"]
+ExtractionJobStatus = Literal[
+    "tempo_review_required",
+    "queued",
+    "running",
+    "needs_review",
+    "completed",
+    "failed",
+]
 ExtractionJobType = Literal["document", "voice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
@@ -142,6 +149,7 @@ class TrackExtractionJob(SourceKindModel):
     review_before_register: bool = False
     allow_overwrite: bool = False
     audio_mime_type: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: str
 
@@ -855,6 +863,12 @@ class DirectUploadRequest(SourceKindModel):
     filename: str = Field(min_length=1, max_length=180)
     size_bytes: int = Field(ge=1)
     content_type: str | None = Field(default=None, max_length=120)
+
+
+class ApproveJobTempoRequest(BaseModel):
+    bpm: int = Field(ge=40, le=240)
+    time_signature_numerator: int = Field(default=4, ge=1, le=32)
+    time_signature_denominator: TimeSignatureDenominator = 4
 
 
 class StudioSeedUploadRequest(SourceKindModel):

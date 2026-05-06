@@ -24,10 +24,9 @@ from gigastudy_api.services.engine.symbolic import (
 )
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.studio_assets import StudioAssetService
-from gigastudy_api.services.studio_documents import register_track_material, track_has_content
+from gigastudy_api.services.studio_documents import register_track_material, studio_has_active_track_material
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.upload_policy import (
-    DOCUMENT_IMAGE_SOURCE_SUFFIXES,
     SYMBOLIC_SOURCE_SUFFIXES,
     validate_studio_seed_upload_filename,
     validate_track_upload_filename,
@@ -69,14 +68,9 @@ class StudioUploadCommands:
     ) -> DirectUploadTarget:
         studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._repository._find_track(studio, slot_id)
-        locked_slot_ids = (
-            {track.slot_id for track in studio.tracks if track.slot_id <= 5}
-            if request.source_kind == "document"
-            else {slot_id}
-        )
         ensure_no_active_extraction_jobs(
             studio,
-            locked_slot_ids,
+            {slot_id},
             action_label="Upload preparation",
         )
         return self._assets.create_track_upload_target(
@@ -117,18 +111,13 @@ class StudioUploadCommands:
         owner_token: str | None = None,
         background_tasks: BackgroundTasks | None = None,
     ) -> Studio:
-        filename, suffix = validate_track_upload_filename(request.source_kind, request.filename)
+        filename, _suffix = validate_track_upload_filename(request.source_kind, request.filename)
 
         studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         self._repository._find_track(studio, slot_id)
-        requested_slot_ids = (
-            {track.slot_id for track in studio.tracks if track.slot_id <= 5}
-            if request.source_kind == "document" and suffix in DOCUMENT_IMAGE_SOURCE_SUFFIXES
-            else {slot_id}
-        )
         ensure_no_active_extraction_jobs(
             studio,
-            requested_slot_ids,
+            {slot_id},
             action_label="Upload",
         )
 
@@ -148,50 +137,12 @@ class StudioUploadCommands:
             )
 
         try:
-            if request.source_kind == "midi" or suffix in SYMBOLIC_SOURCE_SUFFIXES:
-                registered_source_kind: SourceKind = "midi" if suffix in {".mid", ".midi"} else "document"
-                parsed_symbolic = parse_symbolic_file_with_metadata(
-                    source_path,
-                    bpm=studio.bpm,
-                    target_slot_id=slot_id,
-                )
-                if parsed_symbolic.has_time_signature:
-                    self._repository._update_time_signature(
-                        studio_id,
-                        parsed_symbolic.time_signature_numerator,
-                        parsed_symbolic.time_signature_denominator,
-                    )
-                mapped_events = parsed_symbolic.mapped_events
-                ensure_no_active_extraction_jobs(
-                    studio,
-                    mapped_events.keys(),
-                    action_label="Symbolic import",
-                )
-                if request.review_before_register:
-                    return self._repository._add_extraction_candidates(
-                        studio_id,
-                        mapped_events,
-                        source_kind=registered_source_kind,
-                        source_label=filename,
-                        method="symbolic_import_review",
-                        confidence=0.92,
-                        message="Symbolic import is waiting for user approval.",
-                    )
-                if self._repository._mapped_events_would_overwrite(studio, mapped_events) and not request.allow_overwrite:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="Upload would overwrite an existing registered track.",
-                    )
-                return self._repository._apply_extracted_tracks(
-                    studio_id,
-                    mapped_events,
-                    source_kind=registered_source_kind,
-                    source_label=filename,
-                )
-
             if request.source_kind == "audio":
-                track = self._repository._find_track(studio, slot_id)
-                if track_has_content(track) and not request.allow_overwrite and not request.review_before_register:
+                if (
+                    studio_has_active_track_material(studio, slot_id)
+                    and not request.allow_overwrite
+                    and not request.review_before_register
+                ):
                     raise HTTPException(
                         status_code=409,
                         detail="Upload would overwrite an existing registered track.",
@@ -205,17 +156,6 @@ class StudioUploadCommands:
                     background_tasks=background_tasks,
                     review_before_register=request.review_before_register,
                     allow_overwrite=request.allow_overwrite,
-                )
-
-            if request.source_kind == "document" and suffix in DOCUMENT_IMAGE_SOURCE_SUFFIXES:
-                return self._repository._enqueue_document_job(
-                    studio_id,
-                    slot_id,
-                    source_kind="document",
-                    source_label=filename,
-                    source_path=source_path,
-                    background_tasks=background_tasks,
-                    parse_all_parts=True,
                 )
         except (SymbolicParseError, VoiceTranscriptionError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error

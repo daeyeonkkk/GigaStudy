@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from gigastudy_api.api.schemas.studios import GenerateTrackRequest, Studio
 from gigastudy_api.config import get_settings
-from gigastudy_api.services.studio_documents import track_has_content
+from gigastudy_api.services.studio_documents import studio_has_active_track_material
 from gigastudy_api.services.studio_generation import (
     GenerationRequestError,
     generate_track_material,
@@ -61,8 +61,7 @@ class StudioGenerationCommands:
                 context_events_by_slot=generated.context_events_by_slot,
             )
 
-        target_track = self._repository._find_track(studio, slot_id)
-        if track_has_content(target_track) and not request.allow_overwrite:
+        if studio_has_active_track_material(studio, slot_id) and not request.allow_overwrite:
             raise HTTPException(
                 status_code=409,
                 detail="AI generation would overwrite an existing registered track.",

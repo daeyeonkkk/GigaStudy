@@ -10,7 +10,7 @@ from gigastudy_api.api.schemas.studios import SourceKind, Studio
 from gigastudy_api.config import get_settings
 from gigastudy_api.services.engine_queue import EngineQueueStore
 from gigastudy_api.services.studio_assets import StudioAssetService
-from gigastudy_api.services.studio_documents import track_has_content
+from gigastudy_api.services.studio_documents import studio_has_active_track_material
 from gigastudy_api.services.studio_jobs import (
     create_document_extraction_job,
     create_voice_extraction_job,
@@ -78,7 +78,7 @@ class StudioExtractionJobCommands:
                 action_label="Document extraction",
             )
             for track in placeholder_tracks:
-                if track_has_content(track):
+                if studio_has_active_track_material(studio, track.slot_id):
                     continue
                 track.status = "extracting"
                 track.source_kind = source_kind
@@ -137,7 +137,7 @@ class StudioExtractionJobCommands:
                 {slot_id},
                 action_label="Voice extraction",
             )
-            if not track_has_content(track) or not review_before_register:
+            if not studio_has_active_track_material(studio, slot_id) or not review_before_register:
                 track.status = "extracting"
                 track.source_kind = source_kind
                 track.source_label = source_label

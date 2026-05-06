@@ -33,7 +33,7 @@ from gigastudy_api.services.studio_candidates import (
     reject_candidate_group_siblings,
     unique_candidates_by_suggested_slot,
 )
-from gigastudy_api.services.studio_documents import register_track_material, track_has_content
+from gigastudy_api.services.studio_documents import register_track_material, studio_has_active_track_material
 from gigastudy_api.services.studio_generation import generation_candidate_review_metadata
 from gigastudy_api.services.studio_jobs import clear_unmapped_document_placeholders
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
@@ -76,7 +76,7 @@ class StudioCandidateCommands:
                 {target_slot_id},
                 action_label="Candidate approval",
             )
-            if track_has_content(track) and not request.allow_overwrite:
+            if studio_has_active_track_material(studio, target_slot_id) and not request.allow_overwrite:
                 raise HTTPException(
                     status_code=409,
                     detail="Approving this candidate would overwrite an existing registered track.",
@@ -183,7 +183,7 @@ class StudioCandidateCommands:
             occupied_slots = {
                 slot_id
                 for slot_id in unique_candidates_by_slot
-                if track_has_content(self._repository._find_track(studio, slot_id))
+                if studio_has_active_track_material(studio, slot_id)
             }
             blocked_slots = occupied_slots if not request.allow_overwrite else set()
             candidates_to_register = {

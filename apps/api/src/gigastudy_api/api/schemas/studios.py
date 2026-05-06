@@ -84,7 +84,19 @@ class TrackMaterialArchive(SourceKindModel):
     archived_at: str
     reason: TrackMaterialArchiveReason
     pinned: bool = False
-    region_snapshot: ArrangementRegion
+    region_snapshots: list[ArrangementRegion] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_single_region_snapshot(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "region_snapshots" in data or "region_snapshot" not in data:
+            return data
+        migrated = dict(data)
+        region_snapshot = migrated.pop("region_snapshot")
+        migrated["region_snapshots"] = [region_snapshot] if region_snapshot is not None else []
+        return migrated
 
 
 class TrackMaterialArchiveSummary(SourceKindModel):
@@ -721,9 +733,9 @@ def track_material_archive_summaries(studio: Studio) -> list[TrackMaterialArchiv
             archived_at=archive.archived_at,
             reason=archive.reason,
             pinned=archive.pinned,
-            duration_seconds=archive.region_snapshot.duration_seconds,
-            event_count=len(archive.region_snapshot.pitch_events),
-            has_audio=archive.region_snapshot.audio_source_path is not None,
+            duration_seconds=_archive_snapshot_duration_seconds(archive.region_snapshots),
+            event_count=sum(len(region.pitch_events) for region in archive.region_snapshots),
+            has_audio=any(region.audio_source_path is not None for region in archive.region_snapshots),
         )
         for archive in studio.track_material_archives
     ]
@@ -736,6 +748,14 @@ def track_material_archive_summaries(studio: Studio) -> list[TrackMaterialArchiv
             archive.archive_id,
         ),
     )
+
+
+def _archive_snapshot_duration_seconds(region_snapshots: list[ArrangementRegion]) -> float:
+    if not region_snapshots:
+        return 0
+    start_seconds = min(region.start_seconds for region in region_snapshots)
+    end_seconds = max(region.start_seconds + region.duration_seconds for region in region_snapshots)
+    return max(0, end_seconds - start_seconds)
 
 
 def build_studio_response(studio: Studio) -> StudioResponse:
@@ -814,7 +834,7 @@ class CreateStudioRequest(SourceKindModel):
 
 
 class UploadTrackRequest(SourceKindModel):
-    source_kind: Literal["audio", "midi", "document"]
+    source_kind: Literal["audio"]
     filename: str = Field(min_length=1, max_length=180)
     content_base64: str | None = Field(default=None, min_length=1)
     asset_path: str | None = Field(default=None, min_length=1)
@@ -831,7 +851,7 @@ class UploadTrackRequest(SourceKindModel):
 
 
 class DirectUploadRequest(SourceKindModel):
-    source_kind: Literal["audio", "midi", "document"]
+    source_kind: Literal["audio"]
     filename: str = Field(min_length=1, max_length=180)
     size_bytes: int = Field(ge=1)
     content_type: str | None = Field(default=None, max_length=120)

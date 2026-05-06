@@ -141,6 +141,36 @@ def test_merge_concurrent_studio_payload_preserves_region_list() -> None:
     assert set(regions) == {"track-1-region-1", "track-2-region-1"}
 
 
+def test_merge_concurrent_studio_payload_preserves_archives_by_id() -> None:
+    existing = {
+        "updated_at": "2026-04-30T12:00:37+00:00",
+        "tracks": [],
+        "regions": [],
+        "jobs": [],
+        "reports": [],
+        "candidates": [],
+        "track_material_archives": [
+            {"archive_id": "original", "archived_at": "2026-04-30T12:00:37+00:00"}
+        ],
+    }
+    incoming = {
+        "updated_at": "2026-04-30T12:00:40+00:00",
+        "tracks": [],
+        "regions": [],
+        "jobs": [],
+        "reports": [],
+        "candidates": [],
+        "track_material_archives": [
+            {"archive_id": "before-overwrite", "archived_at": "2026-04-30T12:00:40+00:00"}
+        ],
+    }
+
+    merged = _merge_concurrent_studio_payload(existing, incoming)
+
+    archives = {archive["archive_id"]: archive for archive in merged["track_material_archives"]}
+    assert set(archives) == {"original", "before-overwrite"}
+
+
 def test_merge_concurrent_studio_payload_keeps_newer_existing_item_update() -> None:
     existing = {
         "updated_at": "2026-04-30T12:00:50+00:00",

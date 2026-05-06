@@ -10,7 +10,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 
-SIDECAR_KEYS = ("reports", "candidates")
+SIDECAR_KEYS = ("reports", "candidates", "track_material_archives")
 ActiveStatus = Literal["active", "inactive", "all"]
 
 
@@ -140,20 +140,22 @@ class FileStudioStore:
         next_ids = set(payload)
         base_payload: dict[str, Any] = {}
         for studio_id, studio_payload in payload.items():
-            base_studio, reports, candidates = _split_sidecars(studio_payload)
+            base_studio, reports, candidates, track_material_archives = _split_sidecars(studio_payload)
             base_payload[studio_id] = base_studio
             self._write_file_sidecar(studio_id, "reports", reports)
             self._write_file_sidecar(studio_id, "candidates", candidates)
+            self._write_file_sidecar(studio_id, "track_material_archives", track_material_archives)
         for stale_id in existing_ids - next_ids:
             self._delete_file_sidecars(stale_id)
         self._write_base_raw(base_payload)
 
     def save_one_raw(self, studio_id: str, payload: Any) -> None:
         raw_payload = self._read_base_raw()
-        base_studio, reports, candidates = _split_sidecars(payload)
+        base_studio, reports, candidates, track_material_archives = _split_sidecars(payload)
         raw_payload[studio_id] = base_studio
         self._write_file_sidecar(studio_id, "reports", reports)
         self._write_file_sidecar(studio_id, "candidates", candidates)
+        self._write_file_sidecar(studio_id, "track_material_archives", track_material_archives)
         self._write_base_raw(raw_payload)
 
     def delete_one_raw(self, studio_id: str) -> bool:
@@ -189,7 +191,13 @@ class FileStudioStore:
     def _merge_file_sidecars(self, studio_id: str, studio_payload: Any) -> Any:
         reports = self._read_file_sidecar(studio_id, "reports")
         candidates = self._read_file_sidecar(studio_id, "candidates")
-        return _merge_sidecars(studio_payload, reports=reports, candidates=candidates)
+        track_material_archives = self._read_file_sidecar(studio_id, "track_material_archives")
+        return _merge_sidecars(
+            studio_payload,
+            reports=reports,
+            candidates=candidates,
+            track_material_archives=track_material_archives,
+        )
 
     def _read_file_sidecar(self, studio_id: str, key: str) -> list[Any] | None:
         sidecar_path = self._sidecar_path(studio_id, key)
@@ -243,6 +251,7 @@ class PostgresStudioStore:
                 row["payload"],
                 reports=sidecars["reports"].get(str(row["studio_id"])),
                 candidates=sidecars["candidates"].get(str(row["studio_id"])),
+                track_material_archives=sidecars["track_material_archives"].get(str(row["studio_id"])),
             )
             for row in rows
         }
@@ -276,6 +285,7 @@ class PostgresStudioStore:
                     row["payload"],
                     reports=sidecars["reports"].get(str(row["studio_id"])),
                     candidates=sidecars["candidates"].get(str(row["studio_id"])),
+                    track_material_archives=sidecars["track_material_archives"].get(str(row["studio_id"])),
                 ),
             )
             for row in rows
@@ -338,6 +348,7 @@ class PostgresStudioStore:
             row["payload"],
             reports=sidecars["reports"].get(studio_id),
             candidates=sidecars["candidates"].get(studio_id),
+            track_material_archives=sidecars["track_material_archives"].get(studio_id),
         )
 
     def save_raw(self, payload: dict[str, Any]) -> None:
@@ -384,6 +395,7 @@ class PostgresStudioStore:
                     (SELECT coalesce(sum(pg_column_size(payload)), 0) FROM studio_documents)
                   + (SELECT coalesce(sum(pg_column_size(payload)), 0) FROM studio_reports)
                   + (SELECT coalesce(sum(pg_column_size(payload)), 0) FROM studio_candidates)
+                  + (SELECT coalesce(sum(pg_column_size(payload)), 0) FROM studio_track_material_archives)
                     AS bytes
                 """
             ).fetchone()
@@ -393,6 +405,7 @@ class PostgresStudioStore:
         existing_sidecars: dict[str, list[Any]] = {
             "reports": [],
             "candidates": [],
+            "track_material_archives": [],
         }
         existing_row = connection.execute(
             "SELECT payload FROM studio_documents WHERE studio_id = %s FOR UPDATE",
@@ -404,13 +417,15 @@ class PostgresStudioStore:
                 existing_row["payload"],
                 reports=sidecars["reports"].get(studio_id),
                 candidates=sidecars["candidates"].get(studio_id),
+                track_material_archives=sidecars["track_material_archives"].get(studio_id),
             )
             payload = _merge_concurrent_studio_payload(existing_payload, payload)
             existing_sidecars = {
                 "reports": sidecars["reports"].get(studio_id) or [],
                 "candidates": sidecars["candidates"].get(studio_id) or [],
+                "track_material_archives": sidecars["track_material_archives"].get(studio_id) or [],
             }
-        base_studio, reports, candidates = _split_sidecars(payload)
+        base_studio, reports, candidates, track_material_archives = _split_sidecars(payload)
         connection.execute(
             """
             INSERT INTO studio_documents (studio_id, payload, updated_at)
@@ -437,6 +452,15 @@ class PostgresStudioStore:
             studio_id=studio_id,
             items=candidates,
             existing_items=existing_sidecars["candidates"],
+        )
+        self._sync_sidecar_rows(
+            connection,
+            table_name="studio_track_material_archives",
+            id_column="archive_id",
+            id_key="archive_id",
+            studio_id=studio_id,
+            items=track_material_archives,
+            existing_items=existing_sidecars["track_material_archives"],
         )
 
     def _sync_sidecar_rows(
@@ -490,12 +514,14 @@ class PostgresStudioStore:
         sidecars: dict[str, dict[str, list[Any]]] = {
             "reports": {},
             "candidates": {},
+            "track_material_archives": {},
         }
         if not studio_ids:
             return sidecars
         for key, table_name in (
             ("reports", "studio_reports"),
             ("candidates", "studio_candidates"),
+            ("track_material_archives", "studio_track_material_archives"),
         ):
             rows = connection.execute(
                 f"""
@@ -563,10 +589,25 @@ class PostgresStudioStore:
             """
         )
         connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS studio_track_material_archives (
+                studio_id text NOT NULL REFERENCES studio_documents(studio_id) ON DELETE CASCADE,
+                archive_id text NOT NULL,
+                ordinal integer NOT NULL DEFAULT 0,
+                payload jsonb NOT NULL,
+                updated_at timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (studio_id, archive_id)
+            )
+            """
+        )
+        connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_studio_reports_studio_order ON studio_reports (studio_id, ordinal)"
         )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_studio_candidates_studio_order ON studio_candidates (studio_id, ordinal)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_studio_track_archives_studio_order ON studio_track_material_archives (studio_id, ordinal)"
         )
         connection.commit()
         self._initialized = True
@@ -578,20 +619,23 @@ def build_studio_store(*, storage_root: Path, database_url: str | None) -> Studi
     return FileStudioStore(storage_root / "six_track_studios.json")
 
 
-def _split_sidecars(payload: Any) -> tuple[Any, list[Any], list[Any]]:
+def _split_sidecars(payload: Any) -> tuple[Any, list[Any], list[Any], list[Any]]:
     if not isinstance(payload, dict):
-        return payload, [], []
+        return payload, [], [], []
 
     base_payload = dict(payload)
     reports = list(base_payload.pop("reports", []) or [])
     candidates = list(base_payload.pop("candidates", []) or [])
+    track_material_archives = list(base_payload.pop("track_material_archives", []) or [])
     base_payload["reports"] = []
     base_payload["candidates"] = []
+    base_payload["track_material_archives"] = []
     base_payload["_sidecar_counts"] = {
         "reports": len(reports),
         "candidates": len(candidates),
+        "track_material_archives": len(track_material_archives),
     }
-    return base_payload, reports, candidates
+    return base_payload, reports, candidates, track_material_archives
 
 
 def _merge_concurrent_studio_payload(existing: Any, incoming: Any) -> Any:
@@ -606,6 +650,7 @@ def _merge_concurrent_studio_payload(existing: Any, incoming: Any) -> Any:
         ("jobs", "job_id"),
         ("reports", "report_id"),
         ("candidates", "candidate_id"),
+        ("track_material_archives", "archive_id"),
     ):
         merged[key] = _merge_timestamped_items(
             existing.get(key),
@@ -653,20 +698,26 @@ def _merge_sidecars(
     *,
     reports: list[Any] | None,
     candidates: list[Any] | None,
+    track_material_archives: list[Any] | None,
 ) -> Any:
     if not isinstance(payload, dict):
         return payload
 
     merged_payload = dict(payload)
-    if reports:
+    if reports is not None:
         merged_payload["reports"] = reports
     else:
         merged_payload.setdefault("reports", [])
 
-    if candidates:
+    if candidates is not None:
         merged_payload["candidates"] = candidates
     else:
         merged_payload.setdefault("candidates", [])
+
+    if track_material_archives is not None:
+        merged_payload["track_material_archives"] = track_material_archives
+    else:
+        merged_payload.setdefault("track_material_archives", [])
 
     return merged_payload
 

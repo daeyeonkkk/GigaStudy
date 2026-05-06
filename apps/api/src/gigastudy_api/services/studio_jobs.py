@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from gigastudy_api.api.schemas.studios import SourceKind, Studio, TrackExtractionJob, TrackSlot
 from gigastudy_api.services.engine_queue import EngineQueueJob
+from gigastudy_api.services.studio_documents import studio_has_active_track_material
 
 
 def create_document_extraction_job(
@@ -191,7 +192,7 @@ def mark_extraction_job_failed(
             else [_find_track(studio.tracks, job.slot_id)]
         )
         for track in failed_tracks:
-            if _track_has_content(track):
+            if studio_has_active_track_material(studio, track.slot_id):
                 continue
             if track.source_kind not in {None, job.source_kind}:
                 continue
@@ -235,7 +236,7 @@ def clear_unmapped_document_placeholders(
     for track in studio.tracks:
         if track.slot_id > 5 or track.slot_id in mapped_slot_ids:
             continue
-        if _track_has_content(track):
+        if studio_has_active_track_material(studio, track.slot_id):
             continue
         if track.source_kind != job.source_kind or track.source_label != job.source_label:
             continue
@@ -253,7 +254,3 @@ def _find_track(tracks: list[TrackSlot], slot_id: int) -> TrackSlot:
         if track.slot_id == slot_id:
             return track
     raise ValueError(f"Track slot not found: {slot_id}")
-
-
-def _track_has_content(track: TrackSlot) -> bool:
-    return track.status == "registered" or bool(track.events)

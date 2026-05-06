@@ -8,6 +8,7 @@ from gigastudy_api.api.schemas.studios import (
     ArrangementRegion,
     PitchEvent,
     Studio,
+    TrackMaterialArchive,
     TrackSlot,
     build_studio_response,
 )
@@ -16,12 +17,14 @@ from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.audio_decode import VoiceAnalysisAudio
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.audiveris_document import AudiverisDocumentError
+from gigastudy_api.services.engine.candidate_diagnostics import track_duration_seconds
 from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.engine.pdf_vector_document import PdfVectorDocumentError
-from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, ParsedTrack
+from gigastudy_api.services.engine.symbolic import ParsedSymbolicFile, ParsedTrack, parse_symbolic_file_with_metadata
 from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services import studio_repository
 from gigastudy_api.services.llm.midi_role_review import MidiRoleAssignment, MidiRoleReviewInstruction
+from gigastudy_api.services.studio_documents import register_track_material
 
 
 MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
@@ -106,6 +109,16 @@ MULTI_TRACK_MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
 PDF_UPLOAD_BYTES = b"%PDF-1.4\n% GigaStudy test PDF\n"
 OWNER_TOKEN_A = "a" * 32
 OWNER_TOKEN_B = "b" * 32
+
+
+class FixtureResponse:
+    status_code = 200
+
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    def json(self) -> dict:
+        return self._payload
 
 
 def musicxml_upload_with_pitches(first: tuple[str, int], second: tuple[str, int]) -> str:
@@ -253,6 +266,34 @@ def _created_studio_payload(client: TestClient, response) -> dict:
     return client.get(f"/api/studios/{studio_id}").json()
 
 
+def test_track_archive_migrates_legacy_single_region_snapshot() -> None:
+    archive = TrackMaterialArchive.model_validate(
+        {
+            "archive_id": "legacy",
+            "track_slot_id": 1,
+            "track_name": "Soprano",
+            "source_kind": "document",
+            "source_label": "legacy.musicxml",
+            "archived_at": "2026-05-01T00:00:00+00:00",
+            "reason": "original_score",
+            "pinned": True,
+            "region_snapshot": {
+                "region_id": "track-1-region-1",
+                "track_slot_id": 1,
+                "track_name": "Soprano",
+                "source_kind": "document",
+                "source_label": "legacy.musicxml",
+                "start_seconds": 0,
+                "duration_seconds": 1,
+                "pitch_events": [],
+            },
+        }
+    )
+
+    assert len(archive.region_snapshots) == 1
+    assert archive.region_snapshots[0].region_id == "track-1-region-1"
+
+
 def upload_musicxml_track(
     client: TestClient,
     studio_id: str,
@@ -262,18 +303,104 @@ def upload_musicxml_track(
     filename: str = "soprano.musicxml",
     allow_overwrite: bool = False,
 ):
-    encoded = base64.b64encode(xml.encode("utf-8")).decode("ascii")
-    response = client.post(
-        f"/api/studios/{studio_id}/tracks/{slot_id}/upload",
-        json={
-            "source_kind": "document",
-            "filename": filename,
-            "content_base64": encoded,
-            "allow_overwrite": allow_overwrite,
-        },
+    del client
+    repository = studio_repository.get_studio_repository()
+    upload_dir = Path(get_settings().storage_root) / "_test_symbolic_uploads" / studio_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    source_path = upload_dir / Path(filename).name
+    source_path.write_text(xml, encoding="utf-8")
+
+    with repository._lock:
+        studio = repository._load_studio(studio_id)
+        assert studio is not None
+        parsed_symbolic = parse_symbolic_file_with_metadata(
+            source_path,
+            bpm=studio.bpm,
+            target_slot_id=slot_id,
+        )
+        if parsed_symbolic.has_time_signature:
+            studio.time_signature_numerator = parsed_symbolic.time_signature_numerator
+            studio.time_signature_denominator = parsed_symbolic.time_signature_denominator
+        assert allow_overwrite or not repository._mapped_events_would_overwrite(studio, parsed_symbolic.mapped_events)
+        timestamp = studio_repository._now()
+        registrations = repository._prepare_registration_batch(
+            studio,
+            parsed_symbolic.mapped_events,
+            source_kind="document",
+        )
+        for mapped_slot_id, registration in registrations.items():
+            track = repository._find_track(studio, mapped_slot_id)
+            register_track_material(
+                studio,
+                track,
+                timestamp=timestamp,
+                source_kind="document",
+                source_label=filename,
+                events=registration.events,
+                duration_seconds=track_duration_seconds(registration.events),
+                registration_diagnostics=registration.diagnostics,
+            )
+        studio.updated_at = timestamp
+        repository._save_studio(studio)
+        payload = build_studio_response(studio).model_dump(mode="json")
+    return FixtureResponse(payload)
+
+
+def create_musicxml_candidate(
+    client: TestClient,
+    studio_id: str,
+    *,
+    slot_id: int = 1,
+    xml: str = MUSICXML_UPLOAD,
+    filename: str = "soprano.musicxml",
+) -> FixtureResponse:
+    del client
+    repository = studio_repository.get_studio_repository()
+    upload_dir = Path(get_settings().storage_root) / "_test_symbolic_candidates" / studio_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    source_path = upload_dir / Path(filename).name
+    source_path.write_text(xml, encoding="utf-8")
+    studio = repository.get_studio(studio_id)
+    parsed_symbolic = parse_symbolic_file_with_metadata(
+        source_path,
+        bpm=studio.bpm,
+        target_slot_id=slot_id,
     )
-    assert response.status_code == 200
-    return response
+    candidate_studio = repository._add_extraction_candidates(
+        studio_id,
+        parsed_symbolic.mapped_events,
+        source_kind="document",
+        source_label=filename,
+        method="symbolic_import_review",
+        confidence=0.92,
+        message="Symbolic import is waiting for user approval.",
+    )
+    return FixtureResponse(build_studio_response(candidate_studio).model_dump(mode="json"))
+
+
+def enqueue_document_fixture(
+    client: TestClient,
+    studio_id: str,
+    *,
+    filename: str,
+    content: bytes,
+) -> FixtureResponse:
+    del client
+    repository = studio_repository.get_studio_repository()
+    upload_dir = Path(get_settings().storage_root) / "_test_document_uploads" / studio_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    source_path = upload_dir / Path(filename).name
+    source_path.write_bytes(content)
+    studio = repository._enqueue_document_job(
+        studio_id,
+        1,
+        source_kind="document",
+        source_label=filename,
+        source_path=source_path,
+        background_tasks=None,
+        parse_all_parts=True,
+    )
+    return FixtureResponse(build_studio_response(studio).model_dump(mode="json"))
 
 
 def test_create_studio_client_request_id_returns_existing_blank_studio_on_retry(
@@ -326,6 +453,39 @@ def test_create_studio_client_request_id_returns_existing_queued_upload_on_retry
     retry_payload = retry_response.json()
     assert retry_payload["jobs"][0]["status"] == "queued"
     assert len(client.get("/api/studios").json()) == 1
+
+
+def test_create_studio_retry_repairs_missing_queue_record_for_existing_upload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        studio_repository.StudioRepository,
+        "_schedule_engine_queue_processing",
+        lambda self, background_tasks: None,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    encoded = base64.b64encode(build_single_note_midi_bytes(bpm=113)).decode("ascii")
+    payload = {
+        "title": "Retry repair MIDI seed",
+        "client_request_id": "retry-midi-repair-001",
+        "start_mode": "upload",
+        "source_kind": "document",
+        "source_filename": "source.mid",
+        "source_content_base64": encoded,
+    }
+
+    first_response = client.post("/api/studios", json=payload)
+    studio_id = first_response.json()["studio_id"]
+    repository = studio_repository.get_studio_repository()
+    assert repository._engine_queue.delete_studio_jobs(studio_id) == 1
+    assert repository._engine_queue.has_runnable(studio_id=studio_id) is False
+
+    retry_response = client.post("/api/studios", json=payload)
+
+    assert retry_response.status_code == 200
+    assert retry_response.json()["studio_id"] == studio_id
+    assert repository._engine_queue.has_runnable(studio_id=studio_id) is True
 
 
 def test_create_studio_rejects_reused_client_request_id_for_different_start_data(
@@ -1658,12 +1818,12 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
     assert percussion_events[3]["beat_in_measure"] == 1
 
 
-def test_upload_musicxml_registers_parsed_track_region_events(tmp_path: Path, monkeypatch) -> None:
+def test_track_upload_rejects_symbolic_score_files(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
         json={
-            "title": "MusicXML import",
+            "title": "Track score upload rejected",
             "bpm": 120,
             "start_mode": "blank",
         },
@@ -1680,15 +1840,31 @@ def test_upload_musicxml_registers_parsed_track_region_events(tmp_path: Path, mo
         },
     )
 
-    assert upload_response.status_code == 200
-    payload = upload_response.json()
-    soprano = payload["tracks"][0]
-    soprano_events = _track_region_events(payload, 1)
-    assert soprano["status"] == "registered"
-    assert soprano["source_kind"] == "document"
-    assert [note["label"] for note in soprano_events] == ["C5", "G5"]
-    assert soprano_events[0]["source"] == "musicxml"
-    assert soprano_events[0]["pitch_midi"] == 72
+    assert upload_response.status_code == 422
+
+
+def test_track_direct_upload_target_rejects_symbolic_score_files(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    studio_id = client.post(
+        "/api/studios",
+        json={
+            "title": "Track direct score upload rejected",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    ).json()["studio_id"]
+
+    target_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload-target",
+        json={
+            "source_kind": "document",
+            "filename": "soprano.musicxml",
+            "size_bytes": len(MUSICXML_UPLOAD),
+            "content_type": "application/vnd.recordare.musicxml+xml",
+        },
+    )
+
+    assert target_response.status_code == 422
 
 
 def test_track_overwrite_archives_original_score_and_restore_recovers_it(tmp_path: Path, monkeypatch) -> None:
@@ -1794,6 +1970,58 @@ def test_track_archive_keeps_pinned_original_while_pruning_previous_versions(tmp
     assert "version-0.musicxml" not in {archive["source_label"] for archive in non_pinned_archives}
 
 
+def test_track_archive_restores_multiple_regions_without_flattening(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Multi-region archive",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    original_payload = upload_musicxml_track(client, studio_id, filename="original.musicxml").json()
+    source_region = original_payload["regions"][0]
+
+    copy_response = client.post(
+        f"/api/studios/{studio_id}/regions/{source_region['region_id']}/copy",
+        json={"start_seconds": 4.0},
+    )
+
+    assert copy_response.status_code == 200
+    assert len([region for region in copy_response.json()["regions"] if region["track_slot_id"] == 1]) == 2
+
+    replacement_xml = musicxml_upload_with_pitches(("D", 5), ("A", 5))
+    overwrite_payload = upload_musicxml_track(
+        client,
+        studio_id,
+        xml=replacement_xml,
+        filename="replacement.musicxml",
+        allow_overwrite=True,
+    ).json()
+    original_archive = next(
+        archive
+        for archive in overwrite_payload["track_material_archives"]
+        if archive["reason"] == "original_score"
+    )
+    assert original_archive["event_count"] == 4
+
+    restore_response = client.post(
+        f"/api/studios/{studio_id}/track-archives/{original_archive['archive_id']}/restore"
+    )
+
+    assert restore_response.status_code == 200
+    restored_slot_regions = [
+        region
+        for region in restore_response.json()["regions"]
+        if region["track_slot_id"] == 1
+    ]
+    assert len(restored_slot_regions) == 2
+    assert sorted(region["start_seconds"] for region in restored_slot_regions) == [0.0, 4.0]
+    assert all([event["label"] for event in region["pitch_events"]] == ["C5", "G5"] for region in restored_slot_regions)
+
+
 def test_studio_midi_export_uses_registered_region_events(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
@@ -1866,6 +2094,26 @@ def test_track_registration_stores_ensemble_arrangement_diagnostics(tmp_path: Pa
 
 
 def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackPitchEvent(
+                pitch_midi=72,
+                pitch_hz=261.63,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
@@ -1876,15 +2124,15 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
         },
     )
     studio_id = create_response.json()["studio_id"]
-    content = MUSICXML_UPLOAD.encode("utf-8")
+    content = b"RIFF....WAVEfmt direct upload audio"
 
     target_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload-target",
         json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
+            "source_kind": "audio",
+            "filename": "voice.wav",
             "size_bytes": len(content),
-            "content_type": "application/vnd.recordare.musicxml+xml",
+            "content_type": "audio/wav",
         },
     )
 
@@ -1900,17 +2148,17 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
     upload_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
+            "source_kind": "audio",
+            "filename": "voice.wav",
             "asset_path": target["asset_path"],
         },
     )
 
     assert upload_response.status_code == 200
-    upload_payload = upload_response.json()
+    upload_payload = client.get(f"/api/studios/{studio_id}").json()
     soprano = upload_payload["tracks"][0]
     assert soprano["status"] == "registered"
-    assert [note["label"] for note in _track_region_events(upload_payload, 1)] == ["C5", "G5"]
+    assert [note["label"] for note in _track_region_events(upload_payload, 1)] == ["C5"]
 
 
 def test_owner_scoped_direct_upload_put_requires_matching_owner_token(tmp_path: Path, monkeypatch) -> None:
@@ -1927,16 +2175,16 @@ def test_owner_scoped_direct_upload_put_requires_matching_owner_token(tmp_path: 
         },
     )
     studio_id = create_response.json()["studio_id"]
-    content = MUSICXML_UPLOAD.encode("utf-8")
+    content = b"RIFF....WAVEfmt owner scoped audio"
 
     target_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload-target",
         headers=owner_headers,
         json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
+            "source_kind": "audio",
+            "filename": "voice.wav",
             "size_bytes": len(content),
-            "content_type": "application/vnd.recordare.musicxml+xml",
+            "content_type": "audio/wav",
         },
     )
 
@@ -2205,19 +2453,15 @@ def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypat
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(THREE_FOUR_MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "three-four.musicxml",
-            "content_base64": encoded,
-        },
+    payload = upload_musicxml_track(
+        client,
+        studio_id,
+        xml=THREE_FOUR_MUSICXML_UPLOAD,
+        filename="three-four.musicxml",
     )
 
-    assert upload_response.status_code == 200
-    payload = upload_response.json()
+    payload = payload.json()
     assert payload["time_signature_numerator"] == 3
     assert payload["time_signature_denominator"] == 4
     soprano_events = _track_region_events(payload, 1)
@@ -2227,7 +2471,27 @@ def test_upload_musicxml_updates_studio_time_signature(tmp_path: Path, monkeypat
     assert soprano_events[3]["beat_in_measure"] == 1
 
 
-def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypatch) -> None:
+def test_audio_upload_requires_overwrite_confirmation_for_explicit_region(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackPitchEvent(
+                pitch_midi=74,
+                pitch_hz=293.66,
+                label="D5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
@@ -2239,13 +2503,13 @@ def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypat
     )
     studio_id = create_response.json()["studio_id"]
     upload_musicxml_track(client, studio_id)
-    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
+    encoded = base64.b64encode(b"RIFF....WAVEfmt replacement audio").decode("ascii")
 
     blocked_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
+            "source_kind": "audio",
+            "filename": "voice.wav",
             "content_base64": encoded,
         },
     )
@@ -2254,14 +2518,15 @@ def test_direct_upload_requires_overwrite_confirmation(tmp_path: Path, monkeypat
     overwrite_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
+            "source_kind": "audio",
+            "filename": "voice.wav",
             "content_base64": encoded,
             "allow_overwrite": True,
         },
     )
     assert overwrite_response.status_code == 200
-    assert [note["label"] for note in _track_region_events(overwrite_response.json(), 1)] == ["C5", "G5"]
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert [note["label"] for note in _track_region_events(payload, 1)] == ["D5"]
 
 
 def test_upload_requires_file_content_instead_of_fixture_fallback(tmp_path: Path, monkeypatch) -> None:
@@ -2279,15 +2544,15 @@ def test_upload_requires_file_content_instead_of_fixture_fallback(tmp_path: Path
     response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",
         json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
+            "source_kind": "audio",
+            "filename": "voice.wav",
         },
     )
 
     assert response.status_code == 422
 
 
-def test_upload_musicxml_can_wait_for_candidate_approval(tmp_path: Path, monkeypatch) -> None:
+def test_symbolic_candidate_can_wait_for_candidate_approval(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
         "/api/studios",
@@ -2298,17 +2563,8 @@ def test_upload_musicxml_can_wait_for_candidate_approval(tmp_path: Path, monkeyp
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
-    )
+    upload_response = create_musicxml_candidate(client, studio_id)
 
     assert upload_response.status_code == 200
     payload = upload_response.json()
@@ -2344,16 +2600,12 @@ def test_upload_pdf_queues_document_extraction_job_and_creates_document_extracti
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(build_preview_pdf_bytes()).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "soprano.pdf",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="soprano.pdf",
+        content=build_preview_pdf_bytes(),
     )
 
     assert upload_response.status_code == 200
@@ -2414,16 +2666,12 @@ def test_upload_pdf_can_register_document_extraction_candidates_into_each_sugges
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "satb.pdf",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="satb.pdf",
+        content=PDF_UPLOAD_BYTES,
     )
 
     assert upload_response.status_code == 200
@@ -2484,15 +2732,12 @@ def test_upload_pdf_falls_back_to_vector_document_extraction_and_attempts_all_vo
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "phonecert.pdf",
-            "content_base64": encoded,
-        },
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="phonecert.pdf",
+        content=PDF_UPLOAD_BYTES,
     )
 
     assert upload_response.status_code == 200
@@ -2546,15 +2791,12 @@ def test_vector_document_extraction_four_part_score_clears_unmapped_bass_placeho
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
-    response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "four-part.pdf",
-            "content_base64": encoded,
-        },
+    response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="four-part.pdf",
+        content=PDF_UPLOAD_BYTES,
     )
 
     assert response.status_code == 200
@@ -2583,16 +2825,12 @@ def test_document_extraction_job_bulk_approval_registers_open_tracks_before_over
     )
     studio_id = create_response.json()["studio_id"]
     upload_musicxml_track(client, studio_id)
-    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "satb.pdf",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="satb.pdf",
+        content=PDF_UPLOAD_BYTES,
     )
 
     assert upload_response.status_code == 200
@@ -2684,16 +2922,12 @@ def test_upload_pdf_marks_document_extraction_job_failed_when_audiveris_unavaila
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "broken.pdf",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="broken.pdf",
+        content=PDF_UPLOAD_BYTES,
     )
 
     assert upload_response.status_code == 200
@@ -2733,15 +2967,12 @@ def test_failed_document_extraction_job_can_be_retried_from_durable_queue(
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(PDF_UPLOAD_BYTES).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "retry.pdf",
-            "content_base64": encoded,
-        },
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="retry.pdf",
+        content=PDF_UPLOAD_BYTES,
     )
 
     assert upload_response.status_code == 200
@@ -2984,17 +3215,8 @@ def test_candidate_can_be_approved_into_different_empty_track(tmp_path: Path, mo
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
-    )
+    upload_response = create_musicxml_candidate(client, studio_id)
     candidate_id = upload_response.json()["candidates"][0]["candidate_id"]
 
     approve_response = client.post(
@@ -3020,18 +3242,9 @@ def test_candidate_approval_requires_overwrite_confirmation(tmp_path: Path, monk
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
     upload_musicxml_track(client, studio_id, slot_id=2, filename="alto-seed.musicxml")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
-    )
+    upload_response = create_musicxml_candidate(client, studio_id)
     candidate_id = upload_response.json()["candidates"][0]["candidate_id"]
 
     blocked_response = client.post(
@@ -3064,17 +3277,8 @@ def test_reject_candidate_keeps_track_empty(tmp_path: Path, monkeypatch) -> None
         },
     )
     studio_id = create_response.json()["studio_id"]
-    encoded = base64.b64encode(MUSICXML_UPLOAD.encode("utf-8")).decode("ascii")
 
-    upload_response = client.post(
-        f"/api/studios/{studio_id}/tracks/1/upload",
-        json={
-            "source_kind": "document",
-            "filename": "soprano.musicxml",
-            "content_base64": encoded,
-            "review_before_register": True,
-        },
-    )
+    upload_response = create_musicxml_candidate(client, studio_id)
     candidate_id = upload_response.json()["candidates"][0]["candidate_id"]
 
     reject_response = client.post(f"/api/studios/{studio_id}/candidates/{candidate_id}/reject")

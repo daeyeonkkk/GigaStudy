@@ -14,8 +14,6 @@ SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
 AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
 TRACK_UPLOAD_SUFFIXES = {
     "audio": tuple(AUDIO_SOURCE_SUFFIXES),
-    "midi": (".mid", ".midi"),
-    "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | DOCUMENT_IMAGE_SOURCE_SUFFIXES),
 }
 STUDIO_SEED_UPLOAD_SUFFIXES = {
     "document": tuple(SYMBOLIC_SOURCE_SUFFIXES | DOCUMENT_IMAGE_SOURCE_SUFFIXES),

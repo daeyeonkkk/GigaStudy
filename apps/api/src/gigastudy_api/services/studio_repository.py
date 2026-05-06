@@ -107,8 +107,8 @@ from gigastudy_api.services.studio_documents import (
     register_track_material as _register_track_material,
     restore_track_material_archive,
     sync_studio_arrangement_regions,
+    studio_has_active_track_material,
     studio_list_item_from_payload as _studio_list_item_from_payload,
-    track_has_content as _track_has_content,
 )
 from gigastudy_api.services.studio_access import (
     owner_hash_for_request,
@@ -314,6 +314,7 @@ class StudioRepository:
             has_source_content=bool(source_content_base64),
             has_source_asset=bool(source_asset_path),
         )
+        existing_studio: Studio | None = None
         with self._lock:
             if client_request_id is not None:
                 existing_studio = self._find_studio_by_client_request_id(
@@ -326,8 +327,15 @@ class StudioRepository:
                             status_code=409,
                             detail="Studio creation request id was already used for different start data.",
                         )
-                    return existing_studio
-            ensure_studio_capacity(self._count_studios())
+            if existing_studio is None:
+                ensure_studio_capacity(self._count_studios())
+        if existing_studio is not None:
+            self._recover_existing_creation_jobs(existing_studio, background_tasks)
+            return self.get_studio(
+                existing_studio.studio_id,
+                owner_token=owner_token,
+                enforce_owner=owner_policy_enabled(),
+            )
         resolved_bpm = bpm if bpm is not None else DEFAULT_UPLOAD_BPM
         studio = Studio(
             studio_id=uuid4().hex,
@@ -940,7 +948,7 @@ class StudioRepository:
             job.output_path = None
             job.updated_at = timestamp
             track = self._find_track(studio, job.slot_id)
-            if not _track_has_content(track):
+            if not studio_has_active_track_material(studio, job.slot_id):
                 track.status = "extracting"
                 track.source_kind = job.source_kind
                 track.source_label = job.source_label
@@ -1260,7 +1268,7 @@ class StudioRepository:
                 else [self._find_track(studio, job.slot_id)]
             )
             for track in placeholder_tracks:
-                if _track_has_content(track):
+                if studio_has_active_track_material(studio, track.slot_id):
                     continue
                 track.status = "extracting"
                 track.source_kind = job.source_kind
@@ -1334,6 +1342,15 @@ class StudioRepository:
 
     def _schedule_engine_queue_processing(self, background_tasks: BackgroundTasks | None) -> None:
         self._engine_commands.schedule_processing(background_tasks)
+
+    def _recover_existing_creation_jobs(
+        self,
+        studio: Studio,
+        background_tasks: BackgroundTasks | None,
+    ) -> None:
+        repaired = self._engine_commands.ensure_queue_records_for_active_jobs(studio)
+        if repaired > 0 or self._engine_queue.has_runnable(studio_id=studio.studio_id):
+            self._schedule_engine_queue_processing(background_tasks)
 
     def _mark_job_running(
         self,
@@ -1441,7 +1458,7 @@ class StudioRepository:
         studio: Studio,
         mapped_events: dict[int, list[TrackPitchEvent]],
     ) -> bool:
-        return any(_track_has_content(self._find_track(studio, slot_id)) for slot_id in mapped_events)
+        return any(studio_has_active_track_material(studio, slot_id) for slot_id in mapped_events)
 
     def _transcribe_voice_file(
         self,

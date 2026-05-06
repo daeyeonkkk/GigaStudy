@@ -29,7 +29,7 @@ from gigastudy_api.services.llm.midi_role_review import (
     review_midi_roles_with_deepseek,
 )
 from gigastudy_api.services.studio_assets import StudioAssetService
-from gigastudy_api.services.studio_documents import track_has_content
+from gigastudy_api.services.studio_documents import studio_has_active_track_material
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
 from gigastudy_api.services.voice_pipeline import run_voice_pipeline
 
@@ -329,8 +329,7 @@ class StudioEngineJobHandlers:
             )
             return
 
-        track = self._repository._find_track(studio, record.slot_id)
-        if track_has_content(track) and not allow_overwrite:
+        if studio_has_active_track_material(studio, record.slot_id) and not allow_overwrite:
             self._repository._mark_job_failed(
                 record.studio_id,
                 record.job_id,

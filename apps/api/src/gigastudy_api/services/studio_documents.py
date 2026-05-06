@@ -36,8 +36,20 @@ def empty_tracks(timestamp: str) -> list[TrackSlot]:
     ]
 
 
-def track_has_content(track: TrackSlot) -> bool:
-    return track.status == "registered" or bool(track.events)
+def studio_has_active_track_material(studio: Studio, slot_id: int) -> bool:
+    return bool(_current_track_material_snapshots(studio, _find_track(studio.tracks, slot_id)))
+
+
+def _track_slot_has_legacy_content(track: TrackSlot) -> bool:
+    return bool(track.events) or (
+        track.status == "registered"
+        and (
+            bool(track.audio_source_path)
+            or bool(track.source_kind)
+            or bool(track.source_label)
+            or track.duration_seconds > 0
+        )
+    )
 
 
 def register_track_material(
@@ -83,28 +95,29 @@ def archive_current_track_material(
     force_reason: TrackMaterialArchiveReason | None = None,
     force_pinned: bool | None = None,
 ) -> TrackMaterialArchive | None:
-    snapshot = _current_track_material_snapshot(studio, track)
-    if snapshot is None:
+    snapshots = _current_track_material_snapshots(studio, track)
+    if not snapshots:
         return None
 
     pinned = (
         force_pinned
         if force_pinned is not None
-        else _should_pin_original_score(studio, snapshot)
+        else _should_pin_original_score(studio, track.slot_id, snapshots)
     )
     reason: TrackMaterialArchiveReason = force_reason or (
         "original_score" if pinned else "before_overwrite"
     )
+    source_region = snapshots[0]
     archive = TrackMaterialArchive(
         archive_id=f"track-archive-{uuid4().hex}",
         track_slot_id=track.slot_id,
         track_name=track.name,
-        source_kind=snapshot.source_kind or track.source_kind,
-        source_label=snapshot.source_label or track.source_label,
+        source_kind=source_region.source_kind or track.source_kind,
+        source_label=source_region.source_label or track.source_label,
         archived_at=timestamp,
         reason=reason,
         pinned=pinned,
-        region_snapshot=snapshot,
+        region_snapshots=snapshots,
     )
     studio.track_material_archives.insert(0, archive)
     _prune_track_material_archives(studio, track.slot_id)
@@ -119,26 +132,28 @@ def restore_track_material_archive(
     if archive.track_slot_id != track.slot_id:
         raise HTTPException(status_code=409, detail="Track archive can only be restored to its original slot.")
 
-    snapshot = archive.region_snapshot.model_copy(deep=True)
-    snapshot.track_slot_id = track.slot_id
-    snapshot.track_name = track.name
-    for event in snapshot.pitch_events:
-        event.track_slot_id = track.slot_id
-        event.region_id = snapshot.region_id
-    _replace_track_region(studio, track.slot_id, snapshot)
+    snapshots = [
+        _normalized_region_snapshot(region, track)
+        for region in archive.region_snapshots
+        if region.track_slot_id == track.slot_id
+    ]
+    if not snapshots:
+        raise HTTPException(status_code=409, detail="Track archive has no restorable material.")
+    _replace_track_regions(studio, track.slot_id, snapshots)
 
     track.status = "registered"
-    track.source_kind = snapshot.source_kind or archive.source_kind
-    track.source_label = snapshot.source_label or archive.source_label
-    track.audio_source_path = snapshot.audio_source_path
-    track.audio_source_label = snapshot.source_label if snapshot.audio_source_path else None
-    track.audio_mime_type = snapshot.audio_mime_type
-    track.duration_seconds = snapshot.duration_seconds
-    track.sync_offset_seconds = snapshot.sync_offset_seconds
-    track.volume_percent = snapshot.volume_percent
+    source_region = snapshots[0]
+    track.source_kind = source_region.source_kind or archive.source_kind
+    track.source_label = source_region.source_label or archive.source_label
+    track.audio_source_path = source_region.audio_source_path
+    track.audio_source_label = source_region.source_label if source_region.audio_source_path else None
+    track.audio_mime_type = source_region.audio_mime_type
+    track.duration_seconds = _region_snapshots_duration_seconds(snapshots)
+    track.sync_offset_seconds = source_region.sync_offset_seconds
+    track.volume_percent = source_region.volume_percent
     track.events = []
     track.diagnostics = {
-        **snapshot.diagnostics,
+        **source_region.diagnostics,
         "restored_from_archive": {
             "archive_id": archive.archive_id,
             "archived_at": archive.archived_at,
@@ -148,23 +163,27 @@ def restore_track_material_archive(
     }
 
 
-def _current_track_material_snapshot(studio: Studio, track: TrackSlot) -> ArrangementRegion | None:
+def _current_track_material_snapshots(studio: Studio, track: TrackSlot) -> list[ArrangementRegion]:
     regions = [
         region
         for region in studio.regions
         if region.track_slot_id == track.slot_id and (region.pitch_events or region.audio_source_path)
     ]
-    if len(regions) == 1:
-        return _normalized_region_snapshot(regions[0], track)
-    if len(regions) > 1:
-        return _composite_region_snapshot(regions, track)
-    return build_arrangement_region_from_track_events(
+    if regions:
+        return [
+            _normalized_region_snapshot(region, track)
+            for region in sorted(regions, key=lambda item: (item.start_seconds, item.region_id))
+        ]
+    if not _track_slot_has_legacy_content(track):
+        return []
+    fallback_region = build_arrangement_region_from_track_events(
         track,
         events=track.events,
         bpm=studio.bpm,
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
     )
+    return [fallback_region] if fallback_region is not None else []
 
 
 def _normalized_region_snapshot(region: ArrangementRegion, track: TrackSlot) -> ArrangementRegion:
@@ -177,61 +196,27 @@ def _normalized_region_snapshot(region: ArrangementRegion, track: TrackSlot) -> 
     return snapshot
 
 
-def _composite_region_snapshot(
-    regions: list[ArrangementRegion],
-    track: TrackSlot,
-) -> ArrangementRegion:
-    ordered_regions = sorted(
-        regions,
-        key=lambda region: (region.start_seconds, region.region_id),
-    )
-    region_id = f"track-{track.slot_id}-archive-composite"
-    pitch_events = []
-    for index, region in enumerate(ordered_regions, start=1):
-        for event in sorted(region.pitch_events, key=lambda item: (item.start_seconds, item.event_id)):
-            next_event = event.model_copy(deep=True)
-            next_event.event_id = f"{region_id}-e{index}-{len(pitch_events) + 1}"
-            next_event.region_id = region_id
-            next_event.track_slot_id = track.slot_id
-            pitch_events.append(next_event)
-
-    first_region = ordered_regions[0]
-    region_start = min(region.start_seconds for region in ordered_regions)
-    region_end = max(
-        max(
-            (event.start_seconds + event.duration_seconds for event in region.pitch_events),
-            default=region.start_seconds + region.duration_seconds,
-        )
-        for region in ordered_regions
-    )
-    diagnostics = dict(first_region.diagnostics)
-    diagnostics["archived_region_count"] = len(ordered_regions)
-    return ArrangementRegion(
-        region_id=region_id,
-        track_slot_id=track.slot_id,
-        track_name=track.name,
-        source_kind=first_region.source_kind or track.source_kind,
-        source_label=first_region.source_label or track.source_label,
-        audio_source_path=first_region.audio_source_path,
-        audio_mime_type=first_region.audio_mime_type,
-        start_seconds=region_start,
-        duration_seconds=max(0.001, region_end - region_start),
-        sync_offset_seconds=first_region.sync_offset_seconds,
-        volume_percent=track.volume_percent,
-        pitch_events=pitch_events,
-        diagnostics=diagnostics,
-    )
-
-
-def _should_pin_original_score(studio: Studio, snapshot: ArrangementRegion) -> bool:
-    if snapshot.source_kind not in ORIGINAL_SCORE_SOURCE_KINDS:
+def _should_pin_original_score(
+    studio: Studio,
+    slot_id: int,
+    snapshots: list[ArrangementRegion],
+) -> bool:
+    if not any(snapshot.source_kind in ORIGINAL_SCORE_SOURCE_KINDS for snapshot in snapshots):
         return False
     return not any(
-        archive.track_slot_id == snapshot.track_slot_id
+        archive.track_slot_id == slot_id
         and archive.reason == "original_score"
         and archive.pinned
         for archive in studio.track_material_archives
     )
+
+
+def _region_snapshots_duration_seconds(snapshots: list[ArrangementRegion]) -> float:
+    if not snapshots:
+        return 0
+    start_seconds = min(region.start_seconds for region in snapshots)
+    end_seconds = max(region.start_seconds + region.duration_seconds for region in snapshots)
+    return max(0, end_seconds - start_seconds)
 
 
 def _prune_track_material_archives(studio: Studio, slot_id: int) -> None:
@@ -259,13 +244,27 @@ def _replace_track_region(
     slot_id: int,
     region: ArrangementRegion | None,
 ) -> None:
+    _replace_track_regions(studio, slot_id, [region] if region is not None else [])
+
+
+def _replace_track_regions(
+    studio: Studio,
+    slot_id: int,
+    regions: list[ArrangementRegion],
+) -> None:
     studio.regions = [
         existing_region
         for existing_region in studio.regions
         if existing_region.track_slot_id != slot_id
     ]
-    if region is not None:
-        studio.regions.append(region)
+    studio.regions.extend(regions)
+
+
+def _find_track(tracks: list[TrackSlot], slot_id: int) -> TrackSlot:
+    for track in tracks:
+        if track.slot_id == slot_id:
+            return track
+    raise HTTPException(status_code=404, detail="Track slot not found.")
 
 
 def encode_studio_payload(studio: Studio) -> dict[str, Any]:

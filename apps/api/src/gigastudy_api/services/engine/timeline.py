@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gigastudy_api.api.schemas.studios import ArrangementRegion, Studio, TrackSlot
+from gigastudy_api.api.schemas.studios import ArrangementRegion, Studio
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import seconds_per_beat
 
@@ -92,38 +92,3 @@ def registered_region_events_by_slot(
         if events:
             events_by_slot[track.slot_id] = events
     return events_by_slot
-
-
-def registered_sync_resolved_tracks_by_slot(
-    tracks: list[TrackSlot],
-    *,
-    bpm: int,
-    exclude_slot_id: int | None = None,
-) -> dict[int, list[TrackPitchEvent]]:
-    return {
-        track.slot_id: events_with_sync_offset(
-            track.events,
-            track.sync_offset_seconds,
-            bpm,
-            voice_index=track.slot_id,
-        )
-        for track in tracks
-        if track.slot_id != exclude_slot_id
-        and track.status == "registered"
-        and track.events
-    }
-
-
-def registered_sync_resolved_tracks(
-    tracks: list[TrackSlot],
-    *,
-    bpm: int,
-    exclude_slot_id: int | None = None,
-) -> list[list[TrackPitchEvent]]:
-    return list(
-        registered_sync_resolved_tracks_by_slot(
-            tracks,
-            bpm=bpm,
-            exclude_slot_id=exclude_slot_id,
-        ).values()
-    )

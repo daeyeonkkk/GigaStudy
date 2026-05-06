@@ -261,6 +261,14 @@ def build_client(tmp_path: Path, monkeypatch, *, studio_access_policy: str = "pu
     return TestClient(create_app())
 
 
+def _process_engine_queue_and_get_studio(client: TestClient, studio_id: str) -> dict:
+    repository = studio_repository.get_studio_repository()
+    for _ in range(10):
+        if repository.process_engine_queue_once() is None:
+            break
+    return client.get(f"/api/studios/{studio_id}").json()
+
+
 def _created_studio_payload(client: TestClient, response) -> dict:
     studio_id = response.json()["studio_id"]
     payload = client.get(f"/api/studios/{studio_id}").json()
@@ -1145,7 +1153,7 @@ def test_upload_start_applies_llm_midi_role_review_when_enabled(tmp_path: Path, 
     assert [event["label"] for event in _track_region_events(payload, 5)] == ["C3"]
 
 
-def test_studio_response_sanitizes_legacy_explicit_polyphonic_regions() -> None:
+def test_studio_response_preserves_explicit_region_events_without_query_cleanup() -> None:
     timestamp = "2026-05-04T00:00:00+00:00"
     studio = Studio(
         studio_id="legacy-poly",
@@ -1234,9 +1242,8 @@ def test_studio_response_sanitizes_legacy_explicit_polyphonic_regions() -> None:
     response = build_studio_response(studio)
     events = response.regions[0].pitch_events
 
-    assert [event.label for event in events] == ["E5", "G5"]
-    assert events[0].start_seconds + events[0].duration_seconds <= events[1].start_seconds
-    assert "region_monophonic_vocal_line" in response.regions[0].diagnostics["actions"]
+    assert [event.label for event in events] == ["C5", "E5", "G5"]
+    assert response.regions[0].diagnostics == {}
 
 
 def test_studio_bpm_change_endpoint_is_not_exposed(tmp_path: Path, monkeypatch) -> None:
@@ -1279,7 +1286,11 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
         json={"context_slot_ids": [1]},
     )
     assert generate_response.status_code == 200
-    generated_payload = generate_response.json()
+    assert any(
+        job["job_type"] == "generation" and job["status"] == "queued"
+        for job in generate_response.json()["jobs"]
+    )
+    generated_payload = _process_engine_queue_and_get_studio(client, studio_id)
     assert len(
         [
             candidate
@@ -1288,6 +1299,15 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
         ]
     ) == 3
     candidate_id = generated_payload["candidates"][0]["candidate_id"]
+    studio_view_payload = client.get(f"/api/studios/{studio_id}?view=studio").json()
+    studio_view_candidate = next(
+        candidate
+        for candidate in studio_view_payload["candidates"]
+        if candidate["candidate_id"] == candidate_id
+    )
+    assert studio_view_candidate["region"]["pitch_events"] == []
+    candidate_detail = client.get(f"/api/studios/{studio_id}/candidates/{candidate_id}").json()
+    assert candidate_detail["region"]["pitch_events"]
     approve_response = client.post(f"/api/studios/{studio_id}/candidates/{candidate_id}/approve", json={})
     assert approve_response.status_code == 200
     approve_payload = approve_response.json()
@@ -1333,13 +1353,19 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
         },
     )
     assert score_response.status_code == 200
-    reports = score_response.json()["reports"]
+    assert any(
+        job["job_type"] == "scoring" and job["status"] == "queued"
+        for job in score_response.json()["jobs"]
+    )
+    reports = _process_engine_queue_and_get_studio(client, studio_id)["reports"]
     assert len(reports) == 1
     assert reports[0]["score_mode"] == "answer"
     assert reports[0]["target_track_name"] == "Soprano"
     assert reports[0]["reference_slot_ids"] == [6]
     assert reports[0]["alignment_offset_seconds"] == 0.42
     assert reports[0]["overall_score"] == 100
+    report_detail = client.get(f"/api/studios/{studio_id}/reports/{reports[0]['report_id']}").json()
+    assert report_detail["report_id"] == reports[0]["report_id"]
 
 
 def test_studio_activity_and_minimal_volume_response_are_lightweight(tmp_path: Path, monkeypatch) -> None:
@@ -1684,7 +1710,7 @@ def test_harmony_score_uses_reference_tracks_without_registered_answer(tmp_path:
     )
 
     assert score_response.status_code == 200
-    reports = score_response.json()["reports"]
+    reports = _process_engine_queue_and_get_studio(client, studio_id)["reports"]
     assert len(reports) == 1
     assert reports[0]["score_mode"] == "harmony"
     assert reports[0]["target_track_name"] == "Alto"
@@ -1730,7 +1756,7 @@ def test_answer_score_uses_target_track_sync_offset(tmp_path: Path, monkeypatch)
     )
 
     assert score_response.status_code == 200
-    report = score_response.json()["reports"][0]
+    report = _process_engine_queue_and_get_studio(client, studio_id)["reports"][0]
     assert report["score_mode"] == "answer"
     assert report["alignment_offset_seconds"] == 0
     assert report["overall_score"] == 100
@@ -1950,7 +1976,8 @@ def test_scoring_can_use_direct_uploaded_performance_audio(tmp_path: Path, monke
     )
 
     assert score_response.status_code == 200
-    assert score_response.json()["reports"][0]["performance_event_count"] == 1
+    score_payload = _process_engine_queue_and_get_studio(client, studio_id)
+    assert score_payload["reports"][0]["performance_event_count"] == 1
     assert captured["path"].name.endswith("score-take.wav")
     assert not (Path(get_settings().storage_root) / target["asset_path"]).exists()
 
@@ -1981,7 +2008,7 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
     )
 
     assert generate_response.status_code == 200
-    generated_payload = generate_response.json()
+    generated_payload = _process_engine_queue_and_get_studio(client, studio_id)
     variant_labels = [candidate["variant_label"] for candidate in generated_payload["candidates"][:3]]
     assert all(label.startswith("그루브 ") for label in variant_labels)
     assert all("후보 " not in label for label in variant_labels)
@@ -3501,7 +3528,7 @@ def test_ai_generation_creates_candidates_and_approval_requires_overwrite_confir
         json={"context_slot_ids": [1]},
     )
     assert first_generate_response.status_code == 200
-    first_payload = first_generate_response.json()
+    first_payload = _process_engine_queue_and_get_studio(client, studio_id)
     alto_candidates = [
         candidate
         for candidate in first_payload["candidates"]
@@ -3533,9 +3560,10 @@ def test_ai_generation_creates_candidates_and_approval_requires_overwrite_confir
         json={"context_slot_ids": [1]},
     )
     assert second_generate_response.status_code == 200
+    second_payload = _process_engine_queue_and_get_studio(client, studio_id)
     second_candidates = [
         candidate
-        for candidate in second_generate_response.json()["candidates"]
+        for candidate in second_payload["candidates"]
         if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
     ]
     assert len(second_candidates) == 3
@@ -3579,9 +3607,10 @@ def test_ai_generation_uses_sync_adjusted_context_timing(tmp_path: Path, monkeyp
     )
 
     assert generate_response.status_code == 200
+    generate_payload = _process_engine_queue_and_get_studio(client, studio_id)
     alto_candidates = [
         candidate
-        for candidate in generate_response.json()["candidates"]
+        for candidate in generate_payload["candidates"]
         if candidate["suggested_slot_id"] == 2 and candidate["status"] == "pending"
     ]
     assert len(alto_candidates) == 3
@@ -3635,9 +3664,10 @@ def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, mon
     )
 
     assert generate_response.status_code == 200
+    generate_payload = _process_engine_queue_and_get_studio(client, studio_id)
     baritone_candidates = [
         candidate
-        for candidate in generate_response.json()["candidates"]
+        for candidate in generate_payload["candidates"]
         if candidate["suggested_slot_id"] == 4 and candidate["status"] == "pending"
     ]
     assert len(baritone_candidates) == 3
@@ -3649,7 +3679,7 @@ def test_ai_generation_handles_close_tenor_bass_neighbor_gap(tmp_path: Path, mon
     )
 
     assert regenerate_response.status_code == 200
-    regenerate_payload = regenerate_response.json()
+    regenerate_payload = _process_engine_queue_and_get_studio(client, studio_id)
     pending_baritone_candidates = [
         candidate
         for candidate in regenerate_payload["candidates"]

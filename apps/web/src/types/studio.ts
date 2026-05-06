@@ -99,7 +99,7 @@ export type CandidateRegion = {
 
 export type TrackExtractionJob = {
   job_id: string
-  job_type: 'document' | 'voice'
+  job_type: 'document' | 'voice' | 'generation' | 'scoring'
   slot_id: number
   source_kind: SourceKind
   source_label: string

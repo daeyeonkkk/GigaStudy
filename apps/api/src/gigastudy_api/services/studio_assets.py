@@ -266,6 +266,53 @@ class StudioAssetService:
             raise HTTPException(status_code=404, detail="Upload target not found.") from error
         return {"asset_path": relative_path, "size_bytes": len(content)}
 
+    def write_direct_upload_file(
+        self,
+        asset_id: str,
+        source_path: Path,
+        *,
+        size_bytes: int,
+        owner_token: str | None = None,
+        validate_track_upload_owner: Callable[[str, int], None] | None = None,
+    ) -> dict[str, int | str]:
+        upload_target = self._direct_upload_tokens.decode(
+            asset_id,
+            owner_policy_enabled=owner_policy_enabled(),
+        )
+        relative_path = upload_target["relative_path"]
+        owner_hash = upload_target["owner_hash"]
+        max_bytes = upload_target["max_bytes"]
+
+        if owner_hash is not None:
+            if owner_hash_for_request(owner_token, honor_public_token=True) != owner_hash:
+                raise HTTPException(status_code=404, detail="Upload target not found.")
+        elif owner_policy_enabled():
+            raise HTTPException(status_code=404, detail="Upload target not found.")
+
+        upload_owner = _track_upload_owner_from_path(relative_path)
+        is_staged_upload = _is_staged_upload_path(relative_path)
+        if upload_owner is None and not is_staged_upload:
+            raise HTTPException(status_code=404, detail="Upload target not found.")
+        if upload_owner is not None and validate_track_upload_owner is not None:
+            studio_id, slot_id = upload_owner
+            validate_track_upload_owner(studio_id, slot_id)
+        if size_bytes <= 0:
+            raise HTTPException(status_code=422, detail="Uploaded asset is empty.")
+        if size_bytes > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds the configured {max_bytes} byte limit.",
+            )
+        self.ensure_capacity(size_bytes)
+        try:
+            self._asset_storage.write_direct_upload_file(
+                relative_path=relative_path,
+                source_path=source_path,
+            )
+        except AssetStorageError as error:
+            raise HTTPException(status_code=404, detail="Upload target not found.") from error
+        return {"asset_path": relative_path, "size_bytes": size_bytes}
+
     def register_asset(
         self,
         *,

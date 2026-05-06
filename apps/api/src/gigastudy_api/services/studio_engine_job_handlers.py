@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import logging
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from gigastudy_api.config import get_settings
+from gigastudy_api.api.schemas.studios import GenerateTrackRequest, ScoreTrackRequest
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
     candidate_review_message,
@@ -28,8 +31,11 @@ from gigastudy_api.services.llm.midi_role_review import apply_midi_role_review_i
 from gigastudy_api.services.llm.provider import review_midi_roles
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_documents import studio_has_active_track_material
+from gigastudy_api.services.performance import record_metric
 from gigastudy_api.services.upload_policy import guess_audio_mime_type
 from gigastudy_api.services.voice_pipeline import run_voice_pipeline
+
+logger = logging.getLogger("gigastudy_api.engine_jobs")
 
 
 class StudioEngineJobHandlers:
@@ -47,13 +53,69 @@ class StudioEngineJobHandlers:
         self._vector_parser = vector_parser
 
     def process(self, record: EngineQueueJob) -> None:
-        if record.job_type == "document":
-            self.process_document_extraction(record)
-            return
-        if record.job_type == "voice":
-            self.process_voice(record)
-            return
-        raise RuntimeError(f"Unsupported engine job type: {record.job_type}")
+        started_at = perf_counter()
+        outcome = "completed"
+        try:
+            if record.job_type == "document":
+                self.process_document_extraction(record)
+                return
+            if record.job_type == "voice":
+                self.process_voice(record)
+                return
+            if record.job_type == "generation":
+                self.process_generation(record)
+                return
+            if record.job_type == "scoring":
+                self.process_scoring(record)
+                return
+            raise RuntimeError(f"Unsupported engine job type: {record.job_type}")
+        except Exception:
+            outcome = "failed"
+            raise
+        finally:
+            elapsed_ms = (perf_counter() - started_at) * 1000
+            record_metric("engine_job_ms", elapsed_ms)
+            logger.info(
+                "engine_job_duration job_id=%s studio_id=%s slot_id=%s job_type=%s attempt=%s outcome=%s duration_ms=%.1f",
+                record.job_id,
+                record.studio_id,
+                record.slot_id,
+                record.job_type,
+                record.attempt_count,
+                outcome,
+                elapsed_ms,
+            )
+
+    def process_generation(self, record: EngineQueueJob) -> None:
+        request = GenerateTrackRequest.model_validate(record.payload.get("request") or {})
+        self._repository._generation.generate_track_now(
+            record.studio_id,
+            record.slot_id,
+            request,
+            job_id=record.job_id,
+        )
+        if not request.review_before_register:
+            self._repository._mark_job_completed(
+                record.studio_id,
+                record.job_id,
+                output_path="",
+                method="ai_generation",
+            )
+
+    def process_scoring(self, record: EngineQueueJob) -> None:
+        request = ScoreTrackRequest.model_validate(record.payload.get("request") or {})
+        self._repository._scoring.score_track_now(
+            record.studio_id,
+            record.slot_id,
+            request,
+            job_id=record.job_id,
+        )
+        self._repository._mark_job_completed(
+            record.studio_id,
+            record.job_id,
+            output_path=request.performance_asset_path or "",
+            method="practice_scoring",
+        )
 
     def process_document_extraction(self, record: EngineQueueJob) -> None:
         settings = get_settings()

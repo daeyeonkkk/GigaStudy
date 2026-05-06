@@ -67,7 +67,7 @@ function jobTargetLabel(job: TrackExtractionJob): string {
   if (job.parse_all_parts) {
     return '악보 파일'
   }
-  return `Track ${job.slot_id}`
+  return `트랙 ${job.slot_id}`
 }
 
 function describeJobActivity(jobs: TrackExtractionJob[]): string {
@@ -78,8 +78,15 @@ function describeJobActivity(jobs: TrackExtractionJob[]): string {
   const runningJobs = jobs.filter((job) => job.status === 'running')
   const queuedJobs = jobs.filter((job) => job.status === 'queued')
   const leadJob = runningJobs[0] ?? queuedJobs[0]
-  const verb = leadJob.status === 'running' ? '분석 중' : '대기 중'
-  const kind = leadJob.job_type === 'voice' ? '녹음 분석' : '악보 분석'
+  const verb = leadJob.status === 'running' ? '처리 중' : '대기 중'
+  const kind =
+    leadJob.job_type === 'voice'
+      ? '녹음 분석'
+      : leadJob.job_type === 'generation'
+        ? 'AI 생성'
+        : leadJob.job_type === 'scoring'
+          ? '채점'
+          : '악보 분석'
   const queueTail = jobs.length > 1 ? `, 남은 작업 ${jobs.length - 1}개` : ''
   return `${jobTargetLabel(leadJob)} ${kind} ${verb}입니다${queueTail}.`
 }
@@ -88,6 +95,7 @@ export function useStudioResource(
   studioId: string | undefined,
   onPollingError: (message: string) => void,
   onJobActivity?: (message: string, phase?: JobActivityPhase) => void,
+  view: 'full' | 'studio' | 'edit' | 'practice' = 'full',
 ): StudioResourceState {
   const [studio, setStudio] = useState<Studio | null>(null)
   const [loadState, setLoadState] = useState<StudioLoadState>({ phase: 'loading' })
@@ -110,6 +118,7 @@ export function useStudioResource(
 
   useEffect(() => {
     let ignore = false
+    const controller = new AbortController()
 
     if (!studioId) {
       return () => {
@@ -117,7 +126,7 @@ export function useStudioResource(
       }
     }
 
-    getStudio(studioId)
+    getStudio(studioId, { signal: controller.signal, view })
       .then((nextStudio) => {
         if (!ignore) {
           previousActiveJobCountRef.current = activeJobs(nextStudio.jobs).length
@@ -126,7 +135,7 @@ export function useStudioResource(
         }
       })
       .catch((error) => {
-        if (!ignore) {
+        if (!ignore && !controller.signal.aborted) {
           setLoadState({
             phase: 'error',
             message: error instanceof Error ? error.message : '스튜디오를 불러오지 못했습니다.',
@@ -136,8 +145,9 @@ export function useStudioResource(
 
     return () => {
       ignore = true
+      controller.abort()
     }
-  }, [studioId])
+  }, [studioId, view])
 
   const registeredTracks = useMemo(
     () => studio?.tracks.filter((track) => track.status === 'registered') ?? [],
@@ -169,6 +179,7 @@ export function useStudioResource(
     let ignore = false
     let timeoutId = 0
     let pollCount = 0
+    let controller: AbortController | null = null
 
     const scheduleNextPoll = (jobs: TrackExtractionJob[]) => {
       const delayMs = getActivityPollingDelayMs(jobs, pollCount)
@@ -180,7 +191,9 @@ export function useStudioResource(
 
     const pollActivity = () => {
       pollCount += 1
-      getStudioActivity(studioId)
+      controller?.abort()
+      controller = new AbortController()
+      getStudioActivity(studioId, { signal: controller.signal })
         .then(async (activity) => {
           if (ignore) {
             return
@@ -191,7 +204,7 @@ export function useStudioResource(
             previousActiveJobCountRef.current,
           )
           if (needsFullRefresh) {
-            const nextStudio = await getStudio(studioId)
+            const nextStudio = await getStudio(studioId, { signal: controller?.signal, view })
             if (ignore) {
               return
             }
@@ -224,7 +237,7 @@ export function useStudioResource(
           scheduleNextPoll(activity.jobs)
         })
         .catch(() => {
-          if (!ignore) {
+          if (!ignore && controller?.signal.aborted !== true) {
             pollingErrorRef.current(
               '작업 상태를 새로고침하지 못했습니다. 잠시 뒤 다시 확인해 주세요.',
             )
@@ -237,9 +250,10 @@ export function useStudioResource(
 
     return () => {
       ignore = true
+      controller?.abort()
       window.clearTimeout(timeoutId)
     }
-  }, [activeExtractionJobCount, studioId])
+  }, [activeExtractionJobCount, studioId, view])
 
   return {
     activeExtractionJobs,

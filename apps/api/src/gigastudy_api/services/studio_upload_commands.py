@@ -116,6 +116,22 @@ class StudioUploadCommands:
             validate_track_upload_owner=self.validate_track_upload_owner,
         )
 
+    def write_direct_upload_file(
+        self,
+        asset_id: str,
+        source_path: Path,
+        *,
+        size_bytes: int,
+        owner_token: str | None = None,
+    ) -> dict[str, int | str]:
+        return self._assets.write_direct_upload_file(
+            asset_id,
+            source_path,
+            size_bytes=size_bytes,
+            owner_token=owner_token,
+            validate_track_upload_owner=self.validate_track_upload_owner,
+        )
+
     def validate_track_upload_owner(self, studio_id: str, slot_id: int) -> None:
         with self._repository._lock:
             studio = self._repository._load_studio(studio_id)

@@ -1,4 +1,9 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response
+import os
+import tempfile
+from email.utils import formatdate
+from pathlib import Path
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from typing import Literal
 
@@ -10,7 +15,9 @@ from gigastudy_api.api.schemas.studios import (
     CreateStudioRequest,
     DirectUploadRequest,
     DirectUploadTarget,
+    ExtractionCandidateResponse,
     GenerateTrackRequest,
+    ScoringReport,
     ScoreTrackRequest,
     SaveRegionRevisionRequest,
     ShiftTrackSyncRequest,
@@ -18,6 +25,7 @@ from gigastudy_api.api.schemas.studios import (
     StudioActivityResponse,
     StudioListItem,
     StudioResponse,
+    StudioResponseView,
     StudioSeedUploadRequest,
     SplitRegionRequest,
     SyncTrackRequest,
@@ -26,11 +34,12 @@ from gigastudy_api.api.schemas.studios import (
     UpdateRegionRequest,
     VolumeTrackRequest,
     TrackVolumeMinimalResponse,
-    build_studio_activity_response,
     build_studio_response,
     build_track_volume_minimal_response,
 )
+from gigastudy_api.config import get_settings
 from gigastudy_api.services.admin_auth import optional_admin_bypass
+from gigastudy_api.services.performance import measure_metric
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
 
 router = APIRouter()
@@ -52,8 +61,18 @@ def list_studios(
     return repository.list_accessible_studios(limit=limit, offset=offset, owner_token=owner_token)
 
 
-def _studio_response(studio: Studio) -> StudioResponse:
-    return build_studio_response(studio)
+def _studio_response(studio: Studio, *, view: StudioResponseView = "full") -> StudioResponse:
+    with measure_metric("response_build_ms"):
+        return build_studio_response(studio, view=view)
+
+
+def _asset_file_headers(path: Path, *, cache_control: str) -> dict[str, str]:
+    stat = path.stat()
+    return {
+        "Cache-Control": cache_control,
+        "ETag": f'W/"{stat.st_mtime_ns}-{stat.st_size}"',
+        "Last-Modified": formatdate(stat.st_mtime, usegmt=True),
+    }
 
 
 @router.post("", response_model=StudioResponse)
@@ -85,6 +104,7 @@ def create_studio(
 def get_studio(
     studio_id: str,
     background_tasks: BackgroundTasks,
+    view: StudioResponseView = Query(default="full"),
     owner_token: str | None = Depends(studio_owner_token),
     admin_bypass: bool = Depends(optional_admin_bypass),
     repository: StudioRepository = Depends(get_studio_repository),
@@ -96,7 +116,8 @@ def get_studio(
             owner_token=owner_token,
             enforce_owner=True,
             admin_bypass=admin_bypass,
-        )
+        ),
+        view=view,
     )
 
 
@@ -108,14 +129,12 @@ def get_studio_activity(
     admin_bypass: bool = Depends(optional_admin_bypass),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> StudioActivityResponse:
-    return build_studio_activity_response(
-        repository.get_studio_activity(
-            studio_id,
-            background_tasks=background_tasks,
-            owner_token=owner_token,
-            enforce_owner=True,
-            admin_bypass=admin_bypass,
-        )
+    return repository.get_studio_activity_response(
+        studio_id,
+        background_tasks=background_tasks,
+        owner_token=owner_token,
+        enforce_owner=True,
+        admin_bypass=admin_bypass,
     )
 
 
@@ -141,7 +160,12 @@ def get_track_audio(
         slot_id,
         owner_token=owner_token_header or owner_token_query,
     )
-    return FileResponse(path, media_type=media_type, filename=filename)
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=filename,
+        headers=_asset_file_headers(path, cache_control="private, max-age=300"),
+    )
 
 
 @router.get("/{studio_id}/jobs/{job_id}/source-preview")
@@ -210,6 +234,40 @@ def export_studio_midi(
     )
 
 
+@router.get("/{studio_id}/reports/{report_id}", response_model=ScoringReport)
+def get_scoring_report(
+    studio_id: str,
+    report_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    admin_bypass: bool = Depends(optional_admin_bypass),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> ScoringReport:
+    return repository.get_scoring_report(
+        studio_id,
+        report_id,
+        owner_token=owner_token,
+        enforce_owner=True,
+        admin_bypass=admin_bypass,
+    )
+
+
+@router.get("/{studio_id}/candidates/{candidate_id}", response_model=ExtractionCandidateResponse)
+def get_candidate_detail(
+    studio_id: str,
+    candidate_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    admin_bypass: bool = Depends(optional_admin_bypass),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> ExtractionCandidateResponse:
+    return repository.get_candidate_detail(
+        studio_id,
+        candidate_id,
+        owner_token=owner_token,
+        enforce_owner=True,
+        admin_bypass=admin_bypass,
+    )
+
+
 @router.put("/direct-uploads/{asset_id}")
 async def put_direct_upload(
     asset_id: str,
@@ -217,8 +275,36 @@ async def put_direct_upload(
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> dict[str, int | str]:
-    content = await request.body()
-    return repository.write_direct_upload_content(asset_id, content, owner_token=owner_token)
+    max_bytes = get_settings().max_upload_bytes
+    size_bytes = 0
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, prefix="gigastudy-upload-", suffix=".tmp") as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
+                size_bytes += len(chunk)
+                if size_bytes > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds the configured {max_bytes} byte limit.",
+                    )
+                tmp_file.write(chunk)
+        if size_bytes <= 0:
+            raise HTTPException(status_code=422, detail="Uploaded asset is empty.")
+        return repository.write_direct_upload_file(
+            asset_id,
+            tmp_path,
+            size_bytes=size_bytes,
+            owner_token=owner_token,
+        )
+    finally:
+        if tmp_path is not None:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 @router.post("/upload-target", response_model=DirectUploadTarget)
@@ -301,11 +387,18 @@ def generate_track(
     studio_id: str,
     slot_id: int,
     request: GenerateTrackRequest,
+    background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> StudioResponse:
     return _studio_response(
-        repository.generate_track(studio_id, slot_id, request, owner_token=owner_token)
+        repository.generate_track(
+            studio_id,
+            slot_id,
+            request,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
     )
 
 
@@ -525,9 +618,16 @@ def score_track(
     studio_id: str,
     slot_id: int,
     request: ScoreTrackRequest,
+    background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> StudioResponse:
     return _studio_response(
-        repository.score_track(studio_id, slot_id, request, owner_token=owner_token)
+        repository.score_track(
+            studio_id,
+            slot_id,
+            request,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
     )

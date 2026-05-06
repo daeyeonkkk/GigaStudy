@@ -37,7 +37,8 @@ ExtractionJobStatus = Literal[
     "completed",
     "failed",
 ]
-ExtractionJobType = Literal["document", "voice"]
+ExtractionJobType = Literal["document", "voice", "generation", "scoring"]
+StudioResponseView = Literal["full", "studio", "edit", "practice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
 
@@ -603,10 +604,7 @@ def _merged_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     ]
     explicit_slot_ids = {region.track_slot_id for region in explicit_regions}
     derived_regions = [region for region in derived_regions if region.track_slot_id not in explicit_slot_ids]
-    merged_regions = [
-        _sanitize_arrangement_region(studio, region)
-        for region in [*explicit_regions, *derived_regions]
-    ]
+    merged_regions = [*explicit_regions, *derived_regions]
     return sorted(
         merged_regions,
         key=lambda region: (region.track_slot_id, region.start_seconds, region.region_id),
@@ -787,7 +785,29 @@ def _archive_snapshot_duration_seconds(region_snapshots: list[ArrangementRegion]
     return max(0, end_seconds - start_seconds)
 
 
-def build_studio_response(studio: Studio) -> StudioResponse:
+def scoring_report_summary(report: ScoringReport) -> ScoringReport:
+    return report.model_copy(update={"issues": []})
+
+
+def extraction_candidate_response(
+    candidate: ExtractionCandidate,
+    *,
+    include_region_events: bool = True,
+) -> ExtractionCandidateResponse:
+    region = extraction_candidate_region(candidate)
+    if not include_region_events:
+        region = region.model_copy(update={"pitch_events": []})
+    return ExtractionCandidateResponse.model_validate(
+        {
+            **candidate.model_dump(mode="json", exclude={"events", "region"}),
+            "region": region.model_dump(mode="json"),
+        }
+    )
+
+
+def build_studio_response(studio: Studio, *, view: StudioResponseView = "full") -> StudioResponse:
+    include_report_detail = view == "full"
+    include_candidate_region_events = view == "full"
     return StudioResponse(
         studio_id=studio.studio_id,
         is_active=studio.is_active,
@@ -802,14 +822,15 @@ def build_studio_response(studio: Studio) -> StudioResponse:
         ],
         regions=studio_arrangement_regions(studio),
         track_material_archives=track_material_archive_summaries(studio),
-        reports=studio.reports,
+        reports=[
+            report if include_report_detail else scoring_report_summary(report)
+            for report in studio.reports
+        ],
         jobs=studio.jobs,
         candidates=[
-            ExtractionCandidateResponse.model_validate(
-                {
-                    **candidate.model_dump(mode="json", exclude={"events", "region"}),
-                    "region": extraction_candidate_region(candidate).model_dump(mode="json"),
-                }
+            extraction_candidate_response(
+                candidate,
+                include_region_events=include_candidate_region_events,
             )
             for candidate in studio.candidates
         ],

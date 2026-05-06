@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from 'react'
 import { useRef } from 'react'
+import { useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { CandidateReviewPanel } from '../components/studio/CandidateReviewPanel'
@@ -22,6 +23,7 @@ import {
   approveJobTempo,
   copyRegion,
   deleteRegion,
+  getCandidateDetail,
   getDocumentJobSourcePreviewUrl,
   getStudioMidiExportUrl,
   restoreTrackArchive,
@@ -51,6 +53,7 @@ export function StudioPage() {
   const [actionState, setActionState] = useState<StudioActionState>({ phase: 'idle' })
   const [archiveDialogSlotId, setArchiveDialogSlotId] = useState<number | null>(null)
   const studioActionInFlightRef = useRef(false)
+  const candidateDetailRequestIdsRef = useRef(new Set<string>())
   const {
     activeExtractionJobs,
     loadState,
@@ -64,7 +67,50 @@ export function StudioPage() {
     studioId,
     (message) => setActionState({ phase: 'error', message }),
     (message, phase = 'busy') => setActionState({ phase, message }),
+    'studio',
   )
+
+  useEffect(() => {
+    if (!studio) {
+      return
+    }
+    const missingCandidates = pendingCandidates
+      .filter(
+        (candidate) =>
+          candidate.region.pitch_events.length === 0 &&
+          !candidateDetailRequestIdsRef.current.has(candidate.candidate_id),
+      )
+      .slice(0, 4)
+    if (missingCandidates.length === 0) {
+      return
+    }
+    let ignore = false
+    missingCandidates.forEach((candidate) => {
+      candidateDetailRequestIdsRef.current.add(candidate.candidate_id)
+      getCandidateDetail(studio.studio_id, candidate.candidate_id)
+        .then((detail) => {
+          if (ignore) {
+            return
+          }
+          setStudio((current) =>
+            current && current.studio_id === studio.studio_id
+              ? {
+                  ...current,
+                  candidates: current.candidates.map((item) =>
+                    item.candidate_id === detail.candidate_id ? detail : item,
+                  ),
+                }
+              : current,
+          )
+        })
+        .catch(() => {
+          candidateDetailRequestIdsRef.current.delete(candidate.candidate_id)
+        })
+    })
+    return () => {
+      ignore = true
+    }
+  }, [pendingCandidates, setStudio, studio])
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const studioMeter = useMemo(
     () => (studio ? getStudioMeter(studio) : DEFAULT_METER),

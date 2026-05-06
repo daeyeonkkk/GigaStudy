@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any
 
 from gigastudy_api.api.schemas.studios import GenerateTrackRequest, Studio
@@ -18,6 +19,8 @@ DEEPSEEK_GENERATION_CONTEXT_EVENT_LIMIT = 160
 DEEPSEEK_GENERATION_TIMEOUT_SECONDS = 6.0
 GENERATION_EXTRA_DIVERSITY_CANDIDATES = 2
 GENERATION_DISTINCT_DIFFERENCE_THRESHOLD = 0.18
+_HARMONY_PLAN_CACHE_MAX_ENTRIES = 64
+_harmony_plan_cache: dict[str, DeepSeekHarmonyPlan | None] = {}
 
 
 @dataclass(frozen=True)
@@ -82,7 +85,7 @@ def generate_track_material(
         settings,
         context_event_count=len(context_events),
     )
-    llm_plan = plan_harmony(
+    llm_plan = _cached_plan_harmony(
         settings=planning_settings,
         title=studio.title,
         bpm=studio.bpm,
@@ -156,6 +159,84 @@ def _generation_planning_settings(settings: Settings, *, context_event_count: in
             "deepseek_max_retries": 0,
             "deepseek_revision_cycles": 0,
         }
+    )
+
+
+def _cached_plan_harmony(
+    *,
+    settings: Settings,
+    title: str,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+    target_slot_id: int,
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
+    candidate_count: int,
+) -> DeepSeekHarmonyPlan | None:
+    key = _harmony_plan_cache_key(
+        settings=settings,
+        title=title,
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+        target_slot_id=target_slot_id,
+        context_events_by_slot=context_events_by_slot,
+        candidate_count=candidate_count,
+    )
+    if key in _harmony_plan_cache:
+        return _harmony_plan_cache[key]
+    result = plan_harmony(
+        settings=settings,
+        title=title,
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+        target_slot_id=target_slot_id,
+        context_events_by_slot=context_events_by_slot,
+        candidate_count=candidate_count,
+    )
+    if len(_harmony_plan_cache) >= _HARMONY_PLAN_CACHE_MAX_ENTRIES:
+        _harmony_plan_cache.pop(next(iter(_harmony_plan_cache)))
+    _harmony_plan_cache[key] = result
+    return result
+
+
+def _harmony_plan_cache_key(
+    *,
+    settings: Settings,
+    title: str,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+    target_slot_id: int,
+    context_events_by_slot: dict[int, list[TrackPitchEvent]],
+    candidate_count: int,
+) -> str:
+    context_signature = {
+        str(slot_id): [
+            [
+                event.pitch_midi,
+                round(event.onset_seconds, 4),
+                round(event.duration_seconds, 4),
+                round(event.beat, 4),
+                round(event.duration_beats, 4),
+            ]
+            for event in events
+        ]
+        for slot_id, events in sorted(context_events_by_slot.items())
+    }
+    return json.dumps(
+        {
+            "bpm": bpm,
+            "candidate_count": candidate_count,
+            "context": context_signature,
+            "deepseek_enabled": settings.deepseek_harmony_enabled,
+            "meter": [time_signature_numerator, time_signature_denominator],
+            "target_slot_id": target_slot_id,
+            "title": title,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
     )
 
 

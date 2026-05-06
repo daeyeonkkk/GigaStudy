@@ -72,6 +72,59 @@ def create_voice_extraction_job(
     )
 
 
+def create_generation_job(
+    *,
+    input_request: dict[str, Any],
+    max_attempts: int,
+    slot_id: int,
+    source_label: str,
+    timestamp: str,
+) -> TrackExtractionJob:
+    return TrackExtractionJob(
+        job_id=uuid4().hex,
+        job_type="generation",
+        slot_id=slot_id,
+        source_kind="ai",
+        source_label=source_label,
+        status="queued",
+        method="ai_generation",
+        message="AI generation queued.",
+        input_path=None,
+        max_attempts=max_attempts,
+        diagnostics={"request": input_request},
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+
+def create_scoring_job(
+    *,
+    input_request: dict[str, Any],
+    max_attempts: int,
+    slot_id: int,
+    source_label: str,
+    timestamp: str,
+) -> TrackExtractionJob:
+    return TrackExtractionJob(
+        job_id=uuid4().hex,
+        job_type="scoring",
+        slot_id=slot_id,
+        source_kind="recording",
+        source_label=source_label,
+        status="queued",
+        method="practice_scoring",
+        message="Scoring queued.",
+        input_path=input_request.get("performance_asset_path"),
+        max_attempts=max_attempts,
+        diagnostics={
+            "request": input_request,
+            "score_mode": input_request.get("score_mode", "answer"),
+        },
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+
 def document_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
     return {
         "input_path": job.input_path,
@@ -90,6 +143,20 @@ def voice_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
         "review_before_register": job.review_before_register,
         "allow_overwrite": job.allow_overwrite,
         "audio_mime_type": job.audio_mime_type,
+    }
+
+
+def generation_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
+    return {
+        "request": dict(job.diagnostics.get("request") or {}),
+        "source_label": job.source_label,
+    }
+
+
+def scoring_queue_payload(job: TrackExtractionJob, request_payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "request": request_payload,
+        "source_label": job.source_label,
     }
 
 
@@ -122,6 +189,14 @@ def existing_extraction_queue_payload(
     existing_payload: dict[str, Any] | None = None,
     fallback_audio_mime_type: str | None = None,
 ) -> dict[str, Any]:
+    if job.job_type in {"generation", "scoring"}:
+        if existing_payload is not None:
+            return dict(existing_payload)
+        request = job.diagnostics.get("request") if isinstance(job.diagnostics, dict) else None
+        return {
+            "request": dict(request or {}),
+            "source_label": job.source_label,
+        }
     if not job.input_path:
         raise ValueError("Extraction job has no stored input file.")
     payload: dict[str, Any] = {
@@ -168,7 +243,12 @@ def mark_extraction_job_running(
         if job.job_id != job_id:
             continue
         job.status = "running"
-        job.message = "Full-score extraction running." if job.parse_all_parts else "Extraction running."
+        if job.job_type == "generation":
+            job.message = "AI generation running."
+        elif job.job_type == "scoring":
+            job.message = "Scoring running."
+        else:
+            job.message = "Full-score extraction running." if job.parse_all_parts else "Extraction running."
         if attempt_count is not None:
             job.attempt_count = attempt_count
         if max_attempts is not None:
@@ -191,6 +271,8 @@ def mark_extraction_job_failed(
         job.status = "failed"
         job.message = message
         job.updated_at = timestamp
+        if job.job_type == "scoring":
+            break
         failed_tracks = (
             [track for track in studio.tracks if track.slot_id <= 5]
             if job.parse_all_parts

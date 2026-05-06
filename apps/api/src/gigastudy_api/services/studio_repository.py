@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,14 +25,17 @@ from gigastudy_api.api.schemas.studios import (
     DirectUploadRequest,
     DirectUploadTarget,
     ExtractionCandidate,
+    ExtractionCandidateResponse,
     GenerateTrackRequest,
     ScoreTrackRequest,
+    ScoringReport,
     SaveRegionRevisionRequest,
     SeedSourceKind,
     ShiftTrackSyncRequest,
     SourceKind,
     SplitRegionRequest,
     Studio,
+    StudioActivityResponse,
     StudioListItem,
     StudioSeedUploadRequest,
     SyncTrackRequest,
@@ -42,6 +46,7 @@ from gigastudy_api.api.schemas.studios import (
     UpdateRegionRequest,
     UploadTrackRequest,
     VolumeTrackRequest,
+    extraction_candidate_response,
 )
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
@@ -131,6 +136,8 @@ def _now() -> str:
 
 SYNC_OFFSET_PRECISION = 3
 _engine_execution_lock = Lock()
+_VOICE_TRANSCRIPTION_CACHE_MAX_ENTRIES = 32
+_voice_transcription_cache: dict[str, VoiceTranscriptionResult] = {}
 
 
 def _shift_explicit_regions_for_slot(
@@ -153,6 +160,42 @@ def _shift_explicit_regions_for_slot(
 def _safe_export_filename(title: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", title.strip()).strip("-._")
     return normalized[:80] or "gigastudy-studio"
+
+
+def _voice_transcription_cache_key(
+    source_path: Path,
+    *,
+    bpm: int,
+    slot_id: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+    extraction_plan: Any | None,
+) -> str:
+    digest = hashlib.sha256()
+    with source_path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    plan_diagnostics = extraction_plan.diagnostics() if hasattr(extraction_plan, "diagnostics") else None
+    return json.dumps(
+        {
+            "bpm": bpm,
+            "engine": id(transcribe_voice_file),
+            "hash": digest.hexdigest(),
+            "meter": [time_signature_numerator, time_signature_denominator],
+            "plan": plan_diagnostics,
+            "slot_id": slot_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _copy_voice_transcription_result(result: VoiceTranscriptionResult) -> VoiceTranscriptionResult:
+    return VoiceTranscriptionResult(
+        events=[event.model_copy(deep=True) for event in result.events],
+        alignment=result.alignment,
+        diagnostics=dict(result.diagnostics or {}),
+    )
 
 
 def _studio_creation_fingerprint(
@@ -448,6 +491,79 @@ class StudioRepository:
             admin_bypass=admin_bypass,
         )
 
+    def get_studio_activity_response(
+        self,
+        studio_id: str,
+        *,
+        background_tasks: BackgroundTasks | None = None,
+        owner_token: str | None = None,
+        enforce_owner: bool = False,
+        admin_bypass: bool = False,
+    ) -> StudioActivityResponse:
+        with self._lock:
+            raw_payload = self._store.load_activity_raw(studio_id)
+        if raw_payload is None:
+            raise HTTPException(status_code=404, detail="Studio not found.")
+        studio = Studio.model_validate(raw_payload)
+        if not studio.is_active and not admin_bypass:
+            raise HTTPException(status_code=404, detail="Studio not found.")
+        if enforce_owner and not admin_bypass:
+            require_studio_access(studio, owner_token)
+        if background_tasks is not None:
+            self._recover_existing_creation_jobs(studio, background_tasks)
+        counts = raw_payload.get("_activity_counts", {}) if isinstance(raw_payload, dict) else {}
+        return StudioActivityResponse(
+            studio_id=studio.studio_id,
+            updated_at=studio.updated_at,
+            jobs=studio.jobs,
+            pending_candidate_count=int(counts.get("pending_candidate_count") or 0),
+            report_count=int(counts.get("report_count") or 0),
+            registered_track_count=sum(1 for track in studio.tracks if track.status == "registered"),
+        )
+
+    def get_scoring_report(
+        self,
+        studio_id: str,
+        report_id: str,
+        *,
+        owner_token: str | None = None,
+        enforce_owner: bool = False,
+        admin_bypass: bool = False,
+    ) -> ScoringReport:
+        studio = self.get_studio(
+            studio_id,
+            owner_token=owner_token,
+            enforce_owner=enforce_owner,
+            admin_bypass=admin_bypass,
+        )
+        report = next((candidate for candidate in studio.reports if candidate.report_id == report_id), None)
+        if report is None:
+            raise HTTPException(status_code=404, detail="Report not found.")
+        return report
+
+    def get_candidate_detail(
+        self,
+        studio_id: str,
+        candidate_id: str,
+        *,
+        owner_token: str | None = None,
+        enforce_owner: bool = False,
+        admin_bypass: bool = False,
+    ) -> ExtractionCandidateResponse:
+        studio = self.get_studio(
+            studio_id,
+            owner_token=owner_token,
+            enforce_owner=enforce_owner,
+            admin_bypass=admin_bypass,
+        )
+        candidate = next(
+            (candidate for candidate in studio.candidates if candidate.candidate_id == candidate_id),
+            None,
+        )
+        if candidate is None:
+            raise HTTPException(status_code=404, detail="Candidate not found.")
+        return extraction_candidate_response(candidate, include_region_events=True)
+
     def deactivate_studio(
         self,
         studio_id: str,
@@ -591,6 +707,21 @@ class StudioRepository:
             owner_token=owner_token,
         )
 
+    def write_direct_upload_file(
+        self,
+        asset_id: str,
+        source_path: Path,
+        *,
+        size_bytes: int,
+        owner_token: str | None = None,
+    ) -> dict[str, int | str]:
+        return self._uploads.write_direct_upload_file(
+            asset_id,
+            source_path,
+            size_bytes=size_bytes,
+            owner_token=owner_token,
+        )
+
     def _validate_track_upload_owner(self, studio_id: str, slot_id: int) -> None:
         self._uploads.validate_track_upload_owner(studio_id, slot_id)
 
@@ -617,12 +748,14 @@ class StudioRepository:
         slot_id: int,
         request: GenerateTrackRequest,
         *,
+        background_tasks: BackgroundTasks | None = None,
         owner_token: str | None = None,
     ) -> Studio:
         return self._generation.generate_track(
             studio_id,
             slot_id,
             request,
+            background_tasks=background_tasks,
             owner_token=owner_token,
         )
 
@@ -995,7 +1128,7 @@ class StudioRepository:
                 raise HTTPException(status_code=409, detail="Only score-file jobs can approve tempo.")
             if job.status != "tempo_review_required":
                 raise HTTPException(status_code=409, detail="This job is not waiting for tempo approval.")
-            if not job.input_path:
+            if not job.input_path and job.job_type not in {"generation", "scoring"}:
                 raise HTTPException(status_code=409, detail="Extraction job has no stored input file.")
 
             timestamp = _now()
@@ -1093,12 +1226,14 @@ class StudioRepository:
         slot_id: int,
         request: ScoreTrackRequest,
         *,
+        background_tasks: BackgroundTasks | None = None,
         owner_token: str | None = None,
     ) -> Studio:
         return self._scoring.score_track(
             studio_id,
             slot_id,
             request,
+            background_tasks=background_tasks,
             owner_token=owner_token,
         )
 
@@ -1367,7 +1502,18 @@ class StudioRepository:
                 return
 
             timestamp = _now()
-            source_kind: SourceKind = "audio" if record.job_type == "voice" else "document"
+            if record.job_type == "voice":
+                source_kind: SourceKind = "audio"
+                method = "voice_transcription"
+            elif record.job_type == "generation":
+                source_kind = "ai"
+                method = "ai_generation"
+            elif record.job_type == "scoring":
+                source_kind = "recording"
+                method = "practice_scoring"
+            else:
+                source_kind = "document"
+                method = "audiveris_cli"
             payload_source_kind = record.payload.get("source_kind")
             if payload_source_kind in {"recording", "audio", "midi", "document", "ai"}:
                 source_kind = payload_source_kind
@@ -1380,7 +1526,7 @@ class StudioRepository:
                 source_kind=source_kind,
                 source_label=source_label,
                 status="queued",
-                method="voice_transcription" if record.job_type == "voice" else "audiveris_cli",
+                method=method,
                 message="Recovered from durable engine queue.",
                 input_path=str(record.payload.get("input_path") or "") or None,
                 attempt_count=max(0, record.attempt_count),
@@ -1400,6 +1546,8 @@ class StudioRepository:
             )
             for track in placeholder_tracks:
                 if studio_has_active_track_material(studio, track.slot_id):
+                    continue
+                if job.job_type == "scoring":
                     continue
                 track.status = "extracting"
                 track.source_kind = job.source_kind
@@ -1459,6 +1607,7 @@ class StudioRepository:
         message: str,
         llm_plan: DeepSeekHarmonyPlan | None = None,
         context_events_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
+        job_id: str | None = None,
     ) -> Studio:
         return self._candidates.add_generation_candidates(
             studio_id,
@@ -1469,6 +1618,7 @@ class StudioRepository:
             message=message,
             llm_plan=llm_plan,
             context_events_by_slot=context_events_by_slot,
+            job_id=job_id,
         )
 
     def _schedule_engine_queue_processing(self, background_tasks: BackgroundTasks | None) -> None:
@@ -1621,9 +1771,20 @@ class StudioRepository:
         time_signature_denominator: int,
         extraction_plan: Any | None = None,
     ) -> VoiceTranscriptionResult:
+        cache_key = _voice_transcription_cache_key(
+            source_path,
+            bpm=bpm,
+            slot_id=slot_id,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            extraction_plan=extraction_plan,
+        )
         with _engine_execution_lock:
+            cached_result = _voice_transcription_cache.get(cache_key)
+            if cached_result is not None:
+                return _copy_voice_transcription_result(cached_result)
             if transcribe_voice_file is not _ORIGINAL_TRANSCRIBE_VOICE_FILE:
-                return VoiceTranscriptionResult(
+                result = VoiceTranscriptionResult(
                     events=transcribe_voice_file(
                         source_path,
                         bpm=bpm,
@@ -1640,14 +1801,19 @@ class StudioRepository:
                         else None,
                     },
                 )
-            return transcribe_voice_file_with_alignment(
-                source_path,
-                bpm=bpm,
-                slot_id=slot_id,
-                time_signature_numerator=time_signature_numerator,
-                time_signature_denominator=time_signature_denominator,
-                extraction_plan=extraction_plan,
-            )
+            else:
+                result = transcribe_voice_file_with_alignment(
+                    source_path,
+                    bpm=bpm,
+                    slot_id=slot_id,
+                    time_signature_numerator=time_signature_numerator,
+                    time_signature_denominator=time_signature_denominator,
+                    extraction_plan=extraction_plan,
+                )
+            if len(_voice_transcription_cache) >= _VOICE_TRANSCRIPTION_CACHE_MAX_ENTRIES:
+                _voice_transcription_cache.pop(next(iter(_voice_transcription_cache)))
+            _voice_transcription_cache[cache_key] = _copy_voice_transcription_result(result)
+            return result
 
     def _run_audiveris_document_extraction(
         self,

@@ -36,10 +36,12 @@ is excluded from persistence and remains an adapter detail.
   candidate review, and report history. It does not render the piano-roll
   editor, practice waterfall, or scoring controls.
 - `apps/web/src/components/studio/useStudioResource.ts`
-  Loads the full studio once, then uses `/api/studios/{id}/activity` while
-  extraction jobs are active. Activity polling carries only job state and
-  visible counts, and the hook fetches the full studio once when jobs complete
-  or candidate/report/registered-track counts change.
+  Loads a view-specific studio payload for the current page, then uses
+  `/api/studios/{id}/activity` while document, voice, generation, or scoring
+  jobs are active. Activity polling carries only job state and visible counts,
+  and the hook refreshes the current view once when jobs complete or
+  candidate/report/registered-track counts change. Route changes abort stale
+  fetches so old responses cannot overwrite the new page state.
 - `apps/web/src/pages/StudioEditPage.tsx`
   Dedicated region-editing surface for region selection, region structure
   actions, selected-region piano-roll editing, local draft save, and bounded
@@ -122,7 +124,9 @@ is excluded from persistence and remains an adapter detail.
   by the region editor. Job polling has a lightweight activity endpoint that
   omits regions, candidates, reports, and archive detail. Track volume can
   return a minimal patch response for live mix commits while the legacy full
-  response remains the default.
+  response remains the default. `GET /studios/{id}?view=studio|edit|practice`
+  trims candidate/report detail for page loads, while candidate and report
+  detail endpoints serve large review/evidence payloads lazily.
 - `apps/api/src/gigastudy_api/services/studio_repository.py`
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
@@ -140,7 +144,8 @@ is excluded from persistence and remains an adapter detail.
   single `region_snapshot` payloads lazily migrated on read. Studio routes
   return `StudioResponse`, whose tracks and candidates omit internal event
   arrays and whose archive payload exposes summaries only, not stored event
-  snapshots.
+  snapshots. Non-full response views keep reports as summaries and candidates
+  as metadata plus empty preview regions until a detail endpoint is requested.
   `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
   arrangement data flow. Document imports use `source_kind: "document"`;
   `"score"` is no longer accepted as a source-kind alias. `PitchEvent` carries
@@ -181,6 +186,11 @@ is excluded from persistence and remains an adapter detail.
   metronome phase alignment, strict sung-segment cleanup, and a narrow rescue
   pass for short stable sung contours. Rescued material is marked in event
   warnings and diagnostics.
+- `apps/api/src/gigastudy_api/services/studio_repository.py`
+  Wraps voice transcription with a small in-process fingerprint cache keyed by
+  audio bytes, BPM/meter, slot, engine identity, and extraction-plan
+  diagnostics. This avoids repeating expensive voice analysis for identical
+  retries without making cached results part of product truth.
 - `apps/api/src/gigastudy_api/services/engine/audio_decode.py`
   Server-side audio normalization for voice analysis. Track recording uploads
   may arrive as WAV/MP3/M4A/OGG/FLAC, but non-WAV files are decoded through
@@ -242,7 +252,12 @@ is excluded from persistence and remains an adapter detail.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`
   Asset path, local/S3 storage, and direct-upload lifecycle.
 - `apps/api/src/gigastudy_api/services/engine_queue.py`
-  Durable local/Postgres queue for extraction work.
+  Durable local/Postgres queue for document import, voice extraction, AI
+  generation, and scoring analysis work.
+- `apps/api/src/gigastudy_api/services/performance.py`
+  Per-request timing collector used by API middleware and store/response
+  builders. Slow request logs include total time, store load/save time,
+  response-build time, engine-job time when available, and payload lengths.
 
 ## Data Flow
 
@@ -299,10 +314,13 @@ flowchart TD
 
 ### Studio Load
 
-1. Web calls `GET /api/studios/{studio_id}`.
-2. API loads a `Studio` from `StudioStore`.
+1. Web calls `GET /api/studios/{studio_id}?view=studio|edit|practice` for page
+   loads, or `view=full` only for compatibility/admin-style needs.
+2. API loads a `Studio` from `StudioStore`; activity polling uses a summary
+   read that avoids full sidecar/detail merge.
 3. API builds a `StudioResponse`, stripping internal event shadows from tracks
-   and candidates, and exposing only track material archive summaries.
+   and candidates, exposing only track material archive summaries, and trimming
+   report/candidate detail on non-full views.
 4. `StudioResponse.regions` uses persisted explicit regions and derives a
    fallback region from registered track event shadows only for older payloads
    that have not yet been saved through the explicit-region path.
@@ -328,8 +346,9 @@ flowchart TD
 1. Web requests an upload target. Studio creation exposes `PDF/MIDI/MusicXML`
    score-file seeding, while each track row exposes recording-file upload for
    audio extraction.
-2. Browser sends the file via direct upload or inline fallback. Studio creation
-   requests include a browser-generated `client_request_id`; if the browser
+2. Browser sends the file via direct upload or inline fallback. Local
+   direct-upload requests are streamed to storage instead of buffered in memory.
+   Studio creation requests include a browser-generated `client_request_id`; if the browser
    loses the response and retries the same start data, the API returns the
    existing studio instead of creating a duplicate.
 3. For score-file studio starts, API creates a `tempo_review_required` job and
@@ -384,17 +403,21 @@ flowchart TD
    scheduled timeline.
 4. Browser submits recorded audio by temporary direct upload when available, or
    falls back to base64 JSON; it may also submit `performance_events`.
-5. API converts submitted performance events to the internal pitch-event adapter.
+5. API stores a scoring job and returns quickly. The engine queue converts
+   submitted performance events or uploaded audio to the internal pitch-event
+   adapter.
 6. Scoring compares those events with registered arrangement regions, preserving
    public answer-region focus IDs through the internal adapter boundary.
-7. Report issues include region/event IDs and expected/actual beat coordinates.
+7. Report summaries appear in the studio/practice feed after activity polling;
+   the report detail endpoint returns issue/evidence detail on demand.
 8. Report detail links can reopen the region editor with query parameters that
    focus the matching region and piano-roll event.
 
 ### AI Generation
 
 1. User asks a target track to generate from registered context tracks.
-2. API uses deterministic harmony generation plus optional bounded LLM planning.
+2. API stores a generation job and returns quickly. The engine queue uses
+   deterministic harmony generation plus optional bounded LLM planning.
 3. The generator searches a slightly larger candidate pool, normalizes the
    results, selects the most distinct candidates for review, and records context
    and diversity diagnostics.

@@ -75,6 +75,7 @@ class StudioCandidateCommands:
                 studio,
                 {target_slot_id},
                 action_label="Candidate approval",
+                ignore_job_id=candidate.job_id,
             )
             if studio_has_active_track_material(studio, target_slot_id) and not request.allow_overwrite:
                 raise HTTPException(
@@ -178,6 +179,7 @@ class StudioCandidateCommands:
                 studio,
                 unique_candidates_by_slot.keys(),
                 action_label="Job candidate approval",
+                ignore_job_id=job_id,
             )
 
             occupied_slots = {
@@ -518,6 +520,7 @@ class StudioCandidateCommands:
         message: str,
         llm_plan: DeepSeekHarmonyPlan | None = None,
         context_events_by_slot: dict[int, list[TrackPitchEvent]] | None = None,
+        job_id: str | None = None,
     ) -> Studio:
         with self._repository._lock:
             studio = self._repository._load_studio(studio_id)
@@ -528,10 +531,12 @@ class StudioCandidateCommands:
                 studio,
                 {slot_id},
                 action_label="AI generation",
+                ignore_job_id=job_id,
             )
             self._discard_superseded_ai_generation_candidates(
                 studio,
                 slot_id,
+                current_job_id=job_id,
             )
             candidate_group_id = uuid4().hex
             context_events_by_slot = context_events_by_slot or registered_region_events_by_slot(
@@ -572,6 +577,7 @@ class StudioCandidateCommands:
                         diagnostics,
                         registration.diagnostics,
                     ),
+                    job_id=job_id,
                     message=message,
                     method=method,
                     events=prepared_events,
@@ -591,6 +597,12 @@ class StudioCandidateCommands:
                 source_label=source_label,
                 timestamp=timestamp,
             )
+            for job in studio.jobs:
+                if job.job_id == job_id:
+                    job.status = "needs_review"
+                    job.message = message
+                    job.updated_at = timestamp
+                    break
             studio.updated_at = timestamp
             self._repository._save_studio(studio)
         return studio
@@ -599,6 +611,8 @@ class StudioCandidateCommands:
         self,
         studio: Studio,
         slot_id: int,
+        *,
+        current_job_id: str | None = None,
     ) -> None:
         studio.candidates = [
             candidate
@@ -606,7 +620,7 @@ class StudioCandidateCommands:
             if not (
                 candidate.source_kind == "ai"
                 and candidate.suggested_slot_id == slot_id
-                and candidate.job_id is None
+                and candidate.job_id != current_job_id
                 and (
                     candidate.status == "pending"
                     or (

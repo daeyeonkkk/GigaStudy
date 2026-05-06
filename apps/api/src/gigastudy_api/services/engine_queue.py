@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 
-EngineJobType = Literal["document", "voice"]
+EngineJobType = Literal["document", "voice", "generation", "scoring"]
 EngineQueueStatus = Literal["queued", "running", "completed", "failed"]
 
 
@@ -460,7 +460,7 @@ def _is_claimable(row: dict[str, Any], now: datetime) -> bool:
 
 
 def _job_type(value: str) -> EngineJobType:
-    if value in {"document", "voice"}:
+    if value in {"document", "voice", "generation", "scoring"}:
         return value  # type: ignore[return-value]
     raise ValueError(f"Unsupported engine job type: {value}")
 

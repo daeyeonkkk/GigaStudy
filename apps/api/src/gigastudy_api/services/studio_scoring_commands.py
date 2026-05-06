@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from gigastudy_api.api.schemas.studios import (
     PerformanceEvent,
@@ -24,6 +24,11 @@ from gigastudy_api.services.studio_scoring import (
     score_track_request_has_performance,
     selected_scoring_reference_slot_ids,
     validate_score_track_request,
+)
+from gigastudy_api.services.studio_jobs import (
+    create_scoring_job,
+    engine_queue_job_from_extraction,
+    scoring_queue_payload,
 )
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 
@@ -46,6 +51,7 @@ class StudioScoringCommands:
         slot_id: int,
         request: ScoreTrackRequest,
         *,
+        background_tasks: BackgroundTasks | None = None,
         owner_token: str | None = None,
     ) -> Studio:
         studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
@@ -59,6 +65,98 @@ class StudioScoringCommands:
             studio,
             {slot_id, *reference_slot_ids},
             action_label="Scoring",
+        )
+        target_events = registered_region_events_for_slot(studio, slot_id)
+        try:
+            validate_score_track_request(
+                request,
+                target_track=target_track,
+                reference_slot_ids=reference_slot_ids,
+                target_has_events=bool(target_events),
+            )
+        except ScoringRequestError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+        if not score_track_request_has_performance(request):
+            raise HTTPException(
+                status_code=422,
+                detail="Scoring requires a recorded performance with detectable pitch events.",
+            )
+
+        queued_request = self._durable_scoring_request(studio_id, slot_id, request, target_track)
+        timestamp = self._now()
+        request_payload = queued_request.model_dump(mode="json")
+        source_label = queued_request.performance_filename or f"{target_track.name}-score-take.wav"
+        job = create_scoring_job(
+            input_request=request_payload,
+            max_attempts=get_settings().engine_job_max_attempts,
+            slot_id=slot_id,
+            source_label=source_label,
+            timestamp=timestamp,
+        )
+        with self._repository._lock:
+            studio = self._repository._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            target_track = self._repository._find_track(studio, slot_id)
+            reference_slot_ids = selected_scoring_reference_slot_ids(
+                studio,
+                target_slot_id=slot_id,
+                requested_reference_slot_ids=queued_request.reference_slot_ids,
+            )
+            ensure_no_active_extraction_jobs(
+                studio,
+                {slot_id, *reference_slot_ids},
+                action_label="Scoring",
+            )
+            try:
+                validate_score_track_request(
+                    queued_request,
+                    target_track=target_track,
+                    reference_slot_ids=reference_slot_ids,
+                    target_has_events=bool(registered_region_events_for_slot(studio, slot_id)),
+                )
+            except ScoringRequestError as error:
+                raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+            studio.jobs.append(job)
+            studio.updated_at = timestamp
+            self._repository._save_studio(studio)
+
+        self._repository._engine_queue.enqueue(
+            engine_queue_job_from_extraction(
+                job,
+                payload=scoring_queue_payload(job, request_payload),
+                studio_id=studio_id,
+                timestamp=timestamp,
+            )
+        )
+        self._repository._schedule_engine_queue_processing(background_tasks)
+        return self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
+
+    def score_track_now(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: ScoreTrackRequest,
+        *,
+        owner_token: str | None = None,
+        job_id: str | None = None,
+    ) -> Studio:
+        studio = self._repository.get_studio(
+            studio_id,
+            owner_token=owner_token,
+            enforce_owner=owner_token is not None,
+        )
+        target_track = self._repository._find_track(studio, slot_id)
+        reference_slot_ids = selected_scoring_reference_slot_ids(
+            studio,
+            target_slot_id=slot_id,
+            requested_reference_slot_ids=request.reference_slot_ids,
+        )
+        ensure_no_active_extraction_jobs(
+            studio,
+            {slot_id, *reference_slot_ids},
+            action_label="Scoring",
+            ignore_job_id=job_id,
         )
         target_events = registered_region_events_for_slot(studio, slot_id)
         try:
@@ -130,6 +228,30 @@ class StudioScoringCommands:
             studio.updated_at = timestamp
             self._repository._save_studio(studio)
         return studio
+
+    def _durable_scoring_request(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: ScoreTrackRequest,
+        target_track: TrackSlot,
+    ) -> ScoreTrackRequest:
+        if request.performance_audio_base64 is None:
+            return request
+        filename = request.performance_filename or f"{target_track.name}-score-take.wav"
+        saved_path = self._assets.save_upload(
+            studio_id=studio_id,
+            slot_id=slot_id,
+            filename=filename,
+            content_base64=request.performance_audio_base64,
+        )
+        return request.model_copy(
+            update={
+                "performance_asset_path": self._assets.relative_data_asset_path(saved_path),
+                "performance_audio_base64": None,
+                "performance_filename": filename,
+            }
+        )
 
     def extract_scoring_audio(
         self,

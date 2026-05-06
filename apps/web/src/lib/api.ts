@@ -5,9 +5,11 @@ import type {
   CreateStudioRequest,
   DirectUploadTarget,
   CopyRegionRequest,
+  ExtractionCandidate,
   PlaybackInstrumentConfig,
   PitchEvent,
   ScoreMode,
+  ScoringReport,
   SaveRegionRevisionRequest,
   SplitRegionRequest,
   Studio,
@@ -81,6 +83,14 @@ async function requestJson<T>(
   options: RequestInit,
   fallbackMessage: string,
 ): Promise<T> {
+  const startedAt = typeof performance === 'undefined' ? 0 : performance.now()
+  let timingLogged = false
+  const logTiming = () => {
+    if (!timingLogged) {
+      timingLogged = true
+      logSlowRequest(path, startedAt)
+    }
+  }
   try {
     const response = await fetch(new URL(path, apiBaseUrl), {
       headers: {
@@ -91,12 +101,24 @@ async function requestJson<T>(
       },
       ...options,
     })
+    logTiming()
     return await readJson<T>(response, fallbackMessage)
   } catch (error) {
+    logTiming()
     if (error instanceof TypeError) {
       throw new Error('API 서버에 연결하지 못했습니다.')
     }
     throw error
+  }
+}
+
+function logSlowRequest(path: string, startedAt: number): void {
+  if (!import.meta.env.DEV || startedAt <= 0 || typeof performance === 'undefined') {
+    return
+  }
+  const elapsedMs = performance.now() - startedAt
+  if (elapsedMs >= 700) {
+    console.info(`[GigaStudy API] ${Math.round(elapsedMs)}ms ${path}`)
   }
 }
 
@@ -139,15 +161,46 @@ export function createStudioUploadTarget(payload: {
   )
 }
 
-export function getStudio(studioId: string): Promise<Studio> {
-  return requestJson<Studio>(`/api/studios/${studioId}`, {}, '스튜디오를 불러오지 못했습니다.')
+export function getStudio(
+  studioId: string,
+  options: { signal?: AbortSignal; view?: 'full' | 'studio' | 'edit' | 'practice' } = {},
+): Promise<Studio> {
+  const params = new URLSearchParams()
+  if (options.view) {
+    params.set('view', options.view)
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return requestJson<Studio>(
+    `/api/studios/${studioId}${suffix}`,
+    { signal: options.signal },
+    '스튜디오를 불러오지 못했습니다.',
+  )
 }
 
-export function getStudioActivity(studioId: string): Promise<StudioActivity> {
+export function getStudioActivity(
+  studioId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<StudioActivity> {
   return requestJson<StudioActivity>(
     `/api/studios/${studioId}/activity`,
-    {},
+    { signal: options.signal },
     '스튜디오 작업 상태를 불러오지 못했습니다.',
+  )
+}
+
+export function getCandidateDetail(studioId: string, candidateId: string): Promise<ExtractionCandidate> {
+  return requestJson<ExtractionCandidate>(
+    `/api/studios/${studioId}/candidates/${candidateId}`,
+    {},
+    '후보 상세 정보를 불러오지 못했습니다.',
+  )
+}
+
+export function getScoringReport(studioId: string, reportId: string): Promise<ScoringReport> {
+  return requestJson<ScoringReport>(
+    `/api/studios/${studioId}/reports/${reportId}`,
+    {},
+    '채점 리포트를 불러오지 못했습니다.',
   )
 }
 

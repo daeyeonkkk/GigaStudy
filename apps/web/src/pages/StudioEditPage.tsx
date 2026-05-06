@@ -51,6 +51,7 @@ export function StudioEditPage() {
     studioId,
     (message) => setActionState({ phase: 'error', message }),
     (message, phase = 'busy') => setActionState({ phase, message }),
+    'edit',
   )
   const studioMeter = useMemo(
     () => (studio ? getStudioMeter(studio) : DEFAULT_METER),

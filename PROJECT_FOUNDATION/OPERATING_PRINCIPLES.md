@@ -259,6 +259,12 @@ the same change.
   of pretending they are three independent musical ideas.
 - Generated candidates must pass the same normalization, event-quality, range,
   and ensemble checks as imported or recorded material.
+- AI generation requests should be accepted quickly as generation jobs. The UI
+  should show queued/running/completed state through activity polling, and
+  candidate detail should be fetched only when the review surface needs it.
+- LLM harmony planning belongs inside the generation job with timeout,
+  deterministic fallback, and cache opportunities; it should not hold the
+  user's command request open.
 - User-facing candidate information should lead with musical decision evidence,
   not raw engine internals.
 
@@ -277,6 +283,11 @@ the same change.
 - Scoring takes should use direct upload when available so large microphone
   recordings do not travel as base64 JSON. Base64 is a compatibility fallback,
   not the default web path.
+- Scoring analysis should run as a scoring job after the take is accepted. The
+  command response should return quickly with job state, then reports appear
+  after activity polling observes completion.
+- Report feeds should carry summaries. Full issue/evidence detail belongs on
+  the report detail endpoint and page.
 - Harmony scoring should separate useful tension from true collisions. It
   should be helpful, not punishing for every non-triad color.
 
@@ -377,6 +388,9 @@ the same change.
   while work is in progress and fetch the full studio only when jobs finish or
   visible counts change. Small committed settings may return minimal patches
   when the client can safely merge them into the current studio state.
+- Studio/Edit/Practice pages should load view-specific studio responses. Large
+  candidate regions and report issues should be lazy detail fetches instead of
+  being bundled into every navigation.
 - Do not merge region editing and practice waterfall previews back into the
   studio assembly page unless the foundation is reopened first.
 - The home flow has two distinct starts:
@@ -401,6 +415,14 @@ the same change.
 - Repeated playback should avoid unnecessary refetch/decode work through
   bounded caches for original audio buffers and short-lived playback-instrument
   configuration.
+- `/activity` should be a true read model: read base studio job state and
+  sidecar counts without loading region/candidate/report detail.
+- Direct upload endpoints should stream local uploads to disk/object storage
+  rather than buffering the entire request body in API memory.
+- Track audio and playback-instrument sample responses should expose cache
+  validators such as ETag/Last-Modified plus conservative private caching.
+- API and web requests should produce enough timing telemetry in development
+  and server logs to identify slow routes before optimizing by guesswork.
 - Local developer tools are global conveniences. Runtime engines and heavy ML
   dependencies should be pinned in project dependencies, Docker, or worker
   images when they become product requirements.

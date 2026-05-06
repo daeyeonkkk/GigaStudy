@@ -1,17 +1,35 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import contextmanager
+from functools import wraps
 import json
 from pathlib import Path
 from threading import RLock
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, ParamSpec, Protocol, TypeVar
 
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from gigastudy_api.services.performance import measure_metric
+
 
 SIDECAR_KEYS = ("reports", "candidates", "track_material_archives")
 ActiveStatus = Literal["active", "inactive", "all"]
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def _timed_metric(name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+            with measure_metric(name):
+                return func(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
 
 
 class StudioStore(Protocol):
@@ -47,6 +65,9 @@ class StudioStore(Protocol):
     def load_one_raw(self, studio_id: str) -> Any | None:
         ...
 
+    def load_activity_raw(self, studio_id: str) -> Any | None:
+        ...
+
     def save_raw(self, payload: dict[str, Any]) -> None:
         ...
 
@@ -72,12 +93,14 @@ class FileStudioStore:
     def metadata_label(self) -> str:
         return str(self._path.resolve())
 
+    @_timed_metric("store_load_ms")
     def load_raw(self) -> dict[str, Any]:
         return {
             studio_id: self._merge_file_sidecars(studio_id, studio_payload)
             for studio_id, studio_payload in self._read_base_raw().items()
         }
 
+    @_timed_metric("store_load_ms")
     def list_raw(
         self,
         *,
@@ -100,6 +123,7 @@ class FileStudioStore:
             for studio_id, studio_payload in rows[offset : offset + limit]
         ]
 
+    @_timed_metric("store_load_ms")
     def list_summary_raw(
         self,
         *,
@@ -121,6 +145,7 @@ class FileStudioStore:
         )
         return rows[offset : offset + limit]
 
+    @_timed_metric("store_load_ms")
     def count(self, *, active_status: ActiveStatus = "all") -> int:
         return sum(
             1
@@ -128,12 +153,33 @@ class FileStudioStore:
             if _active_matches(studio_payload, active_status)
         )
 
+    @_timed_metric("store_load_ms")
     def load_one_raw(self, studio_id: str) -> Any | None:
         studio_payload = self._read_base_raw().get(studio_id)
         if studio_payload is None:
             return None
         return self._merge_file_sidecars(studio_id, studio_payload)
 
+    @_timed_metric("store_load_ms")
+    def load_activity_raw(self, studio_id: str) -> Any | None:
+        studio_payload = self._read_base_raw().get(studio_id)
+        if studio_payload is None:
+            return None
+        payload = dict(studio_payload) if isinstance(studio_payload, dict) else studio_payload
+        candidates = self._read_file_sidecar(studio_id, "candidates") or []
+        reports = self._read_file_sidecar(studio_id, "reports") or []
+        if isinstance(payload, dict):
+            payload["_activity_counts"] = {
+                "pending_candidate_count": sum(
+                    1
+                    for candidate in candidates
+                    if isinstance(candidate, dict) and candidate.get("status") == "pending"
+                ),
+                "report_count": len(reports),
+            }
+        return payload
+
+    @_timed_metric("store_save_ms")
     def save_raw(self, payload: dict[str, Any]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         existing_ids = set(self._read_base_raw())
@@ -149,6 +195,7 @@ class FileStudioStore:
             self._delete_file_sidecars(stale_id)
         self._write_base_raw(base_payload)
 
+    @_timed_metric("store_save_ms")
     def save_one_raw(self, studio_id: str, payload: Any) -> None:
         raw_payload = self._read_base_raw()
         base_studio, reports, candidates, track_material_archives = _split_sidecars(payload)
@@ -158,6 +205,7 @@ class FileStudioStore:
         self._write_file_sidecar(studio_id, "track_material_archives", track_material_archives)
         self._write_base_raw(raw_payload)
 
+    @_timed_metric("store_save_ms")
     def delete_one_raw(self, studio_id: str) -> bool:
         raw_payload = self._read_base_raw()
         existed = studio_id in raw_payload
@@ -239,6 +287,7 @@ class PostgresStudioStore:
     def metadata_label(self) -> str:
         return "postgres://studio_documents"
 
+    @_timed_metric("store_load_ms")
     def load_raw(self) -> dict[str, Any]:
         with self._connect() as connection:
             self._ensure_schema(connection)
@@ -256,6 +305,7 @@ class PostgresStudioStore:
             for row in rows
         }
 
+    @_timed_metric("store_load_ms")
     def list_raw(
         self,
         *,
@@ -291,6 +341,7 @@ class PostgresStudioStore:
             for row in rows
         ]
 
+    @_timed_metric("store_load_ms")
     def list_summary_raw(
         self,
         *,
@@ -324,6 +375,7 @@ class PostgresStudioStore:
             ).fetchall()
         return [(str(row["studio_id"]), row["payload"]) for row in rows]
 
+    @_timed_metric("store_load_ms")
     def count(self, *, active_status: ActiveStatus = "all") -> int:
         active_clause, params = _active_sql_clause(active_status)
         with self._connect() as connection:
@@ -334,6 +386,7 @@ class PostgresStudioStore:
             ).fetchone()
         return int(row["count"] if row is not None else 0)
 
+    @_timed_metric("store_load_ms")
     def load_one_raw(self, studio_id: str) -> Any | None:
         with self._connect() as connection:
             self._ensure_schema(connection)
@@ -351,6 +404,39 @@ class PostgresStudioStore:
             track_material_archives=sidecars["track_material_archives"].get(studio_id),
         )
 
+    @_timed_metric("store_load_ms")
+    def load_activity_raw(self, studio_id: str) -> Any | None:
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            row = connection.execute(
+                """
+                SELECT
+                    payload,
+                    (
+                        SELECT count(*)
+                        FROM studio_candidates
+                        WHERE studio_id = %s AND payload->>'status' = 'pending'
+                    ) AS pending_candidate_count,
+                    (
+                        SELECT count(*)
+                        FROM studio_reports
+                        WHERE studio_id = %s
+                    ) AS report_count
+                FROM studio_documents
+                WHERE studio_id = %s
+                """,
+                (studio_id, studio_id, studio_id),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = dict(row["payload"])
+        payload["_activity_counts"] = {
+            "pending_candidate_count": int(row["pending_candidate_count"] or 0),
+            "report_count": int(row["report_count"] or 0),
+        }
+        return payload
+
+    @_timed_metric("store_save_ms")
     def save_raw(self, payload: dict[str, Any]) -> None:
         with self._connect() as connection:
             self._ensure_schema(connection)
@@ -367,12 +453,14 @@ class PostgresStudioStore:
                 self._save_one_raw(connection, studio_id, studio_payload)
             connection.commit()
 
+    @_timed_metric("store_save_ms")
     def save_one_raw(self, studio_id: str, payload: Any) -> None:
         with self._connect() as connection:
             self._ensure_schema(connection)
             self._save_one_raw(connection, studio_id, payload)
             connection.commit()
 
+    @_timed_metric("store_save_ms")
     def delete_one_raw(self, studio_id: str) -> bool:
         with self._connect() as connection:
             self._ensure_schema(connection)

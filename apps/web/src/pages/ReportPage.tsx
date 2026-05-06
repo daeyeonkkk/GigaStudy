@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
-import { getStudio } from '../lib/api'
+import { getScoringReport, getStudio } from '../lib/api'
 import {
   describeReferences,
   formatTrackName,
@@ -170,21 +170,26 @@ function ReportRouteState({
 export function ReportPage() {
   const { studioId, reportId } = useParams()
   const [studio, setStudio] = useState<Studio | null>(null)
+  const [report, setReport] = useState<ScoringReport | null>(null)
   const [loadState, setLoadState] = useState<LoadState>({ phase: 'loading' })
 
   useEffect(() => {
     let ignore = false
 
-    if (!studioId) {
+    if (!studioId || !reportId) {
       return () => {
         ignore = true
       }
     }
 
-    getStudio(studioId)
-      .then((nextStudio) => {
+    Promise.all([
+      getStudio(studioId, { view: 'practice' }),
+      getScoringReport(studioId, reportId),
+    ])
+      .then(([nextStudio, nextReport]) => {
         if (!ignore) {
           setStudio(nextStudio)
+          setReport(nextReport)
           setLoadState({ phase: 'ready' })
         }
       })
@@ -200,12 +205,7 @@ export function ReportPage() {
     return () => {
       ignore = true
     }
-  }, [studioId])
-
-  const report = useMemo(
-    () => studio?.reports.find((candidate) => candidate.report_id === reportId) ?? null,
-    [reportId, studio],
-  )
+  }, [reportId, studioId])
 
   if (!studioId) {
     return (

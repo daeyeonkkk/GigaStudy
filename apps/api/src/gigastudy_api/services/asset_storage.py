@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
+import shutil
 from typing import Protocol
 from uuid import uuid4
 
@@ -64,6 +65,9 @@ class AssetStorage(Protocol):
         ...
 
     def write_direct_upload(self, *, relative_path: str, content: bytes) -> Path:
+        ...
+
+    def write_direct_upload_file(self, *, relative_path: str, source_path: Path) -> Path:
         ...
 
     def persist_file(self, path: Path) -> str:
@@ -152,6 +156,12 @@ class LocalAssetStorage:
         path = self._cache_path(relative_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
+        return path
+
+    def write_direct_upload_file(self, *, relative_path: str, source_path: Path) -> Path:
+        path = self._cache_path(relative_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, path)
         return path
 
     def persist_file(self, path: Path) -> str:
@@ -342,6 +352,14 @@ class S3AssetStorage(LocalAssetStorage):
         local_path.parent.mkdir(parents=True, exist_ok=True)
         local_path.write_bytes(content)
         self._client.put_object(Bucket=self._bucket, Key=clean_path, Body=content)
+        return local_path
+
+    def write_direct_upload_file(self, *, relative_path: str, source_path: Path) -> Path:
+        clean_path = _clean_relative_path(relative_path)
+        local_path = self._cache_path(clean_path)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, local_path)
+        self._client.upload_file(str(source_path), self._bucket, clean_path)
         return local_path
 
     def persist_file(self, path: Path) -> str:

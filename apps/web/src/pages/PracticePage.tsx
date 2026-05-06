@@ -231,7 +231,8 @@ export function PracticePage() {
     registeredTracks,
     setStudio,
     studio,
-  } = useStudioResource(studioId, (message) => setActionState({ phase: 'error', message }))
+  } = useStudioResource(studioId, (message) => setActionState({ phase: 'error', message }), undefined, 'practice')
+
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const [selectedScoreTargetSlotId, setSelectedScoreTargetSlotId] = useState<number | null>(null)
   const studioMeter = useMemo(

@@ -260,7 +260,6 @@ export function StudioEditPage() {
               beatsPerMeasure={studioMeter.beatsPerMeasure}
               bpm={studio.bpm}
               draftStorageScope={studio.studio_id}
-              metronomeEnabled={false}
               pendingCandidateCount={pendingCandidates.length}
               extractionJobs={visibleExtractionJobs}
               focusedEventId={focusedEventId}
@@ -272,6 +271,8 @@ export function StudioEditPage() {
               editDisabled={actionBusy}
               editDisabledReason={editDisabledReason}
               registeredTracks={registeredTracks}
+              recordingGuideLabel="무음 카운트"
+              recordingSetupSlotId={null}
               syncStepSeconds={DEFAULT_SYNC_STEP_SECONDS}
               trackCountIn={null}
               recordingSlotId={null}

@@ -60,7 +60,6 @@ type TrackBoardProps = {
   editDisabled: boolean
   editDisabledReason: string | null
   volumeDisabled?: boolean
-  metronomeEnabled: boolean
   pendingCandidateCount: number
   extractionJobs: TrackExtractionJob[]
   playingSlots: Set<number>
@@ -69,6 +68,8 @@ type TrackBoardProps = {
   focusedRegionId?: string | null
   arrangementRegions: ArrangementRegion[]
   registeredTracks: TrackSlot[]
+  recordingGuideLabel: string
+  recordingSetupSlotId: number | null
   recordingSlotId: number | null
   syncStepSeconds: number
   trackCountIn: TrackCountInState | null
@@ -247,7 +248,6 @@ export function TrackBoard({
   editDisabled,
   editDisabledReason,
   volumeDisabled = false,
-  metronomeEnabled,
   pendingCandidateCount,
   extractionJobs,
   playingSlots,
@@ -256,6 +256,8 @@ export function TrackBoard({
   focusedRegionId,
   arrangementRegions,
   registeredTracks,
+  recordingGuideLabel,
+  recordingSetupSlotId,
   recordingSlotId,
   syncStepSeconds,
   trackCountIn,
@@ -375,12 +377,13 @@ export function TrackBoard({
         {tracks.map((track) => {
           const isRegistered = track.status === 'registered'
           const needsReview = track.status === 'needs_review'
+          const isSettingUpRecording = recordingSetupSlotId === track.slot_id
           const isRecording = recordingSlotId === track.slot_id
           const isCountingIn = trackCountIn?.slotId === track.slot_id
           const isPlaying = playingSlots.has(track.slot_id)
           const activeJob = getTrackActiveJob(track, extractionJobs)
           const activeJobLocked = activeJobSlotIds.has(track.slot_id) || track.status === 'extracting'
-          const isRecordToggleAvailable = isRecording || isCountingIn
+          const isRecordToggleAvailable = isRecording || isCountingIn || isSettingUpRecording
           const trackEditDisabled = editDisabled || activeJobLocked
           const trackVolumeDisabled = volumeDisabled || activeJobLocked
           const trackEditDisabledReason = activeJobLocked
@@ -508,15 +511,17 @@ export function TrackBoard({
               <div className="track-card__controls">
                 <div className="track-card__primary-actions">
                   <button
-                    className={`app-button app-button--record ${isRecording || isCountingIn ? 'is-active' : ''}`}
+                    className={`app-button app-button--record ${
+                      isRecording || isCountingIn || isSettingUpRecording ? 'is-active' : ''
+                    }`}
                     data-testid={`track-record-${track.slot_id}`}
                     disabled={!isRecordToggleAvailable && trackEditDisabled}
                     type="button"
                     title={!isRecordToggleAvailable ? trackEditDisabledReason ?? undefined : undefined}
                     onClick={() => onRecord(track)}
                   >
-                    <span aria-hidden="true">{isRecording ? '■' : isCountingIn ? '×' : '●'}</span>
-                    {isRecording ? '녹음 중' : isCountingIn ? '취소' : '녹음'}
+                    <span aria-hidden="true">{isRecording ? '■' : isCountingIn || isSettingUpRecording ? '×' : '●'}</span>
+                    {isRecording ? '녹음 중' : isCountingIn || isSettingUpRecording ? '취소' : '녹음'}
                   </button>
                   <label className={`app-button app-button--secondary track-upload ${trackEditDisabled ? 'is-disabled' : ''}`}>
                     <span aria-hidden="true">↑</span>
@@ -600,7 +605,7 @@ export function TrackBoard({
                     <span>1마디 카운트인</span>
                     <strong>{trackCountIn.pulsesRemaining}</strong>
                     <i aria-hidden="true" />
-                    <em>{metronomeEnabled ? '메트로놈 켜짐' : '무음 카운트'}</em>
+                    <em>{recordingGuideLabel}</em>
                   </div>
                 ) : isRecording ? (
                   <div
@@ -610,7 +615,7 @@ export function TrackBoard({
                   >
                     <span>{formatDurationSeconds(trackRecordingMeter.durationSeconds)}</span>
                     <i aria-hidden="true" />
-                    <em>{metronomeEnabled ? '메트로놈 켜짐' : '메트로놈 꺼짐'}</em>
+                    <em>{recordingGuideLabel}</em>
                   </div>
                 ) : null}
               </div>

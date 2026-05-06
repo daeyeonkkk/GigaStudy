@@ -1,0 +1,82 @@
+.recording-reference-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.32);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 30;
+}
+
+.recording-reference-panel {
+  background: #f8fafc;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.22);
+  color: #0f172a;
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+  padding: 22px;
+  width: min(100%, 560px);
+}
+
+.recording-reference-panel__heading h2 {
+  font-size: 1.6rem;
+  margin: 4px 0 0;
+}
+
+.recording-reference-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recording-reference-list label,
+.recording-reference-metronome {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.recording-reference-list label.is-disabled {
+  color: #64748b;
+}
+
+.recording-reference-list input,
+.recording-reference-metronome input {
+  height: 20px;
+  width: 20px;
+}
+
+.recording-reference-list span,
+.recording-reference-metronome span {
+  font-weight: 800;
+}
+
+.recording-reference-list em {
+  color: #64748b;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.recording-reference-tools,
+.recording-reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recording-reference-actions {
+  justify-content: flex-end;
+}
+
+.recording-reference-hint {
+  color: #475569;
+  font-weight: 700;
+  margin: 0;
+}

@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CandidateReviewPanel } from '../components/studio/CandidateReviewPanel'
 import { ExtractionJobsPanel } from '../components/studio/ExtractionJobsPanel'
 import { PendingRecordingDialog } from '../components/studio/PendingRecordingDialog'
+import { RecordingReferenceDialog } from '../components/studio/RecordingReferenceDialog'
 import { ReportFeed } from '../components/studio/ReportFeed'
 import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { StudioToolbar } from '../components/studio/StudioToolbar'
@@ -68,6 +69,7 @@ export function StudioPage() {
   const {
     changePlaybackSource,
     globalPlaying,
+    markReferencePlayback,
     openPlaybackPicker,
     playbackPickerOpen,
     playbackSource,
@@ -78,6 +80,7 @@ export function StudioPage() {
     selectAllPlaybackTracks,
     selectedPlaybackSlotIds,
     setActiveTrackVolume,
+    startPlaybackSession,
     startSelectedPlayback,
     stopGlobalPlayback,
     stopPlaybackSession,
@@ -96,17 +99,28 @@ export function StudioPage() {
     studioMeter,
   })
   const {
+    activeRecordingGuideLabel,
+    cancelRecordingSetup,
+    clearRecordingReferences,
     handleDiscardPendingRecording,
     handleRecord: handleTrackRecording,
     handleRegisterPendingRecording,
     pendingTrackRecording,
+    recordingSetup,
     recordingSlotId,
+    selectAllRecordingReferences,
+    setRecordingReferenceMetronomeEnabled,
+    startRecordingFromSetup,
     trackCountIn,
     trackRecordingMeter,
+    toggleRecordingReference,
   } = useStudioRecording({
+    markReferencePlayback,
     metronomeEnabled,
     runStudioAction,
     setActionState,
+    startPlaybackSession,
+    stopPlaybackSession,
     studio,
     studioMeter,
   })
@@ -210,7 +224,8 @@ export function StudioPage() {
     }
     return next
   }, [activeExtractionJobs, studio])
-  const recordingInteractionLocked = recordingSlotId !== null || trackCountIn !== null || pendingTrackRecording !== null
+  const recordingInteractionLocked =
+    recordingSetup !== null || recordingSlotId !== null || trackCountIn !== null || pendingTrackRecording !== null
   const playbackInteractionLocked = globalPlaying || playingSlots.size > 0
   const actionBusy = actionState.phase === 'busy'
   const arrangementEditDisabled =
@@ -372,7 +387,6 @@ export function StudioPage() {
             <TrackBoard
               beatsPerMeasure={studioBeatsPerMeasure}
               bpm={studio.bpm}
-              metronomeEnabled={metronomeEnabled}
               pendingCandidateCount={pendingCandidates.length}
               extractionJobs={visibleExtractionJobs}
               focusedEventId={focusedEventId}
@@ -385,6 +399,8 @@ export function StudioPage() {
               editDisabledReason={arrangementEditDisabledReason}
               volumeDisabled={trackVolumeDisabled}
               registeredTracks={registeredTracks}
+              recordingGuideLabel={activeRecordingGuideLabel}
+              recordingSetupSlotId={recordingSetup?.targetSlotId ?? null}
               syncStepSeconds={syncStepSeconds}
               trackCountIn={trackCountIn}
               recordingSlotId={recordingSlotId}
@@ -448,6 +464,20 @@ export function StudioPage() {
       </section>
 
       <ReportFeed reports={studio.reports} studioId={studio.studio_id} tracks={studio.tracks} />
+
+      {recordingSetup ? (
+        <RecordingReferenceDialog
+          busy={actionState.phase === 'busy'}
+          setup={recordingSetup}
+          tracks={studio.tracks}
+          onCancel={cancelRecordingSetup}
+          onClearTracks={clearRecordingReferences}
+          onIncludeMetronomeChange={setRecordingReferenceMetronomeEnabled}
+          onSelectAllTracks={selectAllRecordingReferences}
+          onStart={() => void startRecordingFromSetup()}
+          onToggleTrack={toggleRecordingReference}
+        />
+      ) : null}
 
       {pendingTrackRecording ? (
         <PendingRecordingDialog

@@ -32,9 +32,18 @@ export type InstrumentPlaybackRequest = {
   destination?: AudioNode
   duration: number
   frequency: number
+  gridUnitSeconds?: number
   instrument?: PlaybackInstrument
+  nextGapSeconds?: number
   startTime: number
   volume: number
+}
+
+export type MelodicEnvelope = {
+  attackSeconds: number
+  endGainRatio: number
+  peakGainRatio: number
+  releaseSeconds: number
 }
 
 export const GUIDE_SUSTAIN_INSTRUMENT: SynthPlaybackInstrument = {
@@ -80,6 +89,55 @@ function getReleaseTime(duration: number, ratio: number, maxSeconds: number): nu
   return Math.min(maxSeconds, Math.max(STUDIO_TIME_PRECISION_SECONDS, duration * ratio))
 }
 
+function clampValue(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value))
+}
+
+function getEnvelopeGridUnitSeconds(duration: number, gridUnitSeconds?: number): number {
+  if (gridUnitSeconds !== undefined && Number.isFinite(gridUnitSeconds) && gridUnitSeconds > 0) {
+    return Math.max(STUDIO_TIME_PRECISION_SECONDS, gridUnitSeconds)
+  }
+  return Math.max(STUDIO_TIME_PRECISION_SECONDS, duration)
+}
+
+export function computeMelodicEnvelope(
+  requestedDuration: number,
+  gridUnitSeconds?: number,
+  nextGapSeconds?: number,
+): MelodicEnvelope {
+  const duration = getPlaybackDuration(requestedDuration)
+  const gridUnit = getEnvelopeGridUnitSeconds(duration, gridUnitSeconds)
+  const precisionFloorSeconds = STUDIO_TIME_PRECISION_SECONDS * 6
+  const attackFloorSeconds = Math.min(duration * 0.35, precisionFloorSeconds)
+  const attackCeilingSeconds = Math.max(
+    attackFloorSeconds,
+    Math.min(duration * 0.45, gridUnit * 0.12),
+  )
+  const attackSeconds = clampValue(duration * 0.08, attackFloorSeconds, attackCeilingSeconds)
+  const gridUnits = Math.max(1, duration / gridUnit)
+  const endGainRatio = clampValue(0.7 + 0.2 / gridUnits, 0.7, 0.9)
+  const releaseFloorSeconds = Math.min(
+    duration * 0.4,
+    Math.max(precisionFloorSeconds, gridUnit * 0.04),
+  )
+  const naturalReleaseSeconds = Math.max(
+    releaseFloorSeconds,
+    Math.min(duration * 0.18, gridUnit * 0.5),
+  )
+  const gapLimitedReleaseSeconds =
+    nextGapSeconds !== undefined && Number.isFinite(nextGapSeconds)
+      ? Math.max(releaseFloorSeconds, Math.max(0, nextGapSeconds) + releaseFloorSeconds)
+      : naturalReleaseSeconds
+  const releaseSeconds = Math.min(naturalReleaseSeconds, gapLimitedReleaseSeconds)
+
+  return {
+    attackSeconds,
+    endGainRatio,
+    peakGainRatio: 1.1,
+    releaseSeconds,
+  }
+}
+
 function createSampleInstrumentPlayback(
   context: AudioContext,
   request: InstrumentPlaybackRequest,
@@ -89,9 +147,9 @@ function createSampleInstrumentPlayback(
   const source = context.createBufferSource()
   const gain = context.createGain()
   const duration = getPlaybackDuration(request.duration)
-  const attackTime = Math.min(0.035, duration * 0.25)
-  const releaseTime = getReleaseTime(duration, 0.2, 0.24)
+  const envelope = computeMelodicEnvelope(duration, request.gridUnitSeconds, request.nextGapSeconds)
   const playbackRate = Math.max(0.25, Math.min(4, request.frequency / instrument.rootFrequency))
+  const holdEndTime = request.startTime + duration
 
   source.buffer = instrument.audioBuffer
   source.playbackRate.setValueAtTime(playbackRate, request.startTime)
@@ -102,14 +160,17 @@ function createSampleInstrumentPlayback(
   }
 
   gain.gain.setValueAtTime(0.0001, request.startTime)
-  gain.gain.linearRampToValueAtTime(request.volume * 0.82, request.startTime + attackTime)
-  gain.gain.setValueAtTime(request.volume * 0.72, request.startTime + duration)
-  gain.gain.exponentialRampToValueAtTime(0.0001, request.startTime + duration + releaseTime)
+  gain.gain.linearRampToValueAtTime(
+    request.volume * envelope.peakGainRatio,
+    request.startTime + envelope.attackSeconds,
+  )
+  gain.gain.linearRampToValueAtTime(request.volume * envelope.endGainRatio, holdEndTime)
+  gain.gain.exponentialRampToValueAtTime(0.0001, holdEndTime + envelope.releaseSeconds)
 
   source.connect(gain)
   gain.connect(destination)
   source.start(request.startTime)
-  source.stop(request.startTime + duration + releaseTime + 0.03)
+  source.stop(holdEndTime + envelope.releaseSeconds + 0.03)
   return { gain, source }
 }
 
@@ -135,8 +196,7 @@ function createGuideSustainTone(
   const filter = context.createBiquadFilter()
   const masterGain = context.createGain()
   const duration = getPlaybackDuration(request.duration)
-  const attackTime = Math.min(0.055, duration * 0.3)
-  const releaseTime = getReleaseTime(duration, 0.24, 0.34)
+  const envelope = computeMelodicEnvelope(duration, request.gridUnitSeconds, request.nextGapSeconds)
   const holdEndTime = request.startTime + duration
   const oscillators: OscillatorNode[] = []
   const gains: GainNode[] = [masterGain]
@@ -146,9 +206,12 @@ function createGuideSustainTone(
   filter.Q.setValueAtTime(0.28, request.startTime)
 
   masterGain.gain.setValueAtTime(0.0001, request.startTime)
-  masterGain.gain.linearRampToValueAtTime(request.volume * 0.84, request.startTime + attackTime)
-  masterGain.gain.setValueAtTime(request.volume * 0.74, holdEndTime)
-  masterGain.gain.exponentialRampToValueAtTime(0.0001, holdEndTime + releaseTime)
+  masterGain.gain.linearRampToValueAtTime(
+    request.volume * envelope.peakGainRatio,
+    request.startTime + envelope.attackSeconds,
+  )
+  masterGain.gain.linearRampToValueAtTime(request.volume * envelope.endGainRatio, holdEndTime)
+  masterGain.gain.exponentialRampToValueAtTime(0.0001, holdEndTime + envelope.releaseSeconds)
 
   filter.connect(masterGain)
   masterGain.connect(destination)
@@ -169,7 +232,7 @@ function createGuideSustainTone(
     oscillator.connect(partialGain)
     partialGain.connect(filter)
     oscillator.start(request.startTime)
-    oscillator.stop(holdEndTime + releaseTime + 0.04)
+    oscillator.stop(holdEndTime + envelope.releaseSeconds + 0.04)
     oscillators.push(oscillator)
     gains.push(partialGain)
   })

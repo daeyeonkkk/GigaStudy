@@ -191,3 +191,23 @@ test('AI generation registers a second editable region', async ({ page }) => {
   await expectRegisteredRegion(page, 2, ['E4', 'G4'])
   await expect(page.locator('.studio-tracks__summary')).toContainText('등록 2')
 })
+
+test('track recording chooses reference playback before count-in', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Chromium uses fake microphone input for recording gates')
+
+  await createStudioFromSopranoMusicXml(page, 'Recording reference session')
+
+  await page.getByTestId('track-record-2').click()
+  await expect(page.getByTestId('recording-reference-dialog')).toBeVisible()
+  await expect(page.getByTestId('recording-reference-track-1')).toBeChecked()
+  await expect(page.getByTestId('recording-reference-track-2')).toBeDisabled()
+  await expect(page.getByTestId('recording-reference-track-6')).toBeDisabled()
+  await expect(page.getByTestId('recording-reference-metronome')).toBeChecked()
+
+  await page.getByTestId('recording-reference-start').click()
+  await expect(page.getByTestId('track-count-in-2')).toBeVisible()
+  await expect(page.getByTestId('track-recording-meter-2')).toBeVisible({ timeout: 6_000 })
+  await page.waitForTimeout(350)
+  await page.getByTestId('track-record-2').click()
+  await expect(page.getByTestId('pending-recording-dialog')).toBeVisible()
+})

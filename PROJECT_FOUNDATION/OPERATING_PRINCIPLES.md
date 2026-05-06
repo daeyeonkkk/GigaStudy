@@ -1,6 +1,6 @@
 # GigaStudy Operating Principles
 
-Date: 2026-05-05
+Date: 2026-05-06
 
 These principles are the working rules for GigaStudy while it is still a
 one-person alpha product. They are strong defaults, not permanent law. Change
@@ -125,6 +125,9 @@ the same change.
   active for recording, extraction, scoring, and playback.
 - Count-in is beat/pulse based, not fixed seconds. In 4/4, one-measure count-in
   should naturally land on `3 -> 2 -> 1 -> 0`.
+- Track recording may choose audible reference tracks and the metronome per
+  take. Registered reference tracks start on the shared scheduled timeline; the
+  selected count-in still lands on the same downbeat.
 - The microphone should open slightly before the downbeat so early entrances are
   captured, while backend alignment keeps the registered material on the shared
   beat grid.
@@ -265,6 +268,12 @@ the same change.
 - Default event synthesis should use a voice-friendly warm guide tone: clear
   pitch center, soft attack, restrained upper harmonics, and no vocal/organ
   character that competes with the user's recorded or live voice.
+- Symbolic repeated notes should produce explicit new onsets even when adjacent
+  events have the same pitch. Only measure-boundary fragments that share the
+  same split-event root should sustain without a new attack. Melodic synthesis
+  envelopes should derive attack, decay, and release from the current
+  BPM/meter-based event grid and the next same-track event gap, not from fixed
+  second thresholds that blur short rhythmic repetitions.
 - Admin may replace the guide tone with a custom audio file for alpha testing.
   Playback should use that sample only as an event-synthesis source and fall
   back to the built-in warm guide synth if the file is missing or unsupported.

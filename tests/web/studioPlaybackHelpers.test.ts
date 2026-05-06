@@ -7,6 +7,7 @@ import {
 } from '../../apps/web/src/components/studio/studioPlaybackHelpers'
 import { getGridSeconds } from '../../apps/web/src/components/studio/TrackBoardEditorGrid'
 import {
+  computeMelodicEnvelope,
   getSixteenthNoteSeconds,
   getPitchEventPlaybackFrequency,
   STUDIO_TIME_PRECISION_SECONDS,
@@ -186,6 +187,71 @@ describe('studio playback scheduling helpers', () => {
     const scheduled = getSustainedPitchEvents(events, false, STUDIO_TIME_PRECISION_SECONDS, 1)
 
     expect(scheduled.map((event) => event.event.event_id)).toEqual(['repeat-1', 'repeat-2'])
+  })
+
+  it('keeps sixteenth-note same-pitch repeats as separate attacks', () => {
+    const sixteenthSeconds = getSixteenthNoteSeconds(101)
+    const baseEvent = {
+      beat_in_measure: null,
+      confidence: 1,
+      extraction_method: 'test',
+      is_rest: false,
+      label: 'E4',
+      measure_index: null,
+      pitch_hz: null,
+      pitch_midi: 64,
+      quality_warnings: ['measure_boundary_tie', 'same_pitch_contiguous_merged'],
+      region_id: 'region-1',
+      source: 'midi',
+      track_slot_id: 1,
+    } satisfies Partial<PitchEvent>
+    const events = [
+      {
+        ...baseEvent,
+        duration_beats: 1,
+        duration_seconds: sixteenthSeconds * 4,
+        event_id: 'phrase-a',
+        start_beat: 1,
+        start_seconds: 0,
+      },
+      {
+        ...baseEvent,
+        duration_beats: 0.25,
+        duration_seconds: sixteenthSeconds,
+        event_id: 'phrase-b',
+        start_beat: 2,
+        start_seconds: sixteenthSeconds * 4,
+      },
+      {
+        ...baseEvent,
+        duration_beats: 0.75,
+        duration_seconds: sixteenthSeconds * 3,
+        event_id: 'phrase-c-q1',
+        start_beat: 2.25,
+        start_seconds: sixteenthSeconds * 5,
+      },
+    ] as PitchEvent[]
+
+    const scheduled = getSustainedPitchEvents(events, false, STUDIO_TIME_PRECISION_SECONDS, 1)
+
+    expect(scheduled.map((event) => event.event.event_id)).toEqual(['phrase-a', 'phrase-b', 'phrase-c-q1'])
+  })
+
+  it('uses a grid-aware melodic envelope for short repeated notes', () => {
+    const sixteenthSeconds = getSixteenthNoteSeconds(101)
+    const shortRepeatEnvelope = computeMelodicEnvelope(sixteenthSeconds, sixteenthSeconds, 0)
+    const openShortEnvelope = computeMelodicEnvelope(sixteenthSeconds, sixteenthSeconds)
+    const dottedEighthEnvelope = computeMelodicEnvelope(sixteenthSeconds * 3, sixteenthSeconds, 0)
+    const quarterEnvelope = computeMelodicEnvelope(sixteenthSeconds * 4, sixteenthSeconds, 0)
+
+    expect(shortRepeatEnvelope.attackSeconds).toBeCloseTo(sixteenthSeconds * 0.08)
+    expect(shortRepeatEnvelope.attackSeconds).toBeLessThan(sixteenthSeconds * 0.1)
+    expect(shortRepeatEnvelope.peakGainRatio).toBeCloseTo(1.1)
+    expect(shortRepeatEnvelope.endGainRatio).toBeCloseTo(0.9)
+    expect(shortRepeatEnvelope.releaseSeconds).toBeLessThan(openShortEnvelope.releaseSeconds)
+    expect(shortRepeatEnvelope.releaseSeconds).toBeCloseTo(STUDIO_TIME_PRECISION_SECONDS * 6)
+    expect(dottedEighthEnvelope.endGainRatio).toBeCloseTo(0.7 + 0.2 / 3)
+    expect(quarterEnvelope.endGainRatio).toBeCloseTo(0.7 + 0.2 / 4)
   })
 
   it('still sustains measure-split tie fragments across a barline', () => {

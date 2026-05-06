@@ -13,6 +13,7 @@ import {
   formatTrackName,
   getPlaybackPreparationMessage,
   getRegionsTimelineEndSeconds,
+  getSixteenthNoteSeconds,
   STUDIO_TIME_PRECISION_SECONDS,
   getTrackVolumeScale,
   getVolumeScaleFromPercent,
@@ -64,7 +65,9 @@ type PendingSynthEvent = {
   destination: AudioNode
   durationSeconds: number
   frequency: number
+  gridUnitSeconds: number
   instrument: PlaybackInstrument
+  nextGapSeconds?: number
   relativeStartSeconds: number
   volume: number
 }
@@ -197,6 +200,7 @@ export function useStudioPlayback({
 
     const beatSeconds = 60 / studio.bpm
     const eventPrecisionSeconds = STUDIO_TIME_PRECISION_SECONDS
+    const eventGridUnitSeconds = getSixteenthNoteSeconds(studio.bpm, studioMeter)
     const minTimelineSeconds = Math.min(
       0,
       ...playableTracks.map((track) => track.sync_offset_seconds),
@@ -285,7 +289,9 @@ export function useStudioPlayback({
                   destination: event.destination,
                   duration: event.durationSeconds,
                   frequency: event.frequency,
+                  gridUnitSeconds: event.gridUnitSeconds,
                   instrument: event.instrument,
+                  nextGapSeconds: event.nextGapSeconds,
                   startTime: scheduledStart + event.relativeStartSeconds,
                   volume: event.volume,
                 },
@@ -421,40 +427,46 @@ export function useStudioPlayback({
 
         const isPercussion = track.slot_id === 6
         maxBeat = getMaxBeatFromRegions(trackRegions, maxBeat)
-        trackRegions.forEach((region) => {
-          getSustainedPitchEvents(
-            region.pitch_events,
-            isPercussion,
-            eventPrecisionSeconds,
-            track.slot_id,
-          ).forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }) => {
-            const duration = durationSeconds
-            const eventEndSeconds = eventStartSeconds + duration
-            timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
-            const eventSchedule = getPitchEventSchedule({
-              durationSeconds: duration,
-              eventStartSeconds,
-              precisionSeconds: eventPrecisionSeconds,
-              scheduledStart,
-              startSeconds,
-            })
-            if (!eventSchedule) {
-              return
-            }
-            pendingSynthEvents.push({
-              destination: getTrackOutput(track) ?? activeContext.destination,
-              durationSeconds: eventSchedule.remainingDurationSeconds,
-              frequency,
-              instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : melodicInstrument,
-              relativeStartSeconds: eventSchedule.relativeStartSeconds,
-              volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
-            })
-            latestStop = Math.max(
-              latestStop,
-              eventSchedule.relativeStartSeconds + eventSchedule.remainingDurationSeconds,
-            )
-            scheduledAnyTrack = true
+        const trackPitchEvents = trackRegions.flatMap((region) => region.pitch_events)
+        const scheduledPitchEvents = getSustainedPitchEvents(
+          trackPitchEvents,
+          isPercussion,
+          eventPrecisionSeconds,
+          track.slot_id,
+        )
+        scheduledPitchEvents.forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }, eventIndex) => {
+          const duration = durationSeconds
+          const eventEndSeconds = eventStartSeconds + duration
+          const nextPitchEvent = scheduledPitchEvents[eventIndex + 1]
+          const nextGapSeconds = nextPitchEvent
+            ? Math.max(0, nextPitchEvent.startSeconds - eventEndSeconds)
+            : undefined
+          timelineEndSeconds = Math.max(timelineEndSeconds, eventEndSeconds)
+          const eventSchedule = getPitchEventSchedule({
+            durationSeconds: duration,
+            eventStartSeconds,
+            precisionSeconds: eventPrecisionSeconds,
+            scheduledStart,
+            startSeconds,
           })
+          if (!eventSchedule) {
+            return
+          }
+          pendingSynthEvents.push({
+            destination: getTrackOutput(track) ?? activeContext.destination,
+            durationSeconds: eventSchedule.remainingDurationSeconds,
+            frequency,
+            gridUnitSeconds: eventGridUnitSeconds,
+            instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : melodicInstrument,
+            nextGapSeconds,
+            relativeStartSeconds: eventSchedule.relativeStartSeconds,
+            volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
+          })
+          latestStop = Math.max(
+            latestStop,
+            eventSchedule.relativeStartSeconds + eventSchedule.remainingDurationSeconds,
+          )
+          scheduledAnyTrack = true
         })
       })
 

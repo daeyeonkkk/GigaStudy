@@ -1,6 +1,6 @@
 # GigaStudy Current Architecture
 
-Date: 2026-05-05
+Date: 2026-05-06
 
 This is the current canonical architecture after the region/piano-roll rebuild.
 GigaStudy is a six-track vocal arrangement and practice workspace, not an
@@ -300,10 +300,19 @@ flowchart TD
 
 ### Recording
 
-1. Browser records audio with a count-in tied to the studio clock.
-2. API stores retained audio and starts voice extraction.
-3. Extracted pitch material becomes a candidate or registered track.
-4. Region and pitch-event views update from the studio response.
+1. User clicks a track's recording control and chooses audible references for
+   that take: the six visible tracks remain listed, registered tracks can be
+   enabled, empty tracks are shown but disabled, and the metronome can be
+   toggled separately.
+2. Browser opens the microphone before the downbeat, then schedules selected
+   reference tracks and the metronome against studio timeline `0` so the
+   count-in and reference playback share one downbeat.
+3. If no reference tracks are selected, the browser keeps the existing
+   count-in-only path: metronome if selected, or silent visual count-in if not.
+4. The stopped take stays pending until the user registers or discards it.
+5. API stores retained audio and starts voice extraction after registration.
+6. Extracted pitch material becomes a candidate or registered track.
+7. Region and pitch-event views update from the studio response.
 
 ### Scoring
 

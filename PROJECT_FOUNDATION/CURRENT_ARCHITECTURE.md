@@ -121,10 +121,13 @@ is excluded from persistence and remains an adapter detail.
   internal inputs before registration. `ExtractionCandidate.events` remains a
   candidate-review shadow until approval. They accept only the current event
   shape; obsolete pre-region payloads are rejected with the rest of the obsolete
-  storage shape. `Studio.track_material_archives` stores inactive restore
-  snapshots for overwritten track material. Studio routes return
-  `StudioResponse`, whose tracks and candidates omit internal event arrays and
-  whose archive payload exposes summaries only, not stored event snapshots.
+  storage shape. `Studio.track_material_archives` is loaded into the internal
+  model from a storage sidecar and stores inactive restore snapshots for
+  overwritten track material. Each archive stores `region_snapshots[]`, with old
+  single `region_snapshot` payloads lazily migrated on read. Studio routes
+  return `StudioResponse`, whose tracks and candidates omit internal event
+  arrays and whose archive payload exposes summaries only, not stored event
+  snapshots.
   `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
   arrangement data flow. Document imports use `source_kind: "document"`;
   `"score"` is no longer accepted as a source-kind alias. `PitchEvent` carries
@@ -202,7 +205,10 @@ is excluded from persistence and remains an adapter detail.
   review. It cannot create tracks, delete events, rewrite pitch material, or
   change BPM/meter; invalid or low-confidence responses are ignored.
 - `apps/api/src/gigastudy_api/services/studio_store.py`
-  Studio persistence abstraction.
+  Studio persistence abstraction. Base studio payloads are kept small by
+  sidecar-storing reports, candidates, and track material archives; concurrent
+  saves merge archive rows by `archive_id` so restore history is not lost by a
+  racing save.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`
   Asset path, local/S3 storage, and direct-upload lifecycle.
 - `apps/api/src/gigastudy_api/services/engine_queue.py`
@@ -291,7 +297,9 @@ flowchart TD
 2. Browser sends the file via direct upload or inline fallback. Studio creation
    requests include a browser-generated `client_request_id`; if the browser
    loses the response and retries the same start data, the API returns the
-   existing studio instead of creating a duplicate.
+   existing studio instead of creating a duplicate. If that existing studio has
+   queued/running import jobs but the durable queue record is missing, retry
+   repairs the queue record and schedules processing again.
 3. API either registers clearly assigned symbolic seed parts directly or creates
    an extraction job/candidate review path for ambiguous material. Audio
    extraction first normalizes non-WAV containers into a WAV analysis source.
@@ -305,7 +313,9 @@ flowchart TD
    reviewable, and records the per-track outcome on the extraction job.
 7. If registration overwrites an existing track, API stores the previous active
    material as an inactive track archive before replacing `Studio.regions`.
-   Original MIDI/MusicXML/PDF score material is pinned for that slot.
+   Original MIDI/MusicXML/PDF score material is pinned for that slot. Restore
+   first archives the current active material, then replaces all active regions
+   for the slot with the archived snapshots.
 8. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
@@ -412,14 +422,17 @@ The rebuild now follows the intended separation:
 - Product truth: `Studio.regions`, `ArrangementRegion.pitch_events`, and
   `CandidateRegion.pitch_events`.
 - Restore snapshots: `Studio.track_material_archives` is inactive storage for
-  restoration only and is not consumed by playback, scoring, practice, or AI
-  generation.
+  restoration only, stored outside the base studio payload, and is not consumed
+  by playback, scoring, practice, or AI generation.
 - Product surfaces: region lanes, selected-region piano roll, waterfall
   practice, playback, and report focus consume region/event payloads only.
 - Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,
   and scoring can use `TrackPitchEvent` internally, then publish explicit
   regions. Saved registered material should not keep a parallel
   `TrackSlot.events` truth.
+- Active material checks: overwrite guards, queued placeholders, candidate
+  approval, generation, and job recovery check active `Studio.regions` first,
+  then only use legacy track shadows/audio metadata as a migration fallback.
 - No obsolete compatibility path: obsolete pre-region storage arrays, deprecated document source aliases,
   and old report comparison IDs/counts are rejected
   rather than translated.

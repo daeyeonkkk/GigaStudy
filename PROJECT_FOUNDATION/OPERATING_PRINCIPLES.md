@@ -49,6 +49,9 @@ the same change.
   active timeline and playback, practice, scoring, candidate review, and AI
   generation must ignore them until the user explicitly restores one into
   `Studio.regions`.
+- Archive storage must stay outside the base studio payload when it can grow.
+  Public responses expose archive summaries only; restore loads the stored
+  snapshots and writes them back into `Studio.regions`.
 - Do not reintroduce old `notes` or pre-region compatibility paths unless a
   migration task explicitly requires them.
 - Every playback, scoring, generation, candidate-review, and practice surface

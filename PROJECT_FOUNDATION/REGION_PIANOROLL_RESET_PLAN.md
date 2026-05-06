@@ -2,6 +2,12 @@
 
 Date: 2026-05-02
 
+Status: historical reset reference. This document records the rebuild intent and
+salvage map from the notation-to-region reset. Current product/data contracts
+are governed by `OPERATING_PRINCIPLES.md` and `CURRENT_ARCHITECTURE.md`; when
+they disagree with this reset plan, the newer operating and architecture
+documents win.
+
 This document freezes the salvage map before the notation implementation
 is removed. The new direction is not an engraved-arrangement studio. It is a
 six-track vocal arrangement and practice workspace built around:

@@ -1,7 +1,7 @@
 # GigaStudy
 
 GigaStudy is a six-track a cappella practice studio.
-The product is now centered on three user flows:
+The product is now centered on four user-facing steps:
 
 1. Create a studio from a score/document upload or from an empty six-track board.
 2. Complete six fixed tracks: Soprano, Alto, Tenor, Baritone, Bass, and Percussion.
@@ -63,19 +63,36 @@ The API exposes the current product surface only:
 - `POST /api/studios/upload-target`
 - `PUT /api/studios/direct-uploads/{asset_id}`
 - `GET /api/studios/{studio_id}`
+- `DELETE /api/studios/{studio_id}`
 - `GET /api/studios/{studio_id}/tracks/{slot_id}/audio`
 - `GET /api/studios/{studio_id}/jobs/{job_id}/source-preview`
+- `GET /api/studios/{studio_id}/exports/midi`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/upload-target`
-- `POST /api/studios/{studio_id}/tracks/{slot_id}/upload`
+- `POST /api/studios/{studio_id}/tracks/{slot_id}/upload` (recording audio only)
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/generate`
+- `PATCH /api/studios/{studio_id}/tracks/sync`
 - `PATCH /api/studios/{studio_id}/tracks/{slot_id}/sync`
+- `PATCH /api/studios/{studio_id}/tracks/{slot_id}/volume`
+- `PATCH /api/studios/{studio_id}/regions/{region_id}`
+- `PATCH /api/studios/{studio_id}/regions/{region_id}/revision`
+- `POST /api/studios/{studio_id}/regions/{region_id}/revision-history/{revision_id}/restore`
+- `POST /api/studios/{studio_id}/track-archives/{archive_id}/restore`
+- `POST /api/studios/{studio_id}/regions/{region_id}/copy`
+- `POST /api/studios/{studio_id}/regions/{region_id}/split`
+- `DELETE /api/studios/{studio_id}/regions/{region_id}`
+- `PATCH /api/studios/{studio_id}/regions/{region_id}/events/{event_id}`
 - `POST /api/studios/{studio_id}/candidates/{candidate_id}/approve`
 - `POST /api/studios/{studio_id}/candidates/{candidate_id}/reject`
 - `POST /api/studios/{studio_id}/jobs/{job_id}/approve-candidates`
 - `POST /api/studios/{studio_id}/jobs/{job_id}/retry`
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/score`
+- `GET /api/playback-instrument`
+- `GET /api/playback-instrument/audio`
 - `GET /api/admin/storage`
+- `POST /api/admin/studios/{studio_id}/deactivate`
 - `DELETE /api/admin/studios/{studio_id}`
+- `DELETE /api/admin/inactive-studios`
+- `DELETE /api/admin/playback-instrument`
 - `DELETE /api/admin/studios/{studio_id}/assets`
 - `DELETE /api/admin/staged-assets`
 - `DELETE /api/admin/expired-staged-assets`

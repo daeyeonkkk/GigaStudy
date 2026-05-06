@@ -90,9 +90,11 @@ The ensemble-aware registration bar is now implemented for registration:
 5. Persist diagnostics and event warning flags when the issue may be an
    intentional arrangement choice.
 
-Remaining improvement areas are deeper bass groove quality, lyric/syllable
-alignment, breath/articulation feasibility, and section-level form or texture
-changes.
+Remaining improvement areas are lyric/syllable alignment, breath/articulation
+feasibility, and section-level form changes. The AI generation path now treats
+all vocal slots as a shared a cappella arrangement problem: sibling tracks are
+compiled into lead/activity, rhythm, articulation, and vertical harmony context
+before a candidate is exposed.
 
 The strongest next product move is to introduce explicit arrangement roles:
 
@@ -103,3 +105,9 @@ The strongest next product move is to introduce explicit arrangement roles:
 This can coexist with the current six visible tracks, but the engine should
 know whether a track is acting as melody, bass foundation, block-harmony upper,
 counterline, pad, or percussion.
+
+For AI Track generation, this role model is not optional polish. It is the core
+quality contract: every generated Soprano, Alto, Tenor, Baritone, or Bass
+candidate must state and score its arrangement role, fit the studio BPM/meter
+grid, preserve repeated attacks unless they are true ties, and be judged against
+the other registered tracks before the user sees it.

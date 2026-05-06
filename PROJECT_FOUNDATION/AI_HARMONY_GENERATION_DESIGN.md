@@ -2,6 +2,29 @@
 
 Last updated: 2026-05-04
 
+## 2026-05-07 A Cappella Track Generation V3
+
+- AI generation is now framed as a shared a cappella track generation engine
+  for all vocal slots, not a bass-specific or generic harmony filler.
+- The engine compiles registered sibling tracks into an arrangement context:
+  likely lead/active voice, phrase density, repeated motif ratio, articulation
+  anchors, structural beats, and vocal vertical context.
+- Generated vocal candidates keep the existing deterministic boundary: the LLM
+  may plan role, texture, rhythm role, phrase intent, and review language, but
+  exact pitch-event arrays remain deterministic.
+- Candidate roles are explicitly compared as arrangement choices: context-locked
+  rhythm, stable blend, independent counterline, upper blend, pad/sustain, and
+  hook/riff support.
+- Same-pitch generated events are no longer merged merely because they touch.
+  Repeated short notes remain separate attacks unless they are explicit
+  tie/measure-boundary sustain fragments.
+- Every exposed candidate gets an a cappella quality report covering rhythm fit,
+  harmonic fit, voice leading, singability, spacing, articulation clarity,
+  context onset coverage, long sustain ratio, and generation warnings.
+- UI-facing diagnostics should prefer musical evidence such as "original rhythm
+  reflected", "attack shortage", "voice collision risk", and "harmony stable"
+  over abstract confidence percentages.
+
 ## 2026-05-04 Stabilization Slice
 
 - Deterministic generation now searches a larger internal candidate pool than

@@ -7,6 +7,10 @@ from gigastudy_api.services.engine.harmony_plan import (
     DeepSeekHarmonyPlan,
     MeasureHarmonyIntent,
 )
+from gigastudy_api.services.engine.acappella_generation import (
+    compile_arrangement_context,
+    score_acappella_candidate,
+)
 from gigastudy_api.services.engine.music_theory import event_from_pitch
 
 
@@ -208,6 +212,120 @@ def test_vocal_generation_candidates_are_distinct_arrangements() -> None:
         _sequence_difference_score(sequences[0], sequence) >= 0.22
         for sequence in sequences[1:]
     )
+
+
+def test_acappella_generation_supports_every_vocal_target_with_context() -> None:
+    tracks_by_slot = {
+        1: [_context_note(1, "E5"), _context_note(2, "F5"), _context_note(3, "G5")],
+        2: [_context_note(1, "C5"), _context_note(2, "D5"), _context_note(3, "E5")],
+        3: [_context_note(1, "G3"), _context_note(2, "A3"), _context_note(3, "B3")],
+        5: [_context_note(1, "C3"), _context_note(2, "F2"), _context_note(3, "G2")],
+    }
+
+    for target_slot_id in range(1, 6):
+        context_by_slot = {
+            slot_id: events
+            for slot_id, events in tracks_by_slot.items()
+            if slot_id != target_slot_id
+        }
+        context_tracks = [event for events in context_by_slot.values() for event in events]
+
+        candidates = generate_rule_based_harmony_candidates(
+            target_slot_id=target_slot_id,
+            context_tracks=context_tracks,
+            context_events_by_slot=context_by_slot,
+            bpm=120,
+            candidate_count=3,
+        )
+
+        assert candidates
+        assert all(candidate for candidate in candidates)
+        assert all(
+            event.voice_index == target_slot_id or event.voice_index is None
+            for candidate in candidates
+            for event in candidate
+        )
+
+
+def test_acappella_generation_preserves_short_repeated_context_attacks() -> None:
+    tenor_riff = [
+        _context_note(1, "C4"),
+        _context_note(1.5, "C4"),
+        _context_note(2, "C4"),
+        _context_note(2.5, "C4"),
+        _context_note(3, "C4"),
+        _context_note(3.5, "C4"),
+        _context_note(4, "C4"),
+    ]
+    tenor_riff = [event.model_copy(update={"duration_beats": 0.5}) for event in tenor_riff]
+
+    candidates = generate_rule_based_harmony_candidates(
+        target_slot_id=5,
+        context_tracks=tenor_riff,
+        context_events_by_slot={3: tenor_riff},
+        bpm=120,
+        candidate_count=3,
+    )
+
+    assert [event.beat for event in candidates[0]] == [1, 1.5, 2, 2.5, 3, 3.5, 4]
+    assert all(event.duration_beats == 0.5 for event in candidates[0])
+
+
+def test_acappella_generation_outputs_studio_grid_events() -> None:
+    soprano = [
+        _context_note(1, "C5"),
+        _context_note(1.5, "D5"),
+        _context_note(2.25, "E5"),
+        _context_note(3, "G5"),
+    ]
+
+    candidates = generate_rule_based_harmony_candidates(
+        target_slot_id=2,
+        context_tracks=soprano,
+        context_events_by_slot={1: soprano},
+        bpm=120,
+        candidate_count=3,
+    )
+
+    assert candidates
+    for candidate in candidates:
+        assert all(abs(event.beat * 4 - round(event.beat * 4)) <= 0.001 for event in candidate)
+        assert all(abs(event.duration_beats * 4 - round(event.duration_beats * 4)) <= 0.001 for event in candidate)
+
+
+def test_acappella_quality_report_flags_attack_shortage_against_repeated_context() -> None:
+    context_events = [
+        _context_note(1, "C4"),
+        _context_note(1.5, "C4"),
+        _context_note(2, "C4"),
+        _context_note(2.5, "C4"),
+        _context_note(3, "C4"),
+    ]
+    context_events = [event.model_copy(update={"duration_beats": 0.5}) for event in context_events]
+    overly_sustained = [
+        event_from_pitch(
+            beat=1,
+            duration_beats=2.5,
+            bpm=120,
+            source="ai",
+            extraction_method="test",
+            label="E3",
+            confidence=0.8,
+        )
+    ]
+    context = compile_arrangement_context(
+        {3: context_events},
+        target_slot_id=5,
+    )
+
+    report = score_acappella_candidate(
+        target_slot_id=5,
+        events=overly_sustained,
+        context=context,
+    )
+
+    assert "attack_shortage" in report.warnings
+    assert "long_sustain_review" in report.warnings
 
 
 def test_harmony_plan_changes_notes_and_rhythm_policy() -> None:

@@ -307,6 +307,9 @@ def test_deepseek_payload_uses_json_mode_and_non_thinking_by_default() -> None:
     assert "a_cappella_arrangement_rules" in user_context
     assert any("six-track a cappella region arrangement" in rule for rule in user_context["a_cappella_arrangement_rules"])
     assert any("meaningfully different" in rule for rule in user_context["a_cappella_arrangement_rules"])
+    candidate_shape = user_context["required_json_shape"]["candidate_directions"][0]
+    assert "texture" in candidate_shape
+    assert "rhythm_role" in candidate_shape
 
 
 def test_openrouter_payload_omits_native_deepseek_thinking_field() -> None:
@@ -366,6 +369,8 @@ def test_deepseek_response_parser_returns_bounded_candidate_plan() -> None:
                 "register_bias": "low",
                 "motion_bias": "stable",
                 "rhythm_policy": "sustain_support",
+                "texture": "pad_sustain",
+                "rhythm_role": "sustain_with_attacks",
                 "chord_tone_priority": ["root", "fifth", "third"],
                 "role": "Keeps the target below soprano with stable chord tones.",
                 "selection_hint": "Choose for a plain rehearsal-safe line.",
@@ -379,6 +384,8 @@ def test_deepseek_response_parser_returns_bounded_candidate_plan() -> None:
                 "register_bias": "middle",
                 "motion_bias": "contrary",
                 "rhythm_policy": "follow_context",
+                "texture": "counterline",
+                "rhythm_role": "independent_motion",
                 "chord_tone_priority": ["third", "fifth", "root"],
                 "role": "Adds contrary motion against the context melody.",
                 "selection_hint": "Choose when the first option feels too static.",
@@ -396,6 +403,8 @@ def test_deepseek_response_parser_returns_bounded_candidate_plan() -> None:
     assert plan.profile_names() == ["lower_support", "moving_counterline"]
     assert plan.direction_for_index(2).title == "Counterline"
     assert plan.direction_for_index(1).rhythm_policy == "sustain_support"
+    assert plan.direction_for_index(1).texture == "pad_sustain"
+    assert plan.direction_for_index(2).rhythm_role == "independent_motion"
     assert plan.measure_intent_for_index(1).function == "tonic"
 
 

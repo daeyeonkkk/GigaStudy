@@ -15,7 +15,13 @@ from gigastudy_api.services.engine.harmony_plan import (
     DeepSeekCandidateDirection,
     DeepSeekHarmonyPlan,
     MeasureHarmonyIntent,
+    fallback_candidate_direction,
     key_tonic_from_name,
+)
+from gigastudy_api.services.engine.acappella_generation import (
+    ArrangementContext,
+    apply_acappella_articulation_pass,
+    compile_arrangement_context,
 )
 from gigastudy_api.services.engine.event_normalization import normalize_track_events
 
@@ -238,6 +244,12 @@ def generate_rule_based_harmony_candidates(
         return []
 
     context_by_slot = _normalize_context_map(context_tracks, context_events_by_slot)
+    arrangement_context = compile_arrangement_context(
+        context_events_by_slot or context_by_slot,
+        target_slot_id=target_slot_id,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
     harmony_events = _build_harmony_events(
         context_by_slot,
         time_signature_numerator=time_signature_numerator,
@@ -247,13 +259,20 @@ def generate_rule_based_harmony_candidates(
         return []
 
     key = _resolve_generation_key(_estimate_key(harmony_events), harmony_plan)
+    candidate_goals = _candidate_goals_for_generation(
+        target_slot_id=target_slot_id,
+        candidate_count=resolved_candidate_count,
+        profile_names=profile_names,
+        harmony_plan=harmony_plan,
+    )
     selected_paths = _select_voice_leading_paths(
         target_slot_id=target_slot_id,
         events=harmony_events,
         key=key,
         candidate_count=resolved_candidate_count,
-        profile_names=profile_names,
+        profile_names=[goal.profile_name for goal in candidate_goals],
         harmony_plan=harmony_plan,
+        candidate_goals=candidate_goals,
     )
     if not selected_paths:
         return []
@@ -266,7 +285,8 @@ def generate_rule_based_harmony_candidates(
             key=key,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            candidate_goal=harmony_plan.direction_for_index(index) if harmony_plan is not None else None,
+            candidate_goal=candidate_goals[index - 1] if index - 1 < len(candidate_goals) else None,
+            arrangement_context=arrangement_context,
         )
         for index, path in enumerate(selected_paths, start=1)
     ]
@@ -277,7 +297,7 @@ def generate_rule_based_harmony_candidates(
             slot_id=target_slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            merge_adjacent_same_pitch=True,
+            merge_adjacent_same_pitch=False,
         )
         for candidate_events in generated_candidates
     ]
@@ -296,6 +316,40 @@ def _normalize_context_map(
         if any(normalized.values()):
             return normalized
     return {0: _pitched_events(context_tracks)}
+
+
+def _candidate_goals_for_generation(
+    *,
+    target_slot_id: int,
+    candidate_count: int,
+    profile_names: list[str] | None,
+    harmony_plan: DeepSeekHarmonyPlan | None,
+) -> list[DeepSeekCandidateDirection]:
+    goals: list[DeepSeekCandidateDirection] = []
+    if harmony_plan is not None:
+        for index in range(1, candidate_count + 1):
+            direction = harmony_plan.direction_for_index(index)
+            if direction is not None:
+                goals.append(direction)
+        if len(goals) >= candidate_count:
+            return goals[:candidate_count]
+
+    profiles = _voice_leading_profiles_for_count(candidate_count, profile_names=profile_names)
+    used_profile_names = {goal.profile_name for goal in goals}
+    for profile in profiles:
+        if len(goals) >= candidate_count:
+            break
+        if profile.name in used_profile_names and len(used_profile_names) < len(profiles):
+            continue
+        goals.append(
+            fallback_candidate_direction(
+                len(goals) + 1,
+                profile.name,
+                target_slot_id,
+            )
+        )
+        used_profile_names.add(profile.name)
+    return goals[:candidate_count]
 
 
 def _pitched_events(events: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
@@ -367,6 +421,7 @@ def _events_from_harmony_path(
     time_signature_numerator: int,
     time_signature_denominator: int,
     candidate_goal: DeepSeekCandidateDirection | None,
+    arrangement_context: ArrangementContext,
 ) -> list[TrackPitchEvent]:
     generated_events = [
         event_from_pitch(
@@ -384,20 +439,40 @@ def _events_from_harmony_path(
         )
         for harmony_event, pitch in zip(harmony_events, path.pitches, strict=False)
     ]
-    return _apply_candidate_rhythm_policy(generated_events, candidate_goal)
+    return _apply_candidate_rhythm_policy(
+        generated_events,
+        candidate_goal,
+        arrangement_context=arrangement_context,
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
 
 
 def _apply_candidate_rhythm_policy(
     events: list[TrackPitchEvent],
     candidate_goal: DeepSeekCandidateDirection | None,
+    *,
+    arrangement_context: ArrangementContext,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
 ) -> list[TrackPitchEvent]:
+    shaped_events = events
     if candidate_goal is None or candidate_goal.rhythm_policy in {"follow_context", "answer_melody"}:
-        return events
-    if candidate_goal.rhythm_policy == "simplify":
-        return _merge_weak_repeated_events(events)
-    if candidate_goal.rhythm_policy == "sustain_support":
-        return _sustain_support_events(events)
-    return events
+        shaped_events = events
+    elif candidate_goal.rhythm_policy == "simplify":
+        shaped_events = _merge_weak_repeated_events(events)
+    elif candidate_goal.rhythm_policy == "sustain_support":
+        shaped_events = _sustain_support_events(events)
+    return apply_acappella_articulation_pass(
+        shaped_events,
+        context=arrangement_context,
+        candidate_goal=candidate_goal,
+        bpm=bpm,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
 
 
 def _merge_weak_repeated_events(events: list[TrackPitchEvent]) -> list[TrackPitchEvent]:
@@ -726,12 +801,20 @@ def _select_voice_leading_paths(
     candidate_count: int,
     profile_names: list[str] | None = None,
     harmony_plan: DeepSeekHarmonyPlan | None = None,
+    candidate_goals: list[DeepSeekCandidateDirection] | None = None,
 ) -> list[HarmonyPath]:
     selected: list[HarmonyPath] = []
     profiles = _voice_leading_profiles_for_count(candidate_count, profile_names=profile_names)
     pool_size = max(3, candidate_count)
 
     for candidate_index, profile in enumerate(profiles, start=1):
+        candidate_goal = (
+            candidate_goals[candidate_index - 1]
+            if candidate_goals is not None and candidate_index - 1 < len(candidate_goals)
+            else harmony_plan.direction_for_index(candidate_index)
+            if harmony_plan is not None
+            else None
+        )
         profile_paths = _search_voice_leading_paths(
             target_slot_id=target_slot_id,
             events=events,
@@ -739,7 +822,7 @@ def _select_voice_leading_paths(
             max_paths=pool_size,
             profile=profile,
             harmony_plan=harmony_plan,
-            candidate_goal=harmony_plan.direction_for_index(candidate_index) if harmony_plan is not None else None,
+            candidate_goal=candidate_goal,
         )
         path = _pick_distinct_path(profile_paths, selected)
         if path is not None:

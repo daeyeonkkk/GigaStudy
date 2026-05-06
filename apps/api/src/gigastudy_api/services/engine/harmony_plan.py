@@ -37,6 +37,20 @@ ALLOWED_GOALS = {"rehearsal_safe", "counterline", "open_support", "upper_blend",
 ALLOWED_REGISTER_BIASES = {"low", "middle", "high", "open", "auto"}
 ALLOWED_MOTION_BIASES = {"stable", "mostly_stepwise", "contrary", "active"}
 ALLOWED_RHYTHM_POLICIES = {"follow_context", "simplify", "answer_melody", "sustain_support"}
+ALLOWED_TEXTURES = {
+    "block_harmony",
+    "counterline",
+    "pad_sustain",
+    "rhythmic_echo",
+    "hook_support",
+}
+ALLOWED_RHYTHM_ROLES = {
+    "context_lock",
+    "stable_pulse",
+    "independent_motion",
+    "sustain_with_attacks",
+    "hook_or_riff",
+}
 ALLOWED_CHORD_TONES = {"root", "third", "fifth"}
 
 
@@ -85,6 +99,8 @@ class DeepSeekCandidateDirection(BaseModel):
     register_bias: str = "auto"
     motion_bias: str = "mostly_stepwise"
     rhythm_policy: str = "follow_context"
+    texture: str = "block_harmony"
+    rhythm_role: str = "context_lock"
     chord_tone_priority: list[str] = Field(default_factory=lambda: ["third", "root", "fifth"], max_length=3)
     role: str = Field(default="", max_length=160)
     selection_hint: str = Field(default="", max_length=180)
@@ -121,6 +137,18 @@ class DeepSeekCandidateDirection(BaseModel):
     def validate_rhythm_policy(cls, value: str) -> str:
         normalized = value.strip().lower()
         return normalized if normalized in ALLOWED_RHYTHM_POLICIES else "follow_context"
+
+    @field_validator("texture")
+    @classmethod
+    def validate_texture(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        return normalized if normalized in ALLOWED_TEXTURES else "block_harmony"
+
+    @field_validator("rhythm_role")
+    @classmethod
+    def validate_rhythm_role(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        return normalized if normalized in ALLOWED_RHYTHM_ROLES else "context_lock"
 
     @field_validator("chord_tone_priority")
     @classmethod
@@ -192,6 +220,8 @@ def fallback_candidate_direction(index: int, profile_name: str, target_slot_id: 
         register_bias=_fallback_register_bias(goal, target_slot_id),
         motion_bias=_fallback_motion_bias(goal),
         rhythm_policy=_fallback_rhythm_policy(goal),
+        texture=_fallback_texture(goal),
+        rhythm_role=_fallback_rhythm_role(goal),
         chord_tone_priority=_fallback_chord_tone_priority(goal, target_slot_id),
         role=_fallback_role(goal, target_slot_id),
         selection_hint=_fallback_selection_hint(goal),
@@ -278,8 +308,32 @@ def _fallback_rhythm_policy(goal: str) -> str:
     if goal == "open_support":
         return "sustain_support"
     if goal == "rehearsal_safe":
-        return "simplify"
+        return "follow_context"
+    if goal == "active_motion":
+        return "answer_melody"
     return "follow_context"
+
+
+def _fallback_texture(goal: str) -> str:
+    if goal == "counterline":
+        return "counterline"
+    if goal == "open_support":
+        return "pad_sustain"
+    if goal == "active_motion":
+        return "hook_support"
+    if goal == "upper_blend":
+        return "block_harmony"
+    return "rhythmic_echo"
+
+
+def _fallback_rhythm_role(goal: str) -> str:
+    if goal == "counterline":
+        return "independent_motion"
+    if goal == "open_support":
+        return "sustain_with_attacks"
+    if goal == "active_motion":
+        return "hook_or_riff"
+    return "context_lock"
 
 
 def _fallback_chord_tone_priority(goal: str, target_slot_id: int) -> list[str]:

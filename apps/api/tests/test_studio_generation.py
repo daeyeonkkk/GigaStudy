@@ -1,6 +1,7 @@
 from gigastudy_api.services.engine.music_theory import event_from_pitch
 from gigastudy_api.services.studio_generation import (
     generated_candidate_difference_score,
+    generation_candidate_review_metadata,
     generation_context_diagnostics,
     generation_search_candidate_count,
     select_diverse_generated_candidates,
@@ -77,3 +78,25 @@ def test_generation_context_diagnostics_reports_context_and_sibling_diversity() 
     assert diagnostics["generation_context_event_count"] == 3
     assert diagnostics["candidate_diversity_score"] is not None
     assert diagnostics["candidate_diversity_label"] == "distinct"
+
+
+def test_generation_candidate_metadata_includes_acappella_quality_report() -> None:
+    candidate = _candidate("E3", "F3", "E3")
+    context = {3: _candidate("C4", "C4", "C4")}
+
+    diagnostics, _label = generation_candidate_review_metadata(
+        slot_id=5,
+        events=candidate,
+        method="rule_based_voice_leading_candidates_v1",
+        confidence=0.8,
+        candidate_index=1,
+        llm_plan=None,
+        context_events_by_slot=context,
+        sibling_candidates=[],
+    )
+
+    assert diagnostics["acappella_engine_version"] == "acappella_track_generation_v3"
+    assert diagnostics["arrangement_role"] == "원본 리듬 기반 후보"
+    assert diagnostics["acappella_quality_label"] in {"추천 가능", "확인 필요", "재생성 권장"}
+    assert diagnostics["context_onset_coverage_ratio"] is not None
+    assert isinstance(diagnostics["generation_quality_warnings"], list)

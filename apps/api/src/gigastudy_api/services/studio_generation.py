@@ -11,6 +11,8 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
     generation_variant_label,
 )
+from gigastudy_api.services.engine.acappella_generation import acappella_quality_diagnostics
+from gigastudy_api.services.engine.harmony_plan import DeepSeekCandidateDirection, fallback_candidate_direction
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
 from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 from gigastudy_api.services.llm.provider import DeepSeekHarmonyPlan, plan_harmony
@@ -307,11 +309,11 @@ def generated_candidate_difference_score(
     rhythm_delta = _rhythm_difference_score(first, second)
     length_delta = abs(len(first_pitches) - len(second_pitches)) / max(len(first_pitches), len(second_pitches))
     return (
-        (changed_positions / pair_count) * 0.56
-        + min(1.0, average_register_delta / 8) * 0.18
+        (changed_positions / pair_count) * 0.48
+        + min(1.0, average_register_delta / 8) * 0.16
         + contour_delta * 0.14
-        + rhythm_delta * 0.08
-        + length_delta * 0.04
+        + rhythm_delta * 0.16
+        + length_delta * 0.06
     )
 
 
@@ -320,6 +322,8 @@ def generation_context_diagnostics(
     events: list[TrackPitchEvent],
     context_events_by_slot: dict[int, list[TrackPitchEvent]] | None,
     sibling_candidates: list[list[TrackPitchEvent]] | None,
+    target_slot_id: int | None = None,
+    candidate_goal: DeepSeekCandidateDirection | None = None,
 ) -> dict[str, Any]:
     context_events_by_slot = context_events_by_slot or {}
     context_slot_ids = sorted(slot_id for slot_id, events in context_events_by_slot.items() if events)
@@ -329,7 +333,7 @@ def generation_context_diagnostics(
         if sibling
     ]
     closest_difference = min(sibling_scores) if sibling_scores else None
-    return {
+    diagnostics: dict[str, Any] = {
         "generation_context_slot_ids": context_slot_ids,
         "generation_context_track_count": len(context_slot_ids),
         "generation_context_event_count": sum(len(events) for events in context_events_by_slot.values()),
@@ -340,6 +344,17 @@ def generation_context_diagnostics(
         ),
         "candidate_diversity_label": _candidate_diversity_label(closest_difference),
     }
+    if target_slot_id is not None and target_slot_id in {1, 2, 3, 4, 5}:
+        diagnostics.update(
+            acappella_quality_diagnostics(
+                target_slot_id=target_slot_id,
+                events=events,
+                context_events_by_slot=context_events_by_slot,
+                candidate_goal=candidate_goal,
+                sibling_candidates=sibling_candidates,
+            )
+        )
+    return diagnostics
 
 
 def generation_candidate_review_metadata(
@@ -354,6 +369,7 @@ def generation_candidate_review_metadata(
     sibling_candidates: list[list[TrackPitchEvent]] | None = None,
 ) -> tuple[dict[str, Any], str]:
     llm_direction = llm_plan.direction_for_index(candidate_index) if llm_plan is not None else None
+    arrangement_direction = llm_direction or _fallback_arrangement_direction(candidate_index, slot_id)
     diagnostics: dict[str, Any] = candidate_diagnostics(
         slot_id,
         events,
@@ -377,6 +393,8 @@ def generation_candidate_review_metadata(
         diagnostics["llm_register_bias"] = llm_direction.register_bias
         diagnostics["llm_motion_bias"] = llm_direction.motion_bias
         diagnostics["llm_rhythm_policy"] = llm_direction.rhythm_policy
+        diagnostics["llm_texture"] = llm_direction.texture
+        diagnostics["llm_rhythm_role"] = llm_direction.rhythm_role
         diagnostics["llm_chord_tone_priority"] = llm_direction.chord_tone_priority
         diagnostics["selection_hint"] = llm_direction.selection_hint
         diagnostics["candidate_role"] = llm_direction.role
@@ -386,6 +404,8 @@ def generation_candidate_review_metadata(
             events=events,
             context_events_by_slot=context_events_by_slot,
             sibling_candidates=sibling_candidates,
+            target_slot_id=slot_id,
+            candidate_goal=arrangement_direction,
         )
     )
     variant_label = (
@@ -394,6 +414,12 @@ def generation_candidate_review_metadata(
         else generation_variant_label(candidate_index, slot_id, events)
     )
     return diagnostics, variant_label
+
+
+def _fallback_arrangement_direction(candidate_index: int, slot_id: int):
+    profile_names = ("balanced", "lower_support", "moving_counterline", "upper_blend", "open_voicing")
+    profile_name = profile_names[(max(1, candidate_index) - 1) % len(profile_names)]
+    return fallback_candidate_direction(candidate_index, profile_name, slot_id)
 
 
 def _pitch_sequence(events: list[TrackPitchEvent]) -> list[int]:

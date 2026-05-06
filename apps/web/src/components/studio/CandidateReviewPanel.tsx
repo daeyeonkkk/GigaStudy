@@ -277,6 +277,17 @@ function GeneratedCandidateReview({
         </ul>
       </div>
 
+      {decisionSummary.diagnostics.length > 0 ? (
+        <dl className="candidate-review__diagnostics" aria-label="AI 편곡 판단">
+          {decisionSummary.diagnostics.map((metric) => (
+            <div key={`${candidate.candidate_id}-generated-diagnostic-${metric.label}`}>
+              <dt>{metric.label}</dt>
+              <dd>{metric.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
       <CandidateTargetControls
         allowOverwrite={allowOverwrite}
         busy={busy}
@@ -626,17 +637,26 @@ function getCandidateVerdict(
   const confidence = Math.max(0, Math.min(1, candidate.confidence))
   const reviewHint = getDiagnosticString(diagnostics, 'review_hint')
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags')
+  const generationWarnings = getDiagnosticStringList(diagnostics, 'generation_quality_warnings')
+  const acappellaQualityScore = getDiagnosticNumber(diagnostics, 'acappella_quality_score')
   const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
   const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
   const density = getDiagnosticNumber(diagnostics, 'density_events_per_measure')
 
   if (candidate.source_kind === 'ai') {
-    if (wouldOverwrite || riskTags.length > 0) {
+    if (reviewHint === 'ai_regenerate_recommended' || (acappellaQualityScore !== null && acappellaQualityScore < 58)) {
+      return {
+        label: '재생성 권장',
+        reason: '성부 진행, 박자 그리드, 또는 타 트랙과의 맞물림이 약한 후보입니다.',
+        tone: 'retry',
+      }
+    }
+    if (wouldOverwrite || riskTags.length > 0 || generationWarnings.length > 0) {
       return {
         label: wouldOverwrite ? '교체 전 확인' : '들어보고 선택',
         reason: wouldOverwrite
           ? `${targetName}에 이미 등록된 내용이 있습니다. 체크하면 현재 음표와 연주음이 이 후보로 바뀝니다.`
-          : 'AI가 만든 후보입니다. 음역과 움직임이 파트에 맞는지 들어본 뒤 등록하세요.',
+          : '타 트랙 리듬, 어택, 성부 진행 중 확인할 지점이 있습니다.',
         tone: 'review',
       }
     }

@@ -83,6 +83,36 @@ const RHYTHM_POLICY_LABELS: Record<string, string> = {
   sustain_support: '지속음 보강',
 }
 
+const TEXTURE_LABELS: Record<string, string> = {
+  block_harmony: '블록 화음',
+  counterline: '대선율',
+  pad_sustain: '지속 받침',
+  rhythmic_echo: '리듬 에코',
+  hook_support: '반복 훅',
+}
+
+const RHYTHM_ROLE_LABELS: Record<string, string> = {
+  context_lock: '원본 리듬 맞춤',
+  stable_pulse: '안정 박자',
+  independent_motion: '독립 리듬',
+  sustain_with_attacks: '어택 있는 지속음',
+  hook_or_riff: '훅/리프',
+}
+
+const GENERATION_WARNING_LABELS: Record<string, string> = {
+  attack_shortage: '어택 부족',
+  context_rhythm_mismatch: '원본 리듬과 다름',
+  grid_contract_review: '박자 그리드 확인',
+  large_leap_review: '큰 도약 확인',
+  long_sustain_review: '긴 지속음 많음',
+  parallel_motion: '병행 진행 가능',
+  range_outlier: '음역 확인',
+  similar_candidate: '비슷한 후보',
+  spacing_review: '성부 간격 확인',
+  unresolved_structural_tension: '긴장음 해결 확인',
+  voice_crossing: '성부 충돌 가능',
+}
+
 function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
   const events = getCandidateEvents(candidate)
   if (events.length === 0) {
@@ -511,8 +541,10 @@ function getGeneratedCandidateInsight(candidate: ExtractionCandidate): {
   const diagnostics = candidate.diagnostics ?? {}
   const profileName = getDiagnosticString(diagnostics, 'llm_profile')
   const profileLabel = profileName ? formatVoiceLeadingProfile(profileName) : ''
-  const role = getDiagnosticString(diagnostics, 'candidate_role')
-  const selectionHint = getDiagnosticString(diagnostics, 'selection_hint')
+  const role = getDiagnosticString(diagnostics, 'candidate_role') ?? getDiagnosticString(diagnostics, 'arrangement_role')
+  const selectionHint =
+    getDiagnosticString(diagnostics, 'selection_hint') ??
+    getDiagnosticString(diagnostics, 'arrangement_selection_hint')
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
   const title = candidate.variant_label ? formatGeneratedLabel(candidate.variant_label) : (profileLabel ? `${profileLabel} 후보` : null)
   const headline =
@@ -534,6 +566,22 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   const llmProfile = getDiagnosticString(diagnostics, 'llm_profile')
   const llmGoal = getDiagnosticString(diagnostics, 'llm_goal')
   const llmRhythmPolicy = getDiagnosticString(diagnostics, 'llm_rhythm_policy')
+  const llmTexture = getDiagnosticString(diagnostics, 'llm_texture')
+  const llmRhythmRole = getDiagnosticString(diagnostics, 'llm_rhythm_role')
+  const arrangementGoal = getDiagnosticString(diagnostics, 'arrangement_goal')
+  const arrangementRole = getDiagnosticString(diagnostics, 'arrangement_role')
+  const arrangementTexture = getDiagnosticString(diagnostics, 'arrangement_texture')
+  const arrangementRhythmRole = getDiagnosticString(diagnostics, 'arrangement_rhythm_role')
+  const acappellaQualityLabel = getDiagnosticString(diagnostics, 'acappella_quality_label')
+  const acappellaQualityScore = getDiagnosticNumber(diagnostics, 'acappella_quality_score')
+  const rhythmFitScore = getDiagnosticNumber(diagnostics, 'rhythm_fit_score')
+  const harmonicFitScore = getDiagnosticNumber(diagnostics, 'harmonic_fit_score')
+  const voiceLeadingScore = getDiagnosticNumber(diagnostics, 'voice_leading_score')
+  const articulationScore = getDiagnosticNumber(diagnostics, 'articulation_score')
+  const contextOnsetCoverage = getDiagnosticNumber(diagnostics, 'context_onset_coverage_ratio')
+  const longSustainRatio = getDiagnosticNumber(diagnostics, 'long_sustain_ratio')
+  const attackCount = getDiagnosticNumber(diagnostics, 'attack_count')
+  const generationWarnings = getDiagnosticStringList(diagnostics, 'generation_quality_warnings').map(formatGenerationWarning)
   const llmPhraseSummary = getDiagnosticString(diagnostics, 'llm_phrase_summary')
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
   const emptyMidiPartSummary = formatMidiNamedEmptyParts(
@@ -545,12 +593,22 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   }
   if (llmGoal) {
     metrics.push({ label: '후보 목표', value: formatHarmonyGoal(llmGoal) })
+  } else if (arrangementGoal) {
+    metrics.push({ label: '후보 목표', value: formatHarmonyGoal(arrangementGoal) })
   }
   if (llmRhythmPolicy) {
     metrics.push({ label: '리듬 정책', value: formatRhythmPolicy(llmRhythmPolicy) })
   }
+  if (llmTexture ?? arrangementTexture) {
+    metrics.push({ label: '편곡 질감', value: formatTexture(llmTexture ?? arrangementTexture ?? '') })
+  }
+  if (llmRhythmRole ?? arrangementRhythmRole) {
+    metrics.push({ label: '리듬 역할', value: formatRhythmRole(llmRhythmRole ?? arrangementRhythmRole ?? '') })
+  }
   if (llmRole) {
     metrics.push({ label: '화음 역할', value: llmRole })
+  } else if (arrangementRole) {
+    metrics.push({ label: '편곡 역할', value: arrangementRole })
   }
   if (llmSelectionHint) {
     metrics.push({ label: '선택 이유', value: llmSelectionHint })
@@ -566,6 +624,39 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   }
 
   if (candidate.source_kind === 'ai') {
+    if (acappellaQualityLabel) {
+      metrics.push({
+        label: '편곡 판단',
+        value:
+          acappellaQualityScore !== null
+            ? `${acappellaQualityLabel} · ${Math.round(acappellaQualityScore)}점`
+            : acappellaQualityLabel,
+      })
+    }
+    if (rhythmFitScore !== null) {
+      metrics.push({ label: '원본 리듬 반영', value: formatRatio(rhythmFitScore) })
+    }
+    if (harmonicFitScore !== null) {
+      metrics.push({ label: '화성 안정', value: formatRatio(harmonicFitScore) })
+    }
+    if (voiceLeadingScore !== null) {
+      metrics.push({ label: '성부 진행', value: formatRatio(voiceLeadingScore) })
+    }
+    if (articulationScore !== null) {
+      metrics.push({ label: '어택/발음', value: formatRatio(articulationScore) })
+    }
+    if (contextOnsetCoverage !== null) {
+      metrics.push({ label: '타 트랙 리듬 맞춤', value: formatRatio(contextOnsetCoverage) })
+    }
+    if (longSustainRatio !== null) {
+      metrics.push({ label: '긴 지속음', value: formatRatio(longSustainRatio) })
+    }
+    if (attackCount !== null) {
+      metrics.push({ label: '어택 수', value: `${attackCount}개` })
+    }
+    if (generationWarnings.length > 0) {
+      metrics.push({ label: '확인할 점', value: generationWarnings.join(', ') })
+    }
     return metrics
   }
 
@@ -729,6 +820,18 @@ function formatHarmonyGoal(goal: string): string {
 
 function formatRhythmPolicy(policy: string): string {
   return RHYTHM_POLICY_LABELS[policy] ?? policy
+}
+
+function formatTexture(texture: string): string {
+  return TEXTURE_LABELS[texture] ?? texture
+}
+
+function formatRhythmRole(role: string): string {
+  return RHYTHM_ROLE_LABELS[role] ?? role
+}
+
+function formatGenerationWarning(warning: string): string {
+  return GENERATION_WARNING_LABELS[warning] ?? warning
 }
 
 export function formatGeneratedLabel(value: string): string {

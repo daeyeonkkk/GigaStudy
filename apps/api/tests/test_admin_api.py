@@ -32,6 +32,7 @@ def build_client(
     monkeypatch,
     *,
     admin_password: str | None = ADMIN_PASSWORD,
+    admin_password_aliases: list[str] | None = None,
     admin_token: str | None = None,
 ) -> TestClient:
     monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", str(tmp_path))
@@ -40,6 +41,10 @@ def build_client(
         monkeypatch.delenv("GIGASTUDY_API_ADMIN_PASSWORD", raising=False)
     else:
         monkeypatch.setenv("GIGASTUDY_API_ADMIN_PASSWORD", admin_password)
+    if admin_password_aliases is None:
+        monkeypatch.delenv("GIGASTUDY_API_ADMIN_PASSWORD_ALIASES", raising=False)
+    else:
+        monkeypatch.setenv("GIGASTUDY_API_ADMIN_PASSWORD_ALIASES", ",".join(admin_password_aliases))
     if admin_token is None:
         monkeypatch.delenv("GIGASTUDY_API_ADMIN_TOKEN", raising=False)
     else:
@@ -95,6 +100,17 @@ def test_admin_storage_rejects_keyboard_alias_for_alpha_login(tmp_path: Path, mo
     response = client.get("/api/admin/storage", headers=admin_headers("eodus123"))
 
     assert response.status_code == 401
+
+
+def test_admin_storage_accepts_configured_password_aliases(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        admin_password_aliases=["eodus123", "daeyeon123"],
+    )
+
+    assert client.get("/api/admin/storage", headers=admin_headers("eodus123")).status_code == 200
+    assert client.get("/api/admin/storage", headers=admin_headers("daeyeon123")).status_code == 200
 
 
 def test_admin_storage_rejects_password_when_not_configured(tmp_path: Path, monkeypatch) -> None:

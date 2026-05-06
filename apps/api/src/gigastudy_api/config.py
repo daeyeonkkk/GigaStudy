@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     admin_token: str | None = None
     admin_username: str = "admin"
     admin_password: str | None = None
+    admin_password_aliases: Annotated[list[str], NoDecode] = []
     studio_access_policy: str = "public"
     database_url: str | None = None
     storage_backend: str = "local"
@@ -93,6 +94,22 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if normalized.startswith("["):
+                try:
+                    decoded = json.loads(normalized)
+                except json.JSONDecodeError:
+                    decoded = None
+                if isinstance(decoded, list):
+                    return [str(item).strip() for item in decoded if str(item).strip()]
+            return [item.strip() for item in value.split(",") if item.strip()]
+
+        return value
+
+    @field_validator("admin_password_aliases", mode="before")
+    @classmethod
+    def parse_admin_password_aliases(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
             normalized = value.strip()
             if normalized.startswith("["):

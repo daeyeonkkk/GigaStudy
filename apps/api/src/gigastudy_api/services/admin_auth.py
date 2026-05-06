@@ -26,7 +26,11 @@ def admin_credentials_valid(
 
     return (
         admin_user == settings.admin_username
-        and _is_admin_password(submitted_password, settings.admin_password)
+        and _is_admin_password(
+            submitted_password,
+            settings.admin_password,
+            settings.admin_password_aliases,
+        )
     )
 
 
@@ -71,9 +75,16 @@ def _decode_admin_password(encoded_password: str) -> str | None:
         return None
 
 
-def _is_admin_password(submitted_password: str | None, configured_password: str | None) -> bool:
+def _is_admin_password(
+    submitted_password: str | None,
+    configured_password: str | None,
+    configured_aliases: list[str],
+) -> bool:
     if submitted_password is None or configured_password is None:
         return False
     normalized = unicodedata.normalize("NFC", submitted_password.strip())
-    configured = unicodedata.normalize("NFC", configured_password)
-    return normalized == configured
+    accepted_passwords = [configured_password, *configured_aliases]
+    return any(
+        normalized == unicodedata.normalize("NFC", accepted_password.strip())
+        for accepted_password in accepted_passwords
+    )

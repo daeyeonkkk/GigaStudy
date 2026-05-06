@@ -71,6 +71,9 @@ the same change.
 - Admin surfaces may view active and inactive studios separately. Admin delete
   actions must distinguish deactivation, stored-file cleanup, and permanent
   metadata/assets deletion.
+- Alpha admin login may configure explicit password aliases for keyboard-layout
+  or IME fallback, but aliases are still server-side secrets and must not be
+  inferred or exposed in public UI.
 
 ## Musical Normalization
 

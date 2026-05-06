@@ -557,6 +557,27 @@ class StudioResponse(BaseModel):
     updated_at: str
 
 
+class StudioActivityResponse(BaseModel):
+    studio_id: str
+    updated_at: str
+    jobs: list[TrackExtractionJob] = Field(default_factory=list)
+    pending_candidate_count: int
+    report_count: int
+    registered_track_count: int
+
+
+class TrackVolumePatch(BaseModel):
+    slot_id: int
+    volume_percent: int = Field(ge=0, le=100)
+
+
+class TrackVolumeMinimalResponse(BaseModel):
+    studio_id: str
+    updated_at: str
+    track: TrackVolumePatch
+    affected_region_ids: list[str] = Field(default_factory=list)
+
+
 def studio_arrangement_regions(studio: Studio) -> list[ArrangementRegion]:
     return _merged_arrangement_regions(studio)
 
@@ -797,6 +818,34 @@ def build_studio_response(studio: Studio) -> StudioResponse:
     )
 
 
+def build_studio_activity_response(studio: Studio) -> StudioActivityResponse:
+    return StudioActivityResponse(
+        studio_id=studio.studio_id,
+        updated_at=studio.updated_at,
+        jobs=studio.jobs,
+        pending_candidate_count=sum(1 for candidate in studio.candidates if candidate.status == "pending"),
+        report_count=len(studio.reports),
+        registered_track_count=sum(1 for track in studio.tracks if track.status == "registered"),
+    )
+
+
+def build_track_volume_minimal_response(studio: Studio, slot_id: int) -> TrackVolumeMinimalResponse:
+    track = next((candidate for candidate in studio.tracks if candidate.slot_id == slot_id), None)
+    if track is None:
+        raise ValueError("Track slot not found.")
+    affected_region_ids = [
+        region.region_id
+        for region in studio_arrangement_regions(studio)
+        if region.track_slot_id == slot_id
+    ]
+    return TrackVolumeMinimalResponse(
+        studio_id=studio.studio_id,
+        updated_at=studio.updated_at,
+        track=TrackVolumePatch(slot_id=slot_id, volume_percent=track.volume_percent),
+        affected_region_ids=affected_region_ids,
+    )
+
+
 class StudioListItem(BaseModel):
     studio_id: str
     title: str
@@ -1014,7 +1063,14 @@ class ScoreTrackRequest(BaseModel):
     include_metronome: bool = False
     performance_events: list[PerformanceEvent] = Field(default_factory=list)
     performance_audio_base64: str | None = None
+    performance_asset_path: str | None = Field(default=None, max_length=500)
     performance_filename: str | None = Field(default=None, max_length=180)
+
+    @model_validator(mode="after")
+    def validate_performance_audio_source(self) -> "ScoreTrackRequest":
+        if self.performance_audio_base64 is not None and self.performance_asset_path is not None:
+            raise ValueError("Scoring performance audio must use either base64 or asset_path, not both.")
+        return self
 
 
 class ApproveCandidateRequest(BaseModel):

@@ -60,7 +60,11 @@ def validate_score_track_request(
 
 
 def score_track_request_has_performance(request: ScoreTrackRequest) -> bool:
-    return bool(request.performance_events) or request.performance_audio_base64 is not None
+    return (
+        bool(request.performance_events)
+        or request.performance_audio_base64 is not None
+        or request.performance_asset_path is not None
+    )
 
 
 def build_score_track_report(

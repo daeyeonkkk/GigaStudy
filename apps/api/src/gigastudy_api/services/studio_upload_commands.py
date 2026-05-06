@@ -79,6 +79,29 @@ class StudioUploadCommands:
             owner_token_hash=studio.owner_token_hash,
         )
 
+    def create_scoring_upload_target(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: DirectUploadRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> DirectUploadTarget:
+        studio = self._repository.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
+        self._repository._find_track(studio, slot_id)
+        ensure_no_active_extraction_jobs(
+            studio,
+            {slot_id},
+            action_label="Scoring upload preparation",
+        )
+        return self._assets.create_track_upload_target(
+            studio_id,
+            slot_id,
+            request,
+            owner_token=owner_token,
+            owner_token_hash=studio.owner_token_hash,
+        )
+
     def write_direct_upload_content(
         self,
         asset_id: str,

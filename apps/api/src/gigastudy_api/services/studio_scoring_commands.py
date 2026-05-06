@@ -76,7 +76,21 @@ class StudioScoringCommands:
             for event in request.performance_events
         ]
         has_submitted_performance = score_track_request_has_performance(request)
-        if request.performance_audio_base64 is not None:
+        if request.performance_asset_path is not None:
+            performance_events = self.extract_scoring_audio_from_asset(
+                studio_id=studio_id,
+                slot_id=slot_id,
+                filename=request.performance_filename or "scoring-take.wav",
+                asset_path=request.performance_asset_path,
+                studio=studio,
+                target_track=target_track,
+                score_mode=request.score_mode,
+                reference_slot_ids=reference_slot_ids,
+                bpm=studio.bpm,
+                time_signature_numerator=studio.time_signature_numerator,
+                time_signature_denominator=studio.time_signature_denominator,
+            )
+        elif request.performance_audio_base64 is not None:
             performance_events = self.extract_scoring_audio(
                 studio_id=studio_id,
                 slot_id=slot_id,
@@ -161,6 +175,54 @@ class StudioScoringCommands:
             return []
         finally:
             self._assets.delete_temp_file(source_path)
+
+    def extract_scoring_audio_from_asset(
+        self,
+        *,
+        studio_id: str,
+        slot_id: int,
+        filename: str,
+        asset_path: str,
+        bpm: int,
+        time_signature_numerator: int,
+        time_signature_denominator: int,
+        studio: Studio | None = None,
+        target_track: TrackSlot | None = None,
+        score_mode: str = "answer",
+        reference_slot_ids: list[int] | None = None,
+    ) -> list[TrackPitchEvent]:
+        relative_path = self._assets.normalize_reference(asset_path)
+        if relative_path is None:
+            raise HTTPException(status_code=404, detail="Upload target not found.")
+        source_path = self._assets.resolve_existing_upload_asset(
+            studio_id=studio_id,
+            slot_id=slot_id,
+            filename=filename,
+            asset_path=relative_path,
+        )
+        try:
+            extraction_plan = None
+            if studio is not None and target_track is not None:
+                extraction_plan = self._build_scoring_extraction_plan(
+                    studio=studio,
+                    slot_id=slot_id,
+                    target_track=target_track,
+                    score_mode=score_mode,
+                    reference_slot_ids=reference_slot_ids or [],
+                    source_label=filename,
+                )
+            return self._repository._transcribe_voice_file(
+                source_path,
+                bpm=bpm,
+                slot_id=slot_id,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+                extraction_plan=extraction_plan,
+            )
+        except VoiceTranscriptionError:
+            return []
+        finally:
+            self._assets.delete_asset_file(relative_path)
 
     def _build_scoring_extraction_plan(
         self,

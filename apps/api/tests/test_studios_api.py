@@ -1342,6 +1342,44 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     assert reports[0]["overall_score"] == 100
 
 
+def test_studio_activity_and_minimal_volume_response_are_lightweight(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Lightweight status",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+
+    activity_response = client.get(f"/api/studios/{studio_id}/activity")
+
+    assert activity_response.status_code == 200
+    activity_payload = activity_response.json()
+    assert activity_payload["studio_id"] == studio_id
+    assert activity_payload["registered_track_count"] == 1
+    assert activity_payload["pending_candidate_count"] == 0
+    assert "regions" not in activity_payload
+    assert "candidates" not in activity_payload
+    assert "reports" not in activity_payload
+
+    volume_response = client.patch(
+        f"/api/studios/{studio_id}/tracks/1/volume?response=minimal",
+        json={"volume_percent": 41},
+    )
+
+    assert volume_response.status_code == 200
+    volume_payload = volume_response.json()
+    assert volume_payload["studio_id"] == studio_id
+    assert volume_payload["track"] == {"slot_id": 1, "volume_percent": 41}
+    assert volume_payload["affected_region_ids"] == ["track-1-region-1"]
+    assert "regions" not in volume_payload
+    assert client.get(f"/api/studios/{studio_id}").json()["tracks"][0]["volume_percent"] == 41
+
+
 def test_region_and_piano_roll_mutation_api_uses_explicit_regions(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(
@@ -1849,6 +1887,72 @@ def test_scoring_audio_extraction_uses_context_aware_plan(tmp_path: Path, monkey
     assert plan.slot_id == 1
     assert plan.provider == "deterministic"
     assert any("Existing tracks are present" in reason for reason in plan.reasons)
+
+
+def test_scoring_can_use_direct_uploaded_performance_audio(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, Path] = {}
+
+    def fake_transcribe_voice_file(path: Path, *args, **kwargs):
+        captured["path"] = path
+        return [
+            TrackPitchEvent(
+                pitch_midi=72,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_scoring_direct_upload",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Scoring direct upload",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+    content = b"RIFF....WAVEfmt scoring direct upload"
+
+    target_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/scoring-upload-target",
+        json={
+            "source_kind": "audio",
+            "filename": "score-take.wav",
+            "size_bytes": len(content),
+            "content_type": "audio/wav",
+        },
+    )
+    assert target_response.status_code == 200
+    target = target_response.json()
+    put_response = client.put(target["upload_url"].removeprefix("http://testserver"), content=content)
+    assert put_response.status_code == 200
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/score",
+        json={
+            "reference_slot_ids": [],
+            "include_metronome": True,
+            "performance_asset_path": target["asset_path"],
+            "performance_filename": "score-take.wav",
+        },
+    )
+
+    assert score_response.status_code == 200
+    assert score_response.json()["reports"][0]["performance_event_count"] == 1
+    assert captured["path"].name.endswith("score-take.wav")
+    assert not (Path(get_settings().storage_root) / target["asset_path"]).exists()
 
 
 def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, monkeypatch) -> None:

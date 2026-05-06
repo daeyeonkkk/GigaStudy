@@ -1,5 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response
 from fastapi.responses import FileResponse
+from typing import Literal
 
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
@@ -14,6 +15,7 @@ from gigastudy_api.api.schemas.studios import (
     SaveRegionRevisionRequest,
     ShiftTrackSyncRequest,
     Studio,
+    StudioActivityResponse,
     StudioListItem,
     StudioResponse,
     StudioSeedUploadRequest,
@@ -23,7 +25,10 @@ from gigastudy_api.api.schemas.studios import (
     UpdatePitchEventRequest,
     UpdateRegionRequest,
     VolumeTrackRequest,
+    TrackVolumeMinimalResponse,
+    build_studio_activity_response,
     build_studio_response,
+    build_track_volume_minimal_response,
 )
 from gigastudy_api.services.admin_auth import optional_admin_bypass
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
@@ -86,6 +91,25 @@ def get_studio(
 ) -> StudioResponse:
     return _studio_response(
         repository.get_studio(
+            studio_id,
+            background_tasks=background_tasks,
+            owner_token=owner_token,
+            enforce_owner=True,
+            admin_bypass=admin_bypass,
+        )
+    )
+
+
+@router.get("/{studio_id}/activity", response_model=StudioActivityResponse)
+def get_studio_activity(
+    studio_id: str,
+    background_tasks: BackgroundTasks,
+    owner_token: str | None = Depends(studio_owner_token),
+    admin_bypass: bool = Depends(optional_admin_bypass),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioActivityResponse:
+    return build_studio_activity_response(
+        repository.get_studio_activity(
             studio_id,
             background_tasks=background_tasks,
             owner_token=owner_token,
@@ -233,6 +257,25 @@ def create_track_upload_target(
     return target
 
 
+@router.post("/{studio_id}/tracks/{slot_id}/scoring-upload-target", response_model=DirectUploadTarget)
+def create_scoring_upload_target(
+    studio_id: str,
+    slot_id: int,
+    request: DirectUploadRequest,
+    http_request: Request,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> DirectUploadTarget:
+    target = repository.create_scoring_upload_target(studio_id, slot_id, request, owner_token=owner_token)
+    if not target.upload_url:
+        target = target.model_copy(
+            update={
+                "upload_url": str(http_request.url_for("put_direct_upload", asset_id=target.asset_id)),
+            }
+        )
+    return target
+
+
 @router.post("/{studio_id}/tracks/{slot_id}/upload", response_model=StudioResponse)
 def upload_track(
     studio_id: str,
@@ -291,17 +334,22 @@ def update_track_sync(
     )
 
 
-@router.patch("/{studio_id}/tracks/{slot_id}/volume", response_model=StudioResponse)
+@router.patch(
+    "/{studio_id}/tracks/{slot_id}/volume",
+    response_model=StudioResponse | TrackVolumeMinimalResponse,
+)
 def update_track_volume(
     studio_id: str,
     slot_id: int,
     request: VolumeTrackRequest,
+    response: Literal["full", "minimal"] = Query(default="full"),
     owner_token: str | None = Depends(studio_owner_token),
     repository: StudioRepository = Depends(get_studio_repository),
-) -> StudioResponse:
-    return _studio_response(
-        repository.update_volume(studio_id, slot_id, request, owner_token=owner_token)
-    )
+) -> StudioResponse | TrackVolumeMinimalResponse:
+    studio = repository.update_volume(studio_id, slot_id, request, owner_token=owner_token)
+    if response == "minimal":
+        return build_track_volume_minimal_response(studio, slot_id)
+    return _studio_response(studio)
 
 
 @router.patch("/{studio_id}/regions/{region_id}", response_model=StudioResponse)

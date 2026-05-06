@@ -431,6 +431,23 @@ class StudioRepository:
             self._recover_existing_creation_jobs(studio, background_tasks)
         return studio
 
+    def get_studio_activity(
+        self,
+        studio_id: str,
+        *,
+        background_tasks: BackgroundTasks | None = None,
+        owner_token: str | None = None,
+        enforce_owner: bool = False,
+        admin_bypass: bool = False,
+    ) -> Studio:
+        return self.get_studio(
+            studio_id,
+            background_tasks=background_tasks,
+            owner_token=owner_token,
+            enforce_owner=enforce_owner,
+            admin_bypass=admin_bypass,
+        )
+
     def deactivate_studio(
         self,
         studio_id: str,
@@ -754,6 +771,21 @@ class StudioRepository:
             studio_id,
             region_id,
             revision_id,
+            owner_token=owner_token,
+        )
+
+    def create_scoring_upload_target(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: DirectUploadRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> DirectUploadTarget:
+        return self._uploads.create_scoring_upload_target(
+            studio_id,
+            slot_id,
+            request,
             owner_token=owner_token,
         )
 

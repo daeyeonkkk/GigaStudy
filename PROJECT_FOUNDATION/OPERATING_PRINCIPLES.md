@@ -74,6 +74,9 @@ the same change.
 - Alpha admin login may configure explicit password aliases for keyboard-layout
   or IME fallback, but aliases are still server-side secrets and must not be
   inferred or exposed in public UI.
+- Admin login failures should be actionable without revealing the configured
+  aliases: the UI may tell the operator to check input language/composition,
+  but it must not display alternate passwords.
 
 ## Musical Normalization
 

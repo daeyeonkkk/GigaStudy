@@ -38,6 +38,20 @@ const ADMIN_STUDIO_PAGE_SIZE = 50
 const ADMIN_ASSET_PAGE_SIZE = 25
 type AdminStudioStatus = 'active' | 'inactive' | 'all'
 
+function getAdminErrorMessage(error: unknown, fallback = '요청을 처리하지 못했습니다.'): string {
+  const message = error instanceof Error ? error.message.trim() : ''
+  if (!message) {
+    return fallback
+  }
+  if (message.includes('Invalid admin credentials')) {
+    return 'ID 또는 비밀번호가 맞지 않습니다. 한/영 입력 상태를 확인하세요.'
+  }
+  if (message.includes('API 서버에 연결하지 못했습니다')) {
+    return '관리 서비스에 연결하지 못했습니다. 잠시 뒤 다시 시도하세요.'
+  }
+  return message
+}
+
 export function AdminPage() {
   const [username, setUsername] = useState(DEFAULT_LOGIN_ID)
   const [password, setPassword] = useState('')
@@ -69,7 +83,7 @@ export function AdminPage() {
   const isBusy = status.phase === 'loading' || busyKey !== null
   const activeCredentials = credentials ?? {
     username: username.trim(),
-    password,
+    password: password.trim(),
   }
 
   async function loadSummary(
@@ -96,7 +110,7 @@ export function AdminPage() {
   async function login() {
     const nextCredentials = {
       username: username.trim(),
-      password,
+      password: password.trim(),
     }
     if (!nextCredentials.username || !nextCredentials.password) {
       setStatus({ phase: 'error', message: '관리자 ID와 비밀번호를 모두 입력하세요.' })
@@ -112,7 +126,7 @@ export function AdminPage() {
       setSummary(null)
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '로그인에 실패했습니다.',
+        message: getAdminErrorMessage(error),
       })
     }
   }
@@ -128,7 +142,7 @@ export function AdminPage() {
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '저장소 요약을 불러오지 못했습니다.',
+        message: getAdminErrorMessage(error, '저장소 요약을 불러오지 못했습니다.'),
       })
     }
   }
@@ -143,7 +157,7 @@ export function AdminPage() {
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '스튜디오 페이지를 불러오지 못했습니다.',
+        message: getAdminErrorMessage(error, '스튜디오 페이지를 불러오지 못했습니다.'),
       })
     }
   }
@@ -158,7 +172,7 @@ export function AdminPage() {
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '스튜디오 목록을 불러오지 못했습니다.',
+        message: getAdminErrorMessage(error, '스튜디오 목록을 불러오지 못했습니다.'),
       })
     }
   }
@@ -200,13 +214,13 @@ export function AdminPage() {
       setStatus({
         phase: 'success',
         message: result.cleanup_queued
-          ? '관리 목록에서 제거했습니다. 저장 파일 정리는 백그라운드에서 계속됩니다.'
+          ? '관리 목록에서 제거했습니다. 남은 저장 파일 정리는 계속됩니다.'
           : (result.message ?? '삭제를 완료했습니다.'),
       })
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '삭제에 실패했습니다.',
+        message: getAdminErrorMessage(error, '삭제에 실패했습니다.'),
       })
     } finally {
       setBusyKey(null)
@@ -284,7 +298,7 @@ export function AdminPage() {
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '연주음 파일을 저장하지 못했습니다.',
+        message: getAdminErrorMessage(error, '연주음 파일을 저장하지 못했습니다.'),
       })
     } finally {
       setBusyKey(null)
@@ -304,7 +318,7 @@ export function AdminPage() {
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '연주음을 초기화하지 못했습니다.',
+        message: getAdminErrorMessage(error, '연주음을 초기화하지 못했습니다.'),
       })
     } finally {
       setBusyKey(null)
@@ -330,20 +344,20 @@ export function AdminPage() {
       return
     }
     setBusyKey('engine-drain')
-    setStatus({ phase: 'loading', message: '엔진 대기열을 처리하는 중입니다.' })
+    setStatus({ phase: 'loading', message: '작업 대기열을 처리하는 중입니다.' })
     try {
       const result = await drainAdminEngineQueue(activeCredentials, 3)
       await loadSummary(activeCredentials, studioOffset, studioStatus)
       setStatus({
         phase: 'success',
-        message: `엔진 대기열 ${result.processed_jobs}/${result.max_jobs}개를 처리했습니다.${
+        message: `작업 대기열 ${result.processed_jobs}/${result.max_jobs}개를 처리했습니다.${
           result.remaining_runnable ? ' 아직 대기 중인 작업이 있습니다.' : ''
         }`,
       })
     } catch (error) {
       setStatus({
         phase: 'error',
-        message: error instanceof Error ? error.message : '엔진 대기열을 처리하지 못했습니다.',
+        message: getAdminErrorMessage(error, '작업 대기열을 처리하지 못했습니다.'),
       })
     } finally {
       setBusyKey(null)
@@ -360,61 +374,72 @@ export function AdminPage() {
           <span>GigaStudy - 관리자</span>
         </header>
 
-        <nav className="admin-menubar" aria-label="관리자 메뉴">
-          <span>저장소</span>
-          <span>스튜디오</span>
-          <span>파일</span>
-          <span>정리</span>
+        <nav className="admin-menubar" aria-label="관리 상태">
+          <span>운영 콘솔</span>
+          <span>{credentials === null ? '로그인 필요' : `활성 ${summary?.active_studio_count ?? 0}`}</span>
+          <span>{credentials === null ? '저장소 대기' : `비활성 ${summary?.inactive_studio_count ?? 0}`}</span>
+          <span>{credentials === null ? '파일 대기' : `파일 ${summary?.asset_count ?? 0}`}</span>
         </nav>
 
-        <section className="admin-auth" aria-label="관리자 로그인">
-          <label>
-            <span>ID</span>
-            <input
-              value={username}
-              autoComplete="username"
-              disabled={credentials !== null}
-              onChange={(event) => setUsername(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  void login()
-                }
-              }}
-            />
-          </label>
-          <label>
-            <span>비밀번호</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete="current-password"
-              disabled={credentials !== null}
-              onChange={(event) => setPassword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  void login()
-                }
-              }}
-            />
-          </label>
+        <form
+          className={`admin-auth${credentials !== null ? ' admin-auth--session' : ''}`}
+          aria-label="관리자 로그인"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (credentials === null) {
+              void login()
+            }
+          }}
+        >
           {credentials === null ? (
-            <button className="app-button" type="button" disabled={isBusy} onClick={() => void login()}>
-              로그인
-            </button>
+            <>
+              <label>
+                <span>ID</span>
+                <input
+                  id="admin-id"
+                  name="admin-id"
+                  value={username}
+                  autoComplete="username"
+                  onChange={(event) => setUsername(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>비밀번호</span>
+                <input
+                  id="admin-password"
+                  name="admin-password"
+                  type="password"
+                  value={password}
+                  autoComplete="current-password"
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </label>
+              <button className="app-button" type="submit" disabled={isBusy}>
+                로그인
+              </button>
+              <p className="admin-auth-hint">한글 비밀번호가 실패하면 입력 언어와 조합 상태를 확인하세요.</p>
+            </>
           ) : (
-            <div className="admin-auth-actions">
-              <button className="app-button" type="button" disabled={isBusy} onClick={() => void refreshSummary()}>
-                새로고침
-              </button>
-              <button type="button" disabled={isBusy} onClick={logout}>
-                로그아웃
-              </button>
-            </div>
+            <>
+              <div className="admin-session">
+                <span>관리자 세션</span>
+                <strong>{credentials.username}</strong>
+                <p>스튜디오와 저장 파일을 관리할 수 있습니다.</p>
+              </div>
+              <div className="admin-auth-actions">
+                <button className="app-button" type="button" disabled={isBusy} onClick={() => void refreshSummary()}>
+                  새로고침
+                </button>
+                <button type="button" disabled={isBusy} onClick={logout}>
+                  로그아웃
+                </button>
+              </div>
+            </>
           )}
           <span className={`admin-status admin-status--${status.phase}`} role="status">
             {status.message}
           </span>
-        </section>
+        </form>
 
         {credentials !== null ? (
           <>
@@ -434,80 +459,79 @@ export function AdminPage() {
 
             {summary ? <AdminLimits summary={summary} /> : null}
 
-            <section className="admin-instrument" aria-label="연주음 파일">
-              <div>
-                <span>연주음</span>
-                <strong>{instrumentConfig?.has_custom_file ? instrumentConfig.filename : '기본 연주음'}</strong>
-                <p>음표 재생에 사용할 기준 음원입니다. 업로드 파일은 입력한 기준 음높이에 맞춰 반음 단위로 변환됩니다.</p>
-              </div>
-              <label>
-                <span>파일</span>
-                <input
-                  type="file"
-                  accept=".wav,.mp3,.m4a,.ogg,.flac"
-                  disabled={isBusy}
-                  onChange={(event) => setInstrumentFile(event.target.files?.[0] ?? null)}
-                />
-              </label>
-              <label>
-                <span>기준 MIDI</span>
-                <input
-                  inputMode="numeric"
-                  value={instrumentRootMidi}
-                  disabled={isBusy}
-                  onChange={(event) => setInstrumentRootMidi(event.target.value)}
-                />
-              </label>
-              <button
-                className="app-button"
-                type="button"
-                disabled={isBusy || instrumentFile === null}
-                onClick={() => void handleInstrumentUpload()}
-              >
-                저장
-              </button>
-              <button type="button" disabled={isBusy} onClick={() => void handleInstrumentReset()}>
-                기본값
-              </button>
-            </section>
+            <section className="admin-operations" aria-label="운영 작업">
+              <section className="admin-instrument" aria-label="연주음 파일">
+                <div>
+                  <span>연주음</span>
+                  <strong>{instrumentConfig?.has_custom_file ? instrumentConfig.filename : '기본 연주음'}</strong>
+                  <p>음표 재생에 사용할 기준 음원입니다. 입력한 기준 음높이에 맞춰 반음 단위로 변환됩니다.</p>
+                </div>
+                <label>
+                  <span>파일</span>
+                  <input
+                    type="file"
+                    accept=".wav,.mp3,.m4a,.ogg,.flac"
+                    disabled={isBusy}
+                    onChange={(event) => setInstrumentFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <label>
+                  <span>기준 MIDI</span>
+                  <input
+                    inputMode="numeric"
+                    value={instrumentRootMidi}
+                    disabled={isBusy}
+                    onChange={(event) => setInstrumentRootMidi(event.target.value)}
+                  />
+                </label>
+                <div className="admin-panel-actions">
+                  <button
+                    className="app-button"
+                    type="button"
+                    disabled={isBusy || instrumentFile === null}
+                    onClick={() => void handleInstrumentUpload()}
+                  >
+                    저장
+                  </button>
+                  <button type="button" disabled={isBusy} onClick={() => void handleInstrumentReset()}>
+                    기본값
+                  </button>
+                </div>
+              </section>
 
-            <section className="admin-cleanup" aria-label="정리 작업">
-              <div>
-                <span>정리</span>
-                <strong>남은 임시 업로드</strong>
-                <p>만료된 임시 파일은 새 업로드 준비 정보를 만들 때도 자동으로 정리됩니다.</p>
-              </div>
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={handleDeleteExpiredStagedAssets}
-              >
-                만료 파일 삭제
-              </button>
-              <button
-                className="admin-danger"
-                type="button"
-                disabled={isBusy}
-                onClick={handleDeleteStagedAssets}
-              >
-                임시 파일 삭제
-              </button>
-            </section>
+              <section className="admin-cleanup" aria-label="정리 작업">
+                <div>
+                  <span>정리</span>
+                  <strong>임시 업로드</strong>
+                  <p>만료되었거나 등록되지 않은 임시 파일을 정리합니다. 활성 스튜디오 파일은 유지됩니다.</p>
+                </div>
+                <div className="admin-panel-actions">
+                  <button type="button" disabled={isBusy} onClick={handleDeleteExpiredStagedAssets}>
+                    만료 파일 삭제
+                  </button>
+                  <button className="admin-danger" type="button" disabled={isBusy} onClick={handleDeleteStagedAssets}>
+                    임시 파일 삭제
+                  </button>
+                </div>
+              </section>
 
-            <section className="admin-queue" aria-label="엔진 대기열 작업">
-              <div>
-                <span>엔진 대기열</span>
-                <strong>문서/음성 추출 처리</strong>
-                <p>대기 중이거나 만료된 작업을 최대 3개까지 즉시 처리합니다.</p>
-              </div>
-              <button
-                className="app-button"
-                type="button"
-                disabled={isBusy}
-                onClick={() => void handleDrainEngineQueue()}
-              >
-                대기열 실행
-              </button>
+              <section className="admin-queue" aria-label="작업 대기열">
+                <div>
+                  <span>대기열</span>
+                  <strong>등록 작업 처리</strong>
+                  <p>대기 중이거나 멈춘 작업을 최대 3개까지 즉시 처리합니다.</p>
+                </div>
+                <div className="admin-panel-actions">
+                  <button
+                    className="app-button"
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void handleDrainEngineQueue()}
+                  >
+                    대기열 실행
+                  </button>
+                </div>
+              </section>
             </section>
 
             <section className="admin-studios" aria-label="스튜디오 목록">
@@ -644,8 +668,16 @@ export function AdminPage() {
           </>
         ) : (
           <section className="admin-login-empty" aria-label="로그인 안내">
-            <h1>관리자</h1>
-            <p>스튜디오, 업로드, 녹음, 생성 파일, 문서 출력물을 삭제하려면 로그인하세요.</p>
+            <div className="admin-login-panel">
+              <p className="eyebrow">관리자 전용</p>
+              <h1>운영 콘솔</h1>
+              <p>로그인하면 스튜디오, 저장 파일, 연주음, 정리 작업을 한 화면에서 관리할 수 있습니다.</p>
+              <ul>
+                <li>활성/비활성 스튜디오 진입과 삭제</li>
+                <li>스튜디오별 저장 파일 확인과 정리</li>
+                <li>연주음 파일 교체와 작업 대기열 처리</li>
+              </ul>
+            </div>
           </section>
         )}
 
@@ -678,7 +710,7 @@ function AdminLimits({ summary }: { summary: AdminStorageSummary }) {
         <span>알파 운영 한도</span>
         <strong>
           스튜디오 {totalStudios}/{limits.studio_hard_limit} · 파일{' '}
-          {formatBytes(summary.total_asset_bytes)}/{formatBytes(limits.asset_hard_bytes)} · 엔진 작업{' '}
+          {formatBytes(summary.total_asset_bytes)}/{formatBytes(limits.asset_hard_bytes)} · 등록 작업{' '}
           {limits.max_active_engine_jobs}
         </strong>
       </div>

@@ -596,9 +596,11 @@ export function deactivateStudio(studioId: string): Promise<Studio> {
 }
 
 function adminHeaders(credentials: AdminCredentials): HeadersInit {
+  const username = credentials.username.trim()
+  const password = credentials.password.trim()
   return {
-    'X-GigaStudy-Admin-User': credentials.username,
-    'X-GigaStudy-Admin-Password-B64': encodeUtf8Base64(credentials.password),
+    'X-GigaStudy-Admin-User': username,
+    'X-GigaStudy-Admin-Password-B64': encodeUtf8Base64(password),
   }
 }
 

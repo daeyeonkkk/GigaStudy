@@ -507,6 +507,11 @@ flowchart TD
 
 - FastAPI/Vite application shells.
 - Upload, asset, owner-token, admin, storage, direct-upload, and queue systems.
+- Admin UI is an operator console rather than a public product surface. It
+  uses explicit admin credentials, can rely on server-side password aliases for
+  IME/keyboard fallback, and exposes storage health, active/inactive studio
+  actions, stored-file cleanup, playback instrument replacement, and manual
+  queue recovery in one dense workspace.
 - Audio recording and playback primitives.
 - Voice pitch extraction math.
 - MIDI/MusicXML/PDF import adapters as extraction inputs.

@@ -448,9 +448,13 @@ flowchart TD
 4. Generated candidates pass the shared registration rhythm contract before
    review, so candidate and approved events use the same BPM/meter-derived
    readable grid as imported material.
-5. Generated candidates remain reviewable until approved.
-6. Approved material becomes a region in the target track.
-7. If approval overwrites an active target track, the overwritten material is
+5. Candidate review renders generated and imported material through the same
+   decision surface: target track, musical role/title, note-flow mini timeline,
+   compact facts, and concrete warnings. Raw diagnostic scores stay internal
+   unless they become a clear user-facing warning.
+6. Generated candidates remain reviewable until approved.
+7. Approved material becomes a region in the target track.
+8. If approval overwrites an active target track, the overwritten material is
    archived first; generation, playback, and scoring still consume only the
    restored or newly active `Studio.regions`.
 

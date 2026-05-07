@@ -106,12 +106,18 @@ describe('candidate decision summary', () => {
       buildCandidate({
         confidence: 0.87,
         diagnostics: {
+          acappella_quality_label: 'stable',
+          acappella_quality_score: 82,
+          articulation_score: 0.8,
           density_events_per_measure: 4.7,
           event_count: 393,
+          harmonic_fit_score: 0.83,
           measure_count: 83,
           range_fit_ratio: 1,
           review_hint: 'review_against_source',
+          rhythm_fit_score: 0.76,
           timing_grid_ratio: 1,
+          voice_leading_score: 0.79,
         },
         region: {
           ...buildCandidate().region,
@@ -148,7 +154,17 @@ describe('candidate decision summary', () => {
     )
 
     expect(summary.diagnostics.map((metric) => metric.label)).not.toEqual(
-      expect.arrayContaining(['감지 결과', '음역 적합도', '리듬 그리드', '밀도']),
+      expect.arrayContaining([
+        '감지 결과',
+        '음역 적합도',
+        '리듬 그리드',
+        '밀도',
+        '편곡 판단',
+        '원본 리듬 반영',
+        '화성 안정',
+        '성부 진행',
+        '어택/발음',
+      ]),
     )
     expect(summary.metrics.map((metric) => metric.label)).toEqual([
       '분량',

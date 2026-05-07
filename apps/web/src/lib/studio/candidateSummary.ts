@@ -160,7 +160,6 @@ export function getCandidateDecisionSummary(
   const rhythm = getRhythmSummary(events, beatsPerMeasure)
   const contour = getContourSummary(midiEvents)
   const startEnd = getStartEndSummary(pitchedEvents)
-  const confidence = `${Math.round(Math.max(0, Math.min(1, candidate.confidence)) * 100)}%`
   const diagnostics = getCandidateDiagnostics(candidate)
   const reviewHint = getReviewHintSummary(candidate)
   const llmInsight = getGeneratedCandidateInsight(candidate)
@@ -176,12 +175,10 @@ export function getCandidateDecisionSummary(
           targetTrack,
         })
       : [
+          { label: '분량', value: `${rhythm.measureSpan || 1}마디 - 음표 ${events.length}개` },
           { label: '음역', value: `${range}${register.averageLabel ? ` - 중심 ${register.averageLabel}` : ''}` },
-          { label: '진행', value: `${movement.label} - 도약 ${movement.leapCount}회` },
           { label: '리듬', value: rhythm.label },
           { label: '시작/끝', value: startEnd },
-          { label: '신뢰도', value: confidence },
-          { label: '길이', value: `${durationSeconds.toFixed(2)}초 - 음표 ${events.length}개` },
         ]
 
   if (events.length === 0) {
@@ -193,7 +190,6 @@ export function getCandidateDecisionSummary(
       phrasePreview: '-',
       metrics: [
         { label: '음표', value: '0' },
-        { label: '신뢰도', value: confidence },
       ],
       diagnostics,
       technical: [
@@ -207,11 +203,11 @@ export function getCandidateDecisionSummary(
   const sourceLabel = sourceDecisionLabels[candidate.source_kind]
   const title =
     candidate.source_kind === 'ai'
-      ? (llmInsight?.title ?? `${register.shortLabel} - ${movement.shortLabel}`)
+      ? (llmInsight?.title ?? `${register.shortLabel} · ${movement.shortLabel}`)
       : `${sourceLabel} - ${range}`
   const headline =
     candidate.source_kind === 'ai'
-      ? (llmInsight?.headline ?? `${formatTrackName(targetTrack?.name)}에 ${register.headline} 후보를 배치합니다.`)
+      ? (llmInsight?.headline ?? `${formatTrackName(targetTrack?.name)}에 어울리는 ${register.headline} 라인입니다.`)
       : `${sourceLabel} 결과를 ${formatTrackName(targetTrack?.name)}에 등록할 수 있습니다.`
   const support = [
     candidate.source_kind === 'ai' && llmInsight?.role ? `역할: ${llmInsight.role}.` : '',
@@ -244,7 +240,7 @@ export function getCandidateDecisionSummary(
     technical: [
       { label: '엔진', value: candidate.method },
       { label: '소스', value: candidate.source_label },
-      { label: '원본 미리보기', value: getCandidatePreviewText(candidate) },
+      { label: '원본 위치', value: getCandidatePreviewText(candidate) },
       ...getTechnicalDiagnostics(candidate),
     ],
   }
@@ -429,7 +425,7 @@ function getRhythmSummary(events: PitchEvent[], beatsPerMeasure: number): {
   const shortestDuration = Math.min(...events.map((event) => Math.max(0.25, event.duration_beats)))
 
   const densityLabel =
-    eventsPerMeasure >= 7 ? '촘촘한 리듬' : eventsPerMeasure >= 4 ? '보통 밀도 리듬' : '여유 있는 리듬'
+    eventsPerMeasure >= 7 ? '촘촘한 리듬' : eventsPerMeasure >= 4 ? '보통 리듬' : '여유 있는 리듬'
   return {
     detail: `마디당 ${eventsPerMeasure.toFixed(1)}개 음표, 최단 길이 ${shortestDuration.toFixed(2)}박`,
     eventsPerMeasure,
@@ -572,15 +568,6 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   const arrangementRole = getDiagnosticString(diagnostics, 'arrangement_role')
   const arrangementTexture = getDiagnosticString(diagnostics, 'arrangement_texture')
   const arrangementRhythmRole = getDiagnosticString(diagnostics, 'arrangement_rhythm_role')
-  const acappellaQualityLabel = getDiagnosticString(diagnostics, 'acappella_quality_label')
-  const acappellaQualityScore = getDiagnosticNumber(diagnostics, 'acappella_quality_score')
-  const rhythmFitScore = getDiagnosticNumber(diagnostics, 'rhythm_fit_score')
-  const harmonicFitScore = getDiagnosticNumber(diagnostics, 'harmonic_fit_score')
-  const voiceLeadingScore = getDiagnosticNumber(diagnostics, 'voice_leading_score')
-  const articulationScore = getDiagnosticNumber(diagnostics, 'articulation_score')
-  const contextOnsetCoverage = getDiagnosticNumber(diagnostics, 'context_onset_coverage_ratio')
-  const longSustainRatio = getDiagnosticNumber(diagnostics, 'long_sustain_ratio')
-  const attackCount = getDiagnosticNumber(diagnostics, 'attack_count')
   const generationWarnings = getDiagnosticStringList(diagnostics, 'generation_quality_warnings').map(formatGenerationWarning)
   const llmPhraseSummary = getDiagnosticString(diagnostics, 'llm_phrase_summary')
   const riskTags = getDiagnosticStringList(diagnostics, 'risk_tags').map(formatRiskTag)
@@ -624,36 +611,6 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
   }
 
   if (candidate.source_kind === 'ai') {
-    if (acappellaQualityLabel) {
-      metrics.push({
-        label: '편곡 판단',
-        value:
-          acappellaQualityScore !== null
-            ? `${acappellaQualityLabel} · ${Math.round(acappellaQualityScore)}점`
-            : acappellaQualityLabel,
-      })
-    }
-    if (rhythmFitScore !== null) {
-      metrics.push({ label: '원본 리듬 반영', value: formatRatio(rhythmFitScore) })
-    }
-    if (harmonicFitScore !== null) {
-      metrics.push({ label: '화성 안정', value: formatRatio(harmonicFitScore) })
-    }
-    if (voiceLeadingScore !== null) {
-      metrics.push({ label: '성부 진행', value: formatRatio(voiceLeadingScore) })
-    }
-    if (articulationScore !== null) {
-      metrics.push({ label: '어택/발음', value: formatRatio(articulationScore) })
-    }
-    if (contextOnsetCoverage !== null) {
-      metrics.push({ label: '타 트랙 리듬 맞춤', value: formatRatio(contextOnsetCoverage) })
-    }
-    if (longSustainRatio !== null) {
-      metrics.push({ label: '긴 지속음', value: formatRatio(longSustainRatio) })
-    }
-    if (attackCount !== null) {
-      metrics.push({ label: '어택 수', value: `${attackCount}개` })
-    }
     if (generationWarnings.length > 0) {
       metrics.push({ label: '확인할 점', value: generationWarnings.join(', ') })
     }
@@ -670,30 +627,6 @@ function getCandidateDiagnostics(candidate: ExtractionCandidate): CandidateMetri
           ? `${candidatePageCount}/${documentPageCount}`
           : `${candidatePageCount ?? documentPageCount}`,
     })
-  }
-
-  const measureCount = getDiagnosticNumber(diagnostics, 'measure_count')
-  const eventCount =
-    getDiagnosticNumber(diagnostics, 'event_count') ??
-    candidate.region.pitch_events.length
-  metrics.push({
-    label: '감지 결과',
-    value: `${measureCount !== null ? `${measureCount}마디` : '마디 확인 필요'} - 음표 ${eventCount}개`,
-  })
-
-  const rangeFitRatio = getDiagnosticNumber(diagnostics, 'range_fit_ratio')
-  if (rangeFitRatio !== null) {
-    metrics.push({ label: '음역 적합도', value: formatRatio(rangeFitRatio) })
-  }
-
-  const timingGridRatio = getDiagnosticNumber(diagnostics, 'timing_grid_ratio')
-  if (timingGridRatio !== null) {
-    metrics.push({ label: '리듬 그리드', value: formatRatio(timingGridRatio) })
-  }
-
-  const density = getDiagnosticNumber(diagnostics, 'density_events_per_measure')
-  if (density !== null) {
-    metrics.push({ label: '밀도', value: `마디당 ${density.toFixed(1)}개` })
   }
 
   return metrics
@@ -719,7 +652,7 @@ function reviewHintSummaryFromKey(hint: string): { tag: string; sentence: string
       },
       low_event_confidence: {
         tag: '원본 대조',
-        sentence: '음표 신뢰도가 낮으므로 원본과 비교하세요.',
+        sentence: '음표가 불안정하게 잡혔을 수 있으므로 원본과 비교하세요.',
       },
       range_outliers: {
         tag: '음역 검토',
@@ -727,7 +660,7 @@ function reviewHintSummaryFromKey(hint: string): { tag: string; sentence: string
       },
       rhythm_grid_review: {
         tag: '리듬 검토',
-        sentence: '리듬 그리드가 불안정합니다. 승인 전 타이밍을 확인하세요.',
+        sentence: '박자 위치가 불안정할 수 있습니다. 승인 전 타이밍을 확인하세요.',
       },
       partial_document_review: {
         tag: '부분 문서',
@@ -851,8 +784,4 @@ export function formatGeneratedLabel(value: string): string {
     .replaceAll('kick-led', '킥 중심')
     .replaceAll('snare-led', '스네어 중심')
     .replaceAll('balanced', '균형형')
-}
-
-function formatRatio(value: number): string {
-  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`
 }

@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ReportFeed } from '../components/studio/ReportFeed'
+import { PendingRecordingDialog } from '../components/studio/PendingRecordingDialog'
 import { ScoringDrawer } from '../components/studio/ScoringDrawer'
 import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
@@ -17,6 +18,8 @@ import {
 import type { StudioActionState } from '../components/studio/studioActionState'
 import {
   getBeatUnitWidthPixels,
+  getFollowScrollLeft,
+  getTimelinePixelForSeconds,
   getTimelineWidthPixels,
 } from '../components/studio/TrackBoardTimelineLayout'
 import { useStudioPlayback } from '../components/studio/useStudioPlayback'
@@ -136,16 +139,19 @@ function PracticeWaterfallStage({
   maxSeconds,
   minSeconds,
   playheadSeconds,
+  followPlayhead,
   regions,
   tracks,
 }: {
   maxSeconds: number
   minSeconds: number
   bpm: number
+  followPlayhead: boolean
   playheadSeconds: number | null
   regions: ArrangementRegion[]
   tracks: TrackSlot[]
 }) {
+  const stageRef = useRef<HTMLElement | null>(null)
   const events = useMemo(() => getWaterfallEvents(regions), [regions])
   const eventsByTrack = useMemo(() => {
     const next = new Map<number, WaterfallEvent[]>()
@@ -165,9 +171,39 @@ function PracticeWaterfallStage({
     () => getTimelineWidthPixels(maxSeconds - minSeconds, bpm),
     [bpm, maxSeconds, minSeconds],
   )
+  const timelineBounds = useMemo(
+    () => ({
+      durationSeconds: Math.max(0.25, maxSeconds - minSeconds),
+      maxSeconds,
+      minSeconds,
+    }),
+    [maxSeconds, minSeconds],
+  )
+
+  useEffect(() => {
+    if (!followPlayhead || playheadSeconds === null) {
+      return
+    }
+    const scrollElement = stageRef.current
+    if (!scrollElement) {
+      return
+    }
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const playheadPixels = getTimelinePixelForSeconds(playheadSeconds, timelineBounds, bpm)
+      const nextScrollLeft = getFollowScrollLeft({
+        playheadPixels,
+        scrollWidth: scrollElement.scrollWidth,
+        viewportWidth: scrollElement.clientWidth,
+      })
+      if (Math.abs(scrollElement.scrollLeft - nextScrollLeft) > 2) {
+        scrollElement.scrollLeft = nextScrollLeft
+      }
+    })
+    return () => window.cancelAnimationFrame(animationFrameId)
+  }, [bpm, followPlayhead, playheadSeconds, timelineBounds])
 
   return (
-    <section className="practice-stage" aria-label="연습 화면">
+    <section className="practice-stage" ref={stageRef} aria-label="연습 화면">
       <div className="practice-stage__labels" aria-hidden="true">
         <span>{formatDurationSeconds(minSeconds)}</span>
         <span>
@@ -239,9 +275,9 @@ export function PracticePage() {
   )
   const {
     changePlaybackSource,
-    globalPlaying,
     markReferencePlayback,
     playbackSource,
+    playbackTransportState,
     playbackTimeline,
     playheadSeconds,
     selectAllPlaybackTracks,
@@ -250,6 +286,7 @@ export function PracticePage() {
     startSelectedPlayback,
     stopGlobalPlayback,
     stopPlaybackSession,
+    toggleGlobalPlayback,
     togglePlaybackSelection,
   } = useStudioPlayback({
     metronomeEnabled,
@@ -261,7 +298,10 @@ export function PracticePage() {
   })
   const {
     cancelScoreSession,
+    handleDiscardPendingScoreRecording,
+    handleStartPendingScoreRecording,
     openScoreSession,
+    pendingScoreRecording,
     scoreSession,
     scoreTargetTrack,
     setScoreIncludeMetronome,
@@ -292,7 +332,10 @@ export function PracticePage() {
     selectedPlaybackSlotIds.has(track.slot_id),
   ).length
   const actionBusy = actionState.phase === 'busy'
-  const practiceControlsLocked = actionBusy || scoreSession !== null
+  const practiceControlsLocked = actionBusy || scoreSession !== null || pendingScoreRecording !== null
+  const playbackActive = playbackTransportState === 'playing'
+  const playbackPaused = playbackTransportState === 'paused'
+  const playbackIdle = playbackTransportState === 'idle'
   const selectedScoreTargetTrack =
     studio?.tracks.find((track) => track.slot_id === selectedScoreTargetSlotId) ??
     registeredTracks[0] ??
@@ -302,7 +345,7 @@ export function PracticePage() {
     ? selectedScoreTargetTrack.status === 'registered' ||
       registeredTracks.some((track) => track.slot_id !== selectedScoreTargetTrack.slot_id)
     : false
-  const scoreControlsLocked = practiceControlsLocked || globalPlaying
+  const scoreControlsLocked = practiceControlsLocked || !playbackIdle
 
   if (!studioId) {
     return (
@@ -363,16 +406,16 @@ export function PracticePage() {
           <button
             className="composer-tool composer-tool--primary"
             data-testid="practice-play-button"
-            disabled={selectedTrackCount === 0 || practiceControlsLocked}
+            disabled={playbackIdle && (selectedTrackCount === 0 || practiceControlsLocked)}
             type="button"
-            onClick={() => void startSelectedPlayback()}
+            onClick={() => void (playbackIdle ? startSelectedPlayback() : toggleGlobalPlayback())}
           >
-            {globalPlaying ? '처음부터' : '재생'}
+            {playbackPaused ? '이어 재생' : playbackActive ? '일시정지' : '재생'}
           </button>
           <button
             className="composer-tool"
             data-testid="practice-stop-button"
-            disabled={!globalPlaying}
+            disabled={playbackIdle}
             type="button"
             onClick={stopGlobalPlayback}
           >
@@ -380,7 +423,7 @@ export function PracticePage() {
           </button>
           <button
             className="composer-tool composer-tool--text"
-            disabled={registeredTracks.length === 0 || globalPlaying || practiceControlsLocked}
+            disabled={registeredTracks.length === 0 || !playbackIdle || practiceControlsLocked}
             type="button"
             onClick={selectAllPlaybackTracks}
           >
@@ -389,7 +432,7 @@ export function PracticePage() {
           <label className="composer-metronome">
             <input
               checked={metronomeEnabled}
-              disabled={practiceControlsLocked}
+              disabled={practiceControlsLocked || !playbackIdle}
               type="checkbox"
               onChange={(event) => setMetronomeEnabled(event.target.checked)}
             />
@@ -399,7 +442,7 @@ export function PracticePage() {
             <button
               aria-pressed={playbackSource === 'audio'}
               className={playbackSource === 'audio' ? 'is-active' : ''}
-              disabled={globalPlaying || practiceControlsLocked}
+              disabled={!playbackIdle || practiceControlsLocked}
               type="button"
               onClick={() => changePlaybackSource('audio')}
             >
@@ -408,7 +451,7 @@ export function PracticePage() {
             <button
               aria-pressed={playbackSource === 'events'}
               className={playbackSource === 'events' ? 'is-active' : ''}
-              disabled={globalPlaying || practiceControlsLocked}
+              disabled={!playbackIdle || practiceControlsLocked}
               type="button"
               onClick={() => changePlaybackSource('events')}
             >
@@ -425,7 +468,7 @@ export function PracticePage() {
                 <input
                   checked={isRegistered && selectedPlaybackSlotIds.has(track.slot_id)}
                   data-testid={`practice-track-checkbox-${track.slot_id}`}
-                  disabled={!isRegistered || globalPlaying || practiceControlsLocked}
+                  disabled={!isRegistered || !playbackIdle || practiceControlsLocked}
                   type="checkbox"
                   onChange={() => togglePlaybackSelection(track.slot_id)}
                 />
@@ -481,6 +524,7 @@ export function PracticePage() {
 
         <PracticeWaterfallStage
           bpm={studio.bpm}
+          followPlayhead={playbackActive}
           maxSeconds={playbackTimeline?.maxSeconds ?? timelineBounds.maxSeconds}
           minSeconds={playbackTimeline?.minSeconds ?? timelineBounds.minSeconds}
           playheadSeconds={playheadSeconds}
@@ -489,7 +533,7 @@ export function PracticePage() {
         />
 
         <footer className="composer-statusbar">
-          <span>{globalPlaying ? '재생 중' : '준비 완료'}</span>
+          <span>{playbackPaused ? '일시정지' : playbackActive ? '재생 중' : '준비 완료'}</span>
           <span>{selectedTrackCount}/{studio.tracks.length} 트랙</span>
           <span>{playbackSource === 'audio' ? '원음 우선 재생' : '연주음만 재생'}</span>
           <span>
@@ -514,6 +558,19 @@ export function PracticePage() {
         onToggleReference={toggleScoreReference}
         onToggleReferencePlayback={toggleScoreReferencePlayback}
       />
+
+      {pendingScoreRecording ? (
+        <PendingRecordingDialog
+          busy={actionBusy}
+          description="아직 채점을 시작하지 않았습니다. 들어보고 채점을 시작하거나 삭제하세요."
+          eyebrow="채점 녹음 확인"
+          registerLabel="채점 시작"
+          recording={pendingScoreRecording}
+          title={`${formatTrackName(pendingScoreRecording.trackName)} 채점 녹음`}
+          onDiscard={handleDiscardPendingScoreRecording}
+          onRegister={() => void handleStartPendingScoreRecording()}
+        />
+      ) : null}
     </main>
   )
 }

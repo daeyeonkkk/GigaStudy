@@ -140,6 +140,7 @@ export function StudioPage() {
     openPlaybackPicker,
     playbackPickerOpen,
     playbackSource,
+    playbackTransportState,
     playbackTimeline,
     playingSlots,
     playheadSeconds,
@@ -317,17 +318,19 @@ export function StudioPage() {
   }, [activeExtractionJobs, studio])
   const recordingInteractionLocked =
     recordingSetup !== null || recordingSlotId !== null || trackCountIn !== null || pendingTrackRecording !== null
-  const playbackInteractionLocked = globalPlaying || playingSlots.size > 0
+  const playbackInteractionLocked = playbackTransportState !== 'idle' || playingSlots.size > 0
   const actionBusy = actionState.phase === 'busy'
   const arrangementEditDisabled =
     actionBusy || recordingInteractionLocked || playbackInteractionLocked
   const trackVolumeDisabled = actionBusy || recordingInteractionLocked
   const arrangementEditDisabledReason = actionBusy
     ? '현재 작업이 끝난 뒤 편집할 수 있습니다.'
-    : recordingInteractionLocked
+        : recordingInteractionLocked
         ? '녹음 작업이 진행 중입니다. 녹음을 저장하거나 폐기한 뒤 편집할 수 있습니다.'
         : playbackInteractionLocked
-          ? '재생 중에는 편집을 잠시 멈춥니다. 정지 후 다시 시도해 주세요.'
+          ? playbackTransportState === 'paused'
+            ? '일시정지 중에는 편집을 잠시 멈춥니다. 정지 후 다시 시도해 주세요.'
+            : '재생 중에는 편집을 잠시 멈춥니다. 정지 후 다시 시도해 주세요.'
           : null
   const transportDisabled = actionBusy || recordingInteractionLocked
   const transportDisabledReason = actionBusy
@@ -444,13 +447,12 @@ export function StudioPage() {
   return (
     <main className="app-shell studio-page">
       <section
-        className={`composer-window ${playbackPickerOpen || globalPlaying ? 'composer-window--playback-panel' : ''}`}
+        className={`composer-window ${playbackPickerOpen || playbackTransportState !== 'idle' ? 'composer-window--playback-panel' : ''}`}
         aria-label="GigaStudy 스튜디오"
       >
         <StudioToolbar
           actionState={actionState}
           bpm={studio.bpm}
-          globalPlaying={globalPlaying}
           metronomeEnabled={metronomeEnabled}
           playbackPickerOpen={playbackPickerOpen}
           playbackRange={
@@ -459,6 +461,7 @@ export function StudioPage() {
               : null
           }
           playbackSource={playbackSource}
+          playbackTransportState={playbackTransportState}
           playheadSeconds={playheadSeconds}
           registeredTrackCount={registeredTracks.length}
           registeredTracks={registeredTracks}
@@ -502,6 +505,7 @@ export function StudioPage() {
               focusedRegionId={focusedRegionId}
               playingSlots={playingSlots}
               playheadSeconds={playheadSeconds}
+              followPlayhead={playbackTransportState === 'playing'}
               arrangementRegions={studio.regions}
               activeJobSlotIds={activeJobSlotIds}
               editDisabled={arrangementEditDisabled}
@@ -568,7 +572,13 @@ export function StudioPage() {
         </section>
 
         <footer className="composer-statusbar">
-          <span>{globalPlaying || playingSlots.size > 0 ? '재생 중' : '준비 완료'}</span>
+          <span>
+            {playbackTransportState === 'paused'
+              ? '일시정지'
+              : playbackTransportState === 'playing' || playingSlots.size > 0
+                ? '재생 중'
+                : '준비 완료'}
+          </span>
           <span>1마디</span>
           <span>
             {playheadSeconds === null ? '0:00' : formatDurationSeconds(playheadSeconds)} /{' '}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
@@ -30,9 +30,11 @@ import { getGridSeconds } from './TrackBoardEditorGrid'
 import {
   getBeatUnitWidthPixels,
   getDurationPercent,
+  getFollowScrollLeft,
   getMeasureStarts,
   getRegionHitAreaStyle,
   getRegionLaneStyle,
+  getTimelinePixelForSeconds,
   getTimelineWidthPixels,
   getTimelinePercent,
 } from './TrackBoardTimelineLayout'
@@ -72,6 +74,7 @@ type TrackBoardProps = {
   extractionJobs: TrackExtractionJob[]
   playingSlots: Set<number>
   playheadSeconds: number | null
+  followPlayhead?: boolean
   focusedEventId?: string | null
   focusedRegionId?: string | null
   arrangementRegions: ArrangementRegion[]
@@ -260,6 +263,7 @@ export function TrackBoard({
   extractionJobs,
   playingSlots,
   playheadSeconds,
+  followPlayhead = false,
   focusedEventId,
   focusedRegionId,
   arrangementRegions,
@@ -333,6 +337,7 @@ export function TrackBoard({
     '--timeline-width': `${timelineWidthPixels}px`,
   } as CSSProperties
   const gridSeconds = getGridSeconds(bpm)
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
@@ -361,6 +366,28 @@ export function TrackBoard({
     : null
   const canOpenSelectedRegionEditor = Boolean(selectedRegion && !isEditorMode && onOpenRegionEditor)
 
+  useEffect(() => {
+    if (!followPlayhead || playheadSeconds === null) {
+      return
+    }
+    const scrollElement = timelineScrollRef.current
+    if (!scrollElement) {
+      return
+    }
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const playheadPixels = getTimelinePixelForSeconds(playheadSeconds, timelineBounds, bpm)
+      const nextScrollLeft = getFollowScrollLeft({
+        playheadPixels,
+        scrollWidth: scrollElement.scrollWidth,
+        viewportWidth: scrollElement.clientWidth,
+      })
+      if (Math.abs(scrollElement.scrollLeft - nextScrollLeft) > 2) {
+        scrollElement.scrollLeft = nextScrollLeft
+      }
+    })
+    return () => window.cancelAnimationFrame(animationFrameId)
+  }, [bpm, followPlayhead, playheadSeconds, timelineBounds])
+
   return (
     <section className={`studio-tracks studio-tracks--${mode}`} aria-label={isEditorMode ? '구간 편집기' : '6트랙 스튜디오'}>
       <div className="studio-tracks__header">
@@ -372,7 +399,7 @@ export function TrackBoard({
         </div>
       </div>
 
-      <div className="track-timeline-scroll" style={timelineStyle}>
+      <div className="track-timeline-scroll" ref={timelineScrollRef} style={timelineStyle}>
         <div className="arrangement-ruler" aria-hidden="true">
           {measureStarts.map((measure) => (
             <span

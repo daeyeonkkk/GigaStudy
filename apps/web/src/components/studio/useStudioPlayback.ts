@@ -56,6 +56,16 @@ type PlaybackStartOptions = {
   startSeconds?: number
 }
 
+export type PlaybackTransportState = 'idle' | 'paused' | 'playing'
+
+type PausedPlaybackSnapshot = {
+  includeMetronome: boolean
+  route: PlaybackRoute
+  scope: 'global' | 'track'
+  slotIds: number[]
+  startSeconds: number
+}
+
 type UseStudioPlaybackArgs = {
   metronomeEnabled: boolean
   registeredSlotIds: number[]
@@ -66,6 +76,10 @@ type UseStudioPlaybackArgs = {
 }
 
 const STABLE_GUIDE_TRACK_EVENT_THRESHOLD = 48
+
+export function isPauseablePlaybackRoute(route: PlaybackRoute): boolean {
+  return route !== 'recording' && route !== 'scoring'
+}
 
 export function useStudioPlayback({
   metronomeEnabled,
@@ -81,19 +95,24 @@ export function useStudioPlayback({
   const [syncStepSeconds, setSyncStepSeconds] = useState(DEFAULT_SYNC_STEP_SECONDS)
   const [globalPlaying, setGlobalPlaying] = useState(false)
   const [playingSlots, setPlayingSlots] = useState<Set<number>>(() => new Set())
+  const [playbackTransportState, setPlaybackTransportState] = useState<PlaybackTransportState>('idle')
+  const [pausedPlayback, setPausedPlayback] = useState<PausedPlaybackSnapshot | null>(null)
   const [playbackTimeline, setPlaybackTimeline] = useState<PlaybackTimeline | null>(null)
   const [playheadSeconds, setPlayheadSeconds] = useState<number | null>(null)
   const playbackSessionRef = useRef<PlaybackSession | null>(null)
   const playbackTrackGainsRef = useRef<Map<number, GainNode>>(new Map())
+  const activePlaybackSnapshotRef = useRef<PausedPlaybackSnapshot | null>(null)
   const playbackRunIdRef = useRef(0)
   const stopPlaybackSessionRef = useRef<() => void>(() => undefined)
 
-  function disposeCurrentPlaybackSession() {
+  function disposeCurrentPlaybackSession({ clearPlayhead = true }: { clearPlayhead?: boolean } = {}) {
     disposePlaybackSession(playbackSessionRef.current)
     playbackSessionRef.current = null
     playbackTrackGainsRef.current = new Map()
     setPlaybackTimeline(null)
-    setPlayheadSeconds(null)
+    if (clearPlayhead) {
+      setPlayheadSeconds(null)
+    }
   }
 
   function clearPlaybackIndicators() {
@@ -101,9 +120,28 @@ export function useStudioPlayback({
     setPlayingSlots(new Set())
   }
 
+  function getCurrentPlayheadSeconds(timeline = playbackTimeline): number | null {
+    if (!timeline) {
+      return playheadSeconds
+    }
+    const elapsedSeconds =
+      timeline.audioContext &&
+      timeline.audioContext.state !== 'closed' &&
+      timeline.audioStartTime !== undefined
+        ? Math.max(0, timeline.audioContext.currentTime - timeline.audioStartTime)
+        : Math.max(0, (performance.now() - timeline.startedAtMs) / 1000)
+    return Math.max(
+      timeline.minSeconds,
+      Math.min(timeline.maxSeconds, timeline.startSeconds + elapsedSeconds),
+    )
+  }
+
   function stopPlaybackSession() {
     playbackRunIdRef.current += 1
     disposeCurrentPlaybackSession()
+    activePlaybackSnapshotRef.current = null
+    setPausedPlayback(null)
+    setPlaybackTransportState('idle')
     clearPlaybackIndicators()
   }
 
@@ -212,6 +250,7 @@ export function useStudioPlayback({
       ...playableTracks.map((track) => track.sync_offset_seconds),
     )
     const startSeconds = Math.max(minTimelineSeconds, options.startSeconds ?? minTimelineSeconds)
+    const playbackRoute = options.route ?? 'studio'
     const needsAudioContext = audioTracks.length > 0 || eventTracks.length > 0 || includeMetronome
     let context: AudioContext | null = null
     let timelineEndSeconds = Math.max(startSeconds, minTimelineSeconds + 0.25)
@@ -453,7 +492,7 @@ export function useStudioPlayback({
             options.onStartScheduled?.(scheduledStartAtMs)
           }
         },
-        route: options.route ?? 'studio',
+        route: playbackRoute,
         scheduledStartAtMs: options.scheduledStartAtMs,
         scheduledStartLeadMs: options.scheduledStartLeadMs,
         startSeconds,
@@ -479,12 +518,30 @@ export function useStudioPlayback({
         playbackTrackGainsRef.current = new Map()
         setPlaybackTimeline(null)
         setPlayheadSeconds(null)
+        activePlaybackSnapshotRef.current = null
+        setPausedPlayback(null)
+        setPlaybackTransportState('idle')
         clearPlaybackIndicators()
       }, Math.ceil(Math.max(0, engineResult.scheduledStartAtMs - performance.now()) + sessionDurationSeconds * 1000))
 
       playbackSession.timeoutIds.push(clearUiTimeoutId)
       playbackSessionRef.current = playbackSession
       playbackTrackGainsRef.current = trackVolumeGains
+      if (isPauseablePlaybackRoute(playbackRoute)) {
+        const slotIds = playableTracks.map((track) => track.slot_id)
+        const activeSnapshot = {
+          includeMetronome,
+          route: playbackRoute,
+          scope: 'global' as const,
+          slotIds,
+          startSeconds,
+        }
+        activePlaybackSnapshotRef.current = activeSnapshot
+        setPausedPlayback(null)
+        setPlaybackTransportState('playing')
+      } else {
+        activePlaybackSnapshotRef.current = null
+      }
       setPlaybackTimeline({
         audioContext: engineResult.session.context,
         audioStartTime: engineResult.scheduledStartTime,
@@ -550,7 +607,75 @@ export function useStudioPlayback({
     )
   }
 
+  function pausePlaybackSession() {
+    const activeSnapshot = activePlaybackSnapshotRef.current
+    if (!activeSnapshot || !isPauseablePlaybackRoute(activeSnapshot.route)) {
+      stopPlaybackSession()
+      return
+    }
+    const pausedAtSeconds = getCurrentPlayheadSeconds()
+    if (pausedAtSeconds === null) {
+      stopPlaybackSession()
+      return
+    }
+    playbackRunIdRef.current += 1
+    disposeCurrentPlaybackSession({ clearPlayhead: false })
+    const pausedSnapshot = {
+      ...activeSnapshot,
+      startSeconds: pausedAtSeconds,
+    }
+    activePlaybackSnapshotRef.current = pausedSnapshot
+    setPausedPlayback(pausedSnapshot)
+    setPlaybackTransportState('paused')
+    setGlobalPlaying(false)
+    setPlayheadSeconds(pausedAtSeconds)
+  }
+
+  async function resumePausedPlayback() {
+    const pausedSnapshot = pausedPlayback
+    if (!studio || !pausedSnapshot) {
+      return false
+    }
+    const tracksToResume = studio.tracks.filter(
+      (track) => track.status === 'registered' && pausedSnapshot.slotIds.includes(track.slot_id),
+    )
+    if (tracksToResume.length === 0) {
+      stopPlaybackSession()
+      setActionState({ phase: 'error', message: '이어 재생할 등록 트랙이 없습니다.' })
+      return false
+    }
+    setActionState({
+      phase: 'busy',
+      message: getPlaybackPreparationMessage(
+        tracksToResume,
+        pausedSnapshot.includeMetronome,
+        playbackSource,
+        getPlaybackRegionsBySlot(studio.regions),
+      ),
+    })
+    const resumed = await startPlaybackSession(tracksToResume, pausedSnapshot.includeMetronome, {
+      route: pausedSnapshot.route,
+      startSeconds: pausedSnapshot.startSeconds,
+    })
+    if (resumed) {
+      if (activePlaybackSnapshotRef.current) {
+        activePlaybackSnapshotRef.current = {
+          ...activePlaybackSnapshotRef.current,
+          scope: pausedSnapshot.scope,
+        }
+      }
+      setPlayingSlots(new Set(tracksToResume.map((track) => track.slot_id)))
+      setGlobalPlaying(pausedSnapshot.scope === 'global')
+      setActionState({ phase: 'success', message: '이어 재생합니다.' })
+    }
+    return resumed
+  }
+
   async function startSelectedPlayback(startSeconds?: number) {
+    if (startSeconds === undefined && playbackTransportState === 'paused' && pausedPlayback) {
+      await resumePausedPlayback()
+      return
+    }
     const selectedTracks = getSelectedPlaybackTracks()
     if (selectedTracks.length === 0) {
       setPlaybackPickerOpen(true)
@@ -568,6 +693,12 @@ export function useStudioPlayback({
       ),
     })
     if (await startPlaybackSession(selectedTracks, metronomeEnabled, { startSeconds, route: 'studio' })) {
+      if (activePlaybackSnapshotRef.current) {
+        activePlaybackSnapshotRef.current = {
+          ...activePlaybackSnapshotRef.current,
+          scope: 'global',
+        }
+      }
       setPlaybackPickerOpen(true)
       setPlayingSlots(new Set(selectedTracks.map((track) => track.slot_id)))
       setGlobalPlaying(true)
@@ -582,6 +713,17 @@ export function useStudioPlayback({
   }
 
   async function toggleGlobalPlayback() {
+    if (playbackTransportState === 'playing') {
+      pausePlaybackSession()
+      setActionState({ phase: 'success', message: '재생을 일시정지했습니다.' })
+      return
+    }
+
+    if (playbackTransportState === 'paused' && pausedPlayback) {
+      await resumePausedPlayback()
+      return
+    }
+
     if (globalPlaying) {
       stopPlaybackSession()
       setActionState({ phase: 'success', message: '선택 재생을 멈췄습니다.' })
@@ -610,6 +752,12 @@ export function useStudioPlayback({
       ),
     })
     if (await startPlaybackSession(selectedTracks, metronomeEnabled, { route: 'studio' })) {
+      if (activePlaybackSnapshotRef.current) {
+        activePlaybackSnapshotRef.current = {
+          ...activePlaybackSnapshotRef.current,
+          scope: 'global',
+        }
+      }
       setPlayingSlots(new Set(selectedTracks.map((track) => track.slot_id)))
       setGlobalPlaying(true)
       setActionState({
@@ -659,6 +807,25 @@ export function useStudioPlayback({
       return
     }
 
+    if (
+      playbackTransportState === 'playing' &&
+      activePlaybackSnapshotRef.current?.scope === 'track' &&
+      activePlaybackSnapshotRef.current.slotIds.includes(track.slot_id)
+    ) {
+      pausePlaybackSession()
+      setActionState({ phase: 'success', message: `${formatTrackName(track.name)} 재생을 일시정지했습니다.` })
+      return
+    }
+
+    if (
+      playbackTransportState === 'paused' &&
+      pausedPlayback?.scope === 'track' &&
+      pausedPlayback.slotIds.includes(track.slot_id)
+    ) {
+      await resumePausedPlayback()
+      return
+    }
+
     if (playingSlots.has(track.slot_id)) {
       stopPlaybackSession()
       setActionState({ phase: 'success', message: `${formatTrackName(track.name)} 재생을 멈췄습니다.` })
@@ -670,6 +837,12 @@ export function useStudioPlayback({
       message: getPlaybackPreparationMessage([track], metronomeEnabled, playbackSource, getPlaybackRegionsBySlot(studio?.regions)),
     })
     if (await startPlaybackSession([track], metronomeEnabled, { route: 'studio' })) {
+      if (activePlaybackSnapshotRef.current) {
+        activePlaybackSnapshotRef.current = {
+          ...activePlaybackSnapshotRef.current,
+          scope: 'track',
+        }
+      }
       setGlobalPlaying(false)
       setPlayingSlots(new Set([track.slot_id]))
       setActionState({
@@ -726,6 +899,7 @@ export function useStudioPlayback({
     openPlaybackPicker,
     playbackPickerOpen,
     playbackSource,
+    playbackTransportState,
     playbackTimeline,
     playingSlots,
     playheadSeconds,

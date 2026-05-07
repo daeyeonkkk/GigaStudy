@@ -4,16 +4,33 @@ import { formatDurationSeconds, formatTrackName } from '../../lib/studio'
 import './PendingRecordingDialog.css'
 import type { PendingTrackRecording } from './useStudioRecording'
 
+type PendingRecordingReview = Pick<
+  PendingTrackRecording,
+  'audioDataUrl' | 'durationSeconds' | 'expiresAtMs' | 'trackName'
+>
+
 type PendingRecordingDialogProps = {
   busy: boolean
-  recording: PendingTrackRecording
+  discardLabel?: string
+  description?: string
+  eyebrow?: string
+  recording: PendingRecordingReview
+  registerLabel?: string
+  retentionLabel?: string
+  title?: string
   onDiscard: () => void
   onRegister: () => void
 }
 
 export function PendingRecordingDialog({
   busy,
+  discardLabel = '삭제',
+  description,
+  eyebrow = '녹음 확인',
+  registerLabel = '트랙 등록',
   recording,
+  retentionLabel,
+  title,
   onDiscard,
   onRegister,
 }: PendingRecordingDialogProps) {
@@ -35,11 +52,11 @@ export function PendingRecordingDialog({
       role="dialog"
     >
       <div className="recording-review-panel">
-        <p className="eyebrow">녹음 확인</p>
-        <h2 id="pending-recording-title">{trackLabel} 녹음</h2>
-        <p>아직 트랙에 등록되지 않았습니다. 들어본 뒤 트랙에 등록하거나 삭제하세요.</p>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2 id="pending-recording-title">{title ?? `${trackLabel} 녹음`}</h2>
+        <p>{description ?? '아직 트랙에 등록하지 않았습니다. 들어보고 트랙에 등록하거나 삭제하세요.'}</p>
         <p className="recording-review-panel__retention">
-          임시 녹음은 {formatRemainingTime(remainingMs)} 뒤 자동으로 비워집니다.
+          {retentionLabel ?? `임시 녹음은 ${formatRemainingTime(remainingMs)} 뒤 자동으로 비워집니다.`}
         </p>
         <dl>
           <div>
@@ -62,7 +79,7 @@ export function PendingRecordingDialog({
             type="button"
             onClick={onDiscard}
           >
-            삭제
+            {discardLabel}
           </button>
           <button
             className="app-button"
@@ -71,7 +88,7 @@ export function PendingRecordingDialog({
             type="button"
             onClick={onRegister}
           >
-            트랙 등록
+            {registerLabel}
           </button>
         </div>
       </div>

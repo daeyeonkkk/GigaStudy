@@ -416,17 +416,22 @@ flowchart TD
 2. Reference tracks and metronome are selected in the scoring drawer; reference
    selection is scoring input, while audible reference playback is practice UX.
 3. Browser records a take while selected audible references play on the shared
-   scheduled timeline.
-4. Browser submits recorded audio by temporary direct upload when available, or
-   falls back to base64 JSON; it may also submit `performance_events`.
-5. API stores a scoring job and returns quickly. The engine queue converts
+   scheduled timeline. Scoring reference playback and microphone capture are
+   cancel/stop flows, not pause/resume flows.
+4. When recording stops, the take stays in a pending review dialog until the
+   user deletes it or starts scoring. The pending take is browser-local and
+   expires on the same 30-minute temporary retention window as track recording.
+5. After the user starts scoring, the browser submits recorded audio by
+   temporary direct upload when available, or falls back to base64 JSON; it may
+   also submit `performance_events`.
+6. API stores a scoring job and returns quickly. The engine queue converts
    submitted performance events or uploaded audio to the internal pitch-event
    adapter.
-6. Scoring compares those events with registered arrangement regions, preserving
+7. Scoring compares those events with registered arrangement regions, preserving
    public answer-region focus IDs through the internal adapter boundary.
-7. Report summaries appear in the studio/practice feed after activity polling;
+8. Report summaries appear in the studio/practice feed after activity polling;
    the report detail endpoint returns issue/evidence detail on demand.
-8. Report detail links can reopen the region editor with query parameters that
+9. Report detail links can reopen the region editor with query parameters that
    focus the matching region and piano-roll event.
 
 ### AI Generation

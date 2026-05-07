@@ -334,6 +334,15 @@ the same change.
   selected tracks.
 - Playhead movement should be smooth and tied to the same scheduled timeline as
   audio.
+- General playback may support pause/resume by stopping the active browser
+  playback session, preserving the current shared-timeline position, and
+  rescheduling from that position. Track recording reference playback and
+  scoring reference playback do not pause; those take flows use cancel/stop so
+  microphone capture and the shared downbeat stay unambiguous.
+- During general playback, horizontally scrollable studio and practice
+  timelines should follow the playhead and keep it close to the left side of
+  the visible timeline. This is a viewport behavior only; it must not change
+  event timing, sync, or playback scheduling.
 
 ## UX
 

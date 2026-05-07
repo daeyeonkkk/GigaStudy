@@ -34,6 +34,31 @@ export function getTimelineWidthPixels(
   return Math.max(minimumPixels, durationBeats * BEAT_UNIT_WIDTH_PIXELS)
 }
 
+export function getTimelinePixelForSeconds(
+  seconds: number,
+  timelineBounds: TimelineBounds,
+  bpm: number,
+): number {
+  const timelineWidthPixels = getTimelineWidthPixels(timelineBounds.durationSeconds, bpm, 0)
+  return (getTimelinePercent(seconds, timelineBounds) / 100) * timelineWidthPixels
+}
+
+export function getFollowScrollLeft({
+  leadPixels = 80,
+  playheadPixels,
+  scrollWidth,
+  viewportWidth,
+}: {
+  leadPixels?: number
+  playheadPixels: number
+  scrollWidth: number
+  viewportWidth: number
+}): number {
+  const maxScrollLeft = Math.max(0, scrollWidth - viewportWidth)
+  const effectiveLeadPixels = Math.max(0, Math.min(leadPixels, viewportWidth * 0.4))
+  return Math.max(0, Math.min(maxScrollLeft, playheadPixels - effectiveLeadPixels))
+}
+
 export function getMeasureStarts(
   timelineBounds: TimelineBounds,
   bpm: number,

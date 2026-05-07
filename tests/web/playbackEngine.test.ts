@@ -5,6 +5,7 @@ import {
   getWindowedPlaybackEvents,
   selectPlaybackSchedulerProfile,
 } from '../../apps/web/src/lib/studio'
+import { isPauseablePlaybackRoute } from '../../apps/web/src/components/studio/useStudioPlayback'
 
 describe('playback engine scheduler profiles', () => {
   it('selects ultraStable for six dense long tracks', () => {
@@ -39,6 +40,13 @@ describe('playback engine scheduler profiles', () => {
         trackCount: 1,
       }).id,
     ).toBe('stable')
+  })
+
+  it('allows pause only for general playback routes', () => {
+    expect(isPauseablePlaybackRoute('studio')).toBe(true)
+    expect(isPauseablePlaybackRoute('practice')).toBe(true)
+    expect(isPauseablePlaybackRoute('recording')).toBe(false)
+    expect(isPauseablePlaybackRoute('scoring')).toBe(false)
   })
 
   it('schedules only the warm-up window for a long dense event list', () => {

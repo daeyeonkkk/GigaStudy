@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getBeatUnitWidthPixels,
+  getFollowScrollLeft,
   getMeasureWidthPixels,
+  getTimelinePixelForSeconds,
   getTimelineWidthPixels,
 } from '../../apps/web/src/components/studio/TrackBoardTimelineLayout'
 
@@ -29,5 +31,38 @@ describe('timeline layout scale', () => {
     expect(sixteenthWidthPixels).toBe(12.5)
     expect(measureWidthPixels).toBe(75)
     expect(sixteenthWidthPixels * 6).toBe(measureWidthPixels)
+  })
+
+  it('computes a clamped follow-scroll position for the playhead', () => {
+    const beatSeconds = 60 / 120
+    const bounds = {
+      durationSeconds: beatSeconds * 32,
+      maxSeconds: beatSeconds * 32,
+      minSeconds: 0,
+    }
+    const playheadPixels = getTimelinePixelForSeconds(beatSeconds * 12, bounds, 120)
+
+    expect(playheadPixels).toBeCloseTo(600)
+    expect(
+      getFollowScrollLeft({
+        playheadPixels,
+        scrollWidth: 1600,
+        viewportWidth: 500,
+      }),
+    ).toBeCloseTo(520)
+    expect(
+      getFollowScrollLeft({
+        playheadPixels: 30,
+        scrollWidth: 1600,
+        viewportWidth: 500,
+      }),
+    ).toBe(0)
+    expect(
+      getFollowScrollLeft({
+        playheadPixels: 2000,
+        scrollWidth: 1600,
+        viewportWidth: 500,
+      }),
+    ).toBe(1100)
   })
 })

@@ -6,15 +6,16 @@ import type { TrackSlot } from '../../types/studio'
 import type { StudioActionState } from './studioActionState'
 import { StudioNoticeLine } from './StudioNoticeLine'
 import { StudioPurposeNav } from './StudioPurposeNav'
+import type { PlaybackTransportState } from './useStudioPlayback'
 
 type StudioToolbarProps = {
   actionState: StudioActionState
   bpm: number
-  globalPlaying: boolean
   metronomeEnabled: boolean
   playbackPickerOpen: boolean
   playbackRange: { maxSeconds: number; minSeconds: number } | null
   playbackSource: PlaybackSourceMode
+  playbackTransportState: PlaybackTransportState
   playheadSeconds: number | null
   registeredTrackCount: number
   registeredTracks: TrackSlot[]
@@ -51,11 +52,11 @@ function formatStepInput(seconds: number): string {
 export function StudioToolbar({
   actionState,
   bpm,
-  globalPlaying,
   metronomeEnabled,
   playbackPickerOpen,
   playbackRange,
   playbackSource,
+  playbackTransportState,
   playheadSeconds,
   registeredTrackCount,
   registeredTracks,
@@ -85,10 +86,10 @@ export function StudioToolbar({
   }, [syncStepSeconds])
 
   useEffect(() => {
-    if (!globalPlaying) {
+    if (playbackTransportState === 'idle') {
       setSeekDraftSeconds(null)
     }
-  }, [globalPlaying])
+  }, [playbackTransportState])
 
   const selectedTrackCount = registeredTracks.filter((track) =>
     selectedPlaybackSlotIds.has(track.slot_id),
@@ -103,7 +104,11 @@ export function StudioToolbar({
       )
     : 0
   const actionBusy = actionState.phase === 'busy'
-  const editControlsDisabled = actionBusy || transportDisabled || globalPlaying
+  const playbackActive = playbackTransportState === 'playing'
+  const playbackPaused = playbackTransportState === 'paused'
+  const playbackIdle = playbackTransportState === 'idle'
+  const editControlsDisabled = actionBusy || transportDisabled || !playbackIdle
+  const mainPlayLabel = playbackPaused ? '이어 재생' : playbackActive ? '일시정지' : '재생'
 
   function updateSyncStep(rawValue: string) {
     setSyncStepInput(rawValue)
@@ -148,21 +153,21 @@ export function StudioToolbar({
 
       <div className="composer-toolbar" aria-label="전체 트랙 재생 제어">
         <button
-          aria-label={globalPlaying ? '선택 재생 일시정지' : '트랙 선택 재생'}
+          aria-label={playbackPaused ? '선택 재생 이어 재생' : playbackActive ? '선택 재생 일시정지' : '트랙 선택 재생'}
           className="composer-tool composer-tool--primary"
           data-testid="global-play-button"
-          disabled={!globalPlaying && (transportDisabled || registeredTrackCount === 0)}
-          title={!globalPlaying ? transportDisabledReason ?? undefined : undefined}
+          disabled={playbackIdle && (transportDisabled || registeredTrackCount === 0)}
+          title={playbackIdle ? transportDisabledReason ?? undefined : undefined}
           type="button"
-          onClick={globalPlaying ? onToggleGlobalPlayback : onOpenPlaybackPicker}
+          onClick={playbackIdle ? onOpenPlaybackPicker : onToggleGlobalPlayback}
         >
-          <span aria-hidden="true">{globalPlaying ? '일시정지' : '재생'}</span>
+          <span aria-hidden="true">{mainPlayLabel}</span>
         </button>
         <button
           aria-label="전체 중지"
           className="composer-tool"
           data-testid="global-stop-button"
-          disabled={!globalPlaying}
+          disabled={playbackIdle}
           type="button"
           onClick={onStopGlobalPlayback}
         >
@@ -213,7 +218,7 @@ export function StudioToolbar({
         <label className="composer-metronome">
           <input
             checked={metronomeEnabled}
-            disabled={actionBusy}
+            disabled={actionBusy || !playbackIdle}
             type="checkbox"
             onChange={(event) => onMetronomeChange(event.target.checked)}
           />
@@ -224,7 +229,7 @@ export function StudioToolbar({
             aria-pressed={playbackSource === 'audio'}
             className={playbackSource === 'audio' ? 'is-active' : ''}
             data-testid="playback-source-audio"
-            disabled={globalPlaying || transportDisabled}
+            disabled={!playbackIdle || transportDisabled}
             type="button"
             onClick={() => onPlaybackSourceChange('audio')}
           >
@@ -234,7 +239,7 @@ export function StudioToolbar({
             aria-pressed={playbackSource === 'events'}
             className={playbackSource === 'events' ? 'is-active' : ''}
             data-testid="playback-source-events"
-            disabled={globalPlaying || transportDisabled}
+            disabled={!playbackIdle || transportDisabled}
             type="button"
             onClick={() => onPlaybackSourceChange('events')}
           >
@@ -243,7 +248,7 @@ export function StudioToolbar({
         </div>
       </div>
 
-      {(playbackPickerOpen || globalPlaying) && (
+      {(playbackPickerOpen || !playbackIdle) && (
         <section className="composer-playback-panel" data-testid="selected-playback-panel">
           <div className="composer-track-picker" aria-label="동시 재생 트랙 선택">
             {registeredTracks.length === 0 ? (
@@ -254,7 +259,7 @@ export function StudioToolbar({
                   <input
                     checked={selectedPlaybackSlotIds.has(track.slot_id)}
                     data-testid={`playback-track-checkbox-${track.slot_id}`}
-                    disabled={globalPlaying || transportDisabled}
+                    disabled={!playbackIdle || transportDisabled}
                     type="checkbox"
                     onChange={() => onTogglePlaybackSelection(track.slot_id)}
                   />
@@ -266,7 +271,7 @@ export function StudioToolbar({
           <div className="composer-playback-actions">
             <button
               className="composer-mini-button"
-              disabled={registeredTracks.length === 0 || globalPlaying || transportDisabled}
+              disabled={registeredTracks.length === 0 || !playbackIdle || transportDisabled}
               type="button"
               onClick={onSelectAllPlaybackTracks}
             >
@@ -275,11 +280,11 @@ export function StudioToolbar({
             <button
               className="composer-mini-button composer-mini-button--primary"
               data-testid="selected-play-button"
-              disabled={selectedTrackCount === 0 || actionBusy || transportDisabled}
+              disabled={selectedTrackCount === 0 || actionBusy || (transportDisabled && playbackIdle)}
               type="button"
-              onClick={globalPlaying ? onToggleGlobalPlayback : onStartSelectedPlayback}
+              onClick={playbackIdle ? onStartSelectedPlayback : onToggleGlobalPlayback}
             >
-              {globalPlaying ? '일시정지' : '재생'}
+              {mainPlayLabel}
             </button>
           </div>
           {playbackRange ? (
@@ -288,7 +293,7 @@ export function StudioToolbar({
               <input
                 aria-label="재생 위치"
                 data-testid="selected-playback-seek"
-                disabled={!globalPlaying}
+                disabled={!playbackActive}
                 max={playbackRange.maxSeconds}
                 min={playbackRange.minSeconds}
                 step={STUDIO_TIME_PRECISION_SECONDS}

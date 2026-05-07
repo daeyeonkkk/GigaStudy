@@ -6,6 +6,7 @@ import { ReportFeed } from '../components/studio/ReportFeed'
 import { ScoringDrawer } from '../components/studio/ScoringDrawer'
 import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
+import { StudioNoticeLine } from '../components/studio/StudioNoticeLine'
 import {
   getEventMiniAriaLabel,
   getEventMiniLaneHeight,
@@ -130,19 +131,6 @@ function getPracticeLaneHeight(eventsByTrack: Map<number, WaterfallEvent[]>): nu
   return Math.max(70, ...trackHeights)
 }
 
-function PracticeStatus({ actionState }: { actionState: StudioActionState }) {
-  if (actionState.phase === 'idle') {
-    return null
-  }
-
-  return (
-    <section className="studio-status-line practice-status-line" aria-live="polite">
-      <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
-      <p>{actionState.message}</p>
-    </section>
-  )
-}
-
 function PracticeWaterfallStage({
   bpm,
   maxSeconds,
@@ -231,7 +219,17 @@ export function PracticePage() {
     registeredTracks,
     setStudio,
     studio,
-  } = useStudioResource(studioId, (message) => setActionState({ phase: 'error', message }), undefined, 'practice')
+  } = useStudioResource(
+    studioId,
+    (notice) =>
+      setActionState((current) =>
+        current.phase === 'busy' && notice.phase === 'warning'
+          ? { ...current, detail: notice.message }
+          : notice,
+      ),
+    (notice) => setActionState(notice),
+    'practice',
+  )
 
   const [metronomeEnabled, setMetronomeEnabled] = useState(true)
   const [selectedScoreTargetSlotId, setSelectedScoreTargetSlotId] = useState<number | null>(null)
@@ -479,7 +477,7 @@ export function PracticePage() {
           </button>
         </section>
 
-        <PracticeStatus actionState={actionState} />
+        <StudioNoticeLine className="practice-status-line" notice={actionState} />
 
         <PracticeWaterfallStage
           bpm={studio.bpm}

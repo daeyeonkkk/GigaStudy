@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   activeJobs,
+  getActivityFailureDelayMs,
   getActivityPollingDelayMs,
   shouldRefreshStudioFromActivity,
 } from '../../apps/web/src/components/studio/useStudioResource'
@@ -21,6 +22,7 @@ const baseJob: TrackExtractionJob = {
   method: 'voice_transcription',
   output_path: null,
   parse_all_parts: false,
+  progress: null,
   review_before_register: false,
   slot_id: 1,
   source_kind: 'audio',
@@ -66,5 +68,11 @@ describe('studio activity polling helpers', () => {
     expect(getActivityPollingDelayMs([baseJob], 4)).toBe(5000)
     expect(getActivityPollingDelayMs([{ ...baseJob, status: 'running' }], 8)).toBe(1200)
     expect(getActivityPollingDelayMs([{ ...baseJob, status: 'completed' }], 8)).toBe(0)
+  })
+
+  it('backs off failed activity checks without tight retry loops', () => {
+    expect(getActivityFailureDelayMs(1)).toBe(2500)
+    expect(getActivityFailureDelayMs(2)).toBe(5000)
+    expect(getActivityFailureDelayMs(3)).toBe(12000)
   })
 })

@@ -3,9 +3,53 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from gigastudy_api.api.schemas.studios import ExtractionJobStatus, SourceKind, Studio, TrackExtractionJob, TrackSlot
+from gigastudy_api.api.schemas.studios import (
+    ExtractionJobStatus,
+    JobProgress,
+    JobProgressStage,
+    SourceKind,
+    Studio,
+    TrackExtractionJob,
+    TrackSlot,
+)
 from gigastudy_api.services.engine_queue import EngineQueueJob
 from gigastudy_api.services.studio_documents import studio_has_active_track_material
+
+
+PROGRESS_STAGE_LABELS: dict[JobProgressStage, str] = {
+    "queued": "작업을 준비하고 있습니다.",
+    "preparing": "작업을 준비하고 있습니다.",
+    "reading_source": "파일을 읽고 있습니다.",
+    "analyzing": "내용을 분석하고 있습니다.",
+    "mapping_parts": "파트를 나누고 있습니다.",
+    "normalizing": "박자에 맞게 정리하고 있습니다.",
+    "registering": "트랙에 등록하고 있습니다.",
+    "reviewing": "검토할 후보를 준비하고 있습니다.",
+    "scoring": "연주를 기준 트랙과 맞춰보고 있습니다.",
+    "completed": "작업이 끝났습니다.",
+    "failed": "작업을 마치지 못했습니다.",
+}
+
+
+def build_job_progress(
+    stage: JobProgressStage,
+    *,
+    timestamp: str,
+    stage_label: str | None = None,
+    completed_units: int | None = None,
+    total_units: int | None = None,
+    unit_label: str | None = None,
+    estimated_seconds_remaining: int | None = None,
+) -> JobProgress:
+    return JobProgress(
+        stage=stage,
+        stage_label=stage_label or PROGRESS_STAGE_LABELS[stage],
+        completed_units=completed_units,
+        total_units=total_units,
+        unit_label=unit_label,
+        estimated_seconds_remaining=estimated_seconds_remaining,
+        updated_at=timestamp,
+    )
 
 
 def create_document_extraction_job(
@@ -35,6 +79,15 @@ def create_document_extraction_job(
         max_attempts=max_attempts,
         parse_all_parts=parse_all_parts,
         use_source_tempo=use_source_tempo,
+        progress=build_job_progress(
+            "preparing" if status == "tempo_review_required" else "queued",
+            timestamp=timestamp,
+            stage_label=(
+                "BPM과 박자표 확인을 기다리고 있습니다."
+                if status == "tempo_review_required"
+                else "악보 파일 분석을 준비하고 있습니다."
+            ),
+        ),
         diagnostics=diagnostics or {},
         created_at=timestamp,
         updated_at=timestamp,
@@ -67,6 +120,11 @@ def create_voice_extraction_job(
         review_before_register=review_before_register,
         allow_overwrite=allow_overwrite,
         audio_mime_type=audio_mime_type,
+        progress=build_job_progress(
+            "queued",
+            timestamp=timestamp,
+            stage_label="녹음파일 분석을 준비하고 있습니다.",
+        ),
         created_at=timestamp,
         updated_at=timestamp,
     )
@@ -91,6 +149,11 @@ def create_generation_job(
         message="AI generation queued.",
         input_path=None,
         max_attempts=max_attempts,
+        progress=build_job_progress(
+            "queued",
+            timestamp=timestamp,
+            stage_label="새 성부 생성을 준비하고 있습니다.",
+        ),
         diagnostics={"request": input_request},
         created_at=timestamp,
         updated_at=timestamp,
@@ -116,6 +179,11 @@ def create_scoring_job(
         message="Scoring queued.",
         input_path=input_request.get("performance_asset_path"),
         max_attempts=max_attempts,
+        progress=build_job_progress(
+            "queued",
+            timestamp=timestamp,
+            stage_label="채점 준비 중입니다.",
+        ),
         diagnostics={
             "request": input_request,
             "score_mode": input_request.get("score_mode", "answer"),
@@ -228,6 +296,7 @@ def reset_extraction_job_for_enqueue(
 ) -> None:
     job.attempt_count = 0
     job.max_attempts = max_attempts
+    job.progress = build_job_progress("queued", timestamp=timestamp)
     job.updated_at = timestamp
 
 
@@ -245,10 +314,32 @@ def mark_extraction_job_running(
         job.status = "running"
         if job.job_type == "generation":
             job.message = "AI generation running."
+            job.progress = build_job_progress(
+                "analyzing",
+                timestamp=timestamp,
+                stage_label="선택한 기준 트랙을 바탕으로 새 성부를 만드는 중입니다.",
+            )
         elif job.job_type == "scoring":
             job.message = "Scoring running."
+            job.progress = build_job_progress(
+                "scoring",
+                timestamp=timestamp,
+                stage_label="녹음한 연주를 기준 트랙과 맞춰보는 중입니다.",
+            )
+        elif job.job_type == "voice":
+            job.message = "Voice extraction running."
+            job.progress = build_job_progress(
+                "analyzing",
+                timestamp=timestamp,
+                stage_label="녹음파일에서 음을 찾고 있습니다.",
+            )
         else:
             job.message = "Full-score extraction running." if job.parse_all_parts else "Extraction running."
+            job.progress = build_job_progress(
+                "reading_source",
+                timestamp=timestamp,
+                stage_label="악보 파일을 읽고 파트를 나누는 중입니다.",
+            )
         if attempt_count is not None:
             job.attempt_count = attempt_count
         if max_attempts is not None:
@@ -270,6 +361,11 @@ def mark_extraction_job_failed(
             continue
         job.status = "failed"
         job.message = message
+        job.progress = build_job_progress(
+            "failed",
+            timestamp=timestamp,
+            stage_label="작업을 마치지 못했습니다.",
+        )
         job.updated_at = timestamp
         if job.job_type == "scoring":
             break
@@ -306,6 +402,7 @@ def mark_extraction_job_completed(
             continue
         job.status = "completed"
         job.output_path = output_path
+        job.progress = build_job_progress("completed", timestamp=timestamp)
         if method is not None:
             job.method = method
         job.updated_at = timestamp

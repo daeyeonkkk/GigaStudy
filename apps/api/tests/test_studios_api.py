@@ -1380,8 +1380,16 @@ def test_studio_activity_and_minimal_volume_response_are_lightweight(tmp_path: P
     )
     studio_id = create_response.json()["studio_id"]
     upload_musicxml_track(client, studio_id)
+    repository = studio_repository.get_studio_repository()
+
+    def fail_if_activity_recovers_jobs(*args, **kwargs):
+        raise AssertionError("activity must not recover or schedule jobs")
+
+    original_recover = repository._recover_existing_creation_jobs
+    monkeypatch.setattr(repository, "_recover_existing_creation_jobs", fail_if_activity_recovers_jobs)
 
     activity_response = client.get(f"/api/studios/{studio_id}/activity")
+    monkeypatch.setattr(repository, "_recover_existing_creation_jobs", original_recover)
 
     assert activity_response.status_code == 200
     activity_payload = activity_response.json()
@@ -1404,6 +1412,58 @@ def test_studio_activity_and_minimal_volume_response_are_lightweight(tmp_path: P
     assert volume_payload["affected_region_ids"] == ["track-1-region-1"]
     assert "regions" not in volume_payload
     assert client.get(f"/api/studios/{studio_id}").json()["tracks"][0]["volume_percent"] == 41
+
+
+def test_job_progress_uses_real_units_only(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Job progress",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+
+    score_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/score",
+        json={
+            "reference_slot_ids": [],
+            "include_metronome": True,
+            "performance_events": [
+                _performance_event_from_track_event(
+                    event_from_pitch(
+                        beat=1,
+                        duration_beats=1,
+                        bpm=120,
+                        source="voice",
+                        extraction_method="test",
+                        pitch_midi=60,
+                    )
+                )
+            ],
+        },
+    )
+    assert score_response.status_code == 200
+    scoring_job = next(job for job in score_response.json()["jobs"] if job["job_type"] == "scoring")
+    assert scoring_job["progress"]["stage"] == "queued"
+    assert scoring_job["progress"]["completed_units"] is None
+    assert scoring_job["progress"]["total_units"] is None
+
+    response = client.post(
+        f"/api/studios/{studio_id}/tracks/2/generate",
+        json={
+            "context_slot_ids": [1],
+            "review_before_register": True,
+        },
+    )
+    assert response.status_code == 200
+    generation_job = next(job for job in response.json()["jobs"] if job["job_type"] == "generation")
+    assert generation_job["progress"]["stage"] == "queued"
+    assert generation_job["progress"]["completed_units"] is None
+    assert generation_job["progress"]["total_units"] is None
 
 
 def test_region_and_piano_roll_mutation_api_uses_explicit_regions(tmp_path: Path, monkeypatch) -> None:

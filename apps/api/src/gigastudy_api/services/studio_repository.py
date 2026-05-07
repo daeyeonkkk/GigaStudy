@@ -62,6 +62,7 @@ from gigastudy_api.services.direct_upload_tokens import DirectUploadTokenCodec
 from gigastudy_api.services.studio_admin_commands import StudioAdminCommands
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_jobs import (
+    build_job_progress,
     clear_unmapped_document_placeholders,
     document_queue_payload,
     engine_queue_job_from_extraction,
@@ -481,30 +482,29 @@ class StudioRepository:
         self,
         studio_id: str,
         *,
-        background_tasks: BackgroundTasks | None = None,
         owner_token: str | None = None,
         enforce_owner: bool = False,
         admin_bypass: bool = False,
     ) -> Studio:
-        return self.get_studio(
-            studio_id,
-            background_tasks=background_tasks,
-            owner_token=owner_token,
-            enforce_owner=enforce_owner,
-            admin_bypass=admin_bypass,
-        )
+        with self._lock:
+            studio = self._load_studio(studio_id)
+        if studio is None:
+            raise HTTPException(status_code=404, detail="Studio not found.")
+        if not studio.is_active and not admin_bypass:
+            raise HTTPException(status_code=404, detail="Studio not found.")
+        if enforce_owner and not admin_bypass:
+            require_studio_access(studio, owner_token)
+        return studio
 
     def get_studio_activity_response(
         self,
         studio_id: str,
         *,
-        background_tasks: BackgroundTasks | None = None,
         owner_token: str | None = None,
         enforce_owner: bool = False,
         admin_bypass: bool = False,
     ) -> StudioActivityResponse:
-        with self._lock:
-            raw_payload = self._store.load_activity_raw(studio_id)
+        raw_payload = self._store.load_activity_raw(studio_id)
         if raw_payload is None:
             raise HTTPException(status_code=404, detail="Studio not found.")
         studio = Studio.model_validate(raw_payload)
@@ -512,8 +512,6 @@ class StudioRepository:
             raise HTTPException(status_code=404, detail="Studio not found.")
         if enforce_owner and not admin_bypass:
             require_studio_access(studio, owner_token)
-        if background_tasks is not None:
-            self._recover_existing_creation_jobs(studio, background_tasks)
         counts = raw_payload.get("_activity_counts", {}) if isinstance(raw_payload, dict) else {}
         return StudioActivityResponse(
             studio_id=studio.studio_id,
@@ -1325,6 +1323,7 @@ class StudioRepository:
         *,
         source_kind: SourceKind,
         source_label: str,
+        progress_job_id: str | None = None,
     ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
@@ -1336,7 +1335,25 @@ class StudioRepository:
                 mapped_events,
                 source_kind=source_kind,
             )
-            for slot_id in mapped_events:
+            total_slots = len(mapped_events)
+            progress_job = (
+                next((job for job in studio.jobs if job.job_id == progress_job_id), None)
+                if progress_job_id is not None
+                else None
+            )
+            if progress_job is not None and total_slots > 0:
+                progress_job.progress = build_job_progress(
+                    "registering",
+                    timestamp=timestamp,
+                    stage_label="트랙에 등록하고 있습니다.",
+                    completed_units=0,
+                    total_units=total_slots,
+                    unit_label="파트",
+                )
+                progress_job.updated_at = timestamp
+                studio.updated_at = timestamp
+                self._save_studio(studio)
+            for completed_count, slot_id in enumerate(mapped_events, start=1):
                 track = self._find_track(studio, slot_id)
                 registration = registrations[slot_id]
                 _register_track_material(
@@ -1349,8 +1366,22 @@ class StudioRepository:
                     duration_seconds=_track_duration_seconds(registration.events),
                     registration_diagnostics=registration.diagnostics,
                 )
-            studio.updated_at = timestamp
-            self._save_studio(studio)
+                if progress_job is not None:
+                    progress_timestamp = _now()
+                    progress_job.progress = build_job_progress(
+                        "registering",
+                        timestamp=progress_timestamp,
+                        stage_label="트랙에 등록하고 있습니다.",
+                        completed_units=completed_count,
+                        total_units=total_slots,
+                        unit_label="파트",
+                    )
+                    progress_job.updated_at = progress_timestamp
+                    studio.updated_at = progress_timestamp
+                    self._save_studio(studio)
+            if progress_job is None:
+                studio.updated_at = timestamp
+                self._save_studio(studio)
         return studio
 
     def _prepare_registration_events(
@@ -1543,6 +1574,11 @@ class StudioRepository:
                 review_before_register=bool(record.payload.get("review_before_register")),
                 allow_overwrite=bool(record.payload.get("allow_overwrite")),
                 audio_mime_type=str(audio_mime_type_value) if audio_mime_type_value else None,
+                progress=build_job_progress(
+                    "queued",
+                    timestamp=timestamp,
+                    stage_label="작업을 준비하고 있습니다.",
+                ),
                 created_at=record.created_at,
                 updated_at=timestamp,
             )

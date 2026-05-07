@@ -3,16 +3,12 @@ import { Link } from 'react-router-dom'
 
 import { formatTrackName, STUDIO_TIME_PRECISION_SECONDS, type PlaybackSourceMode } from '../../lib/studio'
 import type { TrackSlot } from '../../types/studio'
+import type { StudioActionState } from './studioActionState'
+import { StudioNoticeLine } from './StudioNoticeLine'
 import { StudioPurposeNav } from './StudioPurposeNav'
 
-type ActionState =
-  | { phase: 'idle' }
-  | { phase: 'busy'; message: string }
-  | { phase: 'success'; message: string }
-  | { phase: 'error'; message: string }
-
 type StudioToolbarProps = {
-  actionState: ActionState
+  actionState: StudioActionState
   bpm: number
   globalPlaying: boolean
   metronomeEnabled: boolean
@@ -320,12 +316,7 @@ export function StudioToolbar({
         </section>
       )}
 
-      {actionState.phase !== 'idle' ? (
-        <section className="studio-status-line" aria-live="polite">
-          <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
-          <p>{actionState.message}</p>
-        </section>
-      ) : null}
+      <StudioNoticeLine notice={actionState} />
     </>
   )
 }

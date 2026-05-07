@@ -312,21 +312,52 @@
 
 .studio-status-line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   min-height: 34px;
-  padding: 0 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid #b8c0c8;
   background: #f7f8f9;
 }
 
+.studio-status-line__content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .studio-status-line p {
+  margin: 0;
   color: #33414d;
   font-size: 0.92rem;
   font-weight: 700;
 }
 
+.studio-status-line__detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: #52616d;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.studio-status-line__progress {
+  width: min(280px, 100%);
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid #b8c0c8;
+  background: #e9edf0;
+}
+
+.studio-status-line__progress span {
+  display: block;
+  height: 100%;
+  background: #0a45c5;
+}
+
 .studio-status-line__dot {
+  margin-top: 5px;
   width: 9px;
   height: 9px;
   flex: 0 0 auto;
@@ -341,6 +372,10 @@
 
 .studio-status-line__dot--success {
   background: #12766b;
+}
+
+.studio-status-line__dot--warning {
+  background: #c27a15;
 }
 
 .studio-status-line__dot--error {

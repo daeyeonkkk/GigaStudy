@@ -41,7 +41,14 @@ is excluded from persistence and remains an adapter detail.
   jobs are active. Activity polling carries only job state and visible counts,
   and the hook refreshes the current view once when jobs complete or
   candidate/report/registered-track counts change. Route changes abort stale
-  fetches so old responses cannot overwrite the new page state.
+  fetches so old responses cannot overwrite the new page state. Activity
+  polling has a short client timeout and backs off failures; short failures do
+  not replace an in-progress notice with a red error.
+- `apps/web/src/components/studio/studioNoticePresenter.ts` and
+  `StudioNoticeLine.tsx`
+  Convert job/activity/action state into public status notices. The presenter
+  blocks implementation-language copy and only exposes progress percentages
+  when a job provides actual completed/total units.
 - `apps/web/src/pages/StudioEditPage.tsx`
   Dedicated region-editing surface for region selection, region structure
   actions, selected-region piano-roll editing, local draft save, and bounded
@@ -122,11 +129,12 @@ is excluded from persistence and remains an adapter detail.
   FastAPI studio command/query endpoints, including single-field region/event
   mutation endpoints and the batch region revision save/restore endpoints used
   by the region editor. Job polling has a lightweight activity endpoint that
-  omits regions, candidates, reports, and archive detail. Track volume can
-  return a minimal patch response for live mix commits while the legacy full
-  response remains the default. `GET /studios/{id}?view=studio|edit|practice`
-  trims candidate/report detail for page loads, while candidate and report
-  detail endpoints serve large review/evidence payloads lazily.
+  omits regions, candidates, reports, and archive detail and does not schedule
+  recovery or processing work. Track volume can return a minimal patch response
+  for live mix commits while the legacy full response remains the default.
+  `GET /studios/{id}?view=studio|edit|practice` trims candidate/report detail
+  for page loads, while candidate and report detail endpoints serve large
+  review/evidence payloads lazily.
 - `apps/api/src/gigastudy_api/services/studio_repository.py`
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.
@@ -144,7 +152,10 @@ is excluded from persistence and remains an adapter detail.
   single `region_snapshot` payloads lazily migrated on read. Studio routes
   return `StudioResponse`, whose tracks and candidates omit internal event
   arrays and whose archive payload exposes summaries only, not stored event
-  snapshots. Non-full response views keep reports as summaries and candidates
+  snapshots. `TrackExtractionJob.progress` is optional and represents
+  user-facing stage/progress evidence; percent-capable fields are set only when
+  the job has real completed/total units. Non-full response views keep reports
+  as summaries and candidates
   as metadata plus empty preview regions until a detail endpoint is requested.
   `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
   arrangement data flow. Document imports use `source_kind: "document"`;

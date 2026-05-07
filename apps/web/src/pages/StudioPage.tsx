@@ -65,8 +65,13 @@ export function StudioPage() {
     visibleExtractionJobs,
   } = useStudioResource(
     studioId,
-    (message) => setActionState({ phase: 'error', message }),
-    (message, phase = 'busy') => setActionState({ phase, message }),
+    (notice) =>
+      setActionState((current) =>
+        current.phase === 'busy' && notice.phase === 'warning'
+          ? { ...current, detail: notice.message }
+          : notice,
+      ),
+    (notice) => setActionState(notice),
     'studio',
   )
 
@@ -291,7 +296,7 @@ export function StudioPage() {
         }),
       'BPM과 박자표를 저장하는 중입니다.',
       '악보 분석을 시작했습니다.',
-      ['업로드 파일을 등록 대기열에 올리고 있습니다.', '트랙을 비워 둔 채 등록 기준을 적용하고 있습니다.'],
+      ['악보 파일 등록을 준비하고 있습니다.', '확인한 BPM과 박자표를 적용하고 있습니다.'],
     )
   }
 

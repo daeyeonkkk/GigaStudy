@@ -38,6 +38,19 @@ ExtractionJobStatus = Literal[
     "failed",
 ]
 ExtractionJobType = Literal["document", "voice", "generation", "scoring"]
+JobProgressStage = Literal[
+    "queued",
+    "preparing",
+    "reading_source",
+    "analyzing",
+    "mapping_parts",
+    "normalizing",
+    "registering",
+    "reviewing",
+    "scoring",
+    "completed",
+    "failed",
+]
 StudioResponseView = Literal["full", "studio", "edit", "practice"]
 ExtractionCandidateStatus = Literal["pending", "approved", "rejected"]
 TimeSignatureDenominator = Literal[1, 2, 4, 8, 16, 32]
@@ -132,6 +145,16 @@ class CandidateRegion(SourceKindModel):
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
+class JobProgress(SourceKindModel):
+    stage: JobProgressStage
+    stage_label: str
+    completed_units: int | None = Field(default=None, ge=0)
+    total_units: int | None = Field(default=None, ge=1)
+    unit_label: str | None = None
+    estimated_seconds_remaining: int | None = Field(default=None, ge=0)
+    updated_at: str
+
+
 class TrackExtractionJob(SourceKindModel):
     job_id: str
     job_type: ExtractionJobType = "document"
@@ -150,6 +173,7 @@ class TrackExtractionJob(SourceKindModel):
     review_before_register: bool = False
     allow_overwrite: bool = False
     audio_mime_type: str | None = None
+    progress: JobProgress | None = None
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: str

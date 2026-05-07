@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { StudioRouteState } from '../components/studio/StudioRouteState'
 import { TrackBoard } from '../components/studio/TrackBoard'
 import type { RegionEditorDraft } from '../components/studio/TrackBoardEditor'
+import { StudioNoticeLine } from '../components/studio/StudioNoticeLine'
 import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
 import type { StudioActionState } from '../components/studio/studioActionState'
 import { useStudioResource } from '../components/studio/useStudioResource'
@@ -49,8 +50,13 @@ export function StudioEditPage() {
     visibleExtractionJobs,
   } = useStudioResource(
     studioId,
-    (message) => setActionState({ phase: 'error', message }),
-    (message, phase = 'busy') => setActionState({ phase, message }),
+    (notice) =>
+      setActionState((current) =>
+        current.phase === 'busy' && notice.phase === 'warning'
+          ? { ...current, detail: notice.message }
+          : notice,
+      ),
+    (notice) => setActionState(notice),
     'edit',
   )
   const studioMeter = useMemo(
@@ -239,12 +245,7 @@ export function StudioEditPage() {
           studioId={studio.studio_id}
         />
 
-        {actionState.phase !== 'idle' ? (
-          <section className="studio-status-line" aria-live="polite">
-            <span className={`studio-status-line__dot studio-status-line__dot--${actionState.phase}`} />
-            <p>{actionState.message}</p>
-          </section>
-        ) : null}
+        <StudioNoticeLine notice={actionState} />
 
         <section className="composer-arrange-viewport composer-arrange-viewport--editor">
           <div className="composer-arrange-paper composer-arrange-paper--editor">

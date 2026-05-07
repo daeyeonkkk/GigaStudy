@@ -333,6 +333,7 @@ class StudioEngineJobHandlers:
             mapped_events,
             source_kind=result.registered_source_kind,
             source_label=source_label,
+            progress_job_id=record.job_id,
         )
         self._repository._clear_unmapped_extraction_placeholders(
             record.studio_id,

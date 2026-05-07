@@ -97,6 +97,29 @@ export type CandidateRegion = {
   diagnostics: Record<string, unknown>
 }
 
+export type JobProgressStage =
+  | 'queued'
+  | 'preparing'
+  | 'reading_source'
+  | 'analyzing'
+  | 'mapping_parts'
+  | 'normalizing'
+  | 'registering'
+  | 'reviewing'
+  | 'scoring'
+  | 'completed'
+  | 'failed'
+
+export type JobProgress = {
+  stage: JobProgressStage
+  stage_label: string
+  completed_units: number | null
+  total_units: number | null
+  unit_label: string | null
+  estimated_seconds_remaining: number | null
+  updated_at: string
+}
+
 export type TrackExtractionJob = {
   job_id: string
   job_type: 'document' | 'voice' | 'generation' | 'scoring'
@@ -115,6 +138,7 @@ export type TrackExtractionJob = {
   review_before_register: boolean
   allow_overwrite: boolean
   audio_mime_type: string | null
+  progress: JobProgress | null
   diagnostics: Record<string, unknown>
   created_at: string
   updated_at: string

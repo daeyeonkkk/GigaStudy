@@ -402,6 +402,13 @@ the same change.
   - Start blank asks for BPM and meter and requires no upload.
 - Queue, upload, extraction, and registration states must be visible enough that
   users do not think the app froze.
+- Public Studio/Edit/Practice status notices should be deterministic,
+  user-facing copy. They must not expose implementation terms such as API,
+  server, engine, LLM, polling, diagnostics, payload, or queue internals.
+- Busy notices may show a percent only when the job reports real completed and
+  total units, such as registered parts in a multi-part score import. Jobs
+  without a meaningful denominator should show stage, elapsed time, and a
+  conservative expected range instead of invented progress.
 - Reports should appear as compact history items in the studio and open into a
   detail view.
 - Admin and public studio listing can remain alpha-simple, but the code should
@@ -434,6 +441,9 @@ the same change.
   configuration.
 - `/activity` should be a true read model: read base studio job state and
   sidecar counts without loading region/candidate/report detail.
+- `/activity` must not repair queue records, schedule background work, or run
+  engine processing. Job recovery belongs only to explicit mutations,
+  retries, creation approval, or admin maintenance actions.
 - Direct upload endpoints should stream local uploads to disk/object storage
   rather than buffering the entire request body in API memory.
 - Track audio and playback-instrument sample responses should expose cache

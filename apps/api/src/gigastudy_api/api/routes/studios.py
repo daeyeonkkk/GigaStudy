@@ -124,14 +124,12 @@ def get_studio(
 @router.get("/{studio_id}/activity", response_model=StudioActivityResponse)
 def get_studio_activity(
     studio_id: str,
-    background_tasks: BackgroundTasks,
     owner_token: str | None = Depends(studio_owner_token),
     admin_bypass: bool = Depends(optional_admin_bypass),
     repository: StudioRepository = Depends(get_studio_repository),
 ) -> StudioActivityResponse:
     return repository.get_studio_activity_response(
         studio_id,
-        background_tasks=background_tasks,
         owner_token=owner_token,
         enforce_owner=True,
         admin_bypass=admin_bypass,

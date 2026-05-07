@@ -84,12 +84,18 @@ Required secret names:
 - `gigastudy-api-admin-session-secret`
 - `gigastudy-api-s3-access-key-id`
 - `gigastudy-api-s3-secret-access-key`
+- `gigastudy-api-deepseek-api-key`
 
 Optional secret names:
 
 - `gigastudy-api-admin-password-aliases`
 - `gigastudy-api-admin-token`
-- `gigastudy-api-deepseek-api-key`
+
+The alpha deploy script currently keeps DeepSeek-backed planning/review enabled,
+so the DeepSeek key is required for parity with production testing. If the
+project intentionally runs deterministic-only, disable the DeepSeek env flags in
+the alpha env file and remove the DeepSeek secret binding from the deploy
+command for that deployment.
 
 Grant the Cloud Run runtime service account secret access before deploying.
 Use the smallest service account scope available for the alpha service.

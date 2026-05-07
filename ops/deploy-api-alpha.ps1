@@ -27,5 +27,5 @@ gcloud run deploy $ServiceName `
   --max-instances 1 `
   --concurrency 4 `
   --env-vars-file $EnvFile `
-  --set-secrets "GIGASTUDY_API_ADMIN_PASSWORD=gigastudy-api-admin-password:latest,GIGASTUDY_API_ADMIN_SESSION_SECRET=gigastudy-api-admin-session-secret:latest,GIGASTUDY_API_S3_ACCESS_KEY_ID=gigastudy-api-s3-access-key-id:latest,GIGASTUDY_API_S3_SECRET_ACCESS_KEY=gigastudy-api-s3-secret-access-key:latest" `
+  --set-secrets "GIGASTUDY_API_ADMIN_PASSWORD=gigastudy-api-admin-password:latest,GIGASTUDY_API_ADMIN_SESSION_SECRET=gigastudy-api-admin-session-secret:latest,GIGASTUDY_API_S3_ACCESS_KEY_ID=gigastudy-api-s3-access-key-id:latest,GIGASTUDY_API_S3_SECRET_ACCESS_KEY=gigastudy-api-s3-secret-access-key:latest,GIGASTUDY_API_DEEPSEEK_API_KEY=gigastudy-api-deepseek-api-key:latest" `
   --allow-unauthenticated

@@ -198,6 +198,7 @@ Copy-Item ops/cloud-run.alpha.env.example.yaml ops/cloud-run.alpha.env.yaml
 # gigastudy-api-admin-session-secret
 # gigastudy-api-s3-access-key-id
 # gigastudy-api-s3-secret-access-key
+# gigastudy-api-deepseek-api-key
 ./ops/deploy-api-alpha.ps1
 ```
 

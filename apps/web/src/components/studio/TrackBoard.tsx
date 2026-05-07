@@ -463,6 +463,38 @@ export function TrackBoard({
                   ) : null}
                   {isRegistered ? <span>{formatSeconds(track.sync_offset_seconds)}</span> : null}
                 </div>
+                {!isEditorMode && isRegistered ? (
+                  <div className="track-card__settings">
+                    <div className="track-card__sync-controls">
+                      <button
+                        aria-label={`${formatTrackName(track.name)} 싱크를 ${formatSyncStep(syncStepSeconds)}초 앞으로 이동`}
+                        className="studio-step-button"
+                        data-testid={`track-sync-earlier-${track.slot_id}`}
+                        disabled={trackEditDisabled}
+                        type="button"
+                        onClick={() => onSync(track, track.sync_offset_seconds - syncStepSeconds)}
+                      >
+                        -{formatSyncStep(syncStepSeconds)}
+                      </button>
+                      <button
+                        aria-label={`${formatTrackName(track.name)} 싱크를 ${formatSyncStep(syncStepSeconds)}초 뒤로 이동`}
+                        className="studio-step-button"
+                        data-testid={`track-sync-later-${track.slot_id}`}
+                        disabled={trackEditDisabled}
+                        type="button"
+                        onClick={() => onSync(track, track.sync_offset_seconds + syncStepSeconds)}
+                      >
+                        +{formatSyncStep(syncStepSeconds)}
+                      </button>
+                    </div>
+                    <TrackVolumeControl
+                      disabled={trackVolumeDisabled}
+                      track={track}
+                      onVolumePreview={onVolumePreview}
+                      onVolumeChange={onVolumeChange}
+                    />
+                  </div>
+                ) : null}
               </header>
 
               <div
@@ -606,32 +638,6 @@ export function TrackBoard({
 
                 {isRegistered ? (
                 <div className="track-card__secondary-actions">
-                  <button
-                    aria-label={`${formatTrackName(track.name)} 싱크를 ${formatSyncStep(syncStepSeconds)}초 앞으로 이동`}
-                    className="studio-step-button"
-                    data-testid={`track-sync-earlier-${track.slot_id}`}
-                    disabled={trackEditDisabled}
-                    type="button"
-                    onClick={() => onSync(track, track.sync_offset_seconds - syncStepSeconds)}
-                  >
-                    -{formatSyncStep(syncStepSeconds)}
-                  </button>
-                  <button
-                    aria-label={`${formatTrackName(track.name)} 싱크를 ${formatSyncStep(syncStepSeconds)}초 뒤로 이동`}
-                    className="studio-step-button"
-                    data-testid={`track-sync-later-${track.slot_id}`}
-                    disabled={trackEditDisabled}
-                    type="button"
-                    onClick={() => onSync(track, track.sync_offset_seconds + syncStepSeconds)}
-                  >
-                    +{formatSyncStep(syncStepSeconds)}
-                  </button>
-                  <TrackVolumeControl
-                    disabled={trackVolumeDisabled}
-                    track={track}
-                    onVolumePreview={onVolumePreview}
-                    onVolumeChange={onVolumeChange}
-                  />
                   <button
                     aria-label={isPlaying ? `${formatTrackName(track.name)} 일시정지` : `${formatTrackName(track.name)} 재생`}
                     className="studio-icon-button"

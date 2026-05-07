@@ -397,6 +397,9 @@ the same change.
 - Studio and region-editing lanes should not draw region cards behind event
   minis. Regions are selectable time spans, but the visible material should be
   the individual pitch bars on the shared lane.
+- Track-level sync and volume controls belong to the track identity/header
+  area, not the horizontally scrolling timeline lane. Long songs must not push
+  those basic track controls out to the far-right measure area.
 - Region editing should use a local draft and a single explicit save for detailed
   region/event changes. Do not send a server mutation for every small pitch or
   timing adjustment. Each saved material change should keep a small bounded

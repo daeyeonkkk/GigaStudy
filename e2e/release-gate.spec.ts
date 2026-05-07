@@ -96,6 +96,33 @@ async function expectRegisteredRegion(page: Page, slotId: number, labels: string
   }
 }
 
+async function expectTrackSettingsInHeader(page: Page, slotId: number) {
+  const card = page.getByTestId(`track-card-${slotId}`)
+  const header = card.locator('.track-card__header')
+  const syncEarlier = page.getByTestId(`track-sync-earlier-${slotId}`)
+  const volumeRange = page.getByTestId(`track-volume-range-${slotId}`)
+
+  await expect(header.locator('.track-card__settings')).toBeVisible()
+  await expect(header.getByTestId(`track-sync-earlier-${slotId}`)).toBeVisible()
+  await expect(header.getByTestId(`track-volume-range-${slotId}`)).toBeVisible()
+  await expect(card.locator(`.track-card__controls [data-testid="track-sync-earlier-${slotId}"]`)).toHaveCount(0)
+  await expect(card.locator(`.track-card__controls [data-testid="track-volume-range-${slotId}"]`)).toHaveCount(0)
+
+  await page.locator('.track-timeline-scroll').evaluate((element) => {
+    element.scrollLeft = element.scrollWidth
+  })
+  const headerBox = await header.boundingBox()
+  const syncBox = await syncEarlier.boundingBox()
+  const volumeBox = await volumeRange.boundingBox()
+  if (!headerBox || !syncBox || !volumeBox) {
+    throw new Error('Expected track settings to have visible bounds inside the sticky header')
+  }
+  expect(syncBox.x).toBeGreaterThanOrEqual(headerBox.x)
+  expect(volumeBox.x).toBeGreaterThanOrEqual(headerBox.x)
+  expect(syncBox.x + syncBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width + 1)
+  expect(volumeBox.x + volumeBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width + 1)
+}
+
 async function expectGeneratedRegion(page: Page, slotId: number) {
   const region = page.getByTestId(`track-region-${slotId}`)
   await expect(region).toBeVisible()
@@ -144,6 +171,7 @@ test('document-start studio flows through studio, region editor, and practice wa
   await createStudioFromSopranoMusicXml(page, 'Region import session')
 
   await expectRegisteredRegion(page, 1, ['C5', 'G5'])
+  await expectTrackSettingsInHeader(page, 1)
   await expect(page.locator('[data-testid^="track-event-mini-"]').first()).toBeVisible()
   await openNoteEditorForRegion(page, 1, ['C5', 'G5'])
   const c5EventTestId = await page.locator('.piano-roll__event[title*="C5"]').first().getAttribute('data-testid')

@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     studio_access_policy: str = "public"
     database_url: str | None = None
     storage_backend: str = "local"
+    metadata_backend: str = "local"
+    metadata_prefix: str = "metadata"
     s3_bucket: str | None = None
     s3_region: str = "auto"
     s3_endpoint_url: str | None = None
@@ -31,6 +33,11 @@ class Settings(BaseSettings):
     asset_hard_bytes: int = int(8.5 * 1024 * 1024 * 1024)
     direct_upload_expiration_seconds: int = 15 * 60
     staged_upload_retention_seconds: int = 24 * 60 * 60
+    pending_recording_retention_seconds: int = 30 * 60
+    inactive_asset_retention_seconds: int = 7 * 24 * 60 * 60
+    track_archive_non_pinned_limit: int = 3
+    maintenance_cleanup_interval_seconds: int = 60 * 60
+    maintenance_cleanup_batch_size: int = 5
     lifecycle_cleanup_interval_seconds: int = 15 * 60
     asset_cache_max_bytes: int = 256 * 1024 * 1024
     asset_cache_max_age_seconds: int = 6 * 60 * 60

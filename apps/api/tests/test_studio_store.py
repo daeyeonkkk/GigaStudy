@@ -1,4 +1,43 @@
-from gigastudy_api.services.studio_store import PostgresStudioStore, _merge_concurrent_studio_payload
+from __future__ import annotations
+
+import copy
+import json
+
+from gigastudy_api.services.asset_registry import AssetRecord, S3AssetRegistry
+from gigastudy_api.services.engine_queue import EngineQueueJob, S3EngineQueueStore
+from gigastudy_api.services.studio_store import (
+    PostgresStudioStore,
+    S3StudioStore,
+    _merge_concurrent_studio_payload,
+)
+
+
+class FakeJsonObjectStore:
+    label = "s3://gigastudy-test/metadata"
+
+    def __init__(self) -> None:
+        self.data = {}
+
+    def read_json(self, relative_path, default):
+        return copy.deepcopy(self.data.get(relative_path, default))
+
+    def write_json(self, relative_path, payload) -> None:
+        self.data[relative_path] = copy.deepcopy(payload)
+
+    def delete_prefix(self, relative_prefix):
+        prefix = relative_prefix.strip().strip("/") + "/"
+        keys = [key for key in self.data if key.startswith(prefix)]
+        for key in keys:
+            self.data.pop(key, None)
+        return len(keys), 0
+
+    def estimate_prefix_bytes(self, relative_prefix=""):
+        prefix = relative_prefix.strip().strip("/")
+        return sum(
+            len(json.dumps(value).encode("utf-8"))
+            for key, value in self.data.items()
+            if not prefix or key.startswith(prefix)
+        )
 
 
 def test_postgres_store_reuses_connection_between_operations(monkeypatch) -> None:
@@ -34,6 +73,91 @@ def test_postgres_store_reuses_connection_between_operations(monkeypatch) -> Non
     assert connections == [first_connection]
     assert first_connection.commits == 2
     assert first_connection.rollbacks == 0
+
+
+def test_s3_studio_store_roundtrips_base_payload_and_sidecars() -> None:
+    objects = FakeJsonObjectStore()
+    store = S3StudioStore(objects)
+    payload = {
+        "studio_id": "studio-1",
+        "title": "R2",
+        "updated_at": "2026-05-07T00:00:00+00:00",
+        "tracks": [],
+        "regions": [],
+        "jobs": [],
+        "reports": [{"report_id": "report-1"}],
+        "candidates": [{"candidate_id": "candidate-1", "status": "pending"}],
+        "track_material_archives": [{"archive_id": "archive-1"}],
+    }
+
+    store.save_one_raw("studio-1", payload)
+
+    index = objects.data["studios/index.json"]
+    assert index["studio-1"]["reports"] == []
+    assert index["studio-1"]["_sidecar_counts"] == {
+        "reports": 1,
+        "candidates": 1,
+        "track_material_archives": 1,
+    }
+    assert objects.data["studios/studio-1/reports.json"] == [{"report_id": "report-1"}]
+    loaded = store.load_one_raw("studio-1")
+    assert loaded["reports"] == [{"report_id": "report-1"}]
+    activity = store.load_activity_raw("studio-1")
+    assert activity["_activity_counts"] == {"pending_candidate_count": 1, "report_count": 1}
+
+
+def test_s3_engine_queue_claims_and_completes_jobs() -> None:
+    objects = FakeJsonObjectStore()
+    store = S3EngineQueueStore(objects)
+    job = EngineQueueJob(
+        job_id="job-1",
+        studio_id="studio-1",
+        slot_id=1,
+        job_type="voice",
+        status="queued",
+        payload={"asset_path": "uploads/studio-1/1/take.wav"},
+        attempt_count=0,
+        max_attempts=3,
+        locked_until=None,
+        message=None,
+        created_at="2026-05-07T00:00:00+00:00",
+        updated_at="2026-05-07T00:00:00+00:00",
+    )
+
+    store.enqueue(job)
+    claimed = store.claim_next(max_active=1, lease_seconds=60)
+    assert claimed is not None
+    assert claimed.status == "running"
+    assert claimed.attempt_count == 1
+
+    store.complete("job-1")
+
+    completed = store.get("job-1")
+    assert completed is not None
+    assert completed.status == "completed"
+
+
+def test_s3_asset_registry_persists_asset_summary() -> None:
+    objects = FakeJsonObjectStore()
+    registry = S3AssetRegistry(objects)
+    registry.upsert(
+        AssetRecord(
+            relative_path="uploads/studio-1/1/take.wav",
+            studio_id="studio-1",
+            kind="upload",
+            filename="take.wav",
+            size_bytes=128,
+            updated_at="2026-05-07T00:00:00+00:00",
+        )
+    )
+
+    assert registry.summarize_all() == (1, 128)
+    assert registry.summarize_studio("studio-1") == (1, 128)
+    assert registry.list_studio_assets("studio-1", limit=10, offset=0)[0].filename == "take.wav"
+
+    registry.mark_prefix_deleted("uploads/studio-1/")
+
+    assert registry.summarize_all() == (0, 0)
 
 
 def test_postgres_store_skips_unchanged_sidecar_upserts() -> None:

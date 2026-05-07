@@ -18,10 +18,19 @@ def referenced_asset_paths(
         normalized = normalize_reference(track.audio_source_path)
         if normalized is not None:
             references.add(normalized)
+    for region in studio.regions:
+        normalized = normalize_reference(region.audio_source_path)
+        if normalized is not None:
+            references.add(normalized)
     for candidate in studio.candidates:
         normalized = normalize_reference(candidate.audio_source_path)
         if normalized is not None:
             references.add(normalized)
+    for archive in studio.track_material_archives:
+        for region in archive.region_snapshots:
+            normalized = normalize_reference(region.audio_source_path)
+            if normalized is not None:
+                references.add(normalized)
     for job in studio.jobs:
         for job_path in (job.input_path, job.output_path):
             normalized = normalize_reference(job_path)

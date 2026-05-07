@@ -17,10 +17,11 @@ from gigastudy_api.api.schemas.studios import (
     sync_studio_arrangement_regions,
     sync_studio_candidate_regions,
 )
+from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.music_theory import TRACKS
 
-TRACK_MATERIAL_ARCHIVE_NON_PINNED_LIMIT = 6
+TRACK_MATERIAL_ARCHIVE_NON_PINNED_LIMIT = 3
 ORIGINAL_SCORE_SOURCE_KINDS: set[SourceKind] = {"document", "midi"}
 
 
@@ -220,6 +221,7 @@ def _region_snapshots_duration_seconds(snapshots: list[ArrangementRegion]) -> fl
 
 
 def _prune_track_material_archives(studio: Studio, slot_id: int) -> None:
+    non_pinned_limit = max(0, get_settings().track_archive_non_pinned_limit)
     non_pinned_seen = 0
     kept_archive_ids: set[str] = set()
     for archive in studio.track_material_archives:
@@ -229,7 +231,7 @@ def _prune_track_material_archives(studio: Studio, slot_id: int) -> None:
         if archive.pinned:
             kept_archive_ids.add(archive.archive_id)
             continue
-        if non_pinned_seen < TRACK_MATERIAL_ARCHIVE_NON_PINNED_LIMIT:
+        if non_pinned_seen < non_pinned_limit:
             kept_archive_ids.add(archive.archive_id)
         non_pinned_seen += 1
     studio.track_material_archives = [

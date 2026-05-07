@@ -31,6 +31,10 @@
   font-weight: 800;
 }
 
+.recording-review-panel__retention {
+  color: #7a4b00;
+}
+
 .recording-review-panel dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

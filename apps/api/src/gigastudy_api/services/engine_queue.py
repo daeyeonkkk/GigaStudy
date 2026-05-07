@@ -10,6 +10,9 @@ from typing import Any, Literal, Protocol
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from gigastudy_api.config import Settings
+from gigastudy_api.services.metadata_object_store import S3JsonObjectStore
+
 
 EngineJobType = Literal["document", "voice", "generation", "scoring"]
 EngineQueueStatus = Literal["queued", "running", "completed", "failed"]
@@ -205,6 +208,102 @@ class FileEngineQueueStore:
         with tmp_path.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
         tmp_path.replace(self._path)
+
+
+class S3EngineQueueStore:
+    def __init__(self, object_store: S3JsonObjectStore) -> None:
+        self._objects = object_store
+        self._lock = RLock()
+
+    def enqueue(self, job: EngineQueueJob) -> None:
+        with self._lock:
+            payload = self._read()
+            payload[job.job_id] = job.to_json()
+            self._write(payload)
+
+    def claim_next(self, *, max_active: int, lease_seconds: int) -> EngineQueueJob | None:
+        with self._lock:
+            payload = self._read()
+            now = _now()
+            if _active_count(payload, now) >= max(1, max_active):
+                return None
+
+            eligible = [
+                EngineQueueJob.from_json(row)
+                for row in payload.values()
+                if _is_claimable(row, now)
+            ]
+            if not eligible:
+                return None
+
+            claimed = sorted(eligible, key=lambda job: (job.created_at, job.job_id))[0]
+            next_job = _replace_job(
+                claimed,
+                status="running",
+                attempt_count=claimed.attempt_count + 1,
+                locked_until=(now + timedelta(seconds=lease_seconds)).isoformat(),
+                message=None,
+            )
+            payload[next_job.job_id] = next_job.to_json()
+            self._write(payload)
+            return next_job
+
+    def complete(self, job_id: str, *, message: str | None = None) -> None:
+        self._set_terminal_status(job_id, status="completed", message=message)
+
+    def fail(self, job_id: str, *, message: str) -> None:
+        self._set_terminal_status(job_id, status="failed", message=message)
+
+    def get(self, job_id: str) -> EngineQueueJob | None:
+        with self._lock:
+            row = self._read().get(job_id)
+        return EngineQueueJob.from_json(row) if row else None
+
+    def has_runnable(self, *, studio_id: str | None = None) -> bool:
+        with self._lock:
+            payload = self._read()
+        now = _now()
+        return any(
+            _is_claimable(row, now) and (studio_id is None or str(row.get("studio_id")) == studio_id)
+            for row in payload.values()
+        )
+
+    def delete_studio_jobs(self, studio_id: str) -> int:
+        with self._lock:
+            payload = self._read()
+            before = len(payload)
+            payload = {
+                job_id: row
+                for job_id, row in payload.items()
+                if str(row.get("studio_id")) != studio_id
+            }
+            if len(payload) != before:
+                self._write(payload)
+        return before - len(payload)
+
+    def _set_terminal_status(self, job_id: str, *, status: EngineQueueStatus, message: str | None) -> None:
+        with self._lock:
+            payload = self._read()
+            row = payload.get(job_id)
+            if row is None:
+                return
+            job = EngineQueueJob.from_json(row)
+            payload[job_id] = _replace_job(
+                job,
+                status=status,
+                locked_until=None,
+                message=message,
+            ).to_json()
+            self._write(payload)
+
+    def _read(self) -> dict[str, dict[str, Any]]:
+        payload = self._objects.read_json("engine_queue/jobs.json", {})
+        if not isinstance(payload, dict):
+            return {}
+        return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+
+    def _write(self, payload: dict[str, dict[str, Any]]) -> None:
+        self._objects.write_json("engine_queue/jobs.json", payload)
 
 
 class PostgresEngineQueueStore:
@@ -408,9 +507,17 @@ class PostgresEngineQueueStore:
         )
 
 
-def build_engine_queue_store(*, storage_root: Path, database_url: str | None) -> EngineQueueStore:
+def build_engine_queue_store(
+    *,
+    storage_root: Path,
+    database_url: str | None,
+    settings: Settings | None = None,
+) -> EngineQueueStore:
     if database_url is not None and database_url.strip():
         return PostgresEngineQueueStore(database_url)
+    metadata_backend = (settings.metadata_backend if settings is not None else "local").strip().lower()
+    if metadata_backend in {"s3", "r2"} and settings is not None:
+        return S3EngineQueueStore(S3JsonObjectStore(settings=settings, prefix=settings.metadata_prefix))
     return FileEngineQueueStore(storage_root / "engine_queue.json")
 
 

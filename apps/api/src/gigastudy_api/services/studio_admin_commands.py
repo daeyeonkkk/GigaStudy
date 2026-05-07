@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
 
 from gigastudy_api.api.schemas.admin import AdminDeleteResult, AdminStorageSummary, AdminStudioSummary
+from gigastudy_api.config import get_settings
 from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.services.alpha_limits import build_admin_limit_summary
 from gigastudy_api.services.asset_paths import studio_id_from_asset_path
@@ -35,6 +37,7 @@ class StudioAdminCommands:
         self._lock = lock
         self._store = store
         self._now = now
+        self._last_maintenance_cleanup_at: datetime | None = None
 
     def storage_summary(
         self,
@@ -46,6 +49,7 @@ class StudioAdminCommands:
         sync_missing_assets: bool = False,
         studio_status: str = "active",
     ) -> AdminStorageSummary:
+        self.cleanup_if_due()
         active_status = _normalize_active_status(studio_status)
         with self._lock:
             studio_count = self._store.count(active_status=active_status)
@@ -228,6 +232,85 @@ class StudioAdminCommands:
             deleted_bytes=deleted_bytes,
         )
 
+    def cleanup_if_due(self) -> None:
+        settings = get_settings()
+        if settings.maintenance_cleanup_interval_seconds <= 0:
+            return
+        now = datetime.now(UTC)
+        if (
+            self._last_maintenance_cleanup_at is not None
+            and now - self._last_maintenance_cleanup_at
+            < timedelta(seconds=settings.maintenance_cleanup_interval_seconds)
+        ):
+            return
+        self._last_maintenance_cleanup_at = now
+        self.run_maintenance_cleanup()
+
+    def run_maintenance_cleanup(self) -> AdminDeleteResult:
+        settings = get_settings()
+        now = datetime.now(UTC)
+        batch_size = max(1, settings.maintenance_cleanup_batch_size)
+        pending_cutoff = now - timedelta(seconds=settings.pending_recording_retention_seconds)
+        inactive_cutoff = now - timedelta(seconds=settings.inactive_asset_retention_seconds)
+        deleted_files = 0
+        deleted_bytes = 0
+
+        staged_files, staged_bytes = self._assets.delete_expired_staged_uploads()
+        deleted_files += staged_files
+        deleted_bytes += staged_bytes
+
+        with self._lock:
+            studios = self._list_studios(limit=10_000, offset=0, active_status="all")
+
+        processed_studios = 0
+        for studio in studios:
+            if processed_studios >= batch_size:
+                break
+            if studio.is_active is not False:
+                continue
+            deactivated_at = _parse_iso(studio.deactivated_at)
+            if deactivated_at is None or deactivated_at > inactive_cutoff:
+                continue
+            with self._lock:
+                current = self._load_studio(studio.studio_id)
+                if current is None:
+                    continue
+                timestamp = self._now()
+                clear_studio_asset_references(current, timestamp=timestamp)
+                current.updated_at = timestamp
+                self._save_studio(current)
+            files, bytes_deleted = self._delete_studio_asset_prefixes(studio.studio_id)
+            deleted_files += files
+            deleted_bytes += bytes_deleted
+            processed_studios += 1
+
+        for studio in studios:
+            if processed_studios >= batch_size:
+                break
+            if studio.is_active is False:
+                continue
+            referenced_paths = referenced_asset_paths(
+                studio,
+                normalize_reference=self._assets.normalize_reference,
+            )
+            files, bytes_deleted = self._assets.delete_unreferenced_studio_assets(
+                studio.studio_id,
+                referenced_paths=referenced_paths,
+                cutoff=pending_cutoff,
+                limit=batch_size - processed_studios,
+            )
+            if files:
+                deleted_files += files
+                deleted_bytes += bytes_deleted
+                processed_studios += 1
+
+        return AdminDeleteResult(
+            deleted=True,
+            message="Maintenance cleanup completed.",
+            deleted_files=deleted_files,
+            deleted_bytes=deleted_bytes,
+        )
+
     def delete_asset(self, asset_id: str) -> AdminDeleteResult:
         relative_path = self._assets.decode_asset_id(asset_id)
         deleted_files, deleted_bytes = self._assets.delete_asset_file(relative_path)
@@ -313,3 +396,15 @@ def _normalize_active_status(value: str) -> ActiveStatus:
     if normalized in {"active", "inactive", "all"}:
         return normalized  # type: ignore[return-value]
     raise HTTPException(status_code=422, detail="studio_status must be active, inactive, or all.")
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)

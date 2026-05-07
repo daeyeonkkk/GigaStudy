@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 import { formatDurationSeconds, formatTrackName } from '../../lib/studio'
 import './PendingRecordingDialog.css'
 import type { PendingTrackRecording } from './useStudioRecording'
@@ -16,6 +18,14 @@ export function PendingRecordingDialog({
   onRegister,
 }: PendingRecordingDialogProps) {
   const trackLabel = formatTrackName(recording.trackName)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const remainingMs = Math.max(0, recording.expiresAtMs - nowMs)
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
   return (
     <section
       aria-labelledby="pending-recording-title"
@@ -26,17 +36,18 @@ export function PendingRecordingDialog({
     >
       <div className="recording-review-panel">
         <p className="eyebrow">녹음 확인</p>
-        <h2 id="pending-recording-title">{trackLabel} 녹음 확인</h2>
-        <p>
-          아직 트랙에 등록하지 않았습니다. 원음을 확인한 뒤 음표 추출을 시작하거나 녹음을 삭제하세요.
+        <h2 id="pending-recording-title">{trackLabel} 녹음</h2>
+        <p>아직 트랙에 등록되지 않았습니다. 들어본 뒤 트랙에 등록하거나 삭제하세요.</p>
+        <p className="recording-review-panel__retention">
+          임시 녹음은 {formatRemainingTime(remainingMs)} 뒤 자동으로 비워집니다.
         </p>
         <dl>
           <div>
-            <dt>대상 트랙</dt>
+            <dt>트랙</dt>
             <dd>{trackLabel}</dd>
           </div>
           <div>
-            <dt>녹음 길이</dt>
+            <dt>길이</dt>
             <dd>{formatDurationSeconds(recording.durationSeconds)}</dd>
           </div>
         </dl>
@@ -51,7 +62,7 @@ export function PendingRecordingDialog({
             type="button"
             onClick={onDiscard}
           >
-            녹음 삭제
+            삭제
           </button>
           <button
             className="app-button"
@@ -66,4 +77,14 @@ export function PendingRecordingDialog({
       </div>
     </section>
   )
+}
+
+function formatRemainingTime(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes <= 0) {
+    return `${seconds}초`
+  }
+  return `${minutes}분 ${seconds.toString().padStart(2, '0')}초`
 }

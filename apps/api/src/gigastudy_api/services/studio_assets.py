@@ -428,6 +428,36 @@ class StudioAssetService:
         self._asset_registry.mark_prefix_deleted(relative_prefix)
         return result
 
+    def delete_unreferenced_studio_assets(
+        self,
+        studio_id: str,
+        *,
+        referenced_paths: set[str],
+        cutoff: datetime,
+        limit: int,
+    ) -> tuple[int, int]:
+        try:
+            stored_assets = self._asset_storage.iter_studio_assets(studio_id)
+        except AssetStorageError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+        deleted_files = 0
+        deleted_bytes = 0
+        cutoff_utc = cutoff.astimezone(UTC)
+        for info in sorted(stored_assets, key=lambda item: item.updated_at):
+            if deleted_files >= max(1, limit):
+                break
+            if info.relative_path in referenced_paths:
+                continue
+            if _parse_asset_timestamp(info.updated_at) >= cutoff_utc:
+                continue
+            files, bytes_deleted = self.delete_asset_file(info.relative_path)
+            deleted_files += files
+            deleted_bytes += bytes_deleted
+        if deleted_files:
+            self._sync_studio_asset_registry(studio_id)
+        return deleted_files, deleted_bytes
+
     def delete_expired_staged_uploads(self) -> tuple[int, int]:
         settings = get_settings()
         cutoff = datetime.now(UTC) - timedelta(seconds=settings.staged_upload_retention_seconds)
@@ -658,3 +688,13 @@ def _normalized_voice_wav_relative_path(relative_audio_path: str) -> str:
     )
     safe_stem = safe_stem.strip(".-_") or "voice"
     return source_path.with_name(f"{safe_stem}-normalized.wav").as_posix()
+
+
+def _parse_asset_timestamp(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.now(UTC)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)

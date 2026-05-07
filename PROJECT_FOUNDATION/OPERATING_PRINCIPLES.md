@@ -412,6 +412,20 @@ the same change.
 - The alpha target is small-scale and cost-aware.
 - Favor pagination, direct upload, asset cleanup, and queue visibility over
   pretending a single Cloud Run lane is unlimited.
+- Free-plan alpha deployment should keep Cloud Run stateless: min instances is
+  `0`, max instances is `1` while R2 metadata is the active store, and no
+  always-on scheduler should wake the API every few minutes just to drain work.
+- R2/S3 metadata mode is a supported alpha persistence mode for new studios.
+  Existing Postgres/file-store studios are not implicitly migrated into it; a
+  deliberate reset or migration must choose that.
+- Temporary recordings are browser-side pending takes. If the user has not
+  registered or deleted one within 30 minutes, the client may discard it.
+- Inactive studio metadata can remain for admin recovery, but its stored audio
+  and generated assets should be cleaned after 7 days. Orphan direct uploads
+  that were never registered follow the pending recording retention window.
+- Non-pinned track material archives are bounded to the latest 3 snapshots per
+  slot. Pinned original score material remains until an explicit admin cleanup
+  or permanent studio deletion.
 - Large audio payloads should prefer direct upload. The browser should not
   decode and re-encode MP3/M4A/OGG/FLAC just to submit a recording file; server
   audio normalization owns analysis WAV creation.

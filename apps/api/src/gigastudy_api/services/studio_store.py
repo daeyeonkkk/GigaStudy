@@ -11,6 +11,8 @@ from typing import Any, Literal, ParamSpec, Protocol, TypeVar
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from gigastudy_api.config import Settings
+from gigastudy_api.services.metadata_object_store import S3JsonObjectStore
 from gigastudy_api.services.performance import measure_metric
 
 
@@ -274,6 +276,183 @@ class FileStudioStore:
 
     def _sidecar_path(self, studio_id: str, key: str) -> Path:
         return self._sidecar_root / studio_id / f"{key}.json"
+
+
+class S3StudioStore:
+    def __init__(self, object_store: S3JsonObjectStore) -> None:
+        self._objects = object_store
+        self._lock = RLock()
+
+    @property
+    def metadata_label(self) -> str:
+        return f"{self._objects.label}/studios"
+
+    @_timed_metric("store_load_ms")
+    def load_raw(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                studio_id: self._merge_s3_sidecars(studio_id, studio_payload)
+                for studio_id, studio_payload in self._read_index().items()
+            }
+
+    @_timed_metric("store_load_ms")
+    def list_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        active_status: ActiveStatus = "all",
+    ) -> list[tuple[str, Any]]:
+        with self._lock:
+            rows = sorted(
+                [
+                    (studio_id, studio_payload)
+                    for studio_id, studio_payload in self._read_index().items()
+                    if _active_matches(studio_payload, active_status)
+                ],
+                key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
+                reverse=True,
+            )
+            return [
+                (studio_id, self._merge_s3_sidecars(studio_id, studio_payload))
+                for studio_id, studio_payload in rows[offset : offset + limit]
+            ]
+
+    @_timed_metric("store_load_ms")
+    def list_summary_raw(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        owner_token_hash: str | None = None,
+        active_status: ActiveStatus = "active",
+    ) -> list[tuple[str, Any]]:
+        with self._lock:
+            rows = sorted(
+                [
+                    (studio_id, studio_payload)
+                    for studio_id, studio_payload in self._read_index().items()
+                    if _owner_matches(studio_payload, owner_token_hash)
+                    and _active_matches(studio_payload, active_status)
+                ],
+                key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
+                reverse=True,
+            )
+            return rows[offset : offset + limit]
+
+    @_timed_metric("store_load_ms")
+    def count(self, *, active_status: ActiveStatus = "all") -> int:
+        with self._lock:
+            return sum(
+                1
+                for studio_payload in self._read_index().values()
+                if _active_matches(studio_payload, active_status)
+            )
+
+    @_timed_metric("store_load_ms")
+    def load_one_raw(self, studio_id: str) -> Any | None:
+        with self._lock:
+            studio_payload = self._read_index().get(studio_id)
+            if studio_payload is None:
+                return None
+            return self._merge_s3_sidecars(studio_id, studio_payload)
+
+    @_timed_metric("store_load_ms")
+    def load_activity_raw(self, studio_id: str) -> Any | None:
+        with self._lock:
+            studio_payload = self._read_index().get(studio_id)
+            if studio_payload is None:
+                return None
+            payload = dict(studio_payload) if isinstance(studio_payload, dict) else studio_payload
+            candidates = self._read_s3_sidecar(studio_id, "candidates") or []
+            reports = self._read_s3_sidecar(studio_id, "reports") or []
+            if isinstance(payload, dict):
+                payload["_activity_counts"] = {
+                    "pending_candidate_count": sum(
+                        1
+                        for candidate in candidates
+                        if isinstance(candidate, dict) and candidate.get("status") == "pending"
+                    ),
+                    "report_count": len(reports),
+                }
+            return payload
+
+    @_timed_metric("store_save_ms")
+    def save_raw(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            existing_ids = set(self._read_index())
+            next_ids = set(payload)
+            base_payload: dict[str, Any] = {}
+            for studio_id, studio_payload in payload.items():
+                base_studio, reports, candidates, track_material_archives = _split_sidecars(studio_payload)
+                base_payload[studio_id] = base_studio
+                self._write_s3_sidecar(studio_id, "reports", reports)
+                self._write_s3_sidecar(studio_id, "candidates", candidates)
+                self._write_s3_sidecar(studio_id, "track_material_archives", track_material_archives)
+            for stale_id in existing_ids - next_ids:
+                self._delete_s3_sidecars(stale_id)
+            self._write_index(base_payload)
+
+    @_timed_metric("store_save_ms")
+    def save_one_raw(self, studio_id: str, payload: Any) -> None:
+        with self._lock:
+            raw_payload = self._read_index()
+            existing_payload = raw_payload.get(studio_id)
+            if existing_payload is not None:
+                payload = _merge_concurrent_studio_payload(
+                    self._merge_s3_sidecars(studio_id, existing_payload),
+                    payload,
+                )
+            base_studio, reports, candidates, track_material_archives = _split_sidecars(payload)
+            raw_payload[studio_id] = base_studio
+            self._write_s3_sidecar(studio_id, "reports", reports)
+            self._write_s3_sidecar(studio_id, "candidates", candidates)
+            self._write_s3_sidecar(studio_id, "track_material_archives", track_material_archives)
+            self._write_index(raw_payload)
+
+    @_timed_metric("store_save_ms")
+    def delete_one_raw(self, studio_id: str) -> bool:
+        with self._lock:
+            raw_payload = self._read_index()
+            existed = studio_id in raw_payload
+            if existed:
+                raw_payload.pop(studio_id, None)
+                self._write_index(raw_payload)
+                self._delete_s3_sidecars(studio_id)
+            return existed
+
+    def estimate_bytes(self, payload: dict[str, Any]) -> int:
+        return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+    def estimate_total_bytes(self) -> int:
+        return self._objects.estimate_prefix_bytes("studios")
+
+    def _read_index(self) -> dict[str, Any]:
+        payload = self._objects.read_json("studios/index.json", {})
+        if not isinstance(payload, dict):
+            return {}
+        return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+
+    def _write_index(self, payload: dict[str, Any]) -> None:
+        self._objects.write_json("studios/index.json", payload)
+
+    def _merge_s3_sidecars(self, studio_id: str, studio_payload: Any) -> Any:
+        return _merge_sidecars(
+            studio_payload,
+            reports=self._read_s3_sidecar(studio_id, "reports"),
+            candidates=self._read_s3_sidecar(studio_id, "candidates"),
+            track_material_archives=self._read_s3_sidecar(studio_id, "track_material_archives"),
+        )
+
+    def _read_s3_sidecar(self, studio_id: str, key: str) -> list[Any] | None:
+        payload = self._objects.read_json(f"studios/{studio_id}/{key}.json", None)
+        return payload if isinstance(payload, list) else None
+
+    def _write_s3_sidecar(self, studio_id: str, key: str, items: list[Any]) -> None:
+        self._objects.write_json(f"studios/{studio_id}/{key}.json", items)
+
+    def _delete_s3_sidecars(self, studio_id: str) -> None:
+        self._objects.delete_prefix(f"studios/{studio_id}/")
 
 
 class PostgresStudioStore:
@@ -701,9 +880,17 @@ class PostgresStudioStore:
         self._initialized = True
 
 
-def build_studio_store(*, storage_root: Path, database_url: str | None) -> StudioStore:
+def build_studio_store(
+    *,
+    storage_root: Path,
+    database_url: str | None,
+    settings: Settings | None = None,
+) -> StudioStore:
     if database_url is not None and database_url.strip():
         return PostgresStudioStore(database_url)
+    metadata_backend = (settings.metadata_backend if settings is not None else "local").strip().lower()
+    if metadata_backend in {"s3", "r2"} and settings is not None:
+        return S3StudioStore(S3JsonObjectStore(settings=settings, prefix=settings.metadata_prefix))
     return FileStudioStore(storage_root / "six_track_studios.json")
 
 

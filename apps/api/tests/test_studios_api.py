@@ -2179,8 +2179,10 @@ def test_track_archive_keeps_pinned_original_while_pruning_previous_versions(tmp
         if archive["track_slot_id"] == 1 and not archive["pinned"]
     ]
     assert [archive["source_label"] for archive in pinned_archives] == ["original.musicxml"]
-    assert len(non_pinned_archives) == 6
-    assert "version-0.musicxml" not in {archive["source_label"] for archive in non_pinned_archives}
+    assert len(non_pinned_archives) == 3
+    assert {"version-0.musicxml", "version-1.musicxml", "version-2.musicxml", "version-3.musicxml"}.isdisjoint(
+        {archive["source_label"] for archive in non_pinned_archives}
+    )
 
 
 def test_track_archive_restores_multiple_regions_without_flattening(tmp_path: Path, monkeypatch) -> None:

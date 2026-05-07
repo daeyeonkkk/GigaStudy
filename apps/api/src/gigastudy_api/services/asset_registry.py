@@ -9,11 +9,13 @@ from typing import Any, Protocol
 import psycopg
 from psycopg.rows import dict_row
 
+from gigastudy_api.config import Settings
 from gigastudy_api.services.asset_paths import (
     clean_relative_path,
     encode_asset_id,
     studio_id_from_asset_path,
 )
+from gigastudy_api.services.metadata_object_store import S3JsonObjectStore
 
 
 def _now_iso() -> str:
@@ -182,6 +184,89 @@ class FileAssetRegistry:
         tmp_path.replace(self._path)
 
 
+class S3AssetRegistry:
+    def __init__(self, object_store: S3JsonObjectStore) -> None:
+        self._objects = object_store
+
+    def upsert(self, record: AssetRecord) -> None:
+        data = self._read()
+        data[record.relative_path] = record.to_json() | {"deleted_at": None}
+        self._write(data)
+
+    def mark_deleted(self, relative_path: str, deleted_at: str | None = None) -> AssetRecord | None:
+        clean = clean_relative_path(relative_path)
+        data = self._read()
+        existing = data.get(clean)
+        if existing is None:
+            return None
+        deleted_at = deleted_at or _now_iso()
+        existing["deleted_at"] = deleted_at
+        existing["updated_at"] = deleted_at
+        data[clean] = existing
+        self._write(data)
+        return AssetRecord.from_json(existing)
+
+    def mark_prefix_deleted(self, relative_prefix: str, deleted_at: str | None = None) -> tuple[int, int]:
+        prefix = clean_relative_path(relative_prefix).rstrip("/") + "/"
+        deleted_at = deleted_at or _now_iso()
+        data = self._read()
+        count = 0
+        size = 0
+        for path, existing in list(data.items()):
+            if not path.startswith(prefix) or existing.get("deleted_at"):
+                continue
+            existing["deleted_at"] = deleted_at
+            existing["updated_at"] = deleted_at
+            data[path] = existing
+            count += 1
+            size += int(existing.get("size_bytes") or 0)
+        if count:
+            self._write(data)
+        return count, size
+
+    def list_studio_assets(self, studio_id: str, *, limit: int, offset: int) -> list[AssetRecord]:
+        records = [
+            AssetRecord.from_json(value)
+            for value in self._read().values()
+            if value.get("studio_id") == studio_id and not value.get("deleted_at")
+        ]
+        records.sort(key=lambda record: record.updated_at, reverse=True)
+        return records[offset : offset + limit]
+
+    def summarize_studio(self, studio_id: str) -> tuple[int, int]:
+        records = [
+            value
+            for value in self._read().values()
+            if value.get("studio_id") == studio_id and not value.get("deleted_at")
+        ]
+        return len(records), sum(int(record.get("size_bytes") or 0) for record in records)
+
+    def summarize_all(self) -> tuple[int, int]:
+        records = [value for value in self._read().values() if not value.get("deleted_at")]
+        return len(records), sum(int(record.get("size_bytes") or 0) for record in records)
+
+    def sync_studio_assets(self, studio_id: str, assets: list[Any]) -> None:
+        data = self._read()
+        changed = False
+        for info in assets:
+            record = AssetRecord.from_storage_info(info)
+            if record.studio_id != studio_id:
+                continue
+            data[record.relative_path] = record.to_json() | {"deleted_at": None}
+            changed = True
+        if changed:
+            self._write(data)
+
+    def _read(self) -> dict[str, dict[str, Any]]:
+        payload = self._objects.read_json("asset_registry.json", {})
+        if not isinstance(payload, dict):
+            return {}
+        return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+
+    def _write(self, data: dict[str, dict[str, Any]]) -> None:
+        self._objects.write_json("asset_registry.json", data)
+
+
 class PostgresAssetRegistry:
     def __init__(self, database_url: str) -> None:
         self._database_url = _normalize_database_url(database_url)
@@ -342,9 +427,17 @@ class PostgresAssetRegistry:
         return str(value or _now_iso())
 
 
-def build_asset_registry(*, storage_root: Path, database_url: str | None) -> AssetRegistry:
+def build_asset_registry(
+    *,
+    storage_root: Path,
+    database_url: str | None,
+    settings: Settings | None = None,
+) -> AssetRegistry:
     if database_url:
         return PostgresAssetRegistry(database_url)
+    metadata_backend = (settings.metadata_backend if settings is not None else "local").strip().lower()
+    if metadata_backend in {"s3", "r2"} and settings is not None:
+        return S3AssetRegistry(S3JsonObjectStore(settings=settings, prefix=settings.metadata_prefix))
     return FileAssetRegistry(storage_root)
 
 

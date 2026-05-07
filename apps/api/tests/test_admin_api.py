@@ -537,6 +537,94 @@ def test_admin_can_delete_studio_with_background_asset_cleanup(tmp_path: Path, m
     assert client.get(f"/api/studios/{studio_id}").status_code == 404
 
 
+def test_admin_maintenance_cleans_old_unreferenced_uploads(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("GIGASTUDY_API_PENDING_RECORDING_RETENTION_SECONDS", "1")
+    monkeypatch.setenv("GIGASTUDY_API_MAINTENANCE_CLEANUP_INTERVAL_SECONDS", "0")
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Orphan upload cleanup",
+            "bpm": 92,
+            "start_mode": "blank",
+        },
+    )
+    assert create_response.status_code == 200
+    studio_id = create_response.json()["studio_id"]
+    content = b"RIFF....WAVEfmt orphan upload"
+    target_response = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload-target",
+        json={
+            "source_kind": "audio",
+            "filename": "orphan.wav",
+            "size_bytes": len(content),
+            "content_type": "audio/wav",
+        },
+    )
+    assert target_response.status_code == 200
+    target = target_response.json()
+    put_path = target["upload_url"].removeprefix("http://testserver")
+    assert client.put(put_path, content=content).status_code == 200
+    upload_path = tmp_path / Path(*target["asset_path"].split("/"))
+    assert upload_path.exists()
+    old_time = time.time() - 10
+    os.utime(upload_path, (old_time, old_time))
+
+    cleanup_response = client.post("/api/admin/maintenance/cleanup", headers=ADMIN_HEADERS)
+
+    assert cleanup_response.status_code == 200
+    assert cleanup_response.json()["deleted_files"] == 1
+    assert not upload_path.exists()
+    assert client.get(f"/api/studios/{studio_id}").status_code == 200
+
+
+def test_admin_maintenance_cleans_inactive_studio_assets_after_retention(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackPitchEvent(
+                pitch_midi=69,
+                pitch_hz=440,
+                label="A4",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    monkeypatch.setenv("GIGASTUDY_API_INACTIVE_ASSET_RETENTION_SECONDS", "1")
+    monkeypatch.setenv("GIGASTUDY_API_MAINTENANCE_CLEANUP_INTERVAL_SECONDS", "0")
+    client = build_client(tmp_path, monkeypatch)
+    studio_id, studio_payload = create_audio_studio(client)
+    relative_audio_path = studio_payload["tracks"][0]["audio_source_path"]
+    assert (tmp_path / relative_audio_path).exists()
+    assert client.post(f"/api/admin/studios/{studio_id}/deactivate", headers=ADMIN_HEADERS).status_code == 200
+
+    store_path = tmp_path / "six_track_studios.json"
+    stored = json.loads(store_path.read_text(encoding="utf-8"))
+    stored[studio_id]["deactivated_at"] = "2026-01-01T00:00:00+00:00"
+    store_path.write_text(json.dumps(stored), encoding="utf-8")
+
+    cleanup_response = client.post("/api/admin/maintenance/cleanup", headers=ADMIN_HEADERS)
+
+    assert cleanup_response.status_code == 200
+    assert cleanup_response.json()["deleted_files"] == 1
+    assert not (tmp_path / relative_audio_path).exists()
+    inactive_payload = client.get(
+        "/api/admin/storage?studio_status=inactive",
+        headers=ADMIN_HEADERS,
+    ).json()
+    assert inactive_payload["studio_count"] == 1
+    assert inactive_payload["studios"][0]["asset_count"] == 0
+
+
 def test_scoring_audio_is_temporary_and_not_listed_as_admin_asset(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe_voice_file(*args, **kwargs):
         return [

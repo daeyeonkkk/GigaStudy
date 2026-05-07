@@ -21,7 +21,9 @@ def test_readiness_returns_non_secret_runtime_contract() -> None:
     payload = response.json()
     assert payload["status"] == "ready"
     assert payload["service"] == "gigastudy-six-track-api"
-    assert payload["storage_backend"] in {"local", "s3"}
+    assert payload["storage_backend"] in {"local", "s3", "r2"}
+    assert payload["metadata_backend"] in {"local", "postgres", "s3", "r2"}
+    assert isinstance(payload["metadata_configured"], bool)
     assert isinstance(payload["database_configured"], bool)
     assert isinstance(payload["deepseek_configured"], bool)
     assert "deepseek_api_key" not in payload

@@ -46,7 +46,9 @@ type TrackCountInState = {
 export type PendingTrackRecording = {
   allowOverwrite: boolean
   audioDataUrl: string
+  createdAtMs: number
   durationSeconds: number
+  expiresAtMs: number
   filename: string
   slotId: number
   trackName: string
@@ -77,6 +79,12 @@ type UseStudioRecordingArgs = {
   stopPlaybackSession: () => void
   studio: Studio | null
   studioMeter: MeterContext
+}
+
+export const PENDING_RECORDING_RETENTION_MS = 30 * 60 * 1000
+
+export function isPendingRecordingExpired(recording: PendingTrackRecording, nowMs = Date.now()): boolean {
+  return recording.expiresAtMs <= nowMs
 }
 
 export function useStudioRecording({
@@ -170,6 +178,34 @@ export function useStudioRecording({
     const intervalId = window.setInterval(updateMeter, 120)
     return () => window.clearInterval(intervalId)
   }, [recordingSlotId, trackCountIn])
+
+  useEffect(() => {
+    if (pendingTrackRecording === null) {
+      return undefined
+    }
+    const expiresInMs = pendingTrackRecording.expiresAtMs - Date.now()
+    if (isPendingRecordingExpired(pendingTrackRecording, Date.now())) {
+      setActionState({
+        phase: 'success',
+        message: `${formatTrackName(pendingTrackRecording.trackName)} 녹음 보관 시간이 지나 임시 녹음을 비웠습니다.`,
+      })
+      setPendingTrackRecording(null)
+      return undefined
+    }
+    const timeoutId = window.setTimeout(() => {
+      setPendingTrackRecording((current) => {
+        if (!current || !isPendingRecordingExpired(current, Date.now())) {
+          return current
+        }
+        setActionState({
+          phase: 'success',
+          message: `${formatTrackName(current.trackName)} 녹음 보관 시간이 지나 임시 녹음을 비웠습니다.`,
+        })
+        return null
+      })
+    }, expiresInMs)
+    return () => window.clearTimeout(timeoutId)
+  }, [pendingTrackRecording, setActionState])
 
   function cancelTrackCountIn(message = '녹음 준비를 취소했습니다.') {
     trackCountInRunIdRef.current += 1
@@ -473,10 +509,13 @@ export function useStudioRecording({
         if (!recordedAudioBase64) {
           throw new Error('녹음 오디오가 비어 있습니다. 마이크 입력을 확인하고 다시 녹음해 주세요.')
         }
+        const createdAtMs = Date.now()
         setPendingTrackRecording({
           allowOverwrite,
           audioDataUrl: recordedAudioBase64,
+          createdAtMs,
           durationSeconds: recordedDurationSeconds,
+          expiresAtMs: createdAtMs + PENDING_RECORDING_RETENTION_MS,
           filename: `${track.name}-recorded-take.wav`,
           slotId: track.slot_id,
           trackName: track.name,
@@ -554,6 +593,14 @@ export function useStudioRecording({
 
     const pendingRecording = pendingTrackRecording
     const trackLabel = formatTrackName(pendingRecording.trackName)
+    if (isPendingRecordingExpired(pendingRecording)) {
+      setPendingTrackRecording(null)
+      setActionState({
+        phase: 'error',
+        message: `${trackLabel} 임시 녹음 보관 시간이 지났습니다. 다시 녹음해 주세요.`,
+      })
+      return
+    }
     const succeeded = await runStudioAction(
       async () => {
         const recordingBlob = dataUrlToBlob(pendingRecording.audioDataUrl)

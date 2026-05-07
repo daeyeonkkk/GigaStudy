@@ -248,11 +248,16 @@ is excluded from persistence and remains an adapter detail.
   Studio persistence abstraction. Base studio payloads are kept small by
   sidecar-storing reports, candidates, and track material archives; concurrent
   saves merge archive rows by `archive_id` so restore history is not lost by a
-  racing save.
+  racing save. Backends are local JSON, Postgres, or R2/S3 JSON metadata under
+  the configured metadata prefix.
+- `apps/api/src/gigastudy_api/services/metadata_object_store.py`
+  Small S3-compatible JSON object adapter used by R2 metadata stores, the
+  engine queue, asset registry, and playback-instrument config.
 - `apps/api/src/gigastudy_api/services/studio_assets.py`
-  Asset path, local/S3 storage, and direct-upload lifecycle.
+  Asset path, local/S3 storage, direct-upload lifecycle, staged cleanup, and
+  bounded deletion of unreferenced studio assets.
 - `apps/api/src/gigastudy_api/services/engine_queue.py`
-  Durable local/Postgres queue for document import, voice extraction, AI
+  Durable local/Postgres/R2 queue for document import, voice extraction, AI
   generation, and scoring analysis work.
 - `apps/api/src/gigastudy_api/services/performance.py`
   Per-request timing collector used by API middleware and store/response
@@ -491,7 +496,11 @@ The rebuild now follows the intended separation:
   `CandidateRegion.pitch_events`.
 - Restore snapshots: `Studio.track_material_archives` is inactive storage for
   restoration only, stored outside the base studio payload, and is not consumed
-  by playback, scoring, practice, or AI generation.
+  by playback, scoring, practice, or AI generation. Pinned original score
+  snapshots remain; non-pinned restore snapshots keep the latest 3 per slot.
+- Alpha persistence: in R2 metadata mode, new studios, sidecars, queue state,
+  asset registry, and custom guide-tone config are stored in object storage
+  under `metadata/`. Cloud Run local disk remains cache/temp space.
 - Product surfaces: region lanes, selected-region piano roll, waterfall
   practice, playback, and report focus consume region/event payloads only.
 - Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,

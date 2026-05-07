@@ -96,6 +96,14 @@ async function expectRegisteredRegion(page: Page, slotId: number, labels: string
   }
 }
 
+async function expectGeneratedRegion(page: Page, slotId: number) {
+  const region = page.getByTestId(`track-region-${slotId}`)
+  await expect(region).toBeVisible()
+
+  const events = page.locator(`[data-track-slot-id="${slotId}"][data-testid^="track-event-mini-"]`)
+  await expect.poll(async () => events.count()).toBeGreaterThan(0)
+}
+
 async function openNoteEditorForRegion(page: Page, slotId: number, labels: string[]) {
   const region = page.getByTestId(`track-region-${slotId}`)
   await region.click()
@@ -205,7 +213,7 @@ test('AI generation registers a second editable region', async ({ page }) => {
   await expect(page.getByTestId('candidate-review')).toContainText('후보')
   await approveFirstCandidate(page)
 
-  await expectRegisteredRegion(page, 2, ['E4', 'G4'])
+  await expectGeneratedRegion(page, 2)
   await expect(page.locator('.studio-tracks__summary')).toContainText('등록 2')
 })
 

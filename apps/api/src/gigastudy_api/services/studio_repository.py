@@ -234,6 +234,7 @@ class StudioRepository:
         self._store: StudioStore = build_studio_store(
             storage_root=self._root,
             database_url=settings.database_url,
+            settings=settings,
         )
         try:
             asset_storage = build_asset_storage(
@@ -249,6 +250,7 @@ class StudioRepository:
         asset_registry = build_asset_registry(
             storage_root=self._root,
             database_url=settings.database_url,
+            settings=settings,
         )
         self._assets = StudioAssetService(
             root=self._root,
@@ -259,6 +261,7 @@ class StudioRepository:
         self._engine_queue: EngineQueueStore = build_engine_queue_store(
             storage_root=self._root,
             database_url=settings.database_url,
+            settings=settings,
         )
         self._engine_job_handlers = StudioEngineJobHandlers(
             assets=self._assets,
@@ -668,6 +671,9 @@ class StudioRepository:
     def delete_admin_expired_staged_assets(self) -> AdminDeleteResult:
         return self._admin.delete_expired_staged_assets()
 
+    def run_admin_maintenance_cleanup(self) -> AdminDeleteResult:
+        return self._admin.run_maintenance_cleanup()
+
     def delete_admin_asset(self, asset_id: str) -> AdminDeleteResult:
         return self._admin.delete_asset(asset_id)
 
@@ -677,6 +683,7 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> DirectUploadTarget:
+        self._admin.cleanup_if_due()
         return self._uploads.create_studio_upload_target(request, owner_token=owner_token)
 
     def create_track_upload_target(
@@ -687,6 +694,7 @@ class StudioRepository:
         *,
         owner_token: str | None = None,
     ) -> DirectUploadTarget:
+        self._admin.cleanup_if_due()
         return self._uploads.create_track_upload_target(
             studio_id,
             slot_id,

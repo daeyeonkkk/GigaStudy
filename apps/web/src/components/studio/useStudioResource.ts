@@ -75,6 +75,13 @@ export function shouldRefreshStudioFromActivity(
   return previousActiveJobCount > 0 && activeJobs(activity.jobs).length === 0
 }
 
+export function shouldNotifyJobCompletionFromPoll(
+  pollStartedWithActiveJobs: boolean,
+  jobs: TrackExtractionJob[],
+): boolean {
+  return pollStartedWithActiveJobs && activeJobs(jobs).length === 0
+}
+
 export function useStudioResource(
   studioId: string | undefined,
   onPollingIssue: (notice: StudioActionState) => void,
@@ -218,7 +225,7 @@ export function useStudioResource(
             setStudio(nextStudio)
             if (nextActiveJobs.length > 0) {
               jobActivityRef.current?.(buildJobNotice(nextActiveJobs))
-            } else if (previousActiveJobCountRef.current > 0) {
+            } else if (shouldNotifyJobCompletionFromPoll(activeExtractionJobCount > 0, nextStudio.jobs)) {
               jobActivityRef.current?.(buildJobNotice([]))
             }
             previousActiveJobCountRef.current = nextActiveJobs.length
@@ -238,6 +245,8 @@ export function useStudioResource(
           )
           if (nextActiveJobs.length > 0) {
             jobActivityRef.current?.(buildJobNotice(nextActiveJobs))
+          } else if (shouldNotifyJobCompletionFromPoll(activeExtractionJobCount > 0, activity.jobs)) {
+            jobActivityRef.current?.(buildJobNotice([]))
           }
           previousActiveJobCountRef.current = nextActiveJobs.length
           scheduleNextPoll(activity.jobs)

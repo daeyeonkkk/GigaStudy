@@ -4,6 +4,7 @@ import {
   activeJobs,
   getActivityFailureDelayMs,
   getActivityPollingDelayMs,
+  shouldNotifyJobCompletionFromPoll,
   shouldRefreshStudioFromActivity,
 } from '../../apps/web/src/components/studio/useStudioResource'
 import type { Studio, StudioActivity, TrackExtractionJob } from '../../apps/web/src/types/studio'
@@ -61,6 +62,14 @@ describe('studio activity polling helpers', () => {
     expect(shouldRefreshStudioFromActivity(studio, activity({ pending_candidate_count: 1 }), 1)).toBe(true)
     expect(shouldRefreshStudioFromActivity(studio, activity({ report_count: 1 }), 1)).toBe(true)
     expect(shouldRefreshStudioFromActivity(studio, activity({ registered_track_count: 2 }), 1)).toBe(true)
+  })
+
+  it('notifies completion when a poll that started from active jobs sees no active jobs', () => {
+    const completedJob = { ...baseJob, status: 'completed' as const }
+
+    expect(shouldNotifyJobCompletionFromPoll(true, [completedJob])).toBe(true)
+    expect(shouldNotifyJobCompletionFromPoll(false, [completedJob])).toBe(false)
+    expect(shouldNotifyJobCompletionFromPoll(true, [baseJob])).toBe(false)
   })
 
   it('backs off queued polling and keeps running jobs responsive', () => {

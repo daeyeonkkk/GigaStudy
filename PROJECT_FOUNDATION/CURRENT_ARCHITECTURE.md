@@ -232,8 +232,11 @@ is excluded from persistence and remains an adapter detail.
   diagnostics, then characterizes each part by musical role. Pitched
   singer-like parts are assigned by relative register and range fit, so generic
   staff names can still become soprano/alto/tenor/baritone/bass material.
-  Channel-10 or clearly special rhythmic parts map to percussion. Candidate
-  review is kept for parts that still look like accompaniment, overly broad
+  Channel-10 or clearly special rhythmic parts map to percussion. If no
+  percussion-like part exists, slot 6 stays empty and the document job is still
+  completed; the web activity notice clears the job-origin busy state when
+  activity or a view refresh reports no queued/running jobs. Candidate review
+  is kept for parts that still look like accompaniment, overly broad
   special-purpose material, or otherwise ambiguous non-vocal content after
   characterization.
 - `apps/api/src/gigastudy_api/services/registration_context.py`

@@ -75,6 +75,35 @@ export function StudioPage() {
     'studio',
   )
 
+  const completedDocumentImportLeavesPercussionEmpty = useMemo(() => {
+    if (!studio) {
+      return false
+    }
+    const completedFullScoreImport = studio.jobs.some(
+      (job) => job.job_type === 'document' && job.parse_all_parts && job.status === 'completed',
+    )
+    const percussionTrack = studio.tracks.find((track) => track.slot_id === 6)
+    return completedFullScoreImport && percussionTrack?.status === 'empty' && registeredSlotIds.length > 0
+  }, [registeredSlotIds.length, studio])
+
+  useEffect(() => {
+    if (activeExtractionJobs.length > 0) {
+      return
+    }
+    setActionState((current) => {
+      if (current.phase !== 'busy' || current.source !== 'job') {
+        return current
+      }
+      return {
+        phase: 'success',
+        message: completedDocumentImportLeavesPercussionEmpty
+          ? '악보 등록을 마쳤습니다. 파일에 퍼커션 파트가 없으면 빈 트랙으로 남습니다.'
+          : '작업이 끝났습니다. 결과를 확인해 주세요.',
+        source: 'job',
+      }
+    })
+  }, [activeExtractionJobs.length, completedDocumentImportLeavesPercussionEmpty])
+
   useEffect(() => {
     if (!studio) {
       return

@@ -216,6 +216,9 @@ the same change.
   lowest suitable line becomes bass, while missing or duplicated middle roles
   are placed into the closest available visible slots without inventing empty
   material. Channel-10 or clearly rhythmic/special parts map to percussion.
+  If the source score has no percussion part, slot 6 remains an empty lane and
+  the score import still completes normally; missing percussion must not keep
+  document registration or AI generation controls in a busy state.
   Review candidates are reserved for parts that still look like accompaniment,
   overly broad special-purpose material, or otherwise ambiguous non-vocal
   content after this analysis.

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str | None = None
     admin_password_aliases: Annotated[list[str], NoDecode] = []
+    admin_session_secret: str | None = None
+    admin_session_ttl_seconds: int = 60 * 60
     studio_access_policy: str = "public"
     database_url: str | None = None
     storage_backend: str = "local"

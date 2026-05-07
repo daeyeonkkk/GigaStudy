@@ -77,6 +77,10 @@ the same change.
 - Admin login failures should be actionable without revealing the configured
   aliases: the UI may tell the operator to check input language/composition,
   but it must not display alternate passwords.
+- Admin browser sessions should use short-lived server-signed bearer tokens.
+  The admin password is submitted only to create the session and should not be
+  stored by the browser after login. Static admin tokens remain script/emergency
+  fallback only.
 
 ## Musical Normalization
 
@@ -440,6 +444,9 @@ the same change.
   detail view.
 - Admin and public studio listing can remain alpha-simple, but the code should
   not assume privacy that does not exist.
+- The web app may be installable as a PWA shell. The service worker must not
+  cache API responses or studio data by default; installability is a UX
+  convenience, not a data durability or security boundary.
 
 ## Infrastructure And Performance
 
@@ -452,6 +459,13 @@ the same change.
 - R2/S3 metadata mode is a supported alpha persistence mode for new studios.
   Existing Postgres/file-store studios are not implicitly migrated into it; a
   deliberate reset or migration must choose that.
+- Production and alpha secrets belong in server-side secret storage such as
+  Google Secret Manager, not in tracked env files or frontend builds. Client
+  apps, including future native shells, must call the API instead of embedding
+  R2, LLM, admin, or database credentials.
+- R2 metadata backups are prefix snapshots covering metadata plus referenced
+  assets. Restoring metadata without matching uploads/jobs/playback assets is
+  unsafe unless the operator intentionally accepts missing media.
 - Temporary recordings are browser-side pending takes. If the user has not
   registered or deleted one within 30 minutes, the client may discard it.
 - Inactive studio metadata can remain for admin recovery, but its stored audio

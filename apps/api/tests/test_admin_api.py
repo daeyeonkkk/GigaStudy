@@ -34,6 +34,7 @@ def build_client(
     admin_password: str | None = ADMIN_PASSWORD,
     admin_password_aliases: list[str] | None = None,
     admin_token: str | None = None,
+    admin_session_secret: str | None = "test-session-secret",
 ) -> TestClient:
     monkeypatch.setenv("GIGASTUDY_API_STORAGE_ROOT", str(tmp_path))
     monkeypatch.setenv("GIGASTUDY_API_STUDIO_ACCESS_POLICY", "public")
@@ -49,6 +50,10 @@ def build_client(
         monkeypatch.delenv("GIGASTUDY_API_ADMIN_TOKEN", raising=False)
     else:
         monkeypatch.setenv("GIGASTUDY_API_ADMIN_TOKEN", admin_token)
+    if admin_session_secret is None:
+        monkeypatch.delenv("GIGASTUDY_API_ADMIN_SESSION_SECRET", raising=False)
+    else:
+        monkeypatch.setenv("GIGASTUDY_API_ADMIN_SESSION_SECRET", admin_session_secret)
     get_settings.cache_clear()
     studio_repository._repository = None
     return TestClient(create_app())
@@ -92,6 +97,39 @@ def test_admin_storage_accepts_configured_admin_login(tmp_path: Path, monkeypatc
     response = client.get("/api/admin/storage", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
+
+
+def test_admin_session_token_authenticates_admin_requests(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+
+    login_response = client.post(
+        "/api/admin/session",
+        json={"username": "admin", "password": ADMIN_PASSWORD},
+    )
+
+    assert login_response.status_code == 200
+    session = login_response.json()
+    assert session["token_type"] == "bearer"
+    assert session["expires_in_seconds"] == 3600
+    assert session["access_token"].startswith("gst_admin_v1.")
+
+    storage_response = client.get(
+        "/api/admin/storage",
+        headers={"Authorization": f"Bearer {session['access_token']}"},
+    )
+
+    assert storage_response.status_code == 200
+
+
+def test_admin_session_rejects_wrong_login(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/admin/session",
+        json={"username": "admin", "password": "wrong"},
+    )
+
+    assert response.status_code == 401
 
 
 def test_admin_storage_rejects_keyboard_alias_for_alpha_login(tmp_path: Path, monkeypatch) -> None:

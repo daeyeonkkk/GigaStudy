@@ -3,11 +3,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from gigastudy_api.api.schemas.admin import (
     AdminDeleteResult,
     AdminEngineDrainResult,
+    AdminSessionRequest,
+    AdminSessionResponse,
     AdminStorageSummary,
     PlaybackInstrumentConfig,
     UpdatePlaybackInstrumentRequest,
 )
-from gigastudy_api.services.admin_auth import require_admin_credentials
+from gigastudy_api.services.admin_auth import create_admin_session_token, require_admin_credentials
 from gigastudy_api.services.playback_instrument import (
     PlaybackInstrumentService,
     get_playback_instrument_service,
@@ -15,6 +17,19 @@ from gigastudy_api.services.playback_instrument import (
 from gigastudy_api.services.studio_repository import StudioRepository, get_studio_repository
 
 router = APIRouter()
+
+
+@router.post("/session", response_model=AdminSessionResponse)
+def create_admin_session(request: AdminSessionRequest) -> AdminSessionResponse:
+    token, expires_at, ttl_seconds = create_admin_session_token(
+        admin_user=request.username,
+        admin_password=request.password,
+    )
+    return AdminSessionResponse(
+        access_token=token,
+        expires_at=expires_at,
+        expires_in_seconds=ttl_seconds,
+    )
 
 
 @router.get("/storage", response_model=AdminStorageSummary)

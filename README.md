@@ -85,10 +85,12 @@ The API exposes the current product surface only:
 - `POST /api/studios/{studio_id}/tracks/{slot_id}/score`
 - `GET /api/playback-instrument`
 - `GET /api/playback-instrument/audio`
+- `POST /api/admin/session`
 - `GET /api/admin/storage`
 - `POST /api/admin/studios/{studio_id}/deactivate`
 - `DELETE /api/admin/studios/{studio_id}`
 - `DELETE /api/admin/inactive-studios`
+- `PUT /api/admin/playback-instrument`
 - `DELETE /api/admin/playback-instrument`
 - `DELETE /api/admin/studios/{studio_id}/assets`
 - `DELETE /api/admin/staged-assets`
@@ -126,6 +128,13 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
 - Local API-proxy direct uploads use signed, expiring upload tokens. Owner-token
   mode also binds those proxy upload tokens to the studio owner hash before any
   bytes are written.
+- Store production/alpha secrets in Google Secret Manager, not in tracked env
+  files or the web bundle. Admin browser login uses a short-lived bearer
+  session token; static admin tokens are script/emergency fallback only.
+- `ops/cloud-run.alpha.env.example.yaml` defines the non-secret Cloud Run env
+  template. Copy it to the ignored `ops/cloud-run.alpha.env.yaml`, fill
+  environment-specific non-secret values, create the required Secret Manager
+  secrets, then use `ops/deploy-api-alpha.ps1`.
 - Document extraction quality/runtime can be tuned with
   `GIGASTUDY_API_DOCUMENT_EXTRACTION_BACKEND`
   (`auto`, `audiveris`, `pdf_vector`, `vector_first`) plus
@@ -177,6 +186,19 @@ gcloud run deploy gigastudy-api-alpha \
   --max-instances 1 \
   --update-env-vars GIGASTUDY_API_APP_ENV=production \
   --allow-unauthenticated
+```
+
+Secret Manager based deploy:
+
+```powershell
+Copy-Item ops/cloud-run.alpha.env.example.yaml ops/cloud-run.alpha.env.yaml
+# Fill ops/cloud-run.alpha.env.yaml with non-secret alpha values.
+# Create required Secret Manager secrets before deploying:
+# gigastudy-api-admin-password
+# gigastudy-api-admin-session-secret
+# gigastudy-api-s3-access-key-id
+# gigastudy-api-s3-secret-access-key
+./ops/deploy-api-alpha.ps1
 ```
 
 Smoke-check the deployed API before testing the Pages UI:

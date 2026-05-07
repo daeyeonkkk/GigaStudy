@@ -122,6 +122,11 @@ is excluded from persistence and remains an adapter detail.
   not rebuild product regions from internal storage event arrays. Timeline
   bounds can extend before 0 seconds so user-visible sync/early entrances are
   displayed rather than clamped onto the downbeat.
+- `apps/web/public/manifest.webmanifest`, `apps/web/public/sw.js`, and
+  `apps/web/src/lib/registerServiceWorker.ts`
+  Provide installable PWA shell metadata and a minimal service worker. The
+  worker claims the app shell only and does not cache API responses or studio
+  data; persistence remains the API/R2 contract.
 
 ### API
 
@@ -135,6 +140,12 @@ is excluded from persistence and remains an adapter detail.
   `GET /studios/{id}?view=studio|edit|practice` trims candidate/report detail
   for page loads, while candidate and report detail endpoints serve large
   review/evidence payloads lazily.
+- `apps/api/src/gigastudy_api/api/routes/admin.py` and
+  `apps/api/src/gigastudy_api/services/admin_auth.py`
+  Admin login creates a short-lived signed bearer session token. Admin command
+  endpoints accept that bearer token, while legacy static admin token/password
+  headers remain available for scripts and emergency access. The web admin page
+  stores only the short-lived token in browser session storage.
 - `apps/api/src/gigastudy_api/services/studio_repository.py`
   Facade over storage, asset, queue, upload, candidate, generation, scoring,
   and resource services.

@@ -6,6 +6,18 @@ from pydantic import BaseModel, Field
 AdminAssetKind = Literal["upload", "generated", "unknown"]
 
 
+class AdminSessionRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AdminSessionResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_at: str
+    expires_in_seconds: int
+
+
 class AdminAssetSummary(BaseModel):
     asset_id: str
     studio_id: str

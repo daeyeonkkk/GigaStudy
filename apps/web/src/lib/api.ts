@@ -29,6 +29,12 @@ const ADMIN_SESSION_STORAGE_KEY = 'gigastudy.adminSession.v1'
 
 export type AdminCredentials = {
   username: string
+  accessToken: string
+  expiresAt: string
+}
+
+export type AdminLoginCredentials = {
+  username: string
   password: string
 }
 
@@ -596,11 +602,8 @@ export function deactivateStudio(studioId: string): Promise<Studio> {
 }
 
 function adminHeaders(credentials: AdminCredentials): HeadersInit {
-  const username = credentials.username.trim()
-  const password = credentials.password.trim()
   return {
-    'X-GigaStudy-Admin-User': username,
-    'X-GigaStudy-Admin-Password-B64': encodeUtf8Base64(password),
+    Authorization: `Bearer ${credentials.accessToken}`,
   }
 }
 
@@ -658,19 +661,8 @@ function storedAdminHeaders(): HeadersInit {
   if (typeof window === 'undefined') {
     return {}
   }
-  const stored = window.sessionStorage.getItem(ADMIN_SESSION_STORAGE_KEY)
-  if (!stored) {
-    return {}
-  }
-  try {
-    const credentials = JSON.parse(stored) as AdminCredentials
-    if (!credentials.username || !credentials.password) {
-      return {}
-    }
-    return adminHeaders(credentials)
-  } catch {
-    return {}
-  }
+  const credentials = readStoredAdminSession()
+  return credentials ? adminHeaders(credentials) : {}
 }
 
 export function storeAdminSession(credentials: AdminCredentials): void {
@@ -685,6 +677,52 @@ export function clearAdminSession(): void {
     return
   }
   window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
+}
+
+export function readStoredAdminSession(): AdminCredentials | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  const stored = window.sessionStorage.getItem(ADMIN_SESSION_STORAGE_KEY)
+  if (!stored) {
+    return null
+  }
+  try {
+    const credentials = JSON.parse(stored) as AdminCredentials
+    if (!credentials.username || !credentials.accessToken || !credentials.expiresAt) {
+      window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
+      return null
+    }
+    if (Date.parse(credentials.expiresAt) <= Date.now() + 5_000) {
+      window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
+      return null
+    }
+    return credentials
+  } catch {
+    window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
+    return null
+  }
+}
+
+export async function createAdminSession(credentials: AdminLoginCredentials): Promise<AdminCredentials> {
+  const payload = await requestJson<{
+    access_token: string
+    token_type: 'bearer'
+    expires_at: string
+    expires_in_seconds: number
+  }>(
+    '/api/admin/session',
+    {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    },
+    '관리자 로그인에 실패했습니다.',
+  )
+  return {
+    username: credentials.username.trim(),
+    accessToken: payload.access_token,
+    expiresAt: payload.expires_at,
+  }
 }
 
 export function getAdminStorage(

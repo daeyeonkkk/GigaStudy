@@ -43,6 +43,8 @@ def read_readiness() -> dict[str, str | int | bool]:
         "object_storage_configured": object_storage_configured,
         "database_configured": bool(settings.database_url),
         "studio_access_policy": settings.studio_access_policy,
+        "admin_password_configured": bool(settings.admin_password),
+        "admin_session_secret_configured": bool(settings.admin_session_secret),
         "max_upload_bytes": settings.max_upload_bytes,
         "max_active_engine_jobs": settings.max_active_engine_jobs,
         "engine_drain_max_jobs": settings.engine_drain_max_jobs,

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   type AdminCredentials,
   clearAdminSession,
+  createAdminSession,
   deactivateAdminStudio,
   deleteAdminAsset,
   deleteAdminExpiredStagedAssets,
@@ -83,7 +84,8 @@ export function AdminPage() {
   const isBusy = status.phase === 'loading' || busyKey !== null
   const activeCredentials = credentials ?? {
     username: username.trim(),
-    password: password.trim(),
+    accessToken: '',
+    expiresAt: '',
   }
 
   async function loadSummary(
@@ -119,11 +121,13 @@ export function AdminPage() {
 
     try {
       setExpandedStudios(new Set())
-      await loadSummary(nextCredentials, 0)
-      storeAdminSession(nextCredentials)
+      const nextSession = await createAdminSession(nextCredentials)
+      storeAdminSession(nextSession)
+      await loadSummary(nextSession, 0)
     } catch (error) {
       setCredentials(null)
       setSummary(null)
+      clearAdminSession()
       setStatus({
         phase: 'error',
         message: getAdminErrorMessage(error),

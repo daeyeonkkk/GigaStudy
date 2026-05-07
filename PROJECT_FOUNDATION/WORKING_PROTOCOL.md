@@ -27,8 +27,10 @@ Before changing code or specs, check the relevant foundation documents:
    cadence
 5. `REGION_PIANOROLL_RESET_PLAN.md` for reset intent and preserved assets
 6. `CURRENT_ARCHITECTURE.md` for code structure, data flow, and contracts
-7. `ACAPPELLA_ARRANGEMENT_AUDIT.md` for musical product constraints
-8. `AI_HARMONY_GENERATION_DESIGN.md` for AI generation constraints
+7. `OPERATIONS_RUNBOOK.md` for deployment, secrets, backup/restore, and PWA
+   boundaries
+8. `ACAPPELLA_ARRANGEMENT_AUDIT.md` for musical product constraints
+9. `AI_HARMONY_GENERATION_DESIGN.md` for AI generation constraints
 
 ## During Work
 

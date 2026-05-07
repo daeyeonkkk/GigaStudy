@@ -501,6 +501,12 @@ the same change.
 
 - Local changes are valuable. Do not reset, checkout, or revert unrequested
   work.
+- `EVALUATION_METRICS.md` defines the project scorecard. Registration quality
+  and playback trust are release-blocking product gates, not optional polish
+  metrics.
+- New tests and release gates should map back to the scorecard categories:
+  registration quality, timeline/playback trust, practice/scoring usefulness,
+  AI musical usefulness, UX/operations stability, and cost/structure health.
 - Before pulling, inspect local status. Prefer `git pull --ff-only` when the
   branch can fast-forward.
 - Prefer small, intention-revealing commits. After each coherent slice is

@@ -140,10 +140,11 @@ Read in this order:
 1. `WORKING_PROTOCOL.md`
 2. `PRODUCT_PURPOSE_AND_FUNCTIONS.md`
 3. `OPERATING_PRINCIPLES.md`
-4. `REGION_PIANOROLL_RESET_PLAN.md`
-5. `CURRENT_ARCHITECTURE.md`
-6. `ACAPPELLA_ARRANGEMENT_AUDIT.md`
-7. `AI_HARMONY_GENERATION_DESIGN.md`
+4. `EVALUATION_METRICS.md`
+5. `REGION_PIANOROLL_RESET_PLAN.md`
+6. `CURRENT_ARCHITECTURE.md`
+7. `ACAPPELLA_ARRANGEMENT_AUDIT.md`
+8. `AI_HARMONY_GENERATION_DESIGN.md`
 
 ## Foundation Rule
 
@@ -158,6 +159,10 @@ generation strategy, or scoring alignment rules, update
 If a task changes the default rules for timing, sync, registration, LLM use,
 playback, UX, infrastructure, code structure, or verification, update
 `OPERATING_PRINCIPLES.md` in the same work.
+
+If a task changes release gates, quality targets, product telemetry, or the
+definition of success for registration, playback, scoring, AI generation, UX,
+or alpha operations, update `EVALUATION_METRICS.md` in the same work.
 
 Every task must follow `WORKING_PROTOCOL.md`: check the relevant foundation
 documents before implementation and update foundation in the same task whenever

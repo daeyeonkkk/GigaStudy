@@ -188,6 +188,7 @@ curl https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app/api/studio
 
 ## Foundation Docs
 
+- [Evaluation Metrics](./PROJECT_FOUNDATION/EVALUATION_METRICS.md)
 - [Current Architecture](./PROJECT_FOUNDATION/CURRENT_ARCHITECTURE.md)
 - [Region/Piano Roll Reset Plan](./PROJECT_FOUNDATION/REGION_PIANOROLL_RESET_PLAN.md)
 - [Working Protocol](./PROJECT_FOUNDATION/WORKING_PROTOCOL.md)

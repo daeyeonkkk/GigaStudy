@@ -23,10 +23,12 @@ Before changing code or specs, check the relevant foundation documents:
    functional scope, non-goals, and decision rules
 3. `OPERATING_PRINCIPLES.md` for timing, sync, registration, LLM, UX,
    infrastructure, code, and verification defaults
-4. `REGION_PIANOROLL_RESET_PLAN.md` for reset intent and preserved assets
-5. `CURRENT_ARCHITECTURE.md` for code structure, data flow, and contracts
-6. `ACAPPELLA_ARRANGEMENT_AUDIT.md` for musical product constraints
-7. `AI_HARMONY_GENERATION_DESIGN.md` for AI generation constraints
+4. `EVALUATION_METRICS.md` for release-blocking quality targets and evaluation
+   cadence
+5. `REGION_PIANOROLL_RESET_PLAN.md` for reset intent and preserved assets
+6. `CURRENT_ARCHITECTURE.md` for code structure, data flow, and contracts
+7. `ACAPPELLA_ARRANGEMENT_AUDIT.md` for musical product constraints
+8. `AI_HARMONY_GENERATION_DESIGN.md` for AI generation constraints
 
 ## During Work
 
@@ -49,6 +51,8 @@ Before finishing a task:
 - Update `OPERATING_PRINCIPLES.md` if default rules for timing, sync,
   registration, LLM use, playback, UX, infrastructure, code structure, or
   verification change.
+- Update `EVALUATION_METRICS.md` if release gates, product quality targets,
+  telemetry, or success criteria change.
 - Update `REGION_PIANOROLL_RESET_PLAN.md` if the reset sequence or retained
   asset list changes.
 - Update `ACAPPELLA_ARRANGEMENT_AUDIT.md` or

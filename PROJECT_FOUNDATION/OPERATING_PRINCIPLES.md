@@ -254,6 +254,11 @@ the same change.
 - The target track should be generated from all usable registered context
   tracks, excluding the target's own current material unless the operation is an
   explicit revision.
+- Percussion generation is rhythm-section generation, not pitched vocal
+  harmony. Slot 6 uses a deterministic percussion rhythm engine on the same
+  BPM/meter-derived grid, with hit labels such as Kick, Snare, Clap,
+  HatClosed, HatOpen, and Rim. LLMs may later suggest pattern intent, but they
+  must not author percussion hit events.
 - Candidates should be meaningfully different by role, such as stable blend,
   counterline, open support, upper blend, or active motion.
 - The deterministic generator should search a slightly larger candidate pool

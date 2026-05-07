@@ -14,6 +14,13 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
 from gigastudy_api.services.engine.acappella_generation import acappella_quality_diagnostics
 from gigastudy_api.services.engine.harmony_plan import DeepSeekCandidateDirection, fallback_candidate_direction
 from gigastudy_api.services.engine.harmony import generate_rule_based_harmony_candidates
+from gigastudy_api.services.engine.percussion_generation import (
+    PERCUSSION_GENERATION_METHOD,
+    PERCUSSION_SOURCE_LABEL,
+    generate_percussion_candidates,
+    percussion_candidate_diagnostics,
+    percussion_candidate_variant_label,
+)
 from gigastudy_api.services.engine.timeline import registered_region_events_by_slot
 from gigastudy_api.services.llm.provider import DeepSeekHarmonyPlan, plan_harmony
 
@@ -82,6 +89,28 @@ def generate_track_material(
         raise GenerationRequestError(
             409,
             "AI generation requires at least one registered context track.",
+        )
+    if target_slot_id == 6:
+        engine_candidate_count = generation_search_candidate_count(request.candidate_count)
+        candidate_events = generate_percussion_candidates(
+            context_tracks=context_events,
+            bpm=studio.bpm,
+            time_signature_numerator=studio.time_signature_numerator,
+            time_signature_denominator=studio.time_signature_denominator,
+            context_events_by_slot=context_events_by_slot,
+            candidate_count=engine_candidate_count,
+        )
+        candidate_events = select_diverse_generated_candidates(
+            candidate_events,
+            requested_count=request.candidate_count,
+        )
+        return GeneratedTrackMaterial(
+            candidate_events=candidate_events,
+            context_events_by_slot=context_events_by_slot,
+            source_label=PERCUSSION_SOURCE_LABEL,
+            method=PERCUSSION_GENERATION_METHOD,
+            message="퍼커션 전용 리듬 엔진으로 후보를 만들었습니다. 하나를 승인하면 트랙에 등록됩니다.",
+            llm_plan=None,
         )
     planning_settings = _generation_planning_settings(
         settings,
@@ -376,6 +405,24 @@ def generation_candidate_review_metadata(
         method=method,
         confidence=confidence,
     )
+    if slot_id == 6:
+        diagnostics.update(
+            percussion_candidate_diagnostics(
+                candidate_index=candidate_index,
+                events=events,
+                context_events_by_slot=context_events_by_slot,
+            )
+        )
+        diagnostics.update(
+            generation_context_diagnostics(
+                events=events,
+                context_events_by_slot=context_events_by_slot,
+                sibling_candidates=sibling_candidates,
+                target_slot_id=slot_id,
+                candidate_goal=None,
+            )
+        )
+        return diagnostics, percussion_candidate_variant_label(candidate_index, events)
     if llm_plan is not None:
         diagnostics["llm_provider"] = llm_plan.provider
         diagnostics["llm_model"] = llm_plan.model

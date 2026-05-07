@@ -8,6 +8,7 @@ import {
 import { getGridSeconds } from '../../apps/web/src/components/studio/TrackBoardEditorGrid'
 import {
   computeMelodicEnvelope,
+  getPercussionHitKind,
   getSixteenthNoteSeconds,
   getPitchEventPlaybackFrequency,
   STUDIO_TIME_PRECISION_SECONDS,
@@ -101,6 +102,29 @@ describe('studio playback scheduling helpers', () => {
     } as PitchEvent
 
     expect(getPitchEventPlaybackFrequency(event)).toBeCloseTo(440)
+  })
+
+  it('maps percussion labels to playable hit kinds and frequencies', () => {
+    const labels = [
+      ['Kick', 'kick', 90],
+      ['Snare', 'snare', 180],
+      ['Clap', 'clap', 320],
+      ['HatClosed', 'hat-closed', 620],
+      ['HatOpen', 'hat-open', 700],
+      ['Rim', 'rim', 480],
+    ] as const
+
+    labels.forEach(([label, kind, frequency]) => {
+      const event = {
+        is_rest: false,
+        label,
+        pitch_hz: null,
+        pitch_midi: null,
+      } as PitchEvent
+
+      expect(getPercussionHitKind(label)).toBe(kind)
+      expect(getPitchEventPlaybackFrequency(event)).toBe(frequency)
+    })
   })
 
   it('collapses vocal playback events to one active pitch at a time', () => {

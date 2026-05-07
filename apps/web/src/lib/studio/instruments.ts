@@ -9,7 +9,9 @@ export type PlaybackNode = {
   gains?: GainNode[]
 }
 
-export type SynthVoiceId = 'guide-sustain' | 'plucked-reference' | 'percussion-click'
+export type PercussionHitKind = 'kick' | 'snare' | 'clap' | 'hat-closed' | 'hat-open' | 'rim'
+
+export type SynthVoiceId = 'guide-sustain' | 'plucked-reference' | 'percussion-click' | 'percussion-kit'
 
 export type SynthPlaybackInstrument = {
   id: string
@@ -35,6 +37,7 @@ export type InstrumentPlaybackRequest = {
   gridUnitSeconds?: number
   instrument?: PlaybackInstrument
   nextGapSeconds?: number
+  percussionKind?: PercussionHitKind
   startTime: number
   volume: number
 }
@@ -76,8 +79,15 @@ export const PERCUSSION_CLICK_INSTRUMENT: SynthPlaybackInstrument = {
   voice: 'percussion-click',
 }
 
+export const PERCUSSION_KIT_INSTRUMENT: SynthPlaybackInstrument = {
+  id: 'percussion-kit',
+  kind: 'synth',
+  label: '퍼커션 키트',
+  voice: 'percussion-kit',
+}
+
 export const DEFAULT_MELODIC_INSTRUMENT = GUIDE_SUSTAIN_INSTRUMENT
-export const DEFAULT_PERCUSSION_INSTRUMENT = PERCUSSION_CLICK_INSTRUMENT
+export const DEFAULT_PERCUSSION_INSTRUMENT = PERCUSSION_KIT_INSTRUMENT
 
 export function createInstrumentPlayback(
   context: AudioContext,
@@ -193,6 +203,9 @@ function createSynthInstrumentPlayback(
   }
   if (instrument.voice === 'plucked-reference') {
     return createPluckedReferenceTone(context, request)
+  }
+  if (instrument.voice === 'percussion-kit') {
+    return createPercussionKitTone(context, request)
   }
   return createPercussionClickTone(context, request)
 }
@@ -394,6 +407,187 @@ function createPluckedReferenceTone(
     gains,
     oscillators,
   }
+}
+
+function createPercussionKitTone(
+  context: AudioContext,
+  request: InstrumentPlaybackRequest,
+): PlaybackNode {
+  const kind = request.percussionKind ?? percussionKindFromFrequency(request.frequency)
+  if (kind === 'kick') {
+    return createKickTone(context, request)
+  }
+  if (kind === 'snare' || kind === 'clap') {
+    return createNoisePercussionTone(context, request, {
+      bodyFrequency: kind === 'clap' ? 520 : 185,
+      durationSeconds: kind === 'clap' ? 0.13 : 0.12,
+      filterFrequency: kind === 'clap' ? 1550 : 1250,
+      filterType: 'bandpass',
+      peakRatio: kind === 'clap' ? 0.82 : 0.9,
+      releaseRatio: kind === 'clap' ? 0.35 : 0.28,
+    })
+  }
+  if (kind === 'hat-open') {
+    return createNoisePercussionTone(context, request, {
+      durationSeconds: 0.18,
+      filterFrequency: 5200,
+      filterType: 'highpass',
+      peakRatio: 0.42,
+      releaseRatio: 0.78,
+    })
+  }
+  if (kind === 'rim') {
+    return createRimTone(context, request)
+  }
+  return createNoisePercussionTone(context, request, {
+    durationSeconds: 0.055,
+    filterFrequency: 6200,
+    filterType: 'highpass',
+    peakRatio: 0.36,
+    releaseRatio: 0.35,
+  })
+}
+
+function createKickTone(context: AudioContext, request: InstrumentPlaybackRequest): PlaybackNode {
+  const destination = request.destination ?? context.destination
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  const filter = context.createBiquadFilter()
+  const duration = Math.min(0.18, Math.max(0.075, request.duration))
+  const start = request.startTime
+  const end = start + duration
+
+  oscillator.type = 'sine'
+  oscillator.frequency.setValueAtTime(Math.max(90, request.frequency * 1.55), start)
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(45, request.frequency * 0.72), start + duration * 0.65)
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(720, start)
+  filter.frequency.exponentialRampToValueAtTime(260, end)
+  filter.Q.setValueAtTime(0.8, start)
+
+  gain.gain.setValueAtTime(0.0001, start)
+  gain.gain.linearRampToValueAtTime(request.volume * 1.08, start + Math.min(0.01, duration * 0.18))
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, request.volume * 0.22), start + duration * 0.62)
+  gain.gain.exponentialRampToValueAtTime(0.0001, end)
+
+  oscillator.connect(filter)
+  filter.connect(gain)
+  gain.connect(destination)
+  oscillator.start(start)
+  oscillator.stop(end + 0.03)
+  return { filters: [filter], gain, oscillator }
+}
+
+function createRimTone(context: AudioContext, request: InstrumentPlaybackRequest): PlaybackNode {
+  const destination = request.destination ?? context.destination
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  const filter = context.createBiquadFilter()
+  const duration = Math.min(0.07, Math.max(0.035, request.duration))
+  const start = request.startTime
+  const end = start + duration
+
+  oscillator.type = 'triangle'
+  oscillator.frequency.setValueAtTime(Math.max(360, request.frequency), start)
+  filter.type = 'bandpass'
+  filter.frequency.setValueAtTime(1800, start)
+  filter.Q.setValueAtTime(4.5, start)
+  gain.gain.setValueAtTime(0.0001, start)
+  gain.gain.linearRampToValueAtTime(request.volume * 0.62, start + Math.min(0.006, duration * 0.18))
+  gain.gain.exponentialRampToValueAtTime(0.0001, end)
+
+  oscillator.connect(filter)
+  filter.connect(gain)
+  gain.connect(destination)
+  oscillator.start(start)
+  oscillator.stop(end + 0.03)
+  return { filters: [filter], gain, oscillator }
+}
+
+function createNoisePercussionTone(
+  context: AudioContext,
+  request: InstrumentPlaybackRequest,
+  options: {
+    bodyFrequency?: number
+    durationSeconds: number
+    filterFrequency: number
+    filterType: BiquadFilterType
+    peakRatio: number
+    releaseRatio: number
+  },
+): PlaybackNode {
+  const destination = request.destination ?? context.destination
+  const duration = Math.min(options.durationSeconds, Math.max(STUDIO_TIME_PRECISION_SECONDS * 8, request.duration))
+  const start = request.startTime
+  const end = start + duration
+  const source = createNoiseSource(context, duration + 0.02)
+  const filter = context.createBiquadFilter()
+  const gain = context.createGain()
+  const gains: GainNode[] = [gain]
+  const oscillators: OscillatorNode[] = []
+
+  filter.type = options.filterType
+  filter.frequency.setValueAtTime(options.filterFrequency, start)
+  filter.Q.setValueAtTime(options.filterType === 'bandpass' ? 1.2 : 0.25, start)
+  gain.gain.setValueAtTime(0.0001, start)
+  gain.gain.linearRampToValueAtTime(request.volume * options.peakRatio, start + Math.min(0.007, duration * 0.18))
+  gain.gain.exponentialRampToValueAtTime(
+    Math.max(0.0001, request.volume * options.peakRatio * 0.22),
+    start + duration * options.releaseRatio,
+  )
+  gain.gain.exponentialRampToValueAtTime(0.0001, end)
+
+  source.connect(filter)
+  filter.connect(gain)
+  gain.connect(destination)
+  source.start(start)
+  source.stop(end + 0.02)
+
+  if (options.bodyFrequency !== undefined) {
+    const body = context.createOscillator()
+    const bodyGain = context.createGain()
+    body.type = 'triangle'
+    body.frequency.setValueAtTime(options.bodyFrequency, start)
+    bodyGain.gain.setValueAtTime(0.0001, start)
+    bodyGain.gain.linearRampToValueAtTime(request.volume * 0.18, start + 0.008)
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.7)
+    body.connect(bodyGain)
+    bodyGain.connect(destination)
+    body.start(start)
+    body.stop(end + 0.02)
+    oscillators.push(body)
+    gains.push(bodyGain)
+  }
+
+  return { filters: [filter], gain, gains, oscillators, source }
+}
+
+function createNoiseSource(context: AudioContext, durationSeconds: number): AudioBufferSourceNode {
+  const frameCount = Math.max(1, Math.ceil(context.sampleRate * durationSeconds))
+  const buffer = context.createBuffer(1, frameCount, context.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let index = 0; index < frameCount; index += 1) {
+    data[index] = Math.random() * 2 - 1
+  }
+  const source = context.createBufferSource()
+  source.buffer = buffer
+  return source
+}
+
+function percussionKindFromFrequency(frequency: number): PercussionHitKind {
+  if (frequency <= 120) {
+    return 'kick'
+  }
+  if (frequency <= 240) {
+    return 'snare'
+  }
+  if (frequency <= 420) {
+    return 'clap'
+  }
+  if (frequency <= 540) {
+    return 'rim'
+  }
+  return 'hat-closed'
 }
 
 function createPercussionClickTone(

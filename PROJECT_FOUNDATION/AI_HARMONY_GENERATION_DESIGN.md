@@ -6,6 +6,9 @@ Last updated: 2026-05-04
 
 - AI generation is now framed as a shared a cappella track generation engine
   for all vocal slots, not a bass-specific or generic harmony filler.
+- Percussion is excluded from the vocal voice-leading engine. Slot 6 uses a
+  deterministic percussion rhythm engine that reads the same registered context
+  timeline but writes unpitched rhythm-hit events on the BPM/meter grid.
 - The engine compiles registered sibling tracks into an arrangement context:
   likely lead/active voice, phrase density, repeated motif ratio, articulation
   anchors, structural beats, and vocal vertical context.

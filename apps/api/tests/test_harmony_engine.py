@@ -37,10 +37,13 @@ def test_percussion_generation_resets_pattern_on_each_measure_downbeat() -> None
         time_signature_denominator=4,
     )
 
-    assert [note.beat for note in notes[:6]] == [1, 2, 3, 4, 5, 6]
-    assert [note.label for note in notes[:6]] == ["Kick", "Snare", "Hat", "Kick", "Snare", "Hat"]
-    assert notes[3].measure_index == 2
-    assert notes[3].beat_in_measure == 1
+    assert notes[0].beat == 1
+    assert notes[0].label == "Kick"
+    assert all(note.duration_beats == 0.25 for note in notes)
+    second_measure_downbeat = next(note for note in notes if note.measure_index == 2 and note.beat_in_measure == 1)
+    assert second_measure_downbeat.beat == 4
+    assert second_measure_downbeat.label == "Kick"
+    assert any(note.label == "Snare" for note in notes if note.measure_index == 1)
 
 
 def test_percussion_generation_uses_denominator_pulses_for_compound_meter() -> None:
@@ -64,8 +67,10 @@ def test_percussion_generation_uses_denominator_pulses_for_compound_meter() -> N
         time_signature_denominator=8,
     )
 
-    assert [note.beat for note in notes[:6]] == [1, 1.5, 2, 2.5, 3, 3.5]
-    assert [note.label for note in notes[:6]] == ["Kick", "Hat", "Hat", "Snare", "Hat", "Hat"]
+    assert notes[0].beat == 1
+    assert notes[0].label == "Kick"
+    assert all(note.duration_beats == 0.25 for note in notes)
+    assert any(note.label == "Snare" and note.beat == 2.5 for note in notes)
 
 
 def test_vocal_generation_keeps_target_range_and_meter_metadata() -> None:

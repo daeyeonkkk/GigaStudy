@@ -1315,9 +1315,10 @@ def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> 
     percussion_events = _track_region_events(approve_payload, 6)
     assert percussion["status"] == "registered"
     assert percussion["source_kind"] == "ai"
-    assert [note["label"] for note in percussion_events[:4]] == ["Kick", "Hat", "Snare", "Hat"]
-
-    assert [note["beat"] for note in percussion_events[:4]] == [1, 2, 3, 4]
+    assert percussion_events[0]["label"] == "Kick"
+    assert percussion_events[0]["beat"] == 1
+    assert all(note["duration_beats"] == 0.25 for note in percussion_events)
+    assert any(note["label"] == "Snare" for note in percussion_events)
 
     sync_response = client.patch(
         f"/api/studios/{studio_id}/tracks/6/sync",
@@ -2070,7 +2071,9 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
     assert generate_response.status_code == 200
     generated_payload = _process_engine_queue_and_get_studio(client, studio_id)
     variant_labels = [candidate["variant_label"] for candidate in generated_payload["candidates"][:3]]
-    assert all(label.startswith("그루브 ") for label in variant_labels)
+    assert variant_labels[0].startswith("기본 박")
+    assert variant_labels[1].startswith("백비트")
+    assert variant_labels[2].startswith("촘촘한 리듬")
     assert all("후보 " not in label for label in variant_labels)
     approve_response = client.post(
         f"/api/studios/{studio_id}/candidates/{generated_payload['candidates'][0]['candidate_id']}/approve",
@@ -2078,17 +2081,17 @@ def test_percussion_generation_respects_studio_time_signature(tmp_path: Path, mo
     )
     assert approve_response.status_code == 200
     percussion_events = _track_region_events(approve_response.json(), 6)
-    assert [note["beat"] for note in percussion_events[:6]] == [1, 2, 3, 4, 5, 6]
-    assert [note["label"] for note in percussion_events[:6]] == [
-        "Kick",
-        "Snare",
-        "Hat",
-        "Kick",
-        "Snare",
-        "Hat",
-    ]
-    assert percussion_events[3]["measure_index"] == 2
-    assert percussion_events[3]["beat_in_measure"] == 1
+    assert percussion_events[0]["beat"] == 1
+    assert percussion_events[0]["label"] == "Kick"
+    assert all(note["duration_beats"] == 0.25 for note in percussion_events)
+    second_measure_downbeat = next(
+        note
+        for note in percussion_events
+        if note["measure_index"] == 2 and note["beat_in_measure"] == 1
+    )
+    assert second_measure_downbeat["beat"] == 4
+    assert second_measure_downbeat["label"] == "Kick"
+    assert any(note["label"] == "Snare" for note in percussion_events)
 
 
 def test_track_upload_rejects_symbolic_score_files(tmp_path: Path, monkeypatch) -> None:

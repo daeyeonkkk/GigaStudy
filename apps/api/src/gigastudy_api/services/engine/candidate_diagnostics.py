@@ -55,7 +55,7 @@ def candidate_diagnostics(
     if measure_count == 0 and events:
         measure_count = max(1, int(max(event.beat + event.duration_beats for event in events) // 4) + 1)
     avg_event_confidence = sum(event.confidence for event in events) / len(events) if events else 0
-    range_fit_ratio = candidate_range_fit_ratio(slot_id, pitched_events)
+    range_fit_ratio = 1.0 if slot_id == 6 and not pitched_events else candidate_range_fit_ratio(slot_id, pitched_events)
     timing_grid_ratio = candidate_timing_grid_ratio(events)
     event_count = len(events)
     diagnostics.update(

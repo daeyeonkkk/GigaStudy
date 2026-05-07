@@ -437,6 +437,9 @@ flowchart TD
 3. The generator searches a slightly larger candidate pool, normalizes the
    results, selects the most distinct candidates for review, and records context
    and diversity diagnostics.
+   Percussion generation is routed to a dedicated rhythm engine instead of the
+   vocal harmony planner. It writes Kick/Snare/Clap/Hat/Rim-style unpitched hit
+   events on the same registration grid and bypasses LLM harmony planning.
 4. Generated candidates pass the shared registration rhythm contract before
    review, so candidate and approved events use the same BPM/meter-derived
    readable grid as imported material.
@@ -454,6 +457,8 @@ flowchart TD
    with the warm guide tone by default. If admin has uploaded a custom guide
    sample, melodic event synthesis may use that sample transposed from its
    configured root MIDI pitch; otherwise it falls back to the built-in synth.
+   Percussion events use the built-in percussion kit synth, while metronome
+   clicks keep the separate click voice.
    Dense MIDI-style event sessions are scheduled by lookahead chunks against
    the shared scheduled start so browser oscillator load does not mute playback.
    Playback uses persisted event durations within studio precision and does not

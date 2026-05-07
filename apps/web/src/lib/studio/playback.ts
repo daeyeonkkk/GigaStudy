@@ -9,6 +9,7 @@ import {
 import {
   createInstrumentPlayback,
   PERCUSSION_CLICK_INSTRUMENT,
+  type PercussionHitKind,
   type PlaybackNode,
 } from './instruments'
 import type { ArrangementRegion, PitchEvent, TrackSlot } from '../../types/studio'
@@ -105,18 +106,46 @@ function getPitchLabelFrequency(label: string): number | null {
   return 440 * 2 ** ((octaveOffset * 12 + pitchClassOffset) / 12)
 }
 
-function getPercussionFrequency(label: string): number {
-  const normalized = label.toLowerCase()
+export function getPercussionHitKind(label: string): PercussionHitKind | null {
+  const normalized = label.toLowerCase().replaceAll(/[\s_-]+/gu, '')
   if (normalized.includes('kick')) {
-    return 90
+    return 'kick'
   }
   if (normalized.includes('snare')) {
+    return 'snare'
+  }
+  if (normalized.includes('clap')) {
+    return 'clap'
+  }
+  if (normalized.includes('hatopen') || normalized.includes('openhat')) {
+    return 'hat-open'
+  }
+  if (normalized.includes('hatclosed') || normalized.includes('closedhat') || normalized.includes('hat')) {
+    return 'hat-closed'
+  }
+  if (normalized.includes('rim')) {
+    return 'rim'
+  }
+  return null
+}
+
+export function getPercussionFrequencyForKind(kind: PercussionHitKind): number {
+  if (kind === 'kick') {
+    return 90
+  }
+  if (kind === 'snare') {
     return 180
   }
-  if (normalized.includes('hat')) {
-    return 620
+  if (kind === 'clap') {
+    return 320
   }
-  return 260
+  if (kind === 'rim') {
+    return 480
+  }
+  if (kind === 'hat-open') {
+    return 700
+  }
+  return 620
 }
 
 export function getPitchEventPlaybackFrequency(event: PitchEvent): number | null {
@@ -126,8 +155,12 @@ export function getPitchEventPlaybackFrequency(event: PitchEvent): number | null
   if (event.pitch_hz && Number.isFinite(event.pitch_hz)) {
     return event.pitch_hz
   }
-  if (event.pitch_midi === 35 || event.label.toLowerCase().includes('kick')) {
-    return getPercussionFrequency(event.label)
+  const percussionKind = getPercussionHitKind(event.label)
+  if (percussionKind !== null) {
+    return getPercussionFrequencyForKind(percussionKind)
+  }
+  if (event.pitch_midi === 35) {
+    return getPercussionFrequencyForKind('kick')
   }
   if (typeof event.pitch_midi === 'number' && Number.isFinite(event.pitch_midi)) {
     return 440 * 2 ** ((event.pitch_midi - 69) / 12)

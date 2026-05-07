@@ -387,7 +387,7 @@ export function useStudioPlayback({
           track.slot_id,
         )
         const engineEvents: PlaybackEngineEvent[] = []
-        scheduledPitchEvents.forEach(({ durationSeconds, frequency, startSeconds: eventStartSeconds }, eventIndex) => {
+        scheduledPitchEvents.forEach(({ durationSeconds, frequency, percussionKind, startSeconds: eventStartSeconds }, eventIndex) => {
           const eventEndSeconds = eventStartSeconds + durationSeconds
           const nextPitchEvent = scheduledPitchEvents[eventIndex + 1]
           const nextGapSeconds = nextPitchEvent
@@ -411,6 +411,7 @@ export function useStudioPlayback({
             gridUnitSeconds: eventGridUnitSeconds,
             instrument: isPercussion ? DEFAULT_PERCUSSION_INSTRUMENT : melodicInstrument,
             nextGapSeconds,
+            percussionKind,
             relativeStartSeconds: eventSchedule.relativeStartSeconds,
             volume: isPercussion ? Math.min(0.2, eventToneVolume * 0.45) : eventToneVolume,
           })

@@ -24,9 +24,9 @@ from gigastudy_api.services.engine.acappella_generation import (
     compile_arrangement_context,
 )
 from gigastudy_api.services.engine.event_normalization import normalize_track_events
+from gigastudy_api.services.engine.percussion_generation import generate_percussion_candidates
 
 VOICE_LEADING_METHOD = "rule_based_voice_leading_v1"
-PERCUSSION_METHOD = "rule_based_percussion_v0"
 
 MAJOR_PROFILE = (6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
 MINOR_PROFILE = (6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17)
@@ -180,19 +180,15 @@ def generate_rule_based_harmony(
     harmony_plan: DeepSeekHarmonyPlan | None = None,
 ) -> list[TrackPitchEvent]:
     if target_slot_id == 6:
-        return normalize_track_events(
-            _generate_percussion(
-                context_tracks=context_tracks,
-                bpm=bpm,
-                time_signature_numerator=time_signature_numerator,
-                time_signature_denominator=time_signature_denominator,
-            ),
+        candidates = generate_percussion_candidates(
+            context_tracks=context_tracks,
             bpm=bpm,
-            slot_id=target_slot_id,
             time_signature_numerator=time_signature_numerator,
             time_signature_denominator=time_signature_denominator,
-            merge_adjacent_same_pitch=False,
+            context_events_by_slot=context_events_by_slot,
+            candidate_count=1,
         )
+        return candidates[0] if candidates else []
     if not context_tracks:
         return []
 
@@ -223,23 +219,14 @@ def generate_rule_based_harmony_candidates(
 ) -> list[list[TrackPitchEvent]]:
     resolved_candidate_count = max(1, min(5, candidate_count))
     if target_slot_id == 6:
-        return [
-            normalize_track_events(
-                _generate_percussion(
-                    context_tracks=context_tracks,
-                    bpm=bpm,
-                    time_signature_numerator=time_signature_numerator,
-                    time_signature_denominator=time_signature_denominator,
-                    variant_index=variant_index,
-                ),
-                bpm=bpm,
-                slot_id=target_slot_id,
-                time_signature_numerator=time_signature_numerator,
-                time_signature_denominator=time_signature_denominator,
-                merge_adjacent_same_pitch=False,
-            )
-            for variant_index in range(resolved_candidate_count)
-        ]
+        return generate_percussion_candidates(
+            context_tracks=context_tracks,
+            bpm=bpm,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+            context_events_by_slot=context_events_by_slot,
+            candidate_count=resolved_candidate_count,
+        )
     if not context_tracks:
         return []
 
@@ -1520,74 +1507,3 @@ def _vertical_interval_class(first_pitch: int, second_pitch: int) -> int:
 def _generation_confidence(total_cost: float, event_count: int, key_confidence: float) -> float:
     average_cost = total_cost / max(1, event_count)
     return round(max(0.58, min(0.9, 0.78 + key_confidence * 0.08 - average_cost * 0.015)), 4)
-
-
-def _generate_percussion(
-    *,
-    context_tracks: list[TrackPitchEvent],
-    bpm: int,
-    time_signature_numerator: int,
-    time_signature_denominator: int,
-    variant_index: int = 0,
-) -> list[TrackPitchEvent]:
-    max_beat = max(
-        (event.beat + max(0.25, event.duration_beats) - 1 for event in context_tracks),
-        default=8,
-    )
-    beats_per_measure = quarter_beats_per_measure(
-        time_signature_numerator,
-        time_signature_denominator,
-    )
-    pulse_quarter_beats = max(0.25, 4 / max(1, time_signature_denominator))
-    pulses_per_measure = max(1, round(beats_per_measure / pulse_quarter_beats))
-    measure_count = max(1, math.floor((max_beat - 1) / beats_per_measure) + 1)
-    total_pulses = max(1, round((measure_count * beats_per_measure) / pulse_quarter_beats))
-    generated: list[TrackPitchEvent] = []
-
-    for pulse_index in range(total_pulses):
-        measure_pulse_index = pulse_index % pulses_per_measure
-        beat = pulse_index * pulse_quarter_beats + 1
-        label = _percussion_label_for_pulse(
-            measure_pulse_index,
-            pulses_per_measure,
-            variant_index=variant_index,
-        )
-        generated.append(
-            event_from_pitch(
-                beat=beat,
-                duration_beats=min(1, pulse_quarter_beats),
-                bpm=bpm,
-                source="ai",
-                extraction_method=PERCUSSION_METHOD,
-                time_signature_numerator=time_signature_numerator,
-                time_signature_denominator=time_signature_denominator,
-                label=label,
-                confidence=0.7,
-            )
-        )
-    return generated
-
-
-def _percussion_label_for_pulse(
-    measure_pulse_index: int,
-    pulses_per_measure: int,
-    *,
-    variant_index: int = 0,
-) -> str:
-    if variant_index % 3 == 1:
-        if measure_pulse_index == 0:
-            return "Kick"
-        if measure_pulse_index in {max(1, pulses_per_measure // 2), pulses_per_measure - 1}:
-            return "Snare"
-        return "Hat"
-    if variant_index % 3 == 2:
-        if measure_pulse_index in {0, max(1, pulses_per_measure // 2)}:
-            return "Kick"
-        if measure_pulse_index == max(1, pulses_per_measure - 1):
-            return "Snare"
-        return "Hat"
-    if measure_pulse_index == 0:
-        return "Kick"
-    if measure_pulse_index == max(1, pulses_per_measure // 2):
-        return "Snare"
-    return "Hat"

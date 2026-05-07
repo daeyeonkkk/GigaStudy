@@ -3,6 +3,7 @@ import {
   createInstrumentPlayback,
   DEFAULT_MELODIC_INSTRUMENT,
   PERCUSSION_CLICK_INSTRUMENT,
+  type PercussionHitKind,
   type PlaybackInstrument,
 } from './instruments'
 import {
@@ -58,6 +59,7 @@ export type PlaybackEngineEvent = {
   gridUnitSeconds?: number
   instrument?: PlaybackInstrument
   nextGapSeconds?: number
+  percussionKind?: PercussionHitKind
   relativeStartSeconds: number
   volume: number
 }
@@ -364,6 +366,7 @@ export async function startPlaybackEngineSession(
       gridUnitSeconds: event.gridUnitSeconds,
       instrument: event.instrument ?? DEFAULT_MELODIC_INSTRUMENT,
       nextGapSeconds: event.nextGapSeconds,
+      percussionKind: event.percussionKind,
       startTime,
       volume: event.volume,
     })

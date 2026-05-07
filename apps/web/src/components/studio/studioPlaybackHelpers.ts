@@ -1,8 +1,10 @@
 import {
+  getPercussionHitKind,
   getPitchEventPlaybackFrequency,
   regionsHavePlayableEvents,
   STUDIO_TIME_PRECISION_SECONDS,
   trackHasPlayableAudio,
+  type PercussionHitKind,
   type PlaybackSourceMode,
 } from '../../lib/studio'
 import type { ArrangementRegion, PitchEvent, TrackSlot } from '../../types/studio'
@@ -11,6 +13,7 @@ export type ScheduledPitchEvent = {
   durationSeconds: number
   event: PitchEvent
   frequency: number
+  percussionKind?: PercussionHitKind
   startSeconds: number
 }
 
@@ -46,14 +49,22 @@ export function getSustainedPitchEvents(
   const scheduledEvents = events
     .map((event) => {
       const frequency = getPitchEventPlaybackFrequency(event)
-      return frequency === null
-        ? null
-        : {
-            durationSeconds: Math.max(0, event.duration_seconds),
-            event,
-            frequency,
-            startSeconds: event.start_seconds,
-          }
+      if (frequency === null) {
+        return null
+      }
+      const scheduledEvent: ScheduledPitchEvent = {
+        durationSeconds: Math.max(0, event.duration_seconds),
+        event,
+        frequency,
+        startSeconds: event.start_seconds,
+      }
+      if (isPercussion) {
+        const percussionKind = getPercussionHitKind(event.label)
+        if (percussionKind) {
+          scheduledEvent.percussionKind = percussionKind
+        }
+      }
+      return scheduledEvent
     })
     .filter((event): event is ScheduledPitchEvent => event !== null)
     .sort((left, right) => left.startSeconds - right.startSeconds || left.event.event_id.localeCompare(right.event.event_id))

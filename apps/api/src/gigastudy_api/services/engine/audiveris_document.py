@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -77,6 +78,12 @@ def _run_audiveris_command(
         "--",
         str(input_path),
     ]
+    settings = get_settings()
+    env = os.environ.copy()
+    if settings.audiveris_java_max_heap.strip():
+        existing_java_options = env.get("JAVA_TOOL_OPTIONS", "").strip()
+        heap_option = f"-Xmx{settings.audiveris_java_max_heap.strip()}"
+        env["JAVA_TOOL_OPTIONS"] = f"{existing_java_options} {heap_option}".strip()
     try:
         completed = subprocess.run(
             command,
@@ -84,20 +91,36 @@ def _run_audiveris_command(
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
+            env=env,
         )
     except subprocess.TimeoutExpired as error:
-        raise AudiverisDocumentError(f"Audiveris timed out after {timeout_seconds} seconds.") from error
+        raise AudiverisDocumentError(
+            "문서 분석 시간이 제한 시간을 넘었습니다. 다시 시도하거나 MIDI/MusicXML 파일을 사용해 주세요."
+        ) from error
     if completed.returncode != 0:
         message = completed.stderr.strip() or completed.stdout.strip() or "Audiveris failed."
-        raise AudiverisDocumentError(message)
+        raise AudiverisDocumentError(_public_audiveris_error_message(message))
 
     mxl_files = sorted(output_dir.rglob("*.mxl"))
     musicxml_files = sorted(output_dir.rglob("*.musicxml"))
     xml_files = sorted(output_dir.rglob("*.xml"))
     outputs = mxl_files or musicxml_files or xml_files
     if not outputs:
-        raise AudiverisDocumentError("Audiveris did not produce a MusicXML output.")
+        raise AudiverisDocumentError(
+            "악보로 등록할 수 있는 음표 결과를 만들지 못했습니다. MIDI/MusicXML 파일을 사용해 주세요."
+        )
     return outputs[0]
+
+
+def _public_audiveris_error_message(message: str) -> str:
+    normalized = message.lower()
+    if any(term in normalized for term in ("outofmemory", "java heap", "memory", "killed", "137")):
+        return "문서가 너무 크거나 복잡해서 처리하지 못했습니다. MIDI/MusicXML 파일을 사용해 주세요."
+    if "timed out" in normalized or "timeout" in normalized:
+        return "문서 분석 시간이 제한 시간을 넘었습니다. 다시 시도하거나 MIDI/MusicXML 파일을 사용해 주세요."
+    if "not configured" in normalized or "not found" in normalized:
+        return "이 PDF는 현재 인식할 수 없습니다. MIDI/MusicXML 파일을 사용해 주세요."
+    return "PDF 악보를 인식하지 못했습니다. 더 선명한 악보 PDF, MIDI, MusicXML을 사용해 주세요."
 
 
 def _prepare_preprocessed_pdf(input_path: Path, *, output_dir: Path, dpi: int) -> Path:

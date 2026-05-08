@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
-import { getStudio, getStudioActivity } from '../../lib/api'
+import { getStudio, getStudioActivity, recoverStaleDocumentJobs } from '../../lib/api'
 import type { Studio, StudioActivity, TrackExtractionJob } from '../../types/studio'
 import type { StudioActionState } from './studioActionState'
 import { buildJobNotice, buildPollingDelayNotice } from './studioNoticePresenter'
@@ -23,6 +23,7 @@ type StudioResourceState = {
 }
 
 const ACTIVITY_REQUEST_TIMEOUT_MS = 5000
+const DOCUMENT_JOB_STALE_MS = 30 * 60 * 1000
 
 export function activeJobs(jobs: TrackExtractionJob[]): TrackExtractionJob[] {
   return jobs.filter((job) => job.status === 'queued' || job.status === 'running')
@@ -47,6 +48,19 @@ export function getActivityFailureDelayMs(failureCount: number): number {
     return 5000
   }
   return 12000
+}
+
+export function staleRunningDocumentJobs(
+  jobs: TrackExtractionJob[],
+  nowMs: number = Date.now(),
+): TrackExtractionJob[] {
+  return jobs.filter((job) => {
+    if (job.job_type !== 'document' || job.status !== 'running') {
+      return false
+    }
+    const updatedAtMs = Date.parse(job.updated_at)
+    return Number.isFinite(updatedAtMs) && nowMs - updatedAtMs >= DOCUMENT_JOB_STALE_MS
+  })
 }
 
 export function shouldRefreshStudioFromActivity(
@@ -94,6 +108,7 @@ export function useStudioResource(
   const jobActivityRef = useRef(onJobActivity)
   const previousActiveJobCountRef = useRef(0)
   const studioRef = useRef<Studio | null>(null)
+  const staleRecoveryAttemptedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     pollingIssueRef.current = onPollingIssue
@@ -106,6 +121,10 @@ export function useStudioResource(
   useEffect(() => {
     studioRef.current = studio
   }, [studio])
+
+  useEffect(() => {
+    staleRecoveryAttemptedRef.current.clear()
+  }, [studioId])
 
   useEffect(() => {
     let ignore = false
@@ -211,6 +230,25 @@ export function useStudioResource(
             return
           }
           failureCount = 0
+          const staleJobs = staleRunningDocumentJobs(activity.jobs)
+          const unrecoveredStaleJob = staleJobs.find((job) => !staleRecoveryAttemptedRef.current.has(job.job_id))
+          if (unrecoveredStaleJob) {
+            staleRecoveryAttemptedRef.current.add(unrecoveredStaleJob.job_id)
+            const recoveredStudio = await recoverStaleDocumentJobs(studioId)
+            if (ignore) {
+              return
+            }
+            const nextActiveJobs = activeJobs(recoveredStudio.jobs)
+            setStudio(recoveredStudio)
+            if (nextActiveJobs.length > 0) {
+              jobActivityRef.current?.(buildJobNotice(nextActiveJobs))
+            } else if (shouldNotifyJobCompletionFromPoll(activeExtractionJobCount > 0, recoveredStudio.jobs)) {
+              jobActivityRef.current?.(buildJobNotice([]))
+            }
+            previousActiveJobCountRef.current = nextActiveJobs.length
+            scheduleNextPoll(recoveredStudio.jobs)
+            return
+          }
           const needsFullRefresh = shouldRefreshStudioFromActivity(
             studioRef.current,
             activity,

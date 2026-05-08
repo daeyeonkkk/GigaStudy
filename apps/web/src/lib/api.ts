@@ -382,6 +382,14 @@ export function retryExtractionJob(studioId: string, jobId: string): Promise<Stu
   )
 }
 
+export function recoverStaleDocumentJobs(studioId: string): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/jobs/recover-stale`,
+    { method: 'POST' },
+    '멈춘 악보 작업을 정리하지 못했습니다.',
+  )
+}
+
 export function generateTrack(
   studioId: string,
   slotId: number,

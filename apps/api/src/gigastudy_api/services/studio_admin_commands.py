@@ -10,6 +10,7 @@ from gigastudy_api.config import get_settings
 from gigastudy_api.api.schemas.studios import Studio
 from gigastudy_api.services.alpha_limits import build_admin_limit_summary
 from gigastudy_api.services.asset_paths import studio_id_from_asset_path
+from gigastudy_api.services.document_job_recovery import recover_stale_running_document_jobs
 from gigastudy_api.services.engine_queue import EngineQueueStore
 from gigastudy_api.services.studio_admin import (
     build_admin_studio_summary,
@@ -254,6 +255,7 @@ class StudioAdminCommands:
         inactive_cutoff = now - timedelta(seconds=settings.inactive_asset_retention_seconds)
         deleted_files = 0
         deleted_bytes = 0
+        recovered_jobs = 0
 
         staged_files, staged_bytes = self._assets.delete_expired_staged_uploads()
         deleted_files += staged_files
@@ -261,6 +263,29 @@ class StudioAdminCommands:
 
         with self._lock:
             studios = self._list_studios(limit=10_000, offset=0, active_status="all")
+
+        processed_studios = 0
+        for studio in studios:
+            if processed_studios >= batch_size:
+                break
+            with self._lock:
+                current = self._load_studio(studio.studio_id)
+                if current is None:
+                    continue
+                timestamp = self._now()
+                recovered_job_ids = recover_stale_running_document_jobs(
+                    current,
+                    now=now,
+                    stale_seconds=settings.document_job_stale_seconds,
+                    timestamp=timestamp,
+                )
+                if not recovered_job_ids:
+                    continue
+                self._save_studio(current)
+            for job_id in recovered_job_ids:
+                self._engine_queue.fail(job_id, message="Stale document job failed.")
+            recovered_jobs += len(recovered_job_ids)
+            processed_studios += 1
 
         processed_studios = 0
         for studio in studios:
@@ -306,7 +331,11 @@ class StudioAdminCommands:
 
         return AdminDeleteResult(
             deleted=True,
-            message="Maintenance cleanup completed.",
+            message=(
+                "Maintenance cleanup completed."
+                if recovered_jobs == 0
+                else f"Maintenance cleanup completed. Recovered {recovered_jobs} stale document job(s)."
+            ),
             deleted_files=deleted_files,
             deleted_bytes=deleted_bytes,
         )

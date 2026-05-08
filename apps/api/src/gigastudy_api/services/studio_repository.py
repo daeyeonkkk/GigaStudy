@@ -58,6 +58,7 @@ from gigastudy_api.services.asset_registry import build_asset_registry
 from gigastudy_api.services.alpha_limits import (
     ensure_studio_capacity,
 )
+from gigastudy_api.services.document_job_recovery import recover_stale_running_document_jobs
 from gigastudy_api.services.direct_upload_tokens import DirectUploadTokenCodec
 from gigastudy_api.services.studio_admin_commands import StudioAdminCommands
 from gigastudy_api.services.studio_assets import StudioAssetService
@@ -475,6 +476,9 @@ class StudioRepository:
         if enforce_owner and not admin_bypass:
             require_studio_access(studio, owner_token)
         if background_tasks is not None:
+            studio, recovered_job_ids = self._recover_stale_document_jobs_internal(studio_id)
+            if recovered_job_ids:
+                return studio
             self._recover_existing_creation_jobs(studio, background_tasks)
         return studio
 
@@ -1226,6 +1230,22 @@ class StudioRepository:
         self._schedule_engine_queue_processing(background_tasks)
         return self.get_studio(studio_id)
 
+    def recover_stale_document_jobs(
+        self,
+        studio_id: str,
+        *,
+        owner_token: str | None = None,
+        enforce_owner: bool = True,
+        admin_bypass: bool = False,
+    ) -> Studio:
+        studio, _recovered_job_ids = self._recover_stale_document_jobs_internal(
+            studio_id,
+            owner_token=owner_token,
+            enforce_owner=enforce_owner,
+            admin_bypass=admin_bypass,
+        )
+        return studio
+
     def score_track(
         self,
         studio_id: str,
@@ -1676,6 +1696,41 @@ class StudioRepository:
         repaired = self._engine_commands.ensure_queue_records_for_active_jobs(studio)
         if repaired > 0 or self._engine_queue.has_runnable(studio_id=studio.studio_id):
             self._schedule_engine_queue_processing(background_tasks)
+
+    def _recover_stale_document_jobs_internal(
+        self,
+        studio_id: str,
+        *,
+        owner_token: str | None = None,
+        enforce_owner: bool = False,
+        admin_bypass: bool = False,
+    ) -> tuple[Studio, list[str]]:
+        settings = get_settings()
+        recovered_job_ids: list[str] = []
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            if not studio.is_active and not admin_bypass:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            if enforce_owner and not admin_bypass:
+                require_studio_access(studio, owner_token)
+            now = datetime.now(UTC)
+            timestamp = now.isoformat()
+            recovered_job_ids = recover_stale_running_document_jobs(
+                studio,
+                now=now,
+                stale_seconds=settings.document_job_stale_seconds,
+                timestamp=timestamp,
+            )
+            if recovered_job_ids:
+                self._save_studio(studio)
+        for recovered_job_id in recovered_job_ids:
+            self._engine_queue.fail(
+                recovered_job_id,
+                message="Stale document job failed.",
+            )
+        return studio, recovered_job_ids
 
     def _mark_job_running(
         self,

@@ -46,8 +46,10 @@ class Settings(BaseSettings):
     max_active_engine_jobs: int = 1
     engine_job_max_attempts: int = 3
     engine_job_lease_seconds: int = 10 * 60
+    document_job_stale_seconds: int = 30 * 60
     engine_drain_max_jobs: int = 3
     audiveris_bin: str | None = None
+    audiveris_java_max_heap: str = "640m"
     document_extraction_backend: str = Field(
         default="auto",
         validation_alias=AliasChoices(

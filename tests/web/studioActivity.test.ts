@@ -6,6 +6,7 @@ import {
   getActivityPollingDelayMs,
   shouldNotifyJobCompletionFromPoll,
   shouldRefreshStudioFromActivity,
+  staleRunningDocumentJobs,
 } from '../../apps/web/src/components/studio/useStudioResource'
 import type { Studio, StudioActivity, TrackExtractionJob } from '../../apps/web/src/types/studio'
 
@@ -83,5 +84,28 @@ describe('studio activity polling helpers', () => {
     expect(getActivityFailureDelayMs(1)).toBe(2500)
     expect(getActivityFailureDelayMs(2)).toBe(5000)
     expect(getActivityFailureDelayMs(3)).toBe(12000)
+  })
+
+  it('detects stale running document jobs for lightweight recovery', () => {
+    const staleDocumentJob: TrackExtractionJob = {
+      ...baseJob,
+      job_id: 'stale-document',
+      job_type: 'document',
+      source_kind: 'document',
+      source_label: 'score.pdf',
+      status: 'running',
+      updated_at: '2026-05-06T00:00:00Z',
+    }
+    const freshDocumentJob: TrackExtractionJob = {
+      ...staleDocumentJob,
+      job_id: 'fresh-document',
+      updated_at: '2026-05-06T00:20:00Z',
+    }
+
+    expect(staleRunningDocumentJobs([staleDocumentJob], Date.parse('2026-05-06T00:31:00Z'))).toEqual([
+      staleDocumentJob,
+    ])
+    expect(staleRunningDocumentJobs([freshDocumentJob], Date.parse('2026-05-06T00:31:00Z'))).toEqual([])
+    expect(staleRunningDocumentJobs([{ ...staleDocumentJob, job_type: 'voice' }], Date.parse('2026-05-06T00:31:00Z'))).toEqual([])
   })
 })

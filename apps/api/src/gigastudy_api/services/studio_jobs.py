@@ -364,7 +364,7 @@ def mark_extraction_job_failed(
         job.progress = build_job_progress(
             "failed",
             timestamp=timestamp,
-            stage_label="작업을 마치지 못했습니다.",
+            stage_label=message,
         )
         job.updated_at = timestamp
         if job.job_type == "scoring":

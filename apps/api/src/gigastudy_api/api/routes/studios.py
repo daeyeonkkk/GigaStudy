@@ -611,6 +611,23 @@ def retry_extraction_job(
     )
 
 
+@router.post("/{studio_id}/jobs/recover-stale", response_model=StudioResponse)
+def recover_stale_document_jobs(
+    studio_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    admin_bypass: bool = Depends(optional_admin_bypass),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.recover_stale_document_jobs(
+            studio_id,
+            owner_token=owner_token,
+            enforce_owner=True,
+            admin_bypass=admin_bypass,
+        )
+    )
+
+
 @router.post("/{studio_id}/tracks/{slot_id}/score", response_model=StudioResponse)
 def score_track(
     studio_id: str,

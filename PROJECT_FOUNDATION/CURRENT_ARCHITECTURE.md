@@ -223,7 +223,10 @@ is excluded from persistence and remains an adapter detail.
   original bytes.
 - `apps/api/src/gigastudy_api/services/document_extraction_pipeline.py` and
   `apps/api/src/gigastudy_api/services/studio_engine_job_handlers.py`
-  Shared queued import path for studio-start score files. PDF/image inputs run
+  Shared queued import path for studio-start score files. PDF inputs first run
+  a lightweight preflight (`services/engine/pdf_preflight.py`) over the first
+  pages. PDFs that look like lyrics or ordinary text documents fail before OMR;
+  vector score PDFs and image-heavy scanned-score candidates continue to
   Audiveris or vector fallback and produce review candidates. MIDI, MusicXML,
   MXL, and XML inputs are parsed directly in the same engine queue; clear
   singer-line results register to regions, while ambiguous symbolic material
@@ -231,7 +234,15 @@ is excluded from persistence and remains an adapter detail.
   `tempo_review_required` job with suggested BPM/meter diagnostics. Only after
   user approval does the API enqueue the document job, and the approved studio
   BPM/meter is passed through the registration path; source-file tempo is
-  evidence, not an automatic override.
+  evidence, not an automatic override. Audiveris timeout, memory, killed, and
+  no-output failures are mapped to user-facing retry/MIDI-MusicXML guidance.
+- `apps/api/src/gigastudy_api/services/document_job_recovery.py`
+  Lightweight stale document-job recovery. A running document job older than
+  the configured threshold is marked failed and retryable without running
+  extraction. Full studio reads may perform this bounded state repair before
+  scheduling old creation recovery; activity reads stay side-effect-free, and
+  the web client calls the explicit recovery mutation once when it sees a stale
+  running document job.
 - `apps/api/src/gigastudy_api/services/studio_tempo_review.py`
   Reads light BPM/meter evidence from symbolic score files before registration
   starts. PDF/image inputs cannot reliably expose tempo at this stage, so the
@@ -386,23 +397,28 @@ flowchart TD
    the studio clock and enqueues registration. If an approved queued/running
    import job loses its durable queue record, retry repairs the queue record and
    schedules processing again.
-4. API either registers clearly assigned symbolic seed parts directly or creates
+4. PDF score jobs run preflight before OMR. Lyrics/general-document PDFs fail
+   immediately with user-facing guidance; vector-score and image-heavy scanned
+   candidates proceed to Audiveris/vector extraction. Timeout, memory, killed,
+   and no-output failures end as retryable failed jobs rather than long-running
+   pending work.
+5. API either registers clearly assigned symbolic seed parts directly or creates
    an extraction job/candidate review path for ambiguous material. Audio
    extraction first normalizes non-WAV containers into a WAV analysis source.
-5. Engine queue runs document/audio extraction when asynchronous extraction is
+6. Engine queue runs document/audio extraction when asynchronous extraction is
    needed.
-6. Extracted or ambiguous material becomes reviewable candidates with
+7. Extracted or ambiguous material becomes reviewable candidates with
    candidate-region previews.
-7. User approval registers candidates into explicit target-track regions and
+8. User approval registers candidates into explicit target-track regions and
    clears target track event shadows. Bulk document approval registers every
    unblocked valid part it can, leaves overwrite-blocked or failed parts
    reviewable, and records the per-track outcome on the extraction job.
-8. If registration overwrites an existing track, API stores the previous active
+9. If registration overwrites an existing track, API stores the previous active
    material as an inactive track archive before replacing `Studio.regions`.
    Original MIDI/MusicXML/PDF score material is pinned for that slot. Restore
    first archives the current active material, then replaces all active regions
    for the slot with the archived snapshots.
-9. Reloaded studio response exposes the registered track from `Studio.regions`.
+10. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
 

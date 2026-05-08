@@ -9,6 +9,10 @@ from gigastudy_api.services.asset_storage import AssetStorageError
 from gigastudy_api.services.engine.audiveris_document import AudiverisDocumentError
 from gigastudy_api.services.engine.document_results import write_pdf_vector_document_summary
 from gigastudy_api.services.engine.pdf_vector_document import PdfVectorDocumentError
+from gigastudy_api.services.engine.pdf_preflight import (
+    PDF_NOT_SCORE_MESSAGE,
+    inspect_pdf_for_score_content,
+)
 from gigastudy_api.services.engine.symbolic import (
     ParsedSymbolicFile,
     SymbolicParseError,
@@ -58,6 +62,11 @@ def run_document_extraction_pipeline(
                 record=record,
                 studio=studio,
             )
+
+        if input_path.suffix.lower() == ".pdf":
+            preflight = inspect_pdf_for_score_content(input_path)
+            if preflight.kind == "not_score":
+                raise DocumentExtractionPipelineError(PDF_NOT_SCORE_MESSAGE)
 
         if normalized_backend in {"pdf_vector", "vector_pdf"}:
             parsed_symbolic, output_reference = _run_pdf_vector_fallback(
@@ -132,10 +141,11 @@ def run_document_extraction_pipeline(
                 ),
             )
         except (PdfVectorDocumentError, AssetStorageError) as fallback_error:
-            message = f"{primary_error}; PDF vector fallback failed: {fallback_error}"
-            raise DocumentExtractionPipelineError(message) from fallback_error
+            raise DocumentExtractionPipelineError(
+                _public_document_extraction_error(primary_error, fallback_error)
+            ) from fallback_error
     except (PdfVectorDocumentError, AssetStorageError) as error:
-        raise DocumentExtractionPipelineError(str(error)) from error
+        raise DocumentExtractionPipelineError(_public_document_extraction_error(error)) from error
 
 
 def _run_symbolic_seed_pipeline(
@@ -256,3 +266,16 @@ def _pdf_vector_result(
         confidence=0.46,
         message=message,
     )
+
+
+def _public_document_extraction_error(*errors: BaseException) -> str:
+    combined = " ".join(str(error) for error in errors).lower()
+    if any(str(error) == PDF_NOT_SCORE_MESSAGE for error in errors):
+        return PDF_NOT_SCORE_MESSAGE
+    if "제한 시간을 넘었습니다" in combined or "timed out" in combined or "timeout" in combined:
+        return "문서 분석 시간이 제한 시간을 넘었습니다. 다시 시도하거나 MIDI/MusicXML 파일을 사용해 주세요."
+    if any(term in combined for term in ("memory", "outofmemory", "java heap", "killed", "137", "너무 크거나 복잡")):
+        return "문서가 너무 크거나 복잡해서 처리하지 못했습니다. MIDI/MusicXML 파일을 사용해 주세요."
+    if "오선이나 음표" in combined or "no labelled" in combined or "no pitch" in combined:
+        return PDF_NOT_SCORE_MESSAGE
+    return "PDF 악보를 인식하지 못했습니다. 더 선명한 악보 PDF, MIDI, MusicXML을 사용해 주세요."

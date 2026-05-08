@@ -25,6 +25,7 @@ from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services import studio_repository
 from gigastudy_api.services.llm.midi_role_review import MidiRoleAssignment, MidiRoleReviewInstruction
 from gigastudy_api.services.studio_documents import register_track_material
+from gigastudy_api.services.studio_jobs import create_document_extraction_job
 
 
 MUSICXML_UPLOAD = """<?xml version="1.0" encoding="UTF-8"?>
@@ -155,7 +156,25 @@ def build_preview_pdf_bytes() -> bytes:
     document = fitz.open()
     page = document.new_page(width=320, height=240)
     page.insert_text((40, 70), "GigaStudy preview", fontsize=16)
-    page.draw_line((40, 120), (280, 120))
+    for offset in range(5):
+        y = 120 + offset * 5
+        page.draw_line((40, y), (280, y))
+    return document.tobytes()
+
+
+def build_lyrics_pdf_bytes() -> bytes:
+    document = fitz.open()
+    page = document.new_page(width=320, height=240)
+    page.insert_text((40, 70), "Love me like this lyrics only", fontsize=16)
+    page.insert_text((40, 100), "No staff lines or notes are present on this page.", fontsize=11)
+    return document.tobytes()
+
+
+def build_image_only_pdf_bytes() -> bytes:
+    document = fitz.open()
+    page = document.new_page(width=320, height=240)
+    pixmap = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 32, 24), False)
+    page.insert_image(page.rect, pixmap=pixmap)
     return document.tobytes()
 
 
@@ -3219,10 +3238,98 @@ def test_upload_pdf_marks_document_extraction_job_failed_when_audiveris_unavaila
     assert upload_response.status_code == 200
     payload = client.get(f"/api/studios/{studio_id}").json()
     assert payload["jobs"][0]["status"] == "failed"
-    assert "Audiveris missing" in payload["jobs"][0]["message"]
-    assert "PDF vector fallback failed" in payload["jobs"][0]["message"]
+    assert payload["jobs"][0]["message"] == "PDF 악보를 인식하지 못했습니다. 더 선명한 악보 PDF, MIDI, MusicXML을 사용해 주세요."
     assert [track["status"] for track in payload["tracks"][:5]] == ["failed"] * 5
     assert payload["candidates"] == []
+
+
+def test_text_only_pdf_fails_preflight_without_running_audiveris(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def unexpected_document_extraction(**kwargs) -> Path:
+        raise AssertionError("text-only PDF should fail before document extraction")
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.run_audiveris_document_extraction",
+        unexpected_document_extraction,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Lyrics PDF",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="love me lyrics.pdf",
+        content=build_lyrics_pdf_bytes(),
+    )
+
+    assert upload_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "failed"
+    assert payload["jobs"][0]["message"] == (
+        "악보로 읽을 수 있는 오선이나 음표를 찾지 못했습니다. "
+        "가사/일반 문서 PDF 대신 악보 PDF, MIDI, MusicXML을 사용해 주세요."
+    )
+    assert payload["candidates"] == []
+
+
+def test_image_only_pdf_is_allowed_to_reach_document_extraction(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls = 0
+
+    def fake_image_pdf_extraction(
+        *,
+        input_path: Path,
+        output_dir: Path,
+        audiveris_bin: str | None,
+        timeout_seconds: int,
+    ) -> Path:
+        nonlocal calls
+        calls += 1
+        return fake_audiveris_document_extraction(
+            input_path=input_path,
+            output_dir=output_dir,
+            audiveris_bin=audiveris_bin,
+            timeout_seconds=timeout_seconds,
+        )
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.run_audiveris_document_extraction",
+        fake_image_pdf_extraction,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Scanned PDF",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="scan.pdf",
+        content=build_image_only_pdf_bytes(),
+    )
+
+    assert upload_response.status_code == 200
+    assert calls == 1
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "needs_review"
 
 
 def test_failed_document_extraction_job_can_be_retried_from_durable_queue(
@@ -3278,6 +3385,61 @@ def test_failed_document_extraction_job_can_be_retried_from_durable_queue(
     assert _candidate_events(retry_payload["candidates"][0])[0]["source"] == "document"
     assert retry_payload["tracks"][0]["status"] == "needs_review"
     assert [track["status"] for track in retry_payload["tracks"][1:5]] == ["empty"] * 4
+
+
+def test_stale_running_document_job_recovers_to_failed_without_activity_side_effect(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Stale PDF job",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    repository = studio_repository.get_studio_repository()
+    stale_timestamp = "2026-05-01T00:00:00+00:00"
+
+    with repository._lock:
+        studio = repository._load_studio(studio_id)
+        assert studio is not None
+        job = create_document_extraction_job(
+            input_path=f"uploads/{studio_id}/stale.pdf",
+            max_attempts=3,
+            parse_all_parts=True,
+            slot_id=1,
+            source_kind="document",
+            source_label="stale.pdf",
+            status="running",
+            timestamp=stale_timestamp,
+        )
+        job.updated_at = stale_timestamp
+        studio.jobs.append(job)
+        for track in studio.tracks[:5]:
+            track.status = "extracting"
+            track.source_kind = "document"
+            track.source_label = "stale.pdf"
+            track.updated_at = stale_timestamp
+        repository._save_studio(studio)
+
+    activity_response = client.get(f"/api/studios/{studio_id}/activity")
+    assert activity_response.status_code == 200
+    assert activity_response.json()["jobs"][0]["status"] == "running"
+
+    recover_response = client.post(f"/api/studios/{studio_id}/jobs/recover-stale")
+
+    assert recover_response.status_code == 200
+    payload = recover_response.json()
+    assert payload["jobs"][0]["status"] == "failed"
+    assert payload["jobs"][0]["message"] == (
+        "작업이 오래 멈춰 실패 처리했습니다. 다시 시도하거나 MIDI/MusicXML 파일을 사용해 주세요."
+    )
+    assert payload["jobs"][0]["diagnostics"]["stale_recovered"] is True
+    assert [track["status"] for track in payload["tracks"][:5]] == ["failed"] * 5
 
 
 def test_voice_retry_rehydrates_direct_register_mode_without_queue_record(

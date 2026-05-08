@@ -43,6 +43,7 @@ practice, scoring, AI generation 모두 신뢰할 수 없다.
 | 같은 pitch 병합 정확도 | 자동 등록에서 맞닿은 같은 pitch는 병합하되, 수동 편집 결과는 임의 병합하지 않는가 | regression 100% |
 | Track 내 overlap rate | 단선율 성부에서 event끼리 겹치지 않는가 | 0 |
 | 부분 실패 복구율 | 한 파트 실패가 전체 등록 실패로 번지지 않는가 | 100% |
+| PDF 문서 판별 | 가사/일반 문서 PDF는 OMR 전에 실패하고, 악보/스캔 후보만 등록 흐름으로 보내는가 | regression 100% |
 | 음성 추출 사용 가능률 | 녹음/음성 업로드가 노이즈가 아닌 singable pitch event로 정리되는가 | 샘플 수동 80%+ |
 | 후보 검토 부담 | 후보가 이유, 위험, 덮어쓰기 영향을 설명하고 raw field를 노출하지 않는가 | raw field 0건 |
 
@@ -178,6 +179,7 @@ truth, 숨은 sync offset, 숨은 compatibility path, 무거운 full payload 재
 
 - Request p50/p95.
 - Job queued/running/completed/failed count.
+- Stale document job recovery count.
 - Import partial failure count.
 - Candidate approval/rejection rate.
 - Scoring completion rate.
@@ -195,6 +197,7 @@ truth, 숨은 sync offset, 숨은 compatibility path, 무거운 full payload 재
   열지 못한다.
 - Public UI가 사용자가 이해할 수 없는 내부 용어를 상태 메시지로 노출한다.
 - 작업 중 activity/read endpoint가 무거운 engine 처리나 queue repair를 유발한다.
+- Document job이 stale threshold를 넘겨도 running으로 남아 사용 흐름을 막는다.
 - 기존 active material을 overwrite하면서 archive/restore 계약을 깨뜨린다.
 
 ## Defaults

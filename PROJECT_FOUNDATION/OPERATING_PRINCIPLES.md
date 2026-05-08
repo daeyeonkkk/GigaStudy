@@ -197,6 +197,11 @@ the same change.
   Individual track rows expose `recording file upload` for user-recorded audio
   only. Backend adapters may still support additional import paths, but
   user-facing labels must not collapse them into one vague upload action.
+- PDF registration is best-effort score recognition, not general document
+  reading. Before expensive extraction, the API should reject PDFs that look
+  like lyrics or ordinary text documents without staff, note, or scanned-image
+  evidence. Scanned score PDFs may proceed to OMR, but failures must end in a
+  retryable user-facing state with a MIDI/MusicXML recommendation.
 - Studio-start score files must not make the create-studio request perform the
   full extraction/registration synchronously. Creation saves a usable studio and
   creates a `tempo_review_required` import job. The UI must show the suggested
@@ -226,6 +231,11 @@ the same change.
   Review candidates are reserved for parts that still look like accompaniment,
   overly broad special-purpose material, or otherwise ambiguous non-vocal
   content after this analysis.
+- Queued document jobs must not remain `running` forever. A running document
+  job whose `updated_at` exceeds the stale threshold is failed, left retryable,
+  and shown with user-facing recovery guidance. Activity/read polling must not
+  perform heavy extraction; it may only trigger lightweight stale-state
+  recovery through an explicit mutation.
 - Bulk approval should register every unblocked valid candidate it can. If some
   parts would overwrite existing tracks or fail registration, keep those
   candidates reviewable, report the skipped/failed tracks, and return the studio

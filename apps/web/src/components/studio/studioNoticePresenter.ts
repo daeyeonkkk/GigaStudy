@@ -11,6 +11,8 @@ export const NOTICE_META_BLOCKLIST = [
   'polling',
   'diagnostics',
   'payload',
+  'Audiveris',
+  'OOM',
 ] as const
 
 const JOB_MESSAGES: Record<TrackExtractionJob['job_type'], string> = {

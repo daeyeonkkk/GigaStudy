@@ -22,7 +22,7 @@ def test_run_audiveris_document_extraction_converts_timeout_to_unavailable(tmp_p
 
     monkeypatch.setattr(subprocess, "run", timeout_run)
 
-    with pytest.raises(AudiverisDocumentError, match="Audiveris timed out after 7 seconds"):
+    with pytest.raises(AudiverisDocumentError, match="문서 분석 시간이 제한 시간을 넘었습니다"):
         run_audiveris_document_extraction(
             input_path=tmp_path / "score.pdf",
             output_dir=tmp_path / "out",
@@ -65,6 +65,28 @@ def test_run_audiveris_document_extraction_retries_with_preprocessed_pdf(tmp_pat
     assert calls[0] == source_pdf
     assert calls[1].name == "scan-preprocessed.pdf"
     assert calls[1].exists()
+
+
+def test_run_audiveris_document_extraction_caps_java_heap(tmp_path: Path, monkeypatch) -> None:
+    captured_env: dict[str, str] = {}
+
+    def fake_run(command, **kwargs):
+        captured_env.update(kwargs.get("env") or {})
+        output_dir = Path(command[command.index("-output") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "output.musicxml").write_text("<score-partwise/>", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    run_audiveris_document_extraction(
+        input_path=tmp_path / "score.pdf",
+        output_dir=tmp_path / "out",
+        audiveris_bin=str(tmp_path / "Audiveris"),
+        timeout_seconds=7,
+    )
+
+    assert "-Xmx640m" in captured_env["JAVA_TOOL_OPTIONS"]
 
 
 def test_vector_document_positions_stay_inside_measure_grid() -> None:

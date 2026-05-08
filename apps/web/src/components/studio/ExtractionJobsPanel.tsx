@@ -13,6 +13,7 @@ type ExtractionJobsPanelProps = {
   lockedSlotIds: Set<number>
   tracks: TrackSlot[]
   visibleJobs: TrackExtractionJob[]
+  getAudioExportDownloadUrl?: (jobId: string) => string
   getPendingJobCandidates: (jobId: string) => ExtractionCandidate[]
   jobWouldOverwrite: (jobId: string) => boolean
   onApproveJobCandidates: (jobId: string) => void
@@ -33,6 +34,7 @@ export function ExtractionJobsPanel({
   lockedSlotIds,
   tracks,
   visibleJobs,
+  getAudioExportDownloadUrl,
   getPendingJobCandidates,
   jobWouldOverwrite,
   onApproveJobCandidates,
@@ -45,7 +47,7 @@ export function ExtractionJobsPanel({
     Record<string, { bpm: string; denominator: string; numerator: string }>
   >({})
   const attentionJobs = useMemo(
-    () => visibleJobs.filter((job) => job.status !== 'completed'),
+    () => visibleJobs.filter((job) => job.status !== 'completed' || job.job_type === 'export'),
     [visibleJobs],
   )
   const failedJobs = useMemo(
@@ -116,7 +118,7 @@ export function ExtractionJobsPanel({
             lockedSlotIds.has(candidate.suggested_slot_id),
           )
           const approveDisabled = busy || lockedByAnotherJob
-          const jobKindLabel = job.job_type === 'voice' ? '음성 추출' : '문서 분석'
+          const jobKindLabel = getJobKindLabel(job)
           const jobTargetLabel = job.parse_all_parts ? '전체 문서' : formatTrackName(jobTrack?.name ?? `트랙 ${job.slot_id}`)
           const candidateSummary = getJobCandidateSummary(jobCandidates, tracks)
           const recoveryHint = getJobRecoveryHint(job)
@@ -258,12 +260,43 @@ export function ExtractionJobsPanel({
                   </button>
                 </div>
               ) : null}
+              {job.job_type === 'export' &&
+              job.status === 'completed' &&
+              job.output_path &&
+              getAudioExportDownloadUrl ? (
+                <div className="extraction-jobs__actions extraction-jobs__actions--download">
+                  <span>오디오 파일이 준비되었습니다.</span>
+                  <a
+                    className="app-button app-button--secondary"
+                    data-testid={`job-audio-export-download-${job.job_id}`}
+                    href={getAudioExportDownloadUrl(job.job_id)}
+                  >
+                    다운로드
+                  </a>
+                </div>
+              ) : null}
             </article>
           )
         })}
       </div>
     </section>
   )
+}
+
+function getJobKindLabel(job: TrackExtractionJob): string {
+  if (job.job_type === 'voice') {
+    return '녹음파일 분석'
+  }
+  if (job.job_type === 'generation') {
+    return 'AI 생성'
+  }
+  if (job.job_type === 'scoring') {
+    return '채점'
+  }
+  if (job.job_type === 'export') {
+    return '오디오 내보내기'
+  }
+  return '악보 분석'
 }
 
 function getJobCandidateSummary(candidates: ExtractionCandidate[], tracks: TrackSlot[]): string {

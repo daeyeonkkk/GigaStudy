@@ -368,6 +368,21 @@ the same change.
   the visible timeline. This is a viewport behavior only; it must not change
   event timing, sync, or playback scheduling.
 
+## Export
+
+- Export reads only the active studio timeline: `Studio.regions`, current track
+  material, current sync, and current volume. It must not include inactive
+  archives, pending candidates, reports, or internal storage shadows unless the
+  user first restores or approves them into the active timeline.
+- Audio export is one user feature with a format option. WAV is the internal
+  render target; MP3 is encoded from the finished WAV mix for sharing.
+- A selected track may export retained original audio or synthesized guide
+  sound, but only when that source exists. Empty tracks remain valid lanes in
+  the studio but are not silently rendered into an export.
+- Export must preserve relative timing. If any selected material starts before
+  0 because of sync, the whole output is shifted together so the file begins at
+  0 without changing the ensemble alignment.
+
 ## UX
 
 - Build the actual workflow, not a landing page around it.

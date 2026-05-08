@@ -107,6 +107,8 @@ export type JobProgressStage =
   | 'registering'
   | 'reviewing'
   | 'scoring'
+  | 'rendering'
+  | 'encoding'
   | 'completed'
   | 'failed'
 
@@ -122,7 +124,7 @@ export type JobProgress = {
 
 export type TrackExtractionJob = {
   job_id: string
-  job_type: 'document' | 'voice' | 'generation' | 'scoring'
+  job_type: 'document' | 'voice' | 'generation' | 'scoring' | 'export'
   slot_id: number
   source_kind: SourceKind
   source_label: string

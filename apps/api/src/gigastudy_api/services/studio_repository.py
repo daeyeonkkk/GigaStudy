@@ -18,6 +18,7 @@ from gigastudy_api.api.schemas.admin import (
 )
 from gigastudy_api.api.schemas.studios import (
     ArrangementRegion,
+    AudioExportRequest,
     ApproveCandidateRequest,
     ApproveJobCandidatesRequest,
     ApproveJobTempoRequest,
@@ -66,8 +67,10 @@ from gigastudy_api.services.direct_upload_tokens import DirectUploadTokenCodec
 from gigastudy_api.services.studio_admin_commands import StudioAdminCommands
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_jobs import (
+    audio_export_queue_payload,
     build_job_progress,
     clear_unmapped_document_placeholders,
+    create_audio_export_job,
     document_queue_payload,
     engine_queue_job_from_extraction,
     mark_extraction_job_completed,
@@ -78,6 +81,10 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     track_duration_seconds as _track_duration_seconds,
 )
 from gigastudy_api.services.engine.midi_export import build_studio_midi_bytes
+from gigastudy_api.services.engine.audio_mix_export import (
+    AudioExportError,
+    validate_audio_export_request,
+)
 from gigastudy_api.services.engine.music_theory import (
     track_name,
 )
@@ -624,6 +631,70 @@ class StudioRepository:
     ) -> tuple[bytes, str]:
         studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
         return build_studio_midi_bytes(studio), f"{_safe_export_filename(studio.title)}.mid"
+
+    def create_audio_export(
+        self,
+        studio_id: str,
+        request: AudioExportRequest,
+        *,
+        owner_token: str | None = None,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            try:
+                validate_audio_export_request(studio, request)
+            except AudioExportError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+            timestamp = _now()
+            first_slot_id = request.tracks[0].slot_id
+            job = create_audio_export_job(
+                input_request=request.model_dump(mode="json"),
+                max_attempts=get_settings().engine_job_max_attempts,
+                slot_id=first_slot_id,
+                source_label=f"오디오 내보내기 {request.format.upper()}",
+                timestamp=timestamp,
+            )
+            studio.jobs.append(job)
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+
+        self._engine_queue.enqueue(
+            engine_queue_job_from_extraction(
+                job,
+                payload=audio_export_queue_payload(job),
+                studio_id=studio_id,
+                timestamp=timestamp,
+            )
+        )
+        self._schedule_engine_queue_processing(background_tasks)
+        return self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
+
+    def get_audio_export_file(
+        self,
+        studio_id: str,
+        job_id: str,
+        *,
+        owner_token: str | None = None,
+    ) -> tuple[Path, str, str]:
+        studio = self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
+        job = next((candidate for candidate in studio.jobs if candidate.job_id == job_id), None)
+        if job is None or job.job_type != "export":
+            raise HTTPException(status_code=404, detail="Audio export not found.")
+        if job.status != "completed":
+            raise HTTPException(status_code=409, detail="Audio export is not ready yet.")
+        if not job.output_path:
+            raise HTTPException(status_code=404, detail="Audio export file is no longer available.")
+        path = self._assets.resolve_data_asset_path(job.output_path)
+        if not path.exists() or not path.is_file():
+            raise HTTPException(status_code=404, detail="Audio export file is no longer available.")
+        suffix = path.suffix.lower()
+        media_type = "audio/mpeg" if suffix == ".mp3" else "audio/wav"
+        filename = f"{_safe_export_filename(studio.title)}-mix{suffix if suffix in {'.mp3', '.wav'} else '.wav'}"
+        return path, media_type, filename
 
     def get_admin_storage_summary(
         self,
@@ -1573,6 +1644,9 @@ class StudioRepository:
             elif record.job_type == "scoring":
                 source_kind = "recording"
                 method = "practice_scoring"
+            elif record.job_type == "export":
+                source_kind = "audio"
+                method = "audio_export"
             else:
                 source_kind = "document"
                 method = "audiveris_cli"
@@ -1614,7 +1688,7 @@ class StudioRepository:
             for track in placeholder_tracks:
                 if studio_has_active_track_material(studio, track.slot_id):
                     continue
-                if job.job_type == "scoring":
+                if job.job_type in {"scoring", "export"}:
                     continue
                 track.status = "extracting"
                 track.source_kind = job.source_kind
@@ -1760,6 +1834,33 @@ class StudioRepository:
                 timestamp=timestamp,
             )
             self._save_studio(studio)
+
+    def _update_job_progress(
+        self,
+        studio_id: str,
+        job_id: str,
+        *,
+        stage: str,
+        stage_label: str,
+    ) -> None:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            timestamp = _now()
+            for job in studio.jobs:
+                if job.job_id != job_id:
+                    continue
+                job.progress = build_job_progress(
+                    stage,  # type: ignore[arg-type]
+                    timestamp=timestamp,
+                    stage_label=stage_label,
+                )
+                job.updated_at = timestamp
+                studio.updated_at = timestamp
+                self._save_studio(studio)
+                return
+            raise HTTPException(status_code=404, detail="Extraction job not found.")
 
     def _mark_job_failed(
         self,

@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     asset_hard_bytes: int = int(8.5 * 1024 * 1024 * 1024)
     direct_upload_expiration_seconds: int = 15 * 60
     staged_upload_retention_seconds: int = 24 * 60 * 60
+    export_output_retention_seconds: int = 24 * 60 * 60
     pending_recording_retention_seconds: int = 30 * 60
     inactive_asset_retention_seconds: int = 7 * 24 * 60 * 60
     track_archive_non_pinned_limit: int = 3

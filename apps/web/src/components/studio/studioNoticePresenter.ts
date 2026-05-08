@@ -20,6 +20,7 @@ export const NOTICE_META_BLOCKLIST = [
 ] as const
 
 const JOB_MESSAGES: Record<TrackExtractionJob['job_type'], string> = {
+  export: '오디오 파일을 만드는 중입니다.',
   document: '악보를 읽고 파트를 나누는 중입니다.',
   voice: '녹음파일에서 음을 찾는 중입니다.',
   generation: '선택한 기준 트랙을 바탕으로 새 성부를 만드는 중입니다.',
@@ -27,6 +28,7 @@ const JOB_MESSAGES: Record<TrackExtractionJob['job_type'], string> = {
 }
 
 const JOB_ESTIMATE_LABELS: Record<TrackExtractionJob['job_type'], string> = {
+  export: '예상 소요: 보통 30초-2분',
   document: '예상 소요: 보통 1-3분',
   voice: '예상 소요: 보통 1-2분',
   generation: '예상 소요: 보통 30초-2분',

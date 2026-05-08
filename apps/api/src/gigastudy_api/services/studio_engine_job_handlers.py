@@ -7,7 +7,7 @@ from time import perf_counter
 from typing import Any
 
 from gigastudy_api.config import get_settings
-from gigastudy_api.api.schemas.studios import GenerateTrackRequest, ScoreTrackRequest
+from gigastudy_api.api.schemas.studios import AudioExportRequest, GenerateTrackRequest, ScoreTrackRequest
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
     candidate_review_message,
@@ -15,6 +15,11 @@ from gigastudy_api.services.engine.candidate_diagnostics import (
     parsed_track_diagnostics_by_slot,
 )
 from gigastudy_api.services.engine.document_results import mark_events_as_document
+from gigastudy_api.services.engine.audio_mix_export import (
+    AudioExportError,
+    encode_wav_to_mp3,
+    render_audio_mix_wav,
+)
 from gigastudy_api.services.engine.event_normalization import annotate_track_events_for_slot
 from gigastudy_api.services.engine.symbolic import (
     ParsedSymbolicFile,
@@ -68,6 +73,9 @@ class StudioEngineJobHandlers:
             if record.job_type == "scoring":
                 self.process_scoring(record)
                 return
+            if record.job_type == "export":
+                self.process_audio_export(record)
+                return
             raise RuntimeError(f"Unsupported engine job type: {record.job_type}")
         except Exception:
             outcome = "failed"
@@ -115,6 +123,49 @@ class StudioEngineJobHandlers:
             record.job_id,
             output_path=request.performance_asset_path or "",
             method="practice_scoring",
+        )
+
+    def process_audio_export(self, record: EngineQueueJob) -> None:
+        request = AudioExportRequest.model_validate(record.payload.get("request") or {})
+        studio = self._repository.get_studio(record.studio_id)
+        output_dir = self._job_output_dir(record.studio_id, record.job_id)
+        try:
+            render_result = render_audio_mix_wav(
+                output_dir=output_dir,
+                request=request,
+                resolve_asset_path=self._assets.resolve_data_asset_path,
+                studio=studio,
+            )
+            final_path = render_result.wav_path
+            if request.format == "mp3":
+                self._repository._update_job_progress(
+                    record.studio_id,
+                    record.job_id,
+                    stage="encoding",
+                    stage_label="MP3로 변환하는 중입니다.",
+                )
+                final_path = encode_wav_to_mp3(render_result.wav_path, output_dir / "mix.mp3")
+        except AudioExportError as error:
+            self._repository._mark_job_failed(
+                record.studio_id,
+                record.job_id,
+                message=str(error),
+            )
+            return
+
+        output_reference = self._assets.persist_generated_asset(final_path)
+        self._repository._mark_job_completed(
+            record.studio_id,
+            record.job_id,
+            diagnostics={
+                "audio_export_format": request.format,
+                "audio_export_duration_seconds": round(render_result.duration_seconds, 3),
+                "audio_export_master_gain": round(render_result.master_gain, 4),
+                "audio_export_peak_before_master_gain": round(render_result.peak_before_master_gain, 4),
+                "audio_export_track_count": render_result.selected_track_count,
+            },
+            output_path=output_reference,
+            method="audio_export",
         )
 
     def process_document_extraction(self, record: EngineQueueJob) -> None:

@@ -228,6 +228,32 @@ export function getStudioMidiExportUrl(studioId: string): string {
   return url.toString()
 }
 
+export function createAudioExport(
+  studioId: string,
+  payload: {
+    format: 'mp3' | 'wav'
+    tracks: Array<{ slot_id: number; source: 'original' | 'guide' }>
+  },
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/exports/audio`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    '오디오 내보내기를 시작하지 못했습니다.',
+  )
+}
+
+export function getStudioAudioExportUrl(studioId: string, jobId: string): string {
+  const url = new URL(`/api/studios/${studioId}/exports/audio/${jobId}`, apiBaseUrl)
+  const ownerToken = getOwnerToken()
+  if (ownerToken) {
+    url.searchParams.set('owner_token', ownerToken)
+  }
+  return url.toString()
+}
+
 export function getDocumentJobSourcePreviewUrl(studioId: string, jobId: string, pageIndex = 0): string {
   const url = new URL(`/api/studios/${studioId}/jobs/${jobId}/source-preview`, apiBaseUrl)
   url.searchParams.set('page_index', String(pageIndex))

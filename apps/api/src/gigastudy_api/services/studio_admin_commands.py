@@ -255,6 +255,7 @@ class StudioAdminCommands:
         now = datetime.now(UTC)
         batch_size = max(1, settings.maintenance_cleanup_batch_size)
         pending_cutoff = now - timedelta(seconds=settings.pending_recording_retention_seconds)
+        export_cutoff = now - timedelta(seconds=settings.export_output_retention_seconds)
         inactive_cutoff = now - timedelta(seconds=settings.inactive_asset_retention_seconds)
         deleted_files = 0
         deleted_bytes = 0
@@ -267,6 +268,14 @@ class StudioAdminCommands:
 
         with self._lock:
             studios = self._list_studios(limit=10_000, offset=0, active_status="all")
+
+        export_files, export_bytes = self._cleanup_expired_export_outputs(
+            studios,
+            cutoff=export_cutoff,
+            limit=batch_size,
+        )
+        deleted_files += export_files
+        deleted_bytes += export_bytes
 
         processed_studios = 0
         for studio in studios:
@@ -421,6 +430,55 @@ class StudioAdminCommands:
 
     def _save_studio(self, studio: Studio) -> None:
         self._store.save_one_raw(studio.studio_id, encode_studio_payload(studio))
+
+    def _cleanup_expired_export_outputs(
+        self,
+        studios: list[Studio],
+        *,
+        cutoff: datetime,
+        limit: int,
+    ) -> tuple[int, int]:
+        deleted_files = 0
+        deleted_bytes = 0
+        cutoff_utc = cutoff.astimezone(UTC)
+        for studio in studios:
+            if deleted_files >= max(1, limit):
+                break
+            expired_paths: list[tuple[str, str]] = []
+            for job in studio.jobs:
+                if job.job_type != "export" or job.status != "completed" or not job.output_path:
+                    continue
+                updated_at = _parse_iso(job.updated_at)
+                if updated_at is None or updated_at > cutoff_utc:
+                    continue
+                normalized = self._assets.normalize_reference(job.output_path)
+                if normalized is not None:
+                    expired_paths.append((job.job_id, normalized))
+            if not expired_paths:
+                continue
+
+            changed = False
+            timestamp = self._now()
+            for job_id, relative_path in expired_paths:
+                files, bytes_deleted = self._assets.delete_asset_file(relative_path)
+                deleted_files += files
+                deleted_bytes += bytes_deleted
+                with self._lock:
+                    current = self._load_studio(studio.studio_id)
+                    if current is None:
+                        continue
+                    job = next((item for item in current.jobs if item.job_id == job_id), None)
+                    if job is not None and job.output_path is not None:
+                        job.output_path = None
+                        job.updated_at = timestamp
+                        current.updated_at = timestamp
+                        self._save_studio(current)
+                        changed = True
+                if deleted_files >= max(1, limit):
+                    break
+            if changed and deleted_files >= max(1, limit):
+                break
+        return deleted_files, deleted_bytes
 
     def _delete_studio_asset_prefixes(self, studio_id: str) -> tuple[int, int]:
         upload_files, upload_bytes = self._assets.delete_asset_prefix(f"uploads/{studio_id}/")

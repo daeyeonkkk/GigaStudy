@@ -432,6 +432,13 @@
   font-weight: 700;
 }
 
+.composer-arrange-heading__exports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
 .studio-step-button,
 .studio-icon-button {
   display: inline-flex;

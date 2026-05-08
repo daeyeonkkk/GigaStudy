@@ -522,16 +522,21 @@ flowchart TD
 
 ### Export
 
-1. Studio exports currently provide a MIDI file built from the public
-   `Studio.regions` timeline.
-2. Export creates one tempo track plus six visible track chunks so empty lanes
-   remain represented, while note events are written only for registered
+1. Studio exports provide MIDI and audio output from the active product
+   timeline. Export reads public `Studio.regions` and current track material,
+   not inactive archives, candidates, reports, or internal `TrackPitchEvent`
+   shadows.
+2. MIDI export creates one tempo track plus six visible track chunks so empty
+   lanes remain represented, while note events are written only for registered
    pitch-event material.
-3. Negative effective starts are shifted together at export time so exported
-   MIDI begins at tick 0 without changing inter-track timing.
-4. Project JSON and audio mix export are future contracts. They must export the
-   public region/event timeline and restored active material only, not inactive
-   archives or internal `TrackPitchEvent` shadows.
+3. Audio export is requested through an export job. The user chooses MP3 or WAV
+   and selects 1-6 tracks. Each selected track uses either retained original
+   audio or synthesized guide sound when that source is available.
+4. The server renders audio to WAV first. MP3 output is encoded from the
+   completed WAV mix. Output files are job artifacts under `jobs/{studio_id}/`
+   and are temporary cleanup targets.
+5. Negative effective starts are shifted together at export time so exported
+   MIDI/audio begins at time 0 without changing inter-track timing.
 
 ## Removed Surface
 

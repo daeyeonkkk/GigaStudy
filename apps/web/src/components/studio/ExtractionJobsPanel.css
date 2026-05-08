@@ -153,6 +153,10 @@
   accent-color: #082fbd;
 }
 
+.extraction-jobs__actions--download {
+  justify-content: flex-end;
+}
+
 .extraction-jobs__tempo-form {
   grid-column: 1 / -1;
   display: flex;

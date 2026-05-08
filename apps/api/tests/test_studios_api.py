@@ -2343,6 +2343,65 @@ def test_studio_midi_export_uses_registered_region_events(tmp_path: Path, monkey
     assert bytes([0x90, 72]) in export_response.content
 
 
+def test_studio_audio_export_wav_uses_registered_region_events(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Audio export",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    upload_musicxml_track(client, studio_id)
+
+    export_response = client.post(
+        f"/api/studios/{studio_id}/exports/audio",
+        json={
+            "format": "wav",
+            "tracks": [{"slot_id": 1, "source": "guide"}],
+        },
+    )
+    assert export_response.status_code == 200
+    payload = _process_engine_queue_and_get_studio(client, studio_id)
+    export_job = next(job for job in payload["jobs"] if job["job_type"] == "export")
+
+    assert export_job["status"] == "completed"
+    assert export_job["output_path"].endswith(".wav")
+
+    download_response = client.get(
+        f"/api/studios/{studio_id}/exports/audio/{export_job['job_id']}"
+    )
+
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"] == "audio/wav"
+    assert download_response.content.startswith(b"RIFF")
+
+
+def test_studio_audio_export_rejects_unavailable_source(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Audio export invalid",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    export_response = client.post(
+        f"/api/studios/{studio_id}/exports/audio",
+        json={
+            "format": "mp3",
+            "tracks": [{"slot_id": 1, "source": "original"}],
+        },
+    )
+
+    assert export_response.status_code == 422
+
+
 def test_unsupported_source_kind_is_rejected(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     studio_id = client.post(

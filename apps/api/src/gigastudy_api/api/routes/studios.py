@@ -9,6 +9,7 @@ from typing import Literal
 
 from gigastudy_api.api.schemas.studios import (
     ApproveCandidateRequest,
+    AudioExportRequest,
     ApproveJobCandidatesRequest,
     ApproveJobTempoRequest,
     CopyRegionRequest,
@@ -229,6 +230,45 @@ def export_studio_midi(
             "Cache-Control": "private, max-age=60",
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
+    )
+
+
+@router.post("/{studio_id}/exports/audio", response_model=StudioResponse)
+def create_studio_audio_export(
+    studio_id: str,
+    request: AudioExportRequest,
+    background_tasks: BackgroundTasks,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.create_audio_export(
+            studio_id,
+            request,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
+        )
+    )
+
+
+@router.get("/{studio_id}/exports/audio/{job_id}")
+def download_studio_audio_export(
+    studio_id: str,
+    job_id: str,
+    owner_token_query: str | None = Query(default=None, alias="owner_token"),
+    owner_token_header: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> FileResponse:
+    path, media_type, filename = repository.get_audio_export_file(
+        studio_id,
+        job_id,
+        owner_token=owner_token_header or owner_token_query,
+    )
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=filename,
+        headers=_asset_file_headers(path, cache_control="private, max-age=300"),
     )
 
 

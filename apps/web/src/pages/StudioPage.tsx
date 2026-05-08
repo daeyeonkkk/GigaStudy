@@ -3,6 +3,8 @@ import { useRef } from 'react'
 import { useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
+import { AudioExportDialog } from '../components/studio/AudioExportDialog'
+import type { AudioExportPayload } from '../components/studio/AudioExportDialog'
 import { CandidateReviewPanel } from '../components/studio/CandidateReviewPanel'
 import { ExtractionJobsPanel } from '../components/studio/ExtractionJobsPanel'
 import { PendingRecordingDialog } from '../components/studio/PendingRecordingDialog'
@@ -22,9 +24,11 @@ import { useStudioTrackActions } from '../components/studio/useStudioTrackAction
 import {
   approveJobTempo,
   copyRegion,
+  createAudioExport,
   deleteRegion,
   getCandidateDetail,
   getDocumentJobSourcePreviewUrl,
+  getStudioAudioExportUrl,
   getStudioMidiExportUrl,
   restoreTrackArchive,
   splitRegion,
@@ -52,6 +56,7 @@ export function StudioPage() {
   const focusedEventId = searchParams.get('event')
   const [actionState, setActionState] = useState<StudioActionState>({ phase: 'idle' })
   const [archiveDialogSlotId, setArchiveDialogSlotId] = useState<number | null>(null)
+  const [audioExportDialogOpen, setAudioExportDialogOpen] = useState(false)
   const studioActionInFlightRef = useRef(false)
   const candidateDetailRequestIdsRef = useRef(new Set<string>())
   const {
@@ -330,6 +335,20 @@ export function StudioPage() {
     )
   }
 
+  async function handleCreateAudioExport(payload: AudioExportPayload) {
+    if (!studio) {
+      return
+    }
+    const success = await runStudioAction(
+      () => createAudioExport(studio.studio_id, payload),
+      '오디오 파일을 만들 준비를 하고 있습니다.',
+      '오디오 내보내기를 시작했습니다.',
+    )
+    if (success) {
+      setAudioExportDialogOpen(false)
+    }
+  }
+
   const activeJobSlotIds = useMemo(() => {
     const next = new Set<number>()
     for (const job of activeExtractionJobs) {
@@ -520,9 +539,20 @@ export function StudioPage() {
                 {studio.bpm} BPM · {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} · 등록{' '}
                 {registeredTracks.length}/6 · 리포트 {studio.reports.length}
               </p>
-              <a className="app-button app-button--secondary" href={getStudioMidiExportUrl(studio.studio_id)}>
-                MIDI 내보내기
-              </a>
+              <div className="composer-arrange-heading__exports">
+                <a className="app-button app-button--secondary" href={getStudioMidiExportUrl(studio.studio_id)}>
+                  MIDI 내보내기
+                </a>
+                <button
+                  className="app-button app-button--secondary"
+                  data-testid="open-audio-export"
+                  disabled={actionState.phase === 'busy'}
+                  type="button"
+                  onClick={() => setAudioExportDialogOpen(true)}
+                >
+                  오디오 내보내기
+                </button>
+              </div>
             </div>
 
             <TrackBoard
@@ -572,6 +602,7 @@ export function StudioPage() {
               lockedSlotIds={activeJobSlotIds}
               tracks={studio.tracks}
               visibleJobs={visibleExtractionJobs}
+              getAudioExportDownloadUrl={(jobId) => getStudioAudioExportUrl(studio.studio_id, jobId)}
               getPendingJobCandidates={getPendingJobCandidates}
               jobWouldOverwrite={jobWouldOverwrite}
               onApproveJobCandidates={(jobId) => void handleApproveJobCandidates(jobId)}
@@ -640,6 +671,15 @@ export function StudioPage() {
           track={archiveDialogTrack}
           onClose={() => setArchiveDialogSlotId(null)}
           onRestore={(archive) => void handleRestoreTrackArchive(archive)}
+        />
+      ) : null}
+
+      {audioExportDialogOpen ? (
+        <AudioExportDialog
+          busy={actionState.phase === 'busy'}
+          studio={studio}
+          onClose={() => setAudioExportDialogOpen(false)}
+          onCreate={(payload) => void handleCreateAudioExport(payload)}
         />
       ) : null}
 

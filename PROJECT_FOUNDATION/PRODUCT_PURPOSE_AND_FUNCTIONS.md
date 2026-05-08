@@ -143,7 +143,8 @@ AI generation은 등록된 context tracks를 바탕으로 symbolic track materia
 - Per-track volume을 가진 synchronized selected-track playback.
 - Answer scoring, harmony scoring, report history, report deep-link.
 - 부족하거나 수정할 part를 위한 symbolic AI generation.
-- `Studio.regions`의 pitch-event timeline을 MIDI 파일로 내보내기.
+- `Studio.regions`의 active timeline을 MIDI 또는 오디오 믹스 파일로
+  내보내기. 오디오 내보내기는 선택 track의 원음 또는 연주음을 사용한다.
 - alpha testing을 운영하기 위한 admin/resource tool.
 - Admin의 active/inactive studio 관리, 개별 저장 파일 정리, 완전삭제, guide
   tone sample 교체.

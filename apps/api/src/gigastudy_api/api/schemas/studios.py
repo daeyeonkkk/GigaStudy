@@ -25,6 +25,8 @@ TrackStatus = Literal[
     "failed",
 ]
 SourceKind = Literal["recording", "audio", "midi", "document", "ai"]
+AudioExportFormat = Literal["mp3", "wav"]
+AudioExportTrackSource = Literal["original", "guide"]
 ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["document"]
@@ -37,7 +39,7 @@ ExtractionJobStatus = Literal[
     "completed",
     "failed",
 ]
-ExtractionJobType = Literal["document", "voice", "generation", "scoring"]
+ExtractionJobType = Literal["document", "voice", "generation", "scoring", "export"]
 JobProgressStage = Literal[
     "queued",
     "preparing",
@@ -48,6 +50,8 @@ JobProgressStage = Literal[
     "registering",
     "reviewing",
     "scoring",
+    "rendering",
+    "encoding",
     "completed",
     "failed",
 ]
@@ -980,6 +984,23 @@ class DirectUploadTarget(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     expires_at: str
     max_bytes: int
+
+
+class AudioExportTrackSelection(SourceKindModel):
+    slot_id: int = Field(ge=1, le=6)
+    source: AudioExportTrackSource
+
+
+class AudioExportRequest(SourceKindModel):
+    format: AudioExportFormat = "mp3"
+    tracks: list[AudioExportTrackSelection] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def validate_unique_tracks(self) -> "AudioExportRequest":
+        slot_ids = [track.slot_id for track in self.tracks]
+        if len(slot_ids) != len(set(slot_ids)):
+            raise ValueError("Audio export cannot include the same track twice.")
+        return self
 
 
 class GenerateTrackRequest(BaseModel):

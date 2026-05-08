@@ -85,9 +85,12 @@ is excluded from persistence and remains an adapter detail.
   timeline lanes with thin pitch-positioned event minis directly on the lane,
   plus track registration/playback/sync controls. Region hit areas remain
   selectable but are not visual cards. In editor mode it renders the same six
-  visible lanes plus selected-region tools and piano-roll editing. Empty tracks
-  remain visible as lanes with no event minis. Practice waterfall rendering
-  belongs to `PracticePage`.
+  visible lanes plus selected-region tools, piano-roll editing, and per-track
+  material version controls. Recording versions are shown as a compact dropdown
+  with user labels such as `원본 녹음` or `보정본 1` plus creation time; the
+  adjacent actions are `이 Track을 사용`, `이름 변경`, and `삭제`. There is no
+  version preview button. Empty tracks remain visible as lanes with no event
+  minis. Practice waterfall rendering belongs to `PracticePage`.
 - `apps/web/src/components/studio/TrackArchiveDialog.tsx`
   Restore-only track material archive dialog. It is opened from a track row
   only when inactive snapshots exist, labels pinned score material as original
@@ -159,11 +162,15 @@ is excluded from persistence and remains an adapter detail.
   shape; obsolete pre-region payloads are rejected with the rest of the obsolete
   storage shape. `Studio.track_material_archives` is loaded into the internal
   model from a storage sidecar and stores inactive restore snapshots for
-  overwritten track material. Each archive stores `region_snapshots[]`, with old
-  single `region_snapshot` payloads lazily migrated on read. Studio routes
-  return `StudioResponse`, whose tracks and candidates omit internal event
-  arrays and whose archive payload exposes summaries only, not stored event
-  snapshots. `TrackExtractionJob.progress` is optional and represents
+  overwritten track material, pinned original recordings, and tuned recording
+  versions. Each archive stores `region_snapshots[]`, optional user label,
+  optional `based_on_archive_id`, and reason metadata. Old single
+  `region_snapshot` payloads are lazily migrated on read. `TrackSlot` may point
+  to the active version by `active_material_version_id`, but the playable truth
+  is still the active region snapshot in `Studio.regions`. Studio routes return
+  `StudioResponse`, whose tracks and candidates omit internal event arrays and
+  whose archive payload exposes summaries only, not stored event snapshots.
+  `TrackExtractionJob.progress` is optional and represents
   user-facing stage/progress evidence; percent-capable fields are set only when
   the job has real completed/total units. Non-full response views keep reports
   as summaries and candidates
@@ -426,6 +433,9 @@ flowchart TD
    Original MIDI/MusicXML/PDF score material is pinned for that slot. Restore
    first archives the current active material, then replaces all active regions
    for the slot with the archived snapshots.
+   Recording-origin versions follow the same restore path: pinned original
+   recordings and inactive corrected versions do not affect the product
+   timeline until the user activates one.
 10. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
@@ -446,7 +456,20 @@ flowchart TD
 6. Extracted pitch material becomes a candidate or registered track. If the
    target slot already had score/imported/generated material, the active
    material is archived before the recording replaces it.
-7. Region and pitch-event views update from the studio response.
+7. The first registered recording for a slot is stored as a pinned `원본 녹음`
+   version. Recording/audio registration stores `audio_source_anchors` in the
+   active region diagnostics so each event can be traced back to its source
+   audio slice. Later edit-applied vocal renders cut source slices from those
+   anchors, then place, stretch, and pitch-shift them to the edited event
+   start, duration, and pitch. The output is saved as an inactive `보정본 N`
+   version and does not change playback, scoring, export, or the piano-roll
+   view until explicitly activated. The API render path prefers Rubber Band CLI
+   for pitch/time processing and falls back to librosa if the CLI is unavailable
+   or a segment fails to process.
+8. In Edit, selecting a version and pressing `이 Track을 사용` archives the
+   current active material as `previous_active`, restores the selected version's
+   snapshots into `Studio.regions`, and updates region and pitch-event views
+   from the studio response.
 
 ### Scoring
 
@@ -500,6 +523,9 @@ flowchart TD
 
 1. Toolbar or track controls choose source mode.
 2. Audio mode prefers retained audio clips when present.
+   If the active track material is a user-selected corrected version, that
+   corrected audio is the retained audio clip for playback. Inactive versions
+   are ignored.
 3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`
    with the warm guide tone by default. If admin has uploaded a custom guide
    sample, melodic event synthesis may use that sample transposed from its
@@ -531,7 +557,9 @@ flowchart TD
    pitch-event material.
 3. Audio export is requested through an export job. The user chooses MP3 or WAV
    and selects 1-6 tracks. Each selected track uses either retained original
-   audio or synthesized guide sound when that source is available.
+   audio or synthesized guide sound when that source is available. If a tuned
+   recording version is active, it is the retained original-audio source for
+   that track; inactive versions are not exported.
 4. The server renders audio to WAV first. MP3 output is encoded from the
    completed WAV mix. Output files are job artifacts under `jobs/{studio_id}/`
    and are temporary cleanup targets.
@@ -568,9 +596,11 @@ The rebuild now follows the intended separation:
 - Product truth: `Studio.regions`, `ArrangementRegion.pitch_events`, and
   `CandidateRegion.pitch_events`.
 - Restore snapshots: `Studio.track_material_archives` is inactive storage for
-  restoration only, stored outside the base studio payload, and is not consumed
-  by playback, scoring, practice, or AI generation. Pinned original score
-  snapshots remain; non-pinned restore snapshots keep the latest 3 per slot.
+  restoration and track material versions, stored outside the base studio
+  payload, and is not consumed by playback, scoring, practice, export, or AI
+  generation until restored into `Studio.regions`. Pinned original score and
+  original recording snapshots remain; non-pinned restore/tuned snapshots keep
+  the latest 3 per slot.
 - Alpha persistence: in R2 metadata mode, new studios, sidecars, queue state,
   asset registry, and custom guide-tone config are stored in object storage
   under `metadata/`. Cloud Run local disk remains cache/temp space.

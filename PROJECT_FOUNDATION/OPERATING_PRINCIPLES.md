@@ -49,6 +49,19 @@ the same change.
   active timeline and playback, practice, scoring, candidate review, and AI
   generation must ignore them until the user explicitly restores one into
   `Studio.regions`.
+- Track recording versions use the same inactive snapshot contract. The first
+  registered recording for a slot is pinned as `원본 녹음`; edit-applied vocal
+  renders are stored as `보정본 N` snapshots. A version becomes product truth
+  only when the user chooses it in Edit and presses `이 Track을 사용`, which
+  replaces the active slot material in `Studio.regions`.
+- Recording/audio registration must store source anchors in region diagnostics
+  so each active pitch event can be traced back to the original recorded audio
+  slice. Edit-applied vocal renders must cut audio from those anchors, then
+  place, stretch, and pitch-shift the slice according to the edited event.
+- Edit-applied vocal render is a user-directed correction tool, not automatic
+  vocal beautification. It must not invent lyrics, notes, or rhythm, and it
+  should not impose musical safety limits that prevent the user's explicit edit
+  from being rendered.
 - Archive storage must stay outside the base studio payload when it can grow.
   Public responses expose archive summaries only; restore loads the stored
   snapshots and writes them back into `Studio.regions`.
@@ -190,6 +203,10 @@ the same change.
   for that slot is pinned as the original score; later recording, audio upload,
   AI generation, or import overwrites keep bounded non-pinned snapshots for
   restore.
+- The first user recording for a slot is preserved as the pinned original
+  recording. An edit-applied vocal render must create an inactive corrected
+  version and must not silently switch playback, scoring, export, or editing to
+  that render. Version activation is an explicit restore-style user action.
 - One failed extraction part must not block all other parts. Multi-part import
   should try every identifiable track and report per-track results.
 - Studio creation upload and per-track upload are different product contracts.
@@ -374,6 +391,9 @@ the same change.
   material, current sync, and current volume. It must not include inactive
   archives, pending candidates, reports, or internal storage shadows unless the
   user first restores or approves them into the active timeline.
+- If a corrected recording version has been explicitly activated, that active
+  corrected audio is the current original-audio source for playback and export.
+  Inactive corrected versions are ignored.
 - Audio export is one user feature with a format option. WAV is the internal
   render target; MP3 is encoded from the finished WAV mix for sharing.
 - A selected track may export retained original audio or synthesized guide

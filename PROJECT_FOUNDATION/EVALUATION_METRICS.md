@@ -163,6 +163,22 @@ a new source of product truth.
 | Volume preservation | Track volume affects the rendered mix and master gain only prevents clipping | fixture pass |
 | Temporary output cleanup | Completed export artifacts expire according to the export retention policy | test pass |
 
+### Track Material Version Regression
+
+Track recording versions are evaluated as inactive material snapshots. They
+must not become a parallel product timeline.
+
+| Metric | Meaning | Target |
+| --- | --- | ---: |
+| Original recording pin | The first registered recording for a slot is preserved as pinned `원본 녹음` | regression pass |
+| Edit-applied version inactivity | Creating `보정본 N` adds a version but does not change active playback/edit/scoring/export | regression pass |
+| Source anchor fidelity | Moving an edited event still cuts the original recorded slice from its stored source anchor | regression pass |
+| Edit timing correction | Corrected audio onset/duration follows edited event start and length | median onset <= 25ms, duration <= 40ms |
+| Edit pitch correction | Corrected voiced material moves toward edited event pitch without inventing new notes | median <= 35 cents |
+| Explicit activation | `이 Track을 사용` archives current active material and restores the selected version into `Studio.regions` | regression pass |
+| Version list clarity | Edit dropdown shows user label and creation time only, with no preview action | web regression pass |
+| Active timeline only | Playback, scoring, AI, and export ignore inactive versions | 100% |
+
 ## Measurement Cadence
 
 ### 매 배포 필수 gate

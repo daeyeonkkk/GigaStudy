@@ -11,7 +11,12 @@ type TrackStatus =
 export type SourceKind = 'recording' | 'audio' | 'midi' | 'document' | 'ai'
 export type PitchEventSource = 'musicxml' | 'midi' | 'document' | 'voice' | 'ai' | 'recording' | 'audio'
 export type ScoreMode = 'answer' | 'harmony'
-export type TrackMaterialArchiveReason = 'original_score' | 'before_overwrite'
+export type TrackMaterialArchiveReason =
+  | 'original_score'
+  | 'original_recording'
+  | 'tuned_recording'
+  | 'previous_active'
+  | 'before_overwrite'
 
 export type PitchEvent = {
   event_id: string
@@ -124,7 +129,7 @@ export type JobProgress = {
 
 export type TrackExtractionJob = {
   job_id: string
-  job_type: 'document' | 'voice' | 'generation' | 'scoring' | 'export'
+  job_type: 'document' | 'voice' | 'generation' | 'scoring' | 'export' | 'tuning'
   slot_id: number
   source_kind: SourceKind
   source_label: string
@@ -178,6 +183,7 @@ export type TrackSlot = {
   audio_source_path: string | null
   audio_source_label: string | null
   audio_mime_type: string | null
+  active_material_version_id: string | null
   duration_seconds: number
   diagnostics: Record<string, unknown>
   updated_at: string
@@ -189,6 +195,8 @@ export type TrackMaterialArchiveSummary = {
   track_name: string
   source_kind: SourceKind | null
   source_label: string | null
+  label: string | null
+  based_on_archive_id: string | null
   archived_at: string
   reason: TrackMaterialArchiveReason
   pinned: boolean

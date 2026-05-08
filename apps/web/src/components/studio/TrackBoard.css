@@ -235,6 +235,46 @@
   width: 44px;
 }
 
+.track-version-control {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 48px;
+}
+
+.track-version-control > span {
+  color: #3c4954;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.track-version-control__row,
+.track-version-control__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.track-version-control select {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 150px;
+  min-height: 30px;
+  border: 1px solid #aeb8c1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #17212b;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.track-version-control .studio-step-button {
+  min-height: 28px;
+  padding-inline: 8px;
+  font-size: 0.76rem;
+}
+
 .track-card__region-lane {
   position: relative;
   min-height: var(--lane-min-height, 94px);

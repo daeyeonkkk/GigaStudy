@@ -296,6 +296,9 @@ function getJobKindLabel(job: TrackExtractionJob): string {
   if (job.job_type === 'export') {
     return '오디오 내보내기'
   }
+  if (job.job_type === 'tuning') {
+    return '편집 반영본 만들기'
+  }
   return '악보 분석'
 }
 
@@ -324,6 +327,9 @@ function getJobStateHint(job: TrackExtractionJob): string {
     return '대기열에 올라와 있습니다. 앞선 문서/음성 작업이 끝나면 자동으로 시작합니다.'
   }
   if (job.status === 'running') {
+    if (job.job_type === 'tuning') {
+      return '저장된 음표에 맞춰 편집 내용을 녹음에 반영하는 중입니다.'
+    }
     return job.job_type === 'voice'
       ? '녹음 파일을 메트로놈 기준으로 정렬하고 음표 후보를 만드는 중입니다.'
       : '문서 파트와 트랙 후보를 추출하는 중입니다. 완료되면 등록 가능한 후보가 표시됩니다.'

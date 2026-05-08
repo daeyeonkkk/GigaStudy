@@ -17,6 +17,9 @@ export const NOTICE_META_BLOCKLIST = [
   'heap',
   'stderr',
   'vector parser',
+  'Rubber Band',
+  'librosa',
+  'backend',
 ] as const
 
 const JOB_MESSAGES: Record<TrackExtractionJob['job_type'], string> = {
@@ -25,6 +28,7 @@ const JOB_MESSAGES: Record<TrackExtractionJob['job_type'], string> = {
   voice: '녹음파일에서 음을 찾는 중입니다.',
   generation: '선택한 기준 트랙을 바탕으로 새 성부를 만드는 중입니다.',
   scoring: '녹음한 연주를 기준 트랙과 맞춰보는 중입니다.',
+  tuning: '편집 내용을 녹음에 반영하는 중입니다.',
 }
 
 const JOB_ESTIMATE_LABELS: Record<TrackExtractionJob['job_type'], string> = {
@@ -33,6 +37,7 @@ const JOB_ESTIMATE_LABELS: Record<TrackExtractionJob['job_type'], string> = {
   voice: '예상 소요: 보통 1-2분',
   generation: '예상 소요: 보통 30초-2분',
   scoring: '예상 소요: 보통 30초-1분',
+  tuning: '예상 소요: 보통 30초-2분',
 }
 
 export function noticeHasMetaLanguage(value: string): boolean {

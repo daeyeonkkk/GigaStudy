@@ -550,6 +550,47 @@ export function restoreTrackArchive(
   )
 }
 
+export function updateTrackArchive(
+  studioId: string,
+  archiveId: string,
+  payload: { label: string },
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/track-archives/${archiveId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+    '트랙 버전 이름을 바꾸지 못했습니다.',
+  )
+}
+
+export function deleteTrackArchive(
+  studioId: string,
+  archiveId: string,
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/track-archives/${archiveId}`,
+    { method: 'DELETE' },
+    '트랙 버전을 삭제하지 못했습니다.',
+  )
+}
+
+export function createTrackTuningRender(
+  studioId: string,
+  slotId: number,
+  payload: { label?: string | null } = {},
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/tracks/${slotId}/tuning-render`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    '편집 반영본 만들기를 시작하지 못했습니다.',
+  )
+}
+
 export function copyRegion(
   studioId: string,
   regionId: string,

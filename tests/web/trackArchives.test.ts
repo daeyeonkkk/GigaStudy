@@ -16,6 +16,8 @@ function archive(
     duration_seconds: 1,
     event_count: 2,
     has_audio: false,
+    label: null,
+    based_on_archive_id: null,
     pinned: false,
     reason: 'before_overwrite',
     source_kind: 'audio',
@@ -36,6 +38,19 @@ describe('track archive display helpers', () => {
     expect(getTrackArchiveDisplayLabel(archive('recording', {
       source_kind: 'recording',
     }))).toBe('이전 녹음')
+    expect(getTrackArchiveDisplayLabel(archive('original-recording', {
+      reason: 'original_recording',
+      source_kind: 'recording',
+    }))).toBe('원본 녹음')
+    expect(getTrackArchiveDisplayLabel(archive('tuned', {
+      label: '튜닝본 2',
+      reason: 'tuned_recording',
+      source_kind: 'audio',
+    }))).toBe('튜닝본 2')
+    expect(getTrackArchiveDisplayLabel(archive('corrected', {
+      reason: 'tuned_recording',
+      source_kind: 'audio',
+    }))).toBe('보정본')
     expect(getTrackArchiveDisplayLabel(archive('ai', {
       source_kind: 'ai',
     }))).toBe('이전 생성')

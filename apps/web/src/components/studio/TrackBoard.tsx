@@ -5,10 +5,13 @@ import { getRecordingLevelPercent } from '../../lib/audio'
 import {
   TRACK_RECORDING_UPLOAD_ACCEPT,
   formatDurationSeconds,
+  formatDate,
   formatSeconds,
   formatTrackName,
   getArrangementTimelineBounds,
   getJobStatusLabel,
+  getTrackArchiveDisplayLabel,
+  sortTrackArchivesForDisplay,
   statusLabels,
 } from '../../lib/studio'
 import type {
@@ -92,6 +95,10 @@ type TrackBoardProps = {
   onGenerate: (track: TrackSlot) => void
   onOpenRegionEditor?: (region: ArrangementRegion) => void
   onOpenTrackArchive?: (track: TrackSlot) => void
+  onCreateTuningRender?: (track: TrackSlot) => void
+  onUseTrackMaterialVersion?: (track: TrackSlot, archive: TrackMaterialArchiveSummary) => void
+  onRenameTrackMaterialVersion?: (archive: TrackMaterialArchiveSummary, label: string) => void
+  onDeleteTrackMaterialVersion?: (archive: TrackMaterialArchiveSummary) => void
   onRecord: (track: TrackSlot) => void
   onRestoreRegionRevision?: (region: ArrangementRegion, revisionId: string) => void
   onSaveRegionDraft?: (region: ArrangementRegion, draft: RegionEditorDraft, revisionLabel: string | null) => void
@@ -250,6 +257,134 @@ function TrackVolumeControl({
   )
 }
 
+function TrackMaterialVersionControls({
+  archives,
+  canCreateTuning,
+  disabled,
+  track,
+  onCreateTuningRender,
+  onDeleteTrackMaterialVersion,
+  onRenameTrackMaterialVersion,
+  onUseTrackMaterialVersion,
+}: {
+  archives: TrackMaterialArchiveSummary[]
+  canCreateTuning: boolean
+  disabled: boolean
+  track: TrackSlot
+  onCreateTuningRender?: (track: TrackSlot) => void
+  onUseTrackMaterialVersion?: (track: TrackSlot, archive: TrackMaterialArchiveSummary) => void
+  onRenameTrackMaterialVersion?: (archive: TrackMaterialArchiveSummary, label: string) => void
+  onDeleteTrackMaterialVersion?: (archive: TrackMaterialArchiveSummary) => void
+}) {
+  const sortedArchives = useMemo(() => sortTrackArchivesForDisplay(archives), [archives])
+  const fallbackArchiveId = sortedArchives[0]?.archive_id ?? ''
+  const [userSelectedArchiveId, setUserSelectedArchiveId] = useState<string | null>(null)
+  const selectedArchiveId =
+    userSelectedArchiveId && sortedArchives.some((archive) => archive.archive_id === userSelectedArchiveId)
+      ? userSelectedArchiveId
+      : track.active_material_version_id ?? fallbackArchiveId
+
+  const selectedArchive =
+    sortedArchives.find((archive) => archive.archive_id === selectedArchiveId) ?? null
+  const selectedIsActive = Boolean(
+    selectedArchive && selectedArchive.archive_id === track.active_material_version_id,
+  )
+  const selectedLabel = selectedArchive ? getTrackArchiveDisplayLabel(selectedArchive) : ''
+
+  return (
+    <div className="track-version-control" data-testid={`track-version-control-${track.slot_id}`}>
+      <span>사용 중인 버전</span>
+      <div className="track-version-control__row">
+        <select
+          aria-label={`${formatTrackName(track.name)} 버전 선택`}
+          data-testid={`track-version-select-${track.slot_id}`}
+          disabled={disabled || sortedArchives.length === 0}
+          value={selectedArchiveId}
+          onChange={(event) => setUserSelectedArchiveId(event.currentTarget.value)}
+        >
+          {sortedArchives.length === 0 ? (
+            <option value="">저장된 버전 없음</option>
+          ) : (
+            sortedArchives.map((archive) => (
+              <option key={archive.archive_id} value={archive.archive_id}>
+                {getTrackArchiveDisplayLabel(archive)} · {formatDate(archive.archived_at)}
+              </option>
+            ))
+          )}
+        </select>
+        <button
+          className="studio-step-button"
+          data-testid={`track-version-use-${track.slot_id}`}
+          disabled={disabled || !selectedArchive || selectedIsActive || !onUseTrackMaterialVersion}
+          type="button"
+          onClick={() => {
+            if (!selectedArchive) {
+              return
+            }
+            if (
+              window.confirm('현재 편집 상태는 보관 후 교체됩니다. 이 버전을 사용하시겠습니까?')
+            ) {
+              onUseTrackMaterialVersion?.(track, selectedArchive)
+            }
+          }}
+        >
+          이 Track을 사용
+        </button>
+      </div>
+      <div className="track-version-control__actions">
+        <button
+          className="studio-step-button"
+          data-testid={`track-tuning-render-${track.slot_id}`}
+          disabled={disabled || !canCreateTuning || !onCreateTuningRender}
+          type="button"
+          onClick={() => onCreateTuningRender?.(track)}
+        >
+          편집 반영본 만들기
+        </button>
+        <button
+          className="studio-step-button"
+          data-testid={`track-version-rename-${track.slot_id}`}
+          disabled={disabled || !selectedArchive || !onRenameTrackMaterialVersion}
+          type="button"
+          onClick={() => {
+            if (!selectedArchive) {
+              return
+            }
+            const nextLabel = window.prompt('버전 이름', selectedLabel)
+            if (nextLabel?.trim()) {
+              onRenameTrackMaterialVersion?.(selectedArchive, nextLabel.trim())
+            }
+          }}
+        >
+          이름 변경
+        </button>
+        <button
+          className="studio-step-button"
+          data-testid={`track-version-delete-${track.slot_id}`}
+          disabled={
+            disabled ||
+            !selectedArchive ||
+            selectedArchive.pinned ||
+            selectedIsActive ||
+            !onDeleteTrackMaterialVersion
+          }
+          type="button"
+          onClick={() => {
+            if (!selectedArchive) {
+              return
+            }
+            if (window.confirm(`${selectedLabel}을 삭제하시겠습니까?`)) {
+              onDeleteTrackMaterialVersion?.(selectedArchive)
+            }
+          }}
+        >
+          삭제
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function TrackBoard({
   activeJobSlotIds,
   beatsPerMeasure,
@@ -279,9 +414,12 @@ export function TrackBoard({
   onCopyRegion,
   onDeleteRegion,
   onGenerate,
+  onCreateTuningRender,
+  onDeleteTrackMaterialVersion,
   onOpenRegionEditor,
   onOpenTrackArchive,
   onRecord,
+  onRenameTrackMaterialVersion,
   onRestoreRegionRevision,
   onSaveRegionDraft,
   onSplitRegion,
@@ -289,6 +427,7 @@ export function TrackBoard({
   onSync,
   onTogglePlayback,
   onUpload,
+  onUseTrackMaterialVersion,
   onVolumePreview,
   onVolumeChange,
 }: TrackBoardProps) {
@@ -429,9 +568,15 @@ export function TrackBoard({
             : editDisabledReason
           const trackRegions = regionsByTrack.get(track.slot_id) ?? []
           const trackMiniEvents = getTrackMiniEvents(trackRegions)
-          const trackArchiveCount = trackMaterialArchives.filter(
+          const trackArchives = trackMaterialArchives.filter(
             (archive) => archive.track_slot_id === track.slot_id,
-          ).length
+          )
+          const trackArchiveCount = trackArchives.length
+          const canCreateTuning =
+            isEditorMode &&
+            isRegistered &&
+            trackRegions.some((region) => region.audio_source_path) &&
+            trackMiniEvents.length > 0
           const canGenerateTrack = registeredTracks.some(
             (registeredTrack) => registeredTrack.slot_id !== track.slot_id,
           )
@@ -494,6 +639,18 @@ export function TrackBoard({
                       onVolumeChange={onVolumeChange}
                     />
                   </div>
+                ) : null}
+                {isEditorMode && isRegistered ? (
+                  <TrackMaterialVersionControls
+                    archives={trackArchives}
+                    canCreateTuning={canCreateTuning}
+                    disabled={trackEditDisabled}
+                    track={track}
+                    onCreateTuningRender={onCreateTuningRender}
+                    onDeleteTrackMaterialVersion={onDeleteTrackMaterialVersion}
+                    onRenameTrackMaterialVersion={onRenameTrackMaterialVersion}
+                    onUseTrackMaterialVersion={onUseTrackMaterialVersion}
+                  />
                 ) : null}
               </header>
 

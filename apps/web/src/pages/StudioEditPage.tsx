@@ -10,10 +10,14 @@ import type { StudioActionState } from '../components/studio/studioActionState'
 import { useStudioResource } from '../components/studio/useStudioResource'
 import {
   copyRegion,
+  createTrackTuningRender,
+  deleteTrackArchive,
   deleteRegion,
+  restoreTrackArchive,
   restoreRegionRevision,
   saveRegionRevision,
   splitRegion,
+  updateTrackArchive,
 } from '../lib/api'
 import {
   DEFAULT_METER,
@@ -27,6 +31,8 @@ import {
 import type {
   ArrangementRegion,
   Studio,
+  TrackMaterialArchiveSummary,
+  TrackSlot,
 } from '../types/studio'
 import './StudioPage.css'
 
@@ -198,6 +204,58 @@ export function StudioEditPage() {
     )
   }
 
+  async function handleCreateTuningRender(track: TrackSlot) {
+    if (!studio) {
+      return
+    }
+    await runStudioAction(
+      () => createTrackTuningRender(studio.studio_id, track.slot_id),
+      `${formatTrackName(track.name)} 편집 반영본을 준비하는 중입니다.`,
+      `${formatTrackName(track.name)} 편집 반영본 만들기를 시작했습니다.`,
+    )
+  }
+
+  async function handleUseTrackMaterialVersion(
+    track: TrackSlot,
+    archive: TrackMaterialArchiveSummary,
+  ) {
+    if (!studio) {
+      return
+    }
+    await runStudioAction(
+      () => restoreTrackArchive(studio.studio_id, archive.archive_id),
+      `${formatTrackName(track.name)} 버전을 적용하는 중입니다.`,
+      `${formatTrackName(track.name)}에 선택한 버전을 적용했습니다.`,
+    )
+  }
+
+  async function handleRenameTrackMaterialVersion(
+    archive: TrackMaterialArchiveSummary,
+    label: string,
+  ) {
+    if (!studio) {
+      return
+    }
+    const targetTrack = studio.tracks.find((track) => track.slot_id === archive.track_slot_id)
+    await runStudioAction(
+      () => updateTrackArchive(studio.studio_id, archive.archive_id, { label }),
+      `${formatTrackName(targetTrack?.name ?? archive.track_name)} 버전 이름을 바꾸는 중입니다.`,
+      '버전 이름을 바꿨습니다.',
+    )
+  }
+
+  async function handleDeleteTrackMaterialVersion(archive: TrackMaterialArchiveSummary) {
+    if (!studio) {
+      return
+    }
+    const targetTrack = studio.tracks.find((track) => track.slot_id === archive.track_slot_id)
+    await runStudioAction(
+      () => deleteTrackArchive(studio.studio_id, archive.archive_id),
+      `${formatTrackName(targetTrack?.name ?? archive.track_name)} 버전을 삭제하는 중입니다.`,
+      '버전을 삭제했습니다.',
+    )
+  }
+
   if (!studioId) {
     return (
       <StudioRouteState
@@ -279,13 +337,19 @@ export function StudioEditPage() {
               trackCountIn={null}
               recordingSlotId={null}
               trackRecordingMeter={EMPTY_RECORDING_METER}
+              trackMaterialArchives={studio.track_material_archives ?? []}
               tracks={studio.tracks}
               onCopyRegion={(region, targetSlotId, startSeconds) =>
                 void handleCopyRegion(region, targetSlotId, startSeconds)
               }
               onDeleteRegion={(region) => void handleDeleteRegion(region)}
+              onCreateTuningRender={(track) => void handleCreateTuningRender(track)}
+              onDeleteTrackMaterialVersion={(archive) => void handleDeleteTrackMaterialVersion(archive)}
               onGenerate={() => undefined}
               onRecord={() => undefined}
+              onRenameTrackMaterialVersion={(archive, label) =>
+                void handleRenameTrackMaterialVersion(archive, label)
+              }
               onRestoreRegionRevision={(region, revisionId) => void handleRestoreRegionRevision(region, revisionId)}
               onSaveRegionDraft={(region, draft, revisionLabel) =>
                 void handleSaveRegionDraft(region, draft, revisionLabel)
@@ -295,6 +359,7 @@ export function StudioEditPage() {
               onSync={() => undefined}
               onTogglePlayback={() => undefined}
               onUpload={() => undefined}
+              onUseTrackMaterialVersion={(track, archive) => void handleUseTrackMaterialVersion(track, archive)}
               onVolumePreview={() => undefined}
               onVolumeChange={() => undefined}
             />

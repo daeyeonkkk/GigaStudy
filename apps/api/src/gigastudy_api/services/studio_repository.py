@@ -58,7 +58,10 @@ from gigastudy_api.services.asset_registry import build_asset_registry
 from gigastudy_api.services.alpha_limits import (
     ensure_studio_capacity,
 )
-from gigastudy_api.services.document_job_recovery import recover_stale_running_document_jobs
+from gigastudy_api.services.document_job_recovery import (
+    recover_stale_running_document_jobs,
+    sanitize_failed_document_job_messages,
+)
 from gigastudy_api.services.direct_upload_tokens import DirectUploadTokenCodec
 from gigastudy_api.services.studio_admin_commands import StudioAdminCommands
 from gigastudy_api.services.studio_assets import StudioAssetService
@@ -1723,14 +1726,18 @@ class StudioRepository:
                 stale_seconds=settings.document_job_stale_seconds,
                 timestamp=timestamp,
             )
-            if recovered_job_ids:
+            sanitized_job_ids = sanitize_failed_document_job_messages(
+                studio,
+                timestamp=timestamp,
+            )
+            if recovered_job_ids or sanitized_job_ids:
                 self._save_studio(studio)
         for recovered_job_id in recovered_job_ids:
             self._engine_queue.fail(
                 recovered_job_id,
                 message="Stale document job failed.",
             )
-        return studio, recovered_job_ids
+        return studio, [*recovered_job_ids, *sanitized_job_ids]
 
     def _mark_job_running(
         self,

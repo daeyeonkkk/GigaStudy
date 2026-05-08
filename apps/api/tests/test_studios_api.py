@@ -3442,6 +3442,55 @@ def test_stale_running_document_job_recovers_to_failed_without_activity_side_eff
     assert [track["status"] for track in payload["tracks"][:5]] == ["failed"] * 5
 
 
+def test_recover_stale_document_jobs_sanitizes_legacy_failed_message(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Legacy failed PDF job",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    repository = studio_repository.get_studio_repository()
+    timestamp = "2026-05-01T00:00:00+00:00"
+
+    with repository._lock:
+        studio = repository._load_studio(studio_id)
+        assert studio is not None
+        job = create_document_extraction_job(
+            input_path=f"uploads/{studio_id}/legacy.pdf",
+            max_attempts=3,
+            parse_all_parts=True,
+            slot_id=1,
+            source_kind="document",
+            source_label="legacy.pdf",
+            status="failed",
+            timestamp=timestamp,
+        )
+        job.message = (
+            "Audiveris timed out after 120 seconds.; "
+            "PDF vector fallback failed: No labelled document rows could be extracted from the PDF."
+        )
+        job.updated_at = timestamp
+        studio.jobs.append(job)
+        repository._save_studio(studio)
+
+    recover_response = client.post(f"/api/studios/{studio_id}/jobs/recover-stale")
+
+    assert recover_response.status_code == 200
+    payload = recover_response.json()
+    assert payload["jobs"][0]["status"] == "failed"
+    assert payload["jobs"][0]["message"] == (
+        "문서 분석 시간이 제한 시간을 넘었습니다. 다시 시도하거나 MIDI/MusicXML 파일을 사용해 주세요."
+    )
+    assert payload["jobs"][0]["diagnostics"]["message_sanitized"] is True
+
+
 def test_voice_retry_rehydrates_direct_register_mode_without_queue_record(
     tmp_path: Path,
     monkeypatch,

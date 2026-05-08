@@ -295,7 +295,7 @@ the same change.
   user's command request open.
 - User-facing candidate information should lead with musical decision evidence,
   not raw engine internals.
-- Candidate review UI should show role, target track, note-flow preview,
+- Candidate review UI should show role, target track, compact note-flow text,
   compact musical facts, and concrete review warnings. It should not expose
   confidence percentages, raw score metrics, or duplicate preview widgets as
   primary decision evidence.

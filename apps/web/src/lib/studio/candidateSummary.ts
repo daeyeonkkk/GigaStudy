@@ -43,11 +43,11 @@ const TRACK_CENTER_MIDI: Record<number, number> = {
 }
 
 const sourceDecisionLabels: Record<SourceKind, string> = {
-  recording: '녹음 추출',
-  audio: '오디오 추출',
-  midi: 'MIDI 가져오기',
-  document: '문서 추출',
-  ai: 'AI 화음',
+  recording: '녹음 후보',
+  audio: '녹음파일 후보',
+  midi: 'MIDI 후보',
+  document: '악보 파일 후보',
+  ai: 'AI 생성',
 }
 
 const VOICE_LEADING_PROFILE_LABELS: Record<string, string> = {
@@ -175,9 +175,12 @@ export function getCandidateDecisionSummary(
           targetTrack,
         })
       : [
+          {
+            label: '대상',
+            value: targetTrack ? formatTrackName(targetTrack.name) : '등록할 트랙 선택',
+          },
           { label: '분량', value: `${rhythm.measureSpan || 1}마디 - 음표 ${events.length}개` },
           { label: '음역', value: `${range}${register.averageLabel ? ` - 중심 ${register.averageLabel}` : ''}` },
-          { label: '리듬', value: rhythm.label },
           { label: '시작/끝', value: startEnd },
         ]
 
@@ -192,11 +195,7 @@ export function getCandidateDecisionSummary(
         { label: '음표', value: '0' },
       ],
       diagnostics,
-      technical: [
-        { label: '엔진', value: candidate.method },
-        { label: '소스', value: candidate.source_label },
-        ...getTechnicalDiagnostics(candidate),
-      ],
+      technical: getTechnicalDiagnostics(candidate),
     }
   }
 
@@ -204,16 +203,16 @@ export function getCandidateDecisionSummary(
   const title =
     candidate.source_kind === 'ai'
       ? (llmInsight?.title ?? `${register.shortLabel} · ${movement.shortLabel}`)
-      : `${sourceLabel} - ${range}`
+      : `${formatTrackName(targetTrack?.name)} 후보`
   const headline =
     candidate.source_kind === 'ai'
       ? (llmInsight?.headline ?? `${formatTrackName(targetTrack?.name)}에 어울리는 ${register.headline} 라인입니다.`)
-      : `${sourceLabel} 결과를 ${formatTrackName(targetTrack?.name)}에 등록할 수 있습니다.`
+      : `${sourceLabel}를 ${formatTrackName(targetTrack?.name)} 트랙에 등록할 수 있습니다.`
   const support = [
     candidate.source_kind === 'ai' && llmInsight?.role ? `역할: ${llmInsight.role}.` : '',
     `음역 ${range}, 시작/끝 ${startEnd}.`,
     `${movement.detail}.`,
-    `${rhythm.detail}.`,
+    candidate.source_kind === 'ai' ? `${rhythm.detail}.` : '',
     candidate.source_kind === 'ai' && llmInsight?.selectionHint ? `선택 이유: ${llmInsight.selectionHint}` : '',
     reviewHint?.sentence ?? '',
   ]
@@ -237,12 +236,7 @@ export function getCandidateDecisionSummary(
     phrasePreview: getCandidatePhrasePreview(candidate),
     metrics,
     diagnostics,
-    technical: [
-      { label: '엔진', value: candidate.method },
-      { label: '소스', value: candidate.source_label },
-      { label: '원본 위치', value: getCandidatePreviewText(candidate) },
-      ...getTechnicalDiagnostics(candidate),
-    ],
+    technical: getTechnicalDiagnostics(candidate),
   }
 }
 

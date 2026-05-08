@@ -101,6 +101,28 @@ describe('candidate decision summary', () => {
     })
   })
 
+  it('keeps imported audio candidates focused on target and source checks', () => {
+    const summary = getCandidateDecisionSummary(
+      buildCandidate({
+        source_kind: 'audio',
+        source_label: 'tenor-take.m4a',
+        region: {
+          ...buildCandidate().region,
+          source_kind: 'audio',
+          source_label: 'tenor-take.m4a',
+        },
+      }),
+      { ...sopranoTrack, name: 'Tenor', slot_id: 3 },
+      4,
+    )
+
+    expect(summary.title).toBe('테너 후보')
+    expect(summary.headline).toBe('녹음파일 후보를 테너 트랙에 등록할 수 있습니다.')
+    expect(summary.metrics.map((metric) => metric.label)).toEqual(['대상', '분량', '음역', '시작/끝'])
+    expect(summary.metrics.map((metric) => metric.label)).not.toContain('리듬')
+    expect(summary.technical.map((metric) => metric.label)).not.toContain('엔진')
+  })
+
   it('keeps generated candidate summaries away from extraction confidence metrics', () => {
     const summary = getCandidateDecisionSummary(
       buildCandidate({

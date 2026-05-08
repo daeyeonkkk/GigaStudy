@@ -487,7 +487,7 @@ flowchart TD
    review, so candidate and approved events use the same BPM/meter-derived
    readable grid as imported material.
 5. Candidate review renders generated and imported material through the same
-   decision surface: target track, musical role/title, note-flow mini timeline,
+   decision surface: target track, musical role/title, compact note-flow text,
    compact facts, and concrete warnings. Raw diagnostic scores stay internal
    unless they become a clear user-facing warning.
 6. Generated candidates remain reviewable until approved.

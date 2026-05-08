@@ -1,17 +1,12 @@
-import type { CSSProperties } from 'react'
-
 import {
   formatGeneratedLabel,
   formatSourceLabel,
   formatTrackName,
   getCandidateDecisionSummary,
-  getPitchEventRange,
   getPitchedEvents,
-  sourceLabels,
   statusLabels,
-  STUDIO_TIME_PRECISION_SECONDS,
 } from '../../lib/studio'
-import type { ExtractionCandidate, PitchEvent, TrackSlot } from '../../types/studio'
+import type { ExtractionCandidate, TrackSlot } from '../../types/studio'
 import './CandidateReviewPanel.css'
 
 type CandidateReviewPanelProps = {
@@ -41,45 +36,6 @@ type CandidateFact = {
   value: string
 }
 
-type CandidateTimelineBounds = {
-  durationSeconds: number
-  startSeconds: number
-}
-
-function getEventTimelinePercent(seconds: number, startSeconds: number, durationSeconds: number): number {
-  return Math.max(
-    0,
-    Math.min(100, ((seconds - startSeconds) / Math.max(STUDIO_TIME_PRECISION_SECONDS, durationSeconds)) * 100),
-  )
-}
-
-function getEventTopPercent(event: PitchEvent, events: PitchEvent[]): number {
-  const pitchRange = getPitchEventRange(events)
-  const midi = typeof event.pitch_midi === 'number' ? event.pitch_midi : pitchRange.minMidi
-  const span = Math.max(1, pitchRange.maxMidi - pitchRange.minMidi)
-  return Math.max(4, Math.min(86, ((pitchRange.maxMidi - midi) / span) * 82 + 4))
-}
-
-function getCandidateEventStyle(
-  event: PitchEvent,
-  events: PitchEvent[],
-  bounds: CandidateTimelineBounds,
-): CSSProperties {
-  return {
-    '--candidate-event-left': `${getEventTimelinePercent(
-      event.start_seconds,
-      bounds.startSeconds,
-      bounds.durationSeconds,
-    )}%`,
-    '--candidate-event-top': `${getEventTopPercent(event, events)}%`,
-    '--candidate-event-width': `${getEventTimelinePercent(
-      event.start_seconds + event.duration_seconds,
-      event.start_seconds,
-      bounds.durationSeconds,
-    )}%`,
-  } as CSSProperties
-}
-
 function getApproveButtonLabel(wouldOverwrite: boolean, allowOverwrite: boolean): string {
   if (!wouldOverwrite) {
     return '등록'
@@ -88,7 +44,14 @@ function getApproveButtonLabel(wouldOverwrite: boolean, allowOverwrite: boolean)
 }
 
 function getCandidateSourceText(candidate: ExtractionCandidate): string {
-  const base = candidate.source_kind === 'ai' ? 'AI 생성 후보' : `${sourceLabels[candidate.source_kind]} 후보`
+  const labels = {
+    ai: 'AI 생성 후보',
+    audio: '녹음파일 후보',
+    document: '악보 파일 후보',
+    midi: 'MIDI 후보',
+    recording: '녹음 후보',
+  } satisfies Record<ExtractionCandidate['source_kind'], string>
+  const base = labels[candidate.source_kind]
   return candidate.variant_label ? `${base} · ${formatGeneratedLabel(candidate.variant_label)}` : base
 }
 
@@ -96,42 +59,8 @@ function getCandidateEventCount(candidate: ExtractionCandidate): number {
   return candidate.region.pitch_events.filter((event) => event.is_rest !== true).length
 }
 
-function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
-  const events = getPitchedEvents(candidate.region.pitch_events)
-  if (events.length === 0) {
-    return Math.max(0, candidate.region.duration_seconds)
-  }
-  const endSeconds = Math.max(...events.map((event) => event.start_seconds + Math.max(0, event.duration_seconds)))
-  return Math.max(candidate.region.duration_seconds, endSeconds - candidate.region.start_seconds)
-}
-
-function getCandidateTimelineBounds(candidate: ExtractionCandidate, events: PitchEvent[]): CandidateTimelineBounds {
-  if (events.length === 0) {
-    return {
-      durationSeconds: Math.max(STUDIO_TIME_PRECISION_SECONDS, candidate.region.duration_seconds),
-      startSeconds: candidate.region.start_seconds,
-    }
-  }
-
-  const eventStart = Math.min(...events.map((event) => event.start_seconds))
-  const eventEnd = Math.max(...events.map((event) => event.start_seconds + Math.max(0, event.duration_seconds)))
-  const startSeconds = Math.min(candidate.region.start_seconds, eventStart)
-  const endSeconds = Math.max(candidate.region.start_seconds + candidate.region.duration_seconds, eventEnd)
-  return {
-    durationSeconds: Math.max(STUDIO_TIME_PRECISION_SECONDS, endSeconds - startSeconds),
-    startSeconds,
-  }
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 10) {
-    return `${seconds.toFixed(1)}초`
-  }
-  return `${Math.round(seconds)}초`
-}
-
 function getDecisionFacts(decisionSummary: ReturnType<typeof getCandidateDecisionSummary>): CandidateFact[] {
-  const preferredOrder = ['분량', '대상', '음역', '움직임', '리듬', '시작/끝', '구간', '음표']
+  const preferredOrder = ['대상', '분량', '음역', '시작/끝', '구간', '움직임', '음표']
   const byLabel = new Map(decisionSummary.metrics.map((metric) => [metric.label, metric]))
   const ordered = preferredOrder
     .map((label) => byLabel.get(label))
@@ -146,7 +75,13 @@ function getDecisionFacts(decisionSummary: ReturnType<typeof getCandidateDecisio
 }
 
 function getCandidatePills(decisionSummary: ReturnType<typeof getCandidateDecisionSummary>): string[] {
-  const blocked = new Set(['AI 화음', 'AI 생성', 'MIDI 가져오기', '문서 추출', '오디오 추출', '녹음 추출'])
+  const blocked = new Set([
+    'AI 생성',
+    'MIDI 후보',
+    '녹음 후보',
+    '녹음파일 후보',
+    '악보 파일 후보',
+  ])
   return decisionSummary.tags.filter((tag) => tag.length > 0 && !blocked.has(tag)).slice(0, 6)
 }
 
@@ -247,38 +182,36 @@ function CandidateActions({
   )
 }
 
-function CandidateRegionPreview({ candidate }: { candidate: ExtractionCandidate }) {
+function CandidatePhrasePreview({
+  candidate,
+  decisionSummary,
+}: {
+  candidate: ExtractionCandidate
+  decisionSummary: ReturnType<typeof getCandidateDecisionSummary>
+}) {
   const events = getPitchedEvents(candidate.region.pitch_events)
-  const visibleEvents = events.slice(0, 96)
-  const bounds = getCandidateTimelineBounds(candidate, events)
   const eventCount = getCandidateEventCount(candidate)
-  const durationSeconds = getCandidateDurationSeconds(candidate)
+  const firstEvent = events[0]
+  const lastEvent = events[events.length - 1]
+  const rangeText =
+    firstEvent && lastEvent
+      ? `${firstEvent.start_beat.toFixed(2)}박부터 ${lastEvent.start_beat.toFixed(2)}박까지`
+      : '음표 없음'
 
   return (
-    <section className="candidate-review__music" data-testid={`candidate-region-${candidate.candidate_id}`}>
-      <div className="candidate-review__music-header">
+    <section className="candidate-review__phrase" data-testid={`candidate-region-${candidate.candidate_id}`}>
+      <div className="candidate-review__phrase-header">
         <strong>음표 흐름</strong>
-        <span>
-          {eventCount}개 · {formatDuration(durationSeconds)}
-        </span>
+        <span>{eventCount}개</span>
       </div>
-      <div className="candidate-review__region-grid">
+      <div className="candidate-review__phrase-line">
         {events.length === 0 ? (
-          <p>등록할 음표가 없습니다</p>
+          <p>등록할 음표가 없습니다.</p>
         ) : (
-          visibleEvents.map((event) => (
-            <i
-              aria-label={`${event.label} ${event.duration_beats.toFixed(2)}박`}
-              key={event.event_id}
-              style={getCandidateEventStyle(event, events, bounds)}
-              title={`${event.label} · ${event.start_beat.toFixed(2)}박부터 ${event.duration_beats.toFixed(2)}박`}
-            />
-          ))
+          <p>{decisionSummary.phrasePreview}</p>
         )}
       </div>
-      {events.length > visibleEvents.length ? (
-        <span className="candidate-review__region-note">앞부분 {visibleEvents.length}개만 표시 중</span>
-      ) : null}
+      <span className="candidate-review__phrase-note">{rangeText}</span>
     </section>
   )
 }
@@ -348,8 +281,6 @@ function CandidateCard({
       ) : null}
 
       <div className="candidate-review__content">
-        <CandidateRegionPreview candidate={candidate} />
-
         <aside className="candidate-review__review">
           <dl className="candidate-review__facts">
             {facts.map((fact) => (
@@ -367,24 +298,26 @@ function CandidateCard({
               ))}
             </ul>
           ) : null}
-
-          {decisionSummary.support ? <p className="candidate-review__support">{decisionSummary.support}</p> : null}
-
-          {notes.length > 0 ? (
-            <div className="candidate-review__notes">
-              <strong>확인할 점</strong>
-              <ul>
-                {notes.map((note) => (
-                  <li key={`${candidate.candidate_id}-note-${note.label}`}>
-                    <span>{note.label}</span>
-                    {note.value}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </aside>
+
+        <CandidatePhrasePreview candidate={candidate} decisionSummary={decisionSummary} />
       </div>
+
+      {decisionSummary.support ? <p className="candidate-review__support">{decisionSummary.support}</p> : null}
+
+      {notes.length > 0 ? (
+        <div className="candidate-review__notes">
+          <strong>확인할 점</strong>
+          <ul>
+            {notes.map((note) => (
+              <li key={`${candidate.candidate_id}-note-${note.label}`}>
+                <span>{note.label}</span>
+                {note.value}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {sourcePreviewUrl ? (
         <details className="candidate-review__source-preview">
@@ -395,7 +328,7 @@ function CandidateCard({
               loading="lazy"
               src={sourcePreviewUrl}
             />
-            <span>원본 첫 페이지와 후보 구간, 리듬, 파트 위치를 비교해 확인하세요.</span>
+            <span>후보가 원본의 어느 파트에서 나온 것인지 확인할 수 있습니다.</span>
           </div>
         </details>
       ) : null}

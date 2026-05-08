@@ -203,9 +203,9 @@ constraint/search engine realize that plan.
    - "Open spacing: strong lower support, range should be checked"
 
    The default review card should therefore lead with the candidate title,
-   target track, note-flow mini timeline, role/texture tags, compact musical
-   facts, and concrete warnings. Confidence percentages, raw fit scores, engine
-   labels, and duplicate preview widgets are not primary UI.
+   target track, a compact note-flow text preview, role/texture tags, compact
+   musical facts, and concrete warnings. Confidence percentages, raw fit
+   scores, engine labels, and duplicate preview widgets are not primary UI.
 
 ## HarmonyPlan Schema V2
 

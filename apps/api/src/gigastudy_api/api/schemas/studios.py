@@ -30,7 +30,13 @@ AudioExportTrackSource = Literal["original", "guide"]
 ScoreMode = Literal["answer", "harmony"]
 StartMode = Literal["blank", "upload"]
 SeedSourceKind = Literal["document"]
-TrackMaterialArchiveReason = Literal["original_score", "before_overwrite"]
+TrackMaterialArchiveReason = Literal[
+    "original_score",
+    "original_recording",
+    "tuned_recording",
+    "previous_active",
+    "before_overwrite",
+]
 ExtractionJobStatus = Literal[
     "tempo_review_required",
     "queued",
@@ -39,7 +45,7 @@ ExtractionJobStatus = Literal[
     "completed",
     "failed",
 ]
-ExtractionJobType = Literal["document", "voice", "generation", "scoring", "export"]
+ExtractionJobType = Literal["document", "voice", "generation", "scoring", "export", "tuning"]
 JobProgressStage = Literal[
     "queued",
     "preparing",
@@ -106,6 +112,8 @@ class TrackMaterialArchive(SourceKindModel):
     track_name: str
     source_kind: SourceKind | None = None
     source_label: str | None = None
+    label: str | None = None
+    based_on_archive_id: str | None = None
     archived_at: str
     reason: TrackMaterialArchiveReason
     pinned: bool = False
@@ -130,6 +138,8 @@ class TrackMaterialArchiveSummary(SourceKindModel):
     track_name: str
     source_kind: SourceKind | None = None
     source_label: str | None = None
+    label: str | None = None
+    based_on_archive_id: str | None = None
     archived_at: str
     reason: TrackMaterialArchiveReason
     pinned: bool = False
@@ -216,6 +226,7 @@ class TrackSlot(SourceKindModel):
     audio_source_path: str | None = None
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
+    active_material_version_id: str | None = None
     duration_seconds: float = 0
     events: list[_TrackPitchEvent] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
@@ -542,6 +553,7 @@ class TrackSlotResponse(SourceKindModel):
     audio_source_path: str | None = None
     audio_source_label: str | None = None
     audio_mime_type: str | None = None
+    active_material_version_id: str | None = None
     duration_seconds: float = 0
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     updated_at: str
@@ -785,6 +797,8 @@ def track_material_archive_summaries(studio: Studio) -> list[TrackMaterialArchiv
             track_name=archive.track_name,
             source_kind=archive.source_kind,
             source_label=archive.source_label,
+            label=archive.label,
+            based_on_archive_id=archive.based_on_archive_id,
             archived_at=archive.archived_at,
             reason=archive.reason,
             pinned=archive.pinned,
@@ -1001,6 +1015,14 @@ class AudioExportRequest(SourceKindModel):
         if len(slot_ids) != len(set(slot_ids)):
             raise ValueError("Audio export cannot include the same track twice.")
         return self
+
+
+class TrackTuningRenderRequest(SourceKindModel):
+    label: str | None = Field(default=None, max_length=80)
+
+
+class UpdateTrackMaterialArchiveRequest(SourceKindModel):
+    label: str = Field(min_length=1, max_length=80)
 
 
 class GenerateTrackRequest(BaseModel):

@@ -7,7 +7,12 @@ from time import perf_counter
 from typing import Any
 
 from gigastudy_api.config import get_settings
-from gigastudy_api.api.schemas.studios import AudioExportRequest, GenerateTrackRequest, ScoreTrackRequest
+from gigastudy_api.api.schemas.studios import (
+    AudioExportRequest,
+    GenerateTrackRequest,
+    ScoreTrackRequest,
+    TrackTuningRenderRequest,
+)
 from gigastudy_api.services.engine.candidate_diagnostics import (
     candidate_diagnostics,
     candidate_review_message,
@@ -19,6 +24,10 @@ from gigastudy_api.services.engine.audio_mix_export import (
     AudioExportError,
     encode_wav_to_mp3,
     render_audio_mix_wav,
+)
+from gigastudy_api.services.engine.audio_tuning import (
+    AudioTuningError,
+    render_tuned_track_wav,
 )
 from gigastudy_api.services.engine.event_normalization import annotate_track_events_for_slot
 from gigastudy_api.services.engine.symbolic import (
@@ -75,6 +84,9 @@ class StudioEngineJobHandlers:
                 return
             if record.job_type == "export":
                 self.process_audio_export(record)
+                return
+            if record.job_type == "tuning":
+                self.process_tuning_render(record)
                 return
             raise RuntimeError(f"Unsupported engine job type: {record.job_type}")
         except Exception:
@@ -166,6 +178,72 @@ class StudioEngineJobHandlers:
             },
             output_path=output_reference,
             method="audio_export",
+        )
+
+    def process_tuning_render(self, record: EngineQueueJob) -> None:
+        request = TrackTuningRenderRequest.model_validate(record.payload.get("request") or {})
+        studio = self._repository.get_studio(record.studio_id)
+        label = request.label or "보정본"
+        output_dir = self._job_output_dir(record.studio_id, record.job_id)
+        regions = [
+            region
+            for region in studio.regions
+            if region.track_slot_id == record.slot_id and (region.pitch_events or region.audio_source_path)
+        ]
+        track = next((candidate for candidate in studio.tracks if candidate.slot_id == record.slot_id), None)
+        based_on_archive_id = track.active_material_version_id if track is not None else None
+        try:
+            render_result = render_tuned_track_wav(
+                output_dir=output_dir,
+                regions=regions,
+                resolve_asset_path=self._assets.resolve_data_asset_path,
+            )
+        except AudioTuningError as error:
+            self._repository._mark_job_failed(
+                record.studio_id,
+                record.job_id,
+                message=str(error),
+            )
+            return
+
+        output_reference = self._assets.persist_generated_asset(render_result.wav_path)
+        archive = self._repository._add_tuned_track_material_version(
+            record.studio_id,
+            record.slot_id,
+            audio_mime_type="audio/wav",
+            audio_source_path=output_reference,
+            based_on_archive_id=based_on_archive_id,
+            label=label,
+            job_id=record.job_id,
+            render_diagnostics={
+                "duration_seconds": round(render_result.duration_seconds, 3),
+                "event_count": render_result.event_count,
+                "pitch_shifted_event_count": render_result.pitch_shifted_event_count,
+                "time_stretched_event_count": render_result.time_stretched_event_count,
+                "anchored_event_count": render_result.anchored_event_count,
+                "fallback_anchored_event_count": render_result.fallback_anchored_event_count,
+                "render_backend": render_result.render_backend,
+                "max_pitch_shift_semitones": round(render_result.max_pitch_shift_semitones, 3),
+                "max_time_stretch_ratio": round(render_result.max_time_stretch_ratio, 3),
+            },
+        )
+        self._repository._mark_job_completed(
+            record.studio_id,
+            record.job_id,
+            diagnostics={
+                "created_archive_id": archive.archive_id,
+                "tuning_duration_seconds": round(render_result.duration_seconds, 3),
+                "tuning_event_count": render_result.event_count,
+                "tuning_pitch_shifted_event_count": render_result.pitch_shifted_event_count,
+                "tuning_time_stretched_event_count": render_result.time_stretched_event_count,
+                "tuning_anchored_event_count": render_result.anchored_event_count,
+                "tuning_fallback_anchored_event_count": render_result.fallback_anchored_event_count,
+                "tuning_render_backend": render_result.render_backend,
+                "tuning_max_pitch_shift_semitones": round(render_result.max_pitch_shift_semitones, 3),
+                "tuning_max_time_stretch_ratio": round(render_result.max_time_stretch_ratio, 3),
+            },
+            output_path=output_reference,
+            method="track_tuning_render",
         )
 
     def process_document_extraction(self, record: EngineQueueJob) -> None:

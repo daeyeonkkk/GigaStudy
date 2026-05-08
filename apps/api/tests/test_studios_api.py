@@ -15,6 +15,7 @@ from gigastudy_api.api.schemas.studios import (
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services.engine.audio_decode import VoiceAnalysisAudio
+from gigastudy_api.services.engine.audio_tuning import AudioTuningRenderResult
 from gigastudy_api.main import create_app
 from gigastudy_api.services.engine.audiveris_document import AudiverisDocumentError
 from gigastudy_api.services.engine.candidate_diagnostics import track_duration_seconds
@@ -2216,7 +2217,7 @@ def test_track_overwrite_archives_original_score_and_restore_recovers_it(tmp_pat
         for archive in restored_archives
     )
     assert any(
-        archive["reason"] == "before_overwrite"
+        archive["reason"] == "previous_active"
         and archive["pinned"] is False
         and archive["source_label"] == "recorded-take.musicxml"
         for archive in restored_archives
@@ -2515,6 +2516,108 @@ def test_track_upload_can_finalize_direct_uploaded_asset(tmp_path: Path, monkeyp
     soprano = upload_payload["tracks"][0]
     assert soprano["status"] == "registered"
     assert [note["label"] for note in _track_region_events(upload_payload, 1)] == ["C5"]
+
+
+def test_track_tuning_render_creates_inactive_version_until_restored(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe_voice_file(*args, **kwargs):
+        return [
+            TrackPitchEvent(
+                pitch_midi=72,
+                pitch_hz=261.63,
+                label="C5",
+                onset_seconds=0,
+                duration_seconds=1,
+                beat=1,
+                duration_beats=1,
+                confidence=0.9,
+                source="voice",
+                extraction_method="test_voice",
+            )
+        ]
+
+    def fake_render_tuned_track_wav(*, output_dir: Path, **kwargs) -> AudioTuningRenderResult:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        wav_path = output_dir / "edit-applied-track.wav"
+        wav_path.write_bytes(b"RIFF....WAVEfmt tuned audio")
+        return AudioTuningRenderResult(
+            wav_path=wav_path,
+            duration_seconds=1.0,
+            event_count=1,
+            pitch_shifted_event_count=1,
+            time_stretched_event_count=1,
+            anchored_event_count=1,
+            fallback_anchored_event_count=0,
+            render_backend="rubberband",
+            max_pitch_shift_semitones=2.0,
+            max_time_stretch_ratio=1.25,
+        )
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.transcribe_voice_file",
+        fake_transcribe_voice_file,
+    )
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_engine_job_handlers.render_tuned_track_wav",
+        fake_render_tuned_track_wav,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    studio_id = client.post(
+        "/api/studios",
+        json={"title": "Tuning version", "bpm": 120, "start_mode": "blank"},
+    ).json()["studio_id"]
+    content = b"RIFF....WAVEfmt direct upload audio"
+    target = client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload-target",
+        json={
+            "source_kind": "audio",
+            "filename": "voice.wav",
+            "size_bytes": len(content),
+            "content_type": "audio/wav",
+        },
+    ).json()
+    client.put(target["upload_url"].removeprefix("http://testserver"), content=content)
+    client.post(
+        f"/api/studios/{studio_id}/tracks/1/upload",
+        json={
+            "source_kind": "audio",
+            "filename": "voice.wav",
+            "asset_path": target["asset_path"],
+        },
+    )
+    upload_payload = _process_engine_queue_and_get_studio(client, studio_id)
+    original_archive = next(
+        archive
+        for archive in upload_payload["track_material_archives"]
+        if archive["reason"] == "original_recording"
+    )
+    original_audio_path = upload_payload["regions"][0]["audio_source_path"]
+
+    request_response = client.post(f"/api/studios/{studio_id}/tracks/1/tuning-render", json={})
+
+    assert request_response.status_code == 200
+    queued_payload = request_response.json()
+    tuning_job = next(job for job in queued_payload["jobs"] if job["job_type"] == "tuning")
+    assert tuning_job["status"] == "queued"
+
+    rendered_payload = _process_engine_queue_and_get_studio(client, studio_id)
+    tuned_archive = next(
+        archive
+        for archive in rendered_payload["track_material_archives"]
+        if archive["reason"] == "tuned_recording"
+    )
+    assert tuned_archive["label"] == "보정본 1"
+    assert tuned_archive["based_on_archive_id"] == original_archive["archive_id"]
+    assert rendered_payload["tracks"][0]["active_material_version_id"] == original_archive["archive_id"]
+    assert rendered_payload["regions"][0]["audio_source_path"] == original_audio_path
+
+    restore_response = client.post(
+        f"/api/studios/{studio_id}/track-archives/{tuned_archive['archive_id']}/restore"
+    )
+
+    assert restore_response.status_code == 200
+    restored_payload = restore_response.json()
+    assert restored_payload["tracks"][0]["active_material_version_id"] == tuned_archive["archive_id"]
+    assert restored_payload["regions"][0]["audio_source_path"] != original_audio_path
 
 
 def test_owner_scoped_direct_upload_put_requires_matching_owner_token(tmp_path: Path, monkeypatch) -> None:

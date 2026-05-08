@@ -479,6 +479,7 @@ class StudioRegionCommands:
             track.audio_source_path = first_region.audio_source_path
             track.audio_source_label = first_region.source_label
             track.audio_mime_type = first_region.audio_mime_type
+            track.active_material_version_id = None
             track.duration_seconds = round(
                 max(region.start_seconds + region.duration_seconds for region in slot_regions),
                 4,
@@ -745,6 +746,7 @@ def _clear_track(track: Any, *, timestamp: str) -> None:
     track.audio_source_path = None
     track.audio_source_label = None
     track.audio_mime_type = None
+    track.active_material_version_id = None
     track.duration_seconds = 0
     track.events = []
     track.diagnostics = {}

@@ -225,6 +225,36 @@ def create_audio_export_job(
     )
 
 
+def create_tuning_render_job(
+    *,
+    input_request: dict[str, Any],
+    max_attempts: int,
+    slot_id: int,
+    source_label: str,
+    timestamp: str,
+) -> TrackExtractionJob:
+    return TrackExtractionJob(
+        job_id=uuid4().hex,
+        job_type="tuning",
+        slot_id=slot_id,
+        source_kind="audio",
+        source_label=source_label,
+        status="queued",
+        method="track_tuning_render",
+        message="편집 반영본 만들기를 준비하고 있습니다.",
+        input_path=None,
+        max_attempts=max_attempts,
+        progress=build_job_progress(
+            "queued",
+            timestamp=timestamp,
+            stage_label="편집 내용을 녹음에 반영할 준비를 하고 있습니다.",
+        ),
+        diagnostics={"request": input_request},
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+
 def document_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
     return {
         "input_path": job.input_path,
@@ -267,6 +297,13 @@ def audio_export_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
     }
 
 
+def tuning_render_queue_payload(job: TrackExtractionJob) -> dict[str, Any]:
+    return {
+        "request": dict(job.diagnostics.get("request") or {}),
+        "source_label": job.source_label,
+    }
+
+
 def engine_queue_job_from_extraction(
     job: TrackExtractionJob,
     *,
@@ -296,7 +333,7 @@ def existing_extraction_queue_payload(
     existing_payload: dict[str, Any] | None = None,
     fallback_audio_mime_type: str | None = None,
 ) -> dict[str, Any]:
-    if job.job_type in {"generation", "scoring", "export"}:
+    if job.job_type in {"generation", "scoring", "export", "tuning"}:
         if existing_payload is not None:
             return dict(existing_payload)
         request = job.diagnostics.get("request") if isinstance(job.diagnostics, dict) else None
@@ -372,6 +409,13 @@ def mark_extraction_job_running(
                 timestamp=timestamp,
                 stage_label="오디오 파일을 만드는 중입니다.",
             )
+        elif job.job_type == "tuning":
+            job.message = "편집 내용을 녹음에 반영하고 있습니다."
+            job.progress = build_job_progress(
+                "rendering",
+                timestamp=timestamp,
+                stage_label="편집 내용을 녹음에 반영하고 있습니다.",
+            )
         elif job.job_type == "voice":
             job.message = "Voice extraction running."
             job.progress = build_job_progress(
@@ -416,7 +460,7 @@ def mark_extraction_job_failed(
             stage_label=message,
         )
         job.updated_at = timestamp
-        if job.job_type in {"scoring", "export"}:
+        if job.job_type in {"scoring", "export", "tuning"}:
             break
         failed_tracks = (
             [track for track in studio.tracks if track.slot_id <= 5]

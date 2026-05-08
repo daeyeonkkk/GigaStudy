@@ -14,7 +14,7 @@ from gigastudy_api.config import Settings
 from gigastudy_api.services.metadata_object_store import S3JsonObjectStore
 
 
-EngineJobType = Literal["document", "voice", "generation", "scoring", "export"]
+EngineJobType = Literal["document", "voice", "generation", "scoring", "export", "tuning"]
 EngineQueueStatus = Literal["queued", "running", "completed", "failed"]
 
 
@@ -567,7 +567,7 @@ def _is_claimable(row: dict[str, Any], now: datetime) -> bool:
 
 
 def _job_type(value: str) -> EngineJobType:
-    if value in {"document", "voice", "generation", "scoring", "export"}:
+    if value in {"document", "voice", "generation", "scoring", "export", "tuning"}:
         return value  # type: ignore[return-value]
     raise ValueError(f"Unsupported engine job type: {value}")
 

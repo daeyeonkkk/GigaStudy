@@ -24,6 +24,7 @@ RUN apt-get update \
         libxi6 \
         libxrender1 \
         libxtst6 \
+        rubberband-cli \
     && curl -fsSL "$AUDIVERIS_URL" -o /tmp/audiveris.deb \
     && dpkg-deb -x /tmp/audiveris.deb / \
     && test -x /opt/audiveris/bin/Audiveris \

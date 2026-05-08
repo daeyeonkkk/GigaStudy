@@ -43,7 +43,9 @@ from gigastudy_api.api.schemas.studios import (
     TrackExtractionJob,
     TrackMaterialArchive,
     TrackSlot,
+    TrackTuningRenderRequest,
     UpdatePitchEventRequest,
+    UpdateTrackMaterialArchiveRequest,
     UpdateRegionRequest,
     UploadTrackRequest,
     VolumeTrackRequest,
@@ -71,11 +73,13 @@ from gigastudy_api.services.studio_jobs import (
     build_job_progress,
     clear_unmapped_document_placeholders,
     create_audio_export_job,
+    create_tuning_render_job,
     document_queue_payload,
     engine_queue_job_from_extraction,
     mark_extraction_job_completed,
     mark_extraction_job_failed,
     mark_extraction_job_running,
+    tuning_render_queue_payload,
 )
 from gigastudy_api.services.engine.candidate_diagnostics import (
     track_duration_seconds as _track_duration_seconds,
@@ -122,6 +126,8 @@ from gigastudy_api.services.studio_track_settings import (
 from gigastudy_api.services.track_registration import TrackRegistrationPreparer
 from gigastudy_api.services.studio_documents import (
     archive_current_track_material,
+    create_tuned_recording_material_version,
+    ensure_audio_source_anchors_for_track,
     empty_tracks as _empty_tracks,
     encode_studio_payload,
     register_track_material as _register_track_material,
@@ -696,6 +702,68 @@ class StudioRepository:
         filename = f"{_safe_export_filename(studio.title)}-mix{suffix if suffix in {'.mp3', '.wav'} else '.wav'}"
         return path, media_type, filename
 
+    def create_track_tuning_render(
+        self,
+        studio_id: str,
+        slot_id: int,
+        request: TrackTuningRenderRequest,
+        *,
+        owner_token: str | None = None,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            track = self._find_track(studio, slot_id)
+            ensure_no_active_extraction_jobs(
+                studio,
+                {slot_id},
+                action_label="편집 반영본 만들기",
+            )
+            if not studio_has_active_track_material(studio, slot_id):
+                raise HTTPException(status_code=409, detail="편집을 반영할 트랙 내용이 없습니다.")
+            slot_regions = [
+                region
+                for region in studio.regions
+                if region.track_slot_id == slot_id and (region.pitch_events or region.audio_source_path)
+            ]
+            if not any(region.audio_source_path for region in slot_regions) and not track.audio_source_path:
+                raise HTTPException(status_code=409, detail="원본 녹음이 있는 트랙만 편집 반영본을 만들 수 있습니다.")
+            if not any(region.pitch_events for region in slot_regions):
+                raise HTTPException(status_code=409, detail="편집을 반영할 음표가 없습니다.")
+
+            if ensure_audio_source_anchors_for_track(studio, track):
+                studio.updated_at = _now()
+
+            timestamp = _now()
+            label = request.label.strip() if request.label and request.label.strip() else self._next_tuned_track_label(
+                studio,
+                slot_id,
+            )
+            job = create_tuning_render_job(
+                input_request={"label": label},
+                max_attempts=get_settings().engine_job_max_attempts,
+                slot_id=slot_id,
+                source_label=label,
+                timestamp=timestamp,
+            )
+            studio.jobs.append(job)
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+
+        self._engine_queue.enqueue(
+            engine_queue_job_from_extraction(
+                job,
+                payload=tuning_render_queue_payload(job),
+                studio_id=studio_id,
+                timestamp=timestamp,
+            )
+        )
+        self._schedule_engine_queue_processing(background_tasks)
+        return self.get_studio(studio_id, owner_token=owner_token, enforce_owner=True)
+
     def get_admin_storage_summary(
         self,
         *,
@@ -1023,18 +1091,73 @@ class StudioRepository:
             ensure_no_active_extraction_jobs(
                 studio,
                 {track.slot_id},
-                action_label="Track archive restore",
+                action_label="트랙 버전 복원",
             )
             timestamp = _now()
             archive_current_track_material(
                 studio,
                 track,
                 timestamp=timestamp,
-                force_reason="before_overwrite",
+                force_reason="previous_active",
                 force_pinned=False,
             )
             restore_track_material_archive(studio, track, archive)
             track.updated_at = timestamp
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+        return studio
+
+    def update_track_archive(
+        self,
+        studio_id: str,
+        archive_id: str,
+        request: UpdateTrackMaterialArchiveRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            archive = self._find_track_material_archive(studio, archive_id)
+            archive.label = request.label.strip()
+            timestamp = _now()
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+        return studio
+
+    def delete_track_archive(
+        self,
+        studio_id: str,
+        archive_id: str,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            archive = self._find_track_material_archive(studio, archive_id)
+            if archive.pinned:
+                raise HTTPException(status_code=409, detail="고정된 원본 버전은 삭제할 수 없습니다.")
+            active_track = next(
+                (
+                    track
+                    for track in studio.tracks
+                    if track.active_material_version_id == archive.archive_id
+                ),
+                None,
+            )
+            if active_track is not None:
+                raise HTTPException(status_code=409, detail="현재 사용 중인 버전은 삭제할 수 없습니다.")
+            studio.track_material_archives = [
+                candidate
+                for candidate in studio.track_material_archives
+                if candidate.archive_id != archive.archive_id
+            ]
+            timestamp = _now()
             studio.updated_at = timestamp
             self._save_studio(studio)
         return studio
@@ -1212,7 +1335,7 @@ class StudioRepository:
                 raise HTTPException(status_code=409, detail="Only score-file jobs can approve tempo.")
             if job.status != "tempo_review_required":
                 raise HTTPException(status_code=409, detail="This job is not waiting for tempo approval.")
-            if not job.input_path and job.job_type not in {"generation", "scoring"}:
+            if not job.input_path and job.job_type not in {"generation", "scoring", "export", "tuning"}:
                 raise HTTPException(status_code=409, detail="Extraction job has no stored input file.")
 
             timestamp = _now()
@@ -1647,6 +1770,9 @@ class StudioRepository:
             elif record.job_type == "export":
                 source_kind = "audio"
                 method = "audio_export"
+            elif record.job_type == "tuning":
+                source_kind = "audio"
+                method = "track_tuning_render"
             else:
                 source_kind = "document"
                 method = "audiveris_cli"
@@ -1688,7 +1814,7 @@ class StudioRepository:
             for track in placeholder_tracks:
                 if studio_has_active_track_material(studio, track.slot_id):
                     continue
-                if job.job_type in {"scoring", "export"}:
+                if job.job_type in {"scoring", "export", "tuning"}:
                     continue
                 track.status = "extracting"
                 track.source_kind = job.source_kind
@@ -1912,6 +2038,47 @@ class StudioRepository:
             )
             self._save_studio(studio)
 
+    def _add_tuned_track_material_version(
+        self,
+        studio_id: str,
+        slot_id: int,
+        *,
+        audio_mime_type: str,
+        audio_source_path: str,
+        based_on_archive_id: str | None,
+        label: str,
+        job_id: str,
+        render_diagnostics: dict[str, Any],
+    ) -> TrackMaterialArchive:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            track = self._find_track(studio, slot_id)
+            timestamp = _now()
+            archive = create_tuned_recording_material_version(
+                studio,
+                track,
+                audio_mime_type=audio_mime_type,
+                audio_source_path=audio_source_path,
+                based_on_archive_id=based_on_archive_id,
+                label=label,
+                timestamp=timestamp,
+            )
+            for job in studio.jobs:
+                if job.job_id != job_id:
+                    continue
+                job.diagnostics = {
+                    **job.diagnostics,
+                    "created_archive_id": archive.archive_id,
+                    "tuning_render": render_diagnostics,
+                }
+                job.updated_at = timestamp
+                break
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+            return archive
+
     def _clear_unmapped_extraction_placeholders(
         self,
         studio_id: str,
@@ -1948,7 +2115,15 @@ class StudioRepository:
         for archive in studio.track_material_archives:
             if archive.archive_id == archive_id:
                 return archive
-        raise HTTPException(status_code=404, detail="Track archive not found.")
+        raise HTTPException(status_code=404, detail="트랙 버전을 찾을 수 없습니다.")
+
+    def _next_tuned_track_label(self, studio: Studio, slot_id: int) -> str:
+        tuned_count = sum(
+            1
+            for archive in studio.track_material_archives
+            if archive.track_slot_id == slot_id and archive.reason == "tuned_recording"
+        )
+        return f"보정본 {tuned_count + 1}"
 
     def _find_candidate(self, studio: Studio, candidate_id: str) -> ExtractionCandidate:
         for candidate in studio.candidates:

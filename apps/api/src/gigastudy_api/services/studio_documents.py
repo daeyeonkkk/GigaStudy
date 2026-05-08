@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from gigastudy_api.api.schemas.studios import (
     ArrangementRegion,
+    PitchEvent,
     SourceKind,
     Studio,
     StudioListItem,
@@ -84,8 +85,28 @@ def register_track_material(
         time_signature_numerator=studio.time_signature_numerator,
         time_signature_denominator=studio.time_signature_denominator,
     )
+    if region is not None and source_kind in {"recording", "audio"} and audio_source_path:
+        _ensure_region_audio_source_anchors(region)
     _replace_track_region(studio, track.slot_id, region)
     track.events = []
+    if source_kind in {"recording", "audio"} and audio_source_path:
+        had_original_recording_version = any(
+            archive.track_slot_id == track.slot_id
+            and archive.reason == "original_recording"
+            and archive.pinned
+            for archive in studio.track_material_archives
+        )
+        original_version = ensure_original_recording_material_version(
+            studio,
+            track,
+            timestamp=timestamp,
+        )
+        if original_version is not None and not had_original_recording_version:
+            track.active_material_version_id = original_version.archive_id
+        else:
+            track.active_material_version_id = None
+    else:
+        track.active_material_version_id = None
 
 
 def archive_current_track_material(
@@ -108,21 +129,88 @@ def archive_current_track_material(
     reason: TrackMaterialArchiveReason = force_reason or (
         "original_score" if pinned else "before_overwrite"
     )
-    source_region = snapshots[0]
-    archive = TrackMaterialArchive(
-        archive_id=f"track-archive-{uuid4().hex}",
-        track_slot_id=track.slot_id,
-        track_name=track.name,
-        source_kind=source_region.source_kind or track.source_kind,
-        source_label=source_region.source_label or track.source_label,
-        archived_at=timestamp,
+    archive = _append_track_material_archive(
+        studio,
+        track,
+        snapshots=snapshots,
+        timestamp=timestamp,
         reason=reason,
         pinned=pinned,
-        region_snapshots=snapshots,
+        label=_default_archive_label(reason),
     )
-    studio.track_material_archives.insert(0, archive)
-    _prune_track_material_archives(studio, track.slot_id)
     return archive
+
+
+def ensure_original_recording_material_version(
+    studio: Studio,
+    track: TrackSlot,
+    *,
+    timestamp: str,
+) -> TrackMaterialArchive | None:
+    existing = next(
+        (
+            archive
+            for archive in studio.track_material_archives
+            if archive.track_slot_id == track.slot_id
+            and archive.reason == "original_recording"
+            and archive.pinned
+        ),
+        None,
+    )
+    if existing is not None:
+        return existing
+    snapshots = _current_track_material_snapshots(studio, track)
+    if not snapshots or not any(snapshot.audio_source_path for snapshot in snapshots):
+        return None
+    return _append_track_material_archive(
+        studio,
+        track,
+        snapshots=snapshots,
+        timestamp=timestamp,
+        reason="original_recording",
+        pinned=True,
+        label="원본 녹음",
+    )
+
+
+def create_tuned_recording_material_version(
+    studio: Studio,
+    track: TrackSlot,
+    *,
+    audio_mime_type: str,
+    audio_source_path: str,
+    based_on_archive_id: str | None,
+    label: str,
+    timestamp: str,
+) -> TrackMaterialArchive:
+    snapshots = _current_track_material_snapshots(studio, track)
+    if not snapshots:
+        raise HTTPException(status_code=409, detail="편집을 반영할 트랙 내용이 없습니다.")
+    tuned_snapshots = []
+    for snapshot in snapshots:
+        tuned_snapshot = snapshot.model_copy(deep=True)
+        tuned_snapshot.audio_source_path = audio_source_path
+        tuned_snapshot.audio_mime_type = audio_mime_type
+        tuned_snapshot.source_kind = "audio"
+        tuned_snapshot.source_label = label
+        tuned_snapshot.diagnostics = {
+            **tuned_snapshot.diagnostics,
+            "tuning_render": {
+                "based_on_archive_id": based_on_archive_id,
+                "created_at": timestamp,
+            },
+        }
+        tuned_snapshots.append(tuned_snapshot)
+    return _append_track_material_archive(
+        studio,
+        track,
+        snapshots=tuned_snapshots,
+        timestamp=timestamp,
+        reason="tuned_recording",
+        pinned=False,
+        label=label,
+        based_on_archive_id=based_on_archive_id,
+    )
 
 
 def restore_track_material_archive(
@@ -131,7 +219,7 @@ def restore_track_material_archive(
     archive: TrackMaterialArchive,
 ) -> None:
     if archive.track_slot_id != track.slot_id:
-        raise HTTPException(status_code=409, detail="Track archive can only be restored to its original slot.")
+        raise HTTPException(status_code=409, detail="이 버전은 원래 트랙으로만 되돌릴 수 있습니다.")
 
     snapshots = [
         _normalized_region_snapshot(region, track)
@@ -139,7 +227,7 @@ def restore_track_material_archive(
         if region.track_slot_id == track.slot_id
     ]
     if not snapshots:
-        raise HTTPException(status_code=409, detail="Track archive has no restorable material.")
+        raise HTTPException(status_code=409, detail="되돌릴 수 있는 트랙 내용이 없습니다.")
     _replace_track_regions(studio, track.slot_id, snapshots)
 
     track.status = "registered"
@@ -149,6 +237,7 @@ def restore_track_material_archive(
     track.audio_source_path = source_region.audio_source_path
     track.audio_source_label = source_region.source_label if source_region.audio_source_path else None
     track.audio_mime_type = source_region.audio_mime_type
+    track.active_material_version_id = archive.archive_id
     track.duration_seconds = _region_snapshots_duration_seconds(snapshots)
     track.sync_offset_seconds = source_region.sync_offset_seconds
     track.volume_percent = source_region.volume_percent
@@ -162,6 +251,48 @@ def restore_track_material_archive(
             "pinned": archive.pinned,
         },
     }
+
+
+def _append_track_material_archive(
+    studio: Studio,
+    track: TrackSlot,
+    *,
+    snapshots: list[ArrangementRegion],
+    timestamp: str,
+    reason: TrackMaterialArchiveReason,
+    pinned: bool,
+    label: str | None = None,
+    based_on_archive_id: str | None = None,
+) -> TrackMaterialArchive:
+    source_region = snapshots[0]
+    archive = TrackMaterialArchive(
+        archive_id=f"track-archive-{uuid4().hex}",
+        track_slot_id=track.slot_id,
+        track_name=track.name,
+        source_kind=source_region.source_kind or track.source_kind,
+        source_label=source_region.source_label or track.source_label,
+        label=label,
+        based_on_archive_id=based_on_archive_id,
+        archived_at=timestamp,
+        reason=reason,
+        pinned=pinned,
+        region_snapshots=snapshots,
+    )
+    studio.track_material_archives.insert(0, archive)
+    _prune_track_material_archives(studio, track.slot_id)
+    return archive
+
+
+def _default_archive_label(reason: TrackMaterialArchiveReason) -> str | None:
+    if reason == "original_score":
+        return "원본 악보"
+    if reason == "original_recording":
+        return "원본 녹음"
+    if reason == "tuned_recording":
+        return "보정본"
+    if reason == "previous_active":
+        return "이전 사용본"
+    return None
 
 
 def _current_track_material_snapshots(studio: Studio, track: TrackSlot) -> list[ArrangementRegion]:
@@ -195,6 +326,76 @@ def _normalized_region_snapshot(region: ArrangementRegion, track: TrackSlot) -> 
         event.track_slot_id = track.slot_id
         event.region_id = snapshot.region_id
     return snapshot
+
+
+def ensure_audio_source_anchors_for_track(studio: Studio, track: TrackSlot) -> bool:
+    changed = False
+    source_anchor_regions = _recording_archive_regions_by_event_id(studio, track.slot_id)
+    for region in studio.regions:
+        if region.track_slot_id != track.slot_id or not region.audio_source_path or not region.pitch_events:
+            continue
+        changed = _ensure_region_audio_source_anchors(
+            region,
+            source_events=source_anchor_regions,
+        ) or changed
+    return changed
+
+
+def _recording_archive_regions_by_event_id(
+    studio: Studio,
+    slot_id: int,
+) -> dict[str, PitchEvent]:
+    events_by_id: dict[str, PitchEvent] = {}
+    for archive in studio.track_material_archives:
+        if archive.track_slot_id != slot_id or archive.reason != "original_recording" or not archive.pinned:
+            continue
+        for region in archive.region_snapshots:
+            for event in region.pitch_events:
+                events_by_id.setdefault(event.event_id, event)
+    return events_by_id
+
+
+def _ensure_region_audio_source_anchors(
+    region: ArrangementRegion,
+    *,
+    source_events: dict[str, PitchEvent] | None = None,
+) -> bool:
+    diagnostics = dict(region.diagnostics or {})
+    existing = diagnostics.get("audio_source_anchors")
+    anchors: dict[str, Any] = dict(existing) if isinstance(existing, dict) else {}
+    changed = not isinstance(existing, dict)
+    source_events = source_events or {}
+    for event in region.pitch_events:
+        if event.is_rest or event.event_id in anchors:
+            continue
+        source_event = source_events.get(event.event_id) or event
+        anchors[event.event_id] = _audio_source_anchor_payload(event, source_event)
+        changed = True
+    if changed:
+        diagnostics["audio_source_anchors"] = anchors
+        region.diagnostics = diagnostics
+    return changed
+
+
+def _audio_source_anchor_payload(event: PitchEvent, source_event: PitchEvent) -> dict[str, Any]:
+    source_duration_seconds = max(0.0, source_event.duration_seconds)
+    return {
+        "source_event_id": source_event.event_id,
+        "source_start_seconds": source_event.start_seconds,
+        "source_duration_seconds": source_duration_seconds,
+        "source_pitch_hz": _event_frequency_hz(source_event),
+        "voiced_start_offset": 0.0,
+        "voiced_duration_seconds": source_duration_seconds,
+        "confidence": event.confidence,
+    }
+
+
+def _event_frequency_hz(event: PitchEvent) -> float | None:
+    if event.pitch_hz is not None and event.pitch_hz > 0:
+        return event.pitch_hz
+    if event.pitch_midi is None:
+        return None
+    return 440.0 * (2.0 ** ((event.pitch_midi - 69) / 12.0))
 
 
 def _should_pin_original_score(

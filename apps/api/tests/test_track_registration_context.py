@@ -3,7 +3,11 @@ from gigastudy_api.domain.track_events import TrackPitchEvent
 from gigastudy_api.services import track_registration
 from gigastudy_api.services.engine.arrangement import EnsembleValidationResult
 from gigastudy_api.services.engine.event_quality import RegistrationQualityResult
-from gigastudy_api.services.studio_documents import register_track_material
+from gigastudy_api.services.studio_documents import (
+    create_tuned_recording_material_version,
+    register_track_material,
+    restore_track_material_archive,
+)
 
 
 def test_registration_context_uses_region_events_after_region_edit(monkeypatch) -> None:
@@ -147,3 +151,143 @@ def test_register_track_material_persists_explicit_region_and_clears_track_shado
     assert len(studio.regions) == 1
     assert studio.regions[0].region_id == "track-1-region-1"
     assert studio.regions[0].pitch_events[0].event_id == "track-1-region-1-source-event-1"
+
+
+def test_recording_registration_pins_original_recording_version_once() -> None:
+    track = TrackSlot(
+        slot_id=1,
+        name="Soprano",
+        status="empty",
+        duration_seconds=0,
+        events=[],
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    studio = Studio(
+        studio_id="studio-recording-version",
+        title="Recording version",
+        bpm=120,
+        tracks=[track],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    event = TrackPitchEvent(
+        id="voice-event-1",
+        label="C4",
+        pitch_midi=60,
+        beat=1,
+        duration_beats=1,
+        onset_seconds=0,
+        duration_seconds=0.5,
+        source="voice",
+    )
+
+    register_track_material(
+        studio,
+        track,
+        timestamp="2026-01-01T00:00:10Z",
+        source_kind="recording",
+        source_label="take-1.wav",
+        events=[event],
+        duration_seconds=0.5,
+        registration_diagnostics={"actions": ["test"]},
+        audio_source_path="uploads/studio/track-1/take-1.wav",
+        audio_mime_type="audio/wav",
+    )
+
+    original_archive = studio.track_material_archives[0]
+    assert original_archive.reason == "original_recording"
+    assert original_archive.pinned is True
+    assert original_archive.label == "원본 녹음"
+    assert track.active_material_version_id == original_archive.archive_id
+    anchors = studio.regions[0].diagnostics["audio_source_anchors"]
+    event_id = studio.regions[0].pitch_events[0].event_id
+    assert anchors[event_id]["source_event_id"] == event_id
+    assert anchors[event_id]["source_start_seconds"] == 0
+    assert anchors[event_id]["source_duration_seconds"] == 0.5
+    assert 260 <= anchors[event_id]["source_pitch_hz"] <= 263
+
+    register_track_material(
+        studio,
+        track,
+        timestamp="2026-01-01T00:00:20Z",
+        source_kind="recording",
+        source_label="take-2.wav",
+        events=[event],
+        duration_seconds=0.5,
+        registration_diagnostics={"actions": ["test"]},
+        audio_source_path="uploads/studio/track-1/take-2.wav",
+        audio_mime_type="audio/wav",
+    )
+
+    original_archives = [
+        archive
+        for archive in studio.track_material_archives
+        if archive.reason == "original_recording" and archive.pinned
+    ]
+    assert len(original_archives) == 1
+    assert track.active_material_version_id is None
+    assert studio.regions[0].audio_source_path == "uploads/studio/track-1/take-2.wav"
+
+
+def test_tuned_recording_version_is_inactive_until_restored() -> None:
+    track = TrackSlot(
+        slot_id=1,
+        name="Soprano",
+        status="empty",
+        duration_seconds=0,
+        events=[],
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    studio = Studio(
+        studio_id="studio-tuned-version",
+        title="Tuned version",
+        bpm=120,
+        tracks=[track],
+        reports=[],
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+    event = TrackPitchEvent(
+        id="voice-event-1",
+        label="C4",
+        pitch_midi=60,
+        beat=1,
+        duration_beats=1,
+        onset_seconds=0,
+        duration_seconds=0.5,
+        source="voice",
+    )
+    register_track_material(
+        studio,
+        track,
+        timestamp="2026-01-01T00:00:10Z",
+        source_kind="recording",
+        source_label="take-1.wav",
+        events=[event],
+        duration_seconds=0.5,
+        registration_diagnostics={"actions": ["test"]},
+        audio_source_path="uploads/studio/track-1/take-1.wav",
+        audio_mime_type="audio/wav",
+    )
+    active_before_tuning = track.active_material_version_id
+
+    tuned_archive = create_tuned_recording_material_version(
+        studio,
+        track,
+        audio_mime_type="audio/wav",
+        audio_source_path="jobs/studio-tuned-version/job-1/edit-applied-track.wav",
+        based_on_archive_id=active_before_tuning,
+        label="보정본 1",
+        timestamp="2026-01-01T00:01:00Z",
+    )
+
+    assert tuned_archive.reason == "tuned_recording"
+    assert tuned_archive.label == "보정본 1"
+    assert track.active_material_version_id == active_before_tuning
+    assert studio.regions[0].audio_source_path == "uploads/studio/track-1/take-1.wav"
+
+    restore_track_material_archive(studio, track, tuned_archive)
+
+    assert track.active_material_version_id == tuned_archive.archive_id
+    assert studio.regions[0].audio_source_path == "jobs/studio-tuned-version/job-1/edit-applied-track.wav"

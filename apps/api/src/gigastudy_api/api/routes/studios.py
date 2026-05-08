@@ -35,6 +35,8 @@ from gigastudy_api.api.schemas.studios import (
     UpdateRegionRequest,
     VolumeTrackRequest,
     TrackVolumeMinimalResponse,
+    TrackTuningRenderRequest,
+    UpdateTrackMaterialArchiveRequest,
     build_studio_response,
     build_track_volume_minimal_response,
 )
@@ -539,6 +541,60 @@ def restore_track_archive(
             studio_id,
             archive_id,
             owner_token=owner_token,
+        )
+    )
+
+
+@router.patch("/{studio_id}/track-archives/{archive_id}", response_model=StudioResponse)
+def update_track_archive(
+    studio_id: str,
+    archive_id: str,
+    request: UpdateTrackMaterialArchiveRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.update_track_archive(
+            studio_id,
+            archive_id,
+            request,
+            owner_token=owner_token,
+        )
+    )
+
+
+@router.delete("/{studio_id}/track-archives/{archive_id}", response_model=StudioResponse)
+def delete_track_archive(
+    studio_id: str,
+    archive_id: str,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.delete_track_archive(
+            studio_id,
+            archive_id,
+            owner_token=owner_token,
+        )
+    )
+
+
+@router.post("/{studio_id}/tracks/{slot_id}/tuning-render", response_model=StudioResponse)
+def create_track_tuning_render(
+    studio_id: str,
+    slot_id: int,
+    request: TrackTuningRenderRequest,
+    background_tasks: BackgroundTasks,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.create_track_tuning_render(
+            studio_id,
+            slot_id,
+            request,
+            owner_token=owner_token,
+            background_tasks=background_tasks,
         )
     )
 

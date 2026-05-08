@@ -353,6 +353,7 @@ def mark_extraction_job_failed(
     studio: Studio,
     job_id: str,
     *,
+    diagnostics: dict[str, Any] | None = None,
     message: str,
     timestamp: str,
 ) -> None:
@@ -361,6 +362,8 @@ def mark_extraction_job_failed(
             continue
         job.status = "failed"
         job.message = message
+        if diagnostics:
+            job.diagnostics = {**job.diagnostics, **diagnostics}
         job.progress = build_job_progress(
             "failed",
             timestamp=timestamp,
@@ -393,6 +396,7 @@ def mark_extraction_job_completed(
     studio: Studio,
     job_id: str,
     *,
+    diagnostics: dict[str, Any] | None = None,
     method: str | None,
     output_path: str,
     timestamp: str,
@@ -402,6 +406,8 @@ def mark_extraction_job_completed(
             continue
         job.status = "completed"
         job.output_path = output_path
+        if diagnostics:
+            job.diagnostics = {**job.diagnostics, **diagnostics}
         job.progress = build_job_progress("completed", timestamp=timestamp)
         if method is not None:
             job.method = method

@@ -138,7 +138,12 @@ class StudioEngineJobHandlers:
                 vector_parser=self._vector_parser,
             )
         except DocumentExtractionPipelineError as error:
-            self._repository._mark_job_failed(record.studio_id, record.job_id, message=str(error))
+            self._repository._mark_job_failed(
+                record.studio_id,
+                record.job_id,
+                diagnostics=error.diagnostics,
+                message=str(error),
+            )
             return
 
         parsed_symbolic = result.parsed_symbolic
@@ -161,6 +166,7 @@ class StudioEngineJobHandlers:
             self._repository._mark_job_failed(
                 record.studio_id,
                 record.job_id,
+                diagnostics=result.diagnostics,
                 message="Document extraction did not produce any track events.",
             )
             return
@@ -168,6 +174,7 @@ class StudioEngineJobHandlers:
         self._repository._mark_job_completed(
             record.studio_id,
             record.job_id,
+            diagnostics=result.diagnostics,
             output_path=result.output_reference,
             method=result.job_method,
         )

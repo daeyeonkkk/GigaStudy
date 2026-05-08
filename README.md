@@ -140,6 +140,10 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
   (`auto`, `audiveris`, `pdf_vector`, `vector_first`) plus
   `GIGASTUDY_API_DOCUMENT_PREPROCESS_MODE` and
   `GIGASTUDY_API_DOCUMENT_PREPROCESS_DPI` for scanned PDF/image retry.
+  PDF recognition also has bounded-cost defaults:
+  `GIGASTUDY_API_DOCUMENT_AUDIVERIS_CHUNK_PAGES`,
+  `GIGASTUDY_API_DOCUMENT_MAX_EXTRACTION_ATTEMPTS`, and
+  `GIGASTUDY_API_DOCUMENT_QUALITY_MIN_SCORE`.
   Older `GIGASTUDY_API_OMR_*` names remain accepted as migration aliases.
   - Voice transcription can be tuned with
     `GIGASTUDY_API_VOICE_TRANSCRIPTION_BACKEND`

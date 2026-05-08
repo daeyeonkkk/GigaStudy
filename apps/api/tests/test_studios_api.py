@@ -2928,7 +2928,8 @@ def test_upload_pdf_queues_document_extraction_job_and_creates_document_extracti
     assert candidate["diagnostics"]["review_hint"] == "few_events"
     candidate_events = _candidate_events(candidate)
     assert candidate_events[0]["source"] == "document"
-    assert candidate_events[0]["extraction_method"] == "audiveris_document_v1"
+    assert candidate_events[0]["extraction_method"] == "document_recognition_v2"
+    assert payload["jobs"][0]["diagnostics"]["document_quality"]["passed"] is True
 
     preview_response = client.get(
         f"/api/studios/{studio_id}/jobs/{payload['jobs'][0]['job_id']}/source-preview"
@@ -3048,7 +3049,7 @@ def test_upload_pdf_falls_back_to_vector_document_extraction_and_attempts_all_vo
     assert [candidate["suggested_slot_id"] for candidate in payload["candidates"]] == [1, 2, 3, 4, 5]
     assert all(candidate["method"] == "pdf_vector_document_review" for candidate in payload["candidates"])
     assert all(
-        _candidate_events(candidate)[0]["extraction_method"] == "pdf_vector_document_v1"
+        _candidate_events(candidate)[0]["extraction_method"] == "pdf_vector_document_v2"
         for candidate in payload["candidates"]
     )
     first_candidate = payload["candidates"][0]
@@ -3062,6 +3063,48 @@ def test_upload_pdf_falls_back_to_vector_document_extraction_and_attempts_all_vo
     assert "Soprano" in first_candidate["message"]
     assert [track["status"] for track in payload["tracks"][:5]] == ["needs_review"] * 5
     assert payload["tracks"][5]["status"] == "empty"
+
+
+def test_born_digital_pdf_uses_vector_result_without_document_recognition_when_quality_passes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def unexpected_document_extraction(**kwargs) -> Path:
+        raise AssertionError("born-digital vector result should pass before document recognition")
+
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.run_audiveris_document_extraction",
+        unexpected_document_extraction,
+    )
+    monkeypatch.setattr(
+        "gigastudy_api.services.studio_repository.parse_born_digital_pdf_document",
+        fake_pdf_vector_document,
+    )
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Vector first PDF",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+
+    upload_response = enqueue_document_fixture(
+        client,
+        studio_id,
+        filename="score.pdf",
+        content=build_preview_pdf_bytes(),
+    )
+
+    assert upload_response.status_code == 200
+    payload = client.get(f"/api/studios/{studio_id}").json()
+    assert payload["jobs"][0]["status"] == "needs_review"
+    assert payload["jobs"][0]["method"] == "pdf_vector_document"
+    assert payload["jobs"][0]["diagnostics"]["pdf_preflight"]["kind"] == "born_digital_score"
+    assert payload["jobs"][0]["diagnostics"]["document_quality"]["selected_method"] == "pdf_vector_document_v2"
+    assert len(payload["candidates"]) == 5
 
 
 def test_vector_document_extraction_four_part_score_clears_unmapped_bass_placeholder(
@@ -3238,7 +3281,9 @@ def test_upload_pdf_marks_document_extraction_job_failed_when_audiveris_unavaila
     assert upload_response.status_code == 200
     payload = client.get(f"/api/studios/{studio_id}").json()
     assert payload["jobs"][0]["status"] == "failed"
-    assert payload["jobs"][0]["message"] == "PDF 악보를 인식하지 못했습니다. 더 선명한 악보 PDF, MIDI, MusicXML을 사용해 주세요."
+    assert payload["jobs"][0]["message"] == (
+        "PDF 악보를 안정적으로 읽지 못했습니다. 더 선명한 악보 PDF, MIDI, MusicXML을 사용해 주세요."
+    )
     assert [track["status"] for track in payload["tracks"][:5]] == ["failed"] * 5
     assert payload["candidates"] == []
 
@@ -3279,6 +3324,7 @@ def test_text_only_pdf_fails_preflight_without_running_audiveris(
         "악보로 읽을 수 있는 오선이나 음표를 찾지 못했습니다. "
         "가사/일반 문서 PDF 대신 악보 PDF, MIDI, MusicXML을 사용해 주세요."
     )
+    assert payload["jobs"][0]["diagnostics"]["pdf_preflight"]["kind"] == "text_only"
     assert payload["candidates"] == []
 
 

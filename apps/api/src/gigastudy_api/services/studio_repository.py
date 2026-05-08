@@ -1761,14 +1761,27 @@ class StudioRepository:
             )
             self._save_studio(studio)
 
-    def _mark_job_failed(self, studio_id: str, job_id: str, *, message: str) -> Studio:
+    def _mark_job_failed(
+        self,
+        studio_id: str,
+        job_id: str,
+        *,
+        diagnostics: dict[str, Any] | None = None,
+        message: str,
+    ) -> Studio:
         with self._lock:
             studio = self._load_studio(studio_id)
             if studio is None:
                 raise HTTPException(status_code=404, detail="Studio not found.")
             timestamp = _now()
             try:
-                mark_extraction_job_failed(studio, job_id, message=message, timestamp=timestamp)
+                mark_extraction_job_failed(
+                    studio,
+                    job_id,
+                    diagnostics=diagnostics,
+                    message=message,
+                    timestamp=timestamp,
+                )
             except ValueError as error:
                 raise HTTPException(status_code=404, detail="Track slot not found.") from error
             self._save_studio(studio)
@@ -1779,6 +1792,7 @@ class StudioRepository:
         studio_id: str,
         job_id: str,
         *,
+        diagnostics: dict[str, Any] | None = None,
         output_path: str,
         method: str | None = None,
     ) -> None:
@@ -1790,6 +1804,7 @@ class StudioRepository:
             mark_extraction_job_completed(
                 studio,
                 job_id,
+                diagnostics=diagnostics,
                 method=method,
                 output_path=output_path,
                 timestamp=timestamp,

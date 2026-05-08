@@ -71,6 +71,9 @@ class Settings(BaseSettings):
             "GIGASTUDY_API_OMR_PREPROCESS_DPI",
         ),
     )
+    document_audiveris_chunk_pages: int = 4
+    document_max_extraction_attempts: int = 3
+    document_quality_min_score: float = 0.55
     voice_transcription_backend: str = "auto"
     engine_processing_timeout_seconds: int = 120
     deepseek_harmony_enabled: bool = False

@@ -12,7 +12,11 @@ export const NOTICE_META_BLOCKLIST = [
   'diagnostics',
   'payload',
   'Audiveris',
+  'OMR',
   'OOM',
+  'heap',
+  'stderr',
+  'vector parser',
 ] as const
 
 const JOB_MESSAGES: Record<TrackExtractionJob['job_type'], string> = {

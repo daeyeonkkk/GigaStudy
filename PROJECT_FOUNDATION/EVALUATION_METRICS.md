@@ -44,6 +44,8 @@ practice, scoring, AI generation 모두 신뢰할 수 없다.
 | Track 내 overlap rate | 단선율 성부에서 event끼리 겹치지 않는가 | 0 |
 | 부분 실패 복구율 | 한 파트 실패가 전체 등록 실패로 번지지 않는가 | 100% |
 | PDF 문서 판별 | 가사/일반 문서 PDF는 OMR 전에 실패하고, 악보/스캔 후보만 등록 흐름으로 보내는가 | regression 100% |
+| PDF 품질 게이트 | PDF 추출 결과가 mapped track, event 수, grid fit, overlap, 음역 판단 기준을 통과하지 못하면 성공 처리하지 않는가 | regression 100% |
+| PDF 장기 작업 복구 | PDF 작업이 stale 기준을 넘겨 running으로 남지 않고 retryable failed 상태로 정리되는가 | regression 100% |
 | 음성 추출 사용 가능률 | 녹음/음성 업로드가 노이즈가 아닌 singable pitch event로 정리되는가 | 샘플 수동 80%+ |
 | 후보 검토 부담 | 후보가 이유, 위험, 덮어쓰기 영향을 설명하고 raw field를 노출하지 않는가 | raw field 0건 |
 

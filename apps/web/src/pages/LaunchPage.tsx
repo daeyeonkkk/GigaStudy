@@ -523,7 +523,7 @@ export function LaunchPage() {
                 />
               </label>
               <p className="launch-source-guidance">
-                PDF는 오선과 음표가 있는 악보 PDF만 인식합니다. 가능하면 MIDI 또는 MusicXML이 가장 안정적입니다.
+                악보 프로그램에서 내보낸 PDF는 인식률이 높습니다. 스캔/사진 PDF는 품질에 따라 실패할 수 있습니다. 가장 안정적인 형식은 MIDI 또는 MusicXML입니다.
               </p>
               {sourceFile ? (
                 <div className="launch-source-summary">

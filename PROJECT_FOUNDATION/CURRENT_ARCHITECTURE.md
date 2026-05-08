@@ -225,16 +225,22 @@ is excluded from persistence and remains an adapter detail.
   `apps/api/src/gigastudy_api/services/studio_engine_job_handlers.py`
   Shared queued import path for studio-start score files. PDF inputs first run
   a lightweight preflight (`services/engine/pdf_preflight.py`) over the first
-  pages. PDFs that look like lyrics or ordinary text documents fail before OMR;
-  vector score PDFs and image-heavy scanned-score candidates continue to
-  Audiveris or vector fallback and produce review candidates. MIDI, MusicXML,
-  MXL, and XML inputs are parsed directly in the same engine queue; clear
-  singer-line results register to regions, while ambiguous symbolic material
-  becomes review candidates. Studio-start score files first create a
+  pages and are classified as born-digital score, scanned-score possible,
+  text-only, or unknown. Text-only PDFs fail before expensive extraction.
+  Born-digital score PDFs try the PyMuPDF vector parser first; if its document
+  quality score is good enough, the pipeline skips heavier recognition. Scanned
+  or weak vector results use bounded recognition with Java heap limits, 4-page
+  PDF chunks by default, and at most one PyMuPDF grayscale/crop preprocessing
+  retry. Each extraction attempt is scored by mapped track count, event count,
+  grid fit, range fit, overlap rate, and measure consistency before candidates
+  are exposed. MIDI, MusicXML, MXL, and XML inputs are parsed directly in the
+  same engine queue; clear singer-line results register to regions, while
+  ambiguous symbolic material becomes review candidates. Studio-start score
+  files first create a
   `tempo_review_required` job with suggested BPM/meter diagnostics. Only after
   user approval does the API enqueue the document job, and the approved studio
   BPM/meter is passed through the registration path; source-file tempo is
-  evidence, not an automatic override. Audiveris timeout, memory, killed, and
+  evidence, not an automatic override. Recognition timeout, memory, killed, and
   no-output failures are mapped to user-facing retry/MIDI-MusicXML guidance.
 - `apps/api/src/gigastudy_api/services/document_job_recovery.py`
   Lightweight stale document-job recovery. A running document job older than
@@ -397,10 +403,12 @@ flowchart TD
    the studio clock and enqueues registration. If an approved queued/running
    import job loses its durable queue record, retry repairs the queue record and
    schedules processing again.
-4. PDF score jobs run preflight before OMR. Lyrics/general-document PDFs fail
-   immediately with user-facing guidance; vector-score and image-heavy scanned
-   candidates proceed to Audiveris/vector extraction. Timeout, memory, killed,
-   and no-output failures end as retryable failed jobs rather than long-running
+4. PDF score jobs run preflight before expensive extraction. Text-only PDFs
+   fail immediately with user-facing guidance. Born-digital score PDFs use a
+   vector-first path and skip heavier recognition when the quality gate passes;
+   scanned/image-heavy PDFs run bounded recognition in page chunks with one
+   lightweight preprocessing retry. Timeout, memory, killed, no-output, and
+   below-quality results end as retryable failed jobs rather than long-running
    pending work.
 5. API either registers clearly assigned symbolic seed parts directly or creates
    an extraction job/candidate review path for ambiguous material. Audio

@@ -166,13 +166,18 @@ def candidate_review_message(
     hint_label = review_hint_label(hint)
     if method.startswith("pdf_vector"):
         return (
-            f"{track_name(slot_id)}: extracted {event_count} events across "
-            f"{measure_count} measures from vector PDF. {candidate_confidence_label}; {hint_label}"
+            f"{track_name(slot_id)}: 악보 PDF에서 {measure_count}마디, 음표 {event_count}개를 찾았습니다. "
+            f"{candidate_confidence_label}; {hint_label}"
         )
     if method.startswith("audiveris"):
         return (
-            f"{track_name(slot_id)}: extracted {event_count} events across "
-            f"{measure_count} measures from Audiveris MusicXML. {candidate_confidence_label}; review against source."
+            f"{track_name(slot_id)}: 악보 PDF에서 {measure_count}마디, 음표 {event_count}개를 찾았습니다. "
+            f"{candidate_confidence_label}; 원본 악보와 비교해 주세요."
+        )
+    if method.startswith("document_recognition"):
+        return (
+            f"{track_name(slot_id)}: 악보 PDF에서 {measure_count}마디, 음표 {event_count}개를 찾았습니다. "
+            f"{candidate_confidence_label}; 원본 악보와 비교해 주세요."
         )
     return default_message
 

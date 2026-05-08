@@ -42,6 +42,8 @@ LABEL_ALIASES: dict[str, int] = {
     "tenor": 3,
     "t": 3,
     "baritone": 4,
+    "bariton": 4,
+    "bari": 4,
     "br": 4,
     "bass": 5,
     "b": 5,
@@ -49,6 +51,12 @@ LABEL_ALIASES: dict[str, int] = {
     "d. set": 6,
     "d.set": 6,
     "d": 6,
+    "소프라노": 1,
+    "알토": 2,
+    "테너": 3,
+    "바리톤": 4,
+    "베이스": 5,
+    "퍼커션": 6,
 }
 
 SLOT_PITCH_RANGES: dict[int, tuple[int, int]] = {
@@ -265,7 +273,57 @@ def _assign_document_slots(page: Any, rows: list[_DocumentRow]) -> list[_Documen
         if candidates:
             candidates.sort()
             _, _, row.slot_id, row.label = candidates[0]
+    return _assign_unlabelled_document_slots(rows)
+
+
+def _assign_unlabelled_document_slots(rows: list[_DocumentRow]) -> list[_DocumentRow]:
+    if not rows:
+        return rows
+    systems = _group_rows_into_systems(rows)
+    for system in systems:
+        missing_rows = [row for row in system if row.slot_id is None]
+        if not missing_rows:
+            continue
+        if any(row.slot_id is not None for row in system):
+            used_slots = {row.slot_id for row in system if row.slot_id is not None}
+            available_slots = [slot_id for slot_id in _slots_for_staff_count(len(system)) if slot_id not in used_slots]
+        else:
+            available_slots = _slots_for_staff_count(len(system))
+        for row, slot_id in zip(missing_rows, available_slots):
+            row.slot_id = slot_id
+            row.label = f"inferred-{slot_id}"
     return rows
+
+
+def _group_rows_into_systems(rows: list[_DocumentRow]) -> list[list[_DocumentRow]]:
+    sorted_rows = sorted(rows, key=lambda row: (row.page_index, row.center))
+    systems: list[list[_DocumentRow]] = []
+    current: list[_DocumentRow] = []
+    previous: _DocumentRow | None = None
+    for row in sorted_rows:
+        gap = row.top - previous.bottom if previous is not None and previous.page_index == row.page_index else None
+        if previous is None or previous.page_index != row.page_index or (gap is not None and gap > max(22, previous.spacing * 6)):
+            if current:
+                systems.append(current)
+            current = [row]
+        else:
+            current.append(row)
+        previous = row
+    if current:
+        systems.append(current)
+    return systems
+
+
+def _slots_for_staff_count(count: int) -> list[int]:
+    if count <= 1:
+        return [1]
+    if count == 2:
+        return [1, 5]
+    if count == 3:
+        return [1, 3, 5]
+    if count == 4:
+        return [1, 2, 3, 5]
+    return [1, 2, 3, 4, 5]
 
 
 def _extract_events_from_row(

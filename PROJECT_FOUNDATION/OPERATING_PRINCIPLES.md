@@ -441,6 +441,13 @@ the same change.
   - PDF/MIDI/MusicXML and start appears only after a supported score file is
     selected.
   - Start blank asks for BPM and meter and requires no upload.
+- PDF score import is best-effort and must choose the extraction path by PDF
+  evidence. Born-digital score PDFs use a vector-first path; scanned/image PDFs
+  use bounded recognition with at most one lightweight PyMuPDF preprocessing
+  retry; lyrics/general PDFs fail before expensive extraction. A generated
+  MusicXML file is not enough to count as success: PDF results must pass a
+  document quality gate or become a retryable failure/candidate review with
+  user-facing guidance.
 - Queue, upload, extraction, and registration states must be visible enough that
   users do not think the app froze.
 - Public Studio/Edit/Practice status notices should be deterministic,

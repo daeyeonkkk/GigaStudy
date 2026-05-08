@@ -368,6 +368,22 @@
   background: #f0f4ff;
 }
 
+.launch-recent__refresh {
+  justify-self: start;
+  min-height: 32px;
+  border: 1px solid #aeb8c1;
+  border-radius: 4px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #17212b;
+  font-weight: 800;
+}
+
+.launch-recent__refresh:hover {
+  border-color: #082fbd;
+  color: #082fbd;
+}
+
 .launch-recent__item.is-selected {
   border-color: #082fbd;
   box-shadow: inset 0 0 0 1px #082fbd;

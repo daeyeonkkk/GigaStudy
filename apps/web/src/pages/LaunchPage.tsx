@@ -11,6 +11,7 @@ import {
   setOwnerTokenFromStudioPassword,
 } from '../lib/api'
 import { getFileExtension } from '../lib/audio'
+import { getStudioListRetryDelayMs } from '../lib/studioListRetry'
 import type { Studio, StudioListItem } from '../types/studio'
 import './LaunchPage.css'
 
@@ -71,30 +72,61 @@ export function LaunchPage() {
   const [sourceInputKey, setSourceInputKey] = useState(0)
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
   const [recentStudios, setRecentStudios] = useState<StudioListItem[]>([])
-  const [recentMessage, setRecentMessage] = useState<string | null>(null)
+  const [recentMessage, setRecentMessage] = useState<string | null>('스튜디오 목록을 불러오는 중입니다.')
+  const [recentReloadKey, setRecentReloadKey] = useState(0)
   const [selectedStudioId, setSelectedStudioId] = useState<string | null>(null)
   const [selectedStudioPassword, setSelectedStudioPassword] = useState('')
   const [selectedStudioMessage, setSelectedStudioMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let ignore = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
 
-    listStudios(12, 0)
-      .then((items) => {
-        if (!ignore) {
-          setRecentStudios(items)
-        }
-      })
-      .catch(() => {
-        if (!ignore) {
-          setRecentMessage('API 서버에 연결되면 스튜디오 목록이 여기에 표시됩니다.')
-        }
-      })
+    function clearRetryTimer() {
+      if (retryTimer !== null) {
+        clearTimeout(retryTimer)
+        retryTimer = null
+      }
+    }
+
+    function loadRecentStudios(attemptIndex: number) {
+      if (attemptIndex === 0) {
+        setRecentMessage('스튜디오 목록을 불러오는 중입니다.')
+      }
+      listStudios(12, 0)
+        .then((items) => {
+          if (!ignore) {
+            setRecentStudios(items)
+            setRecentMessage(items.length === 0 ? '아직 만든 스튜디오가 없습니다.' : null)
+          }
+        })
+        .catch(() => {
+          if (ignore) {
+            return
+          }
+          const delayMs = getStudioListRetryDelayMs(attemptIndex)
+          setRecentMessage(
+            attemptIndex <= 1
+              ? '스튜디오 목록 확인이 늦어지고 있습니다. 잠시 뒤 다시 확인합니다.'
+              : `${Math.round(delayMs / 1000)}초 뒤 스튜디오 목록을 다시 확인합니다.`,
+          )
+          clearRetryTimer()
+          retryTimer = setTimeout(() => loadRecentStudios(attemptIndex + 1), delayMs)
+        })
+    }
+
+    loadRecentStudios(0)
 
     return () => {
       ignore = true
+      clearRetryTimer()
     }
-  }, [])
+  }, [recentReloadKey])
+
+  function refreshRecentStudios() {
+    setRecentMessage('스튜디오 목록을 다시 확인합니다.')
+    setRecentReloadKey((currentKey) => currentKey + 1)
+  }
 
   const normalizedTitle = title.trim()
   const parsedBpm = useMemo(() => parseInteger(bpm), [bpm])
@@ -549,6 +581,9 @@ export function LaunchPage() {
           <div>
             <p className="eyebrow">스튜디오 목록</p>
             {recentMessage ? <p>{recentMessage}</p> : null}
+            <button className="launch-recent__refresh" type="button" onClick={refreshRecentStudios}>
+              다시 확인
+            </button>
           </div>
           {recentStudios.map((studio) => (
             <button

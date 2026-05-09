@@ -4,14 +4,16 @@ import type { Dispatch, SetStateAction } from 'react'
 import {
   createScoringUploadTarget,
   putDirectUpload,
+  readFileAsDataUrl,
   scoreTrack,
+  shouldUseBase64UploadFallback,
 } from '../../lib/api'
 import {
   beginMicrophoneCapture,
-  dataUrlToBlob,
   startMicrophoneRecorder,
   stopMicrophoneRecorder,
   type MicrophoneRecorder,
+  type RecordedAudioBlob,
 } from '../../lib/audio'
 import {
   COUNT_IN_FIRST_PULSE_DELAY_MS,
@@ -57,14 +59,18 @@ type UseStudioScoringArgs = {
 }
 
 export type PendingScoreRecording = {
-  audioDataUrl: string
+  audioBlob: Blob
+  audioObjectUrl: string
+  contentType: string
   createdAtMs: number
   durationSeconds: number
+  encoding: RecordedAudioBlob['encoding']
   expiresAtMs: number
   filename: string
   includeMetronome: boolean
   referenceSlotIds: number[]
   scoreMode: ScoreSessionState['scoreMode']
+  sizeBytes: number
   slotId: number
   trackName: string
 }
@@ -139,6 +145,13 @@ export function useStudioScoring({
       scoreRecorderRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (pendingScoreRecording === null) {
+      return undefined
+    }
+    return () => window.URL.revokeObjectURL(pendingScoreRecording.audioObjectUrl)
+  }, [pendingScoreRecording])
 
   useEffect(() => {
     if (pendingScoreRecording === null) {
@@ -500,11 +513,11 @@ export function useStudioScoring({
       const recordedDurationSeconds = recorder
         ? Math.max(0, (performance.now() - recorder.startedAt) / 1000)
         : 0
-      const performanceAudioBase64 = await stopMicrophoneRecorder(recorder)
+      const performanceAudio = await stopMicrophoneRecorder(recorder)
       scoreRecorderRef.current = null
       stopPlaybackSession()
       markReferencePlayback([])
-      if (!performanceAudioBase64) {
+      if (!performanceAudio) {
         setScoreSession({ ...session, phase: 'ready' })
         setActionState({
           phase: 'error',
@@ -512,17 +525,21 @@ export function useStudioScoring({
         })
         return
       }
-      const performanceFilename = `${scoreTargetTrack?.name ?? 'track'}-score-take.wav`
+      const performanceFilename = `${scoreTargetTrack?.name ?? 'track'}-score-take${performanceAudio.extension}`
       const createdAtMs = Date.now()
       setPendingScoreRecording({
-        audioDataUrl: performanceAudioBase64,
+        audioBlob: performanceAudio.blob,
+        audioObjectUrl: window.URL.createObjectURL(performanceAudio.blob),
+        contentType: performanceAudio.contentType,
         createdAtMs,
         durationSeconds: recordedDurationSeconds,
+        encoding: performanceAudio.encoding,
         expiresAtMs: createdAtMs + PENDING_SCORE_RECORDING_RETENTION_MS,
         filename: performanceFilename,
         includeMetronome: session.includeMetronome,
         referenceSlotIds: session.selectedReferenceIds,
         scoreMode: session.scoreMode,
+        sizeBytes: performanceAudio.sizeBytes,
         slotId: session.targetSlotId,
         trackName: scoreTargetTrack?.name ?? `Track ${session.targetSlotId}`,
       })
@@ -559,26 +576,28 @@ export function useStudioScoring({
 
     setActionState({ phase: 'busy', message: `${trackLabel} 녹음을 채점하는 중입니다.` })
     try {
-      const performanceBlob = dataUrlToBlob(pendingRecording.audioDataUrl)
       let performancePayload:
         | { performance_asset_path: string; performance_audio_base64?: never }
         | { performance_audio_base64: string; performance_asset_path?: never } = {
-        performance_audio_base64: pendingRecording.audioDataUrl,
+        performance_audio_base64: '',
       }
       try {
         const uploadTarget = await createScoringUploadTarget(studio.studio_id, pendingRecording.slotId, {
           source_kind: 'audio',
           filename: pendingRecording.filename,
-          size_bytes: performanceBlob.size,
-          content_type: performanceBlob.type || 'audio/wav',
+          size_bytes: pendingRecording.audioBlob.size,
+          content_type: pendingRecording.contentType,
         })
-        await putDirectUpload(uploadTarget, performanceBlob)
+        await putDirectUpload(uploadTarget, pendingRecording.audioBlob)
         performancePayload = {
           performance_asset_path: uploadTarget.asset_path,
         }
-      } catch {
+      } catch (error) {
+        if (!shouldUseBase64UploadFallback(error, pendingRecording.audioBlob)) {
+          throw error
+        }
         performancePayload = {
-          performance_audio_base64: pendingRecording.audioDataUrl,
+          performance_audio_base64: await readFileAsDataUrl(pendingRecording.audioBlob),
         }
       }
       const nextStudio = await scoreTrack(studio.studio_id, pendingRecording.slotId, {

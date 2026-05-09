@@ -58,6 +58,14 @@ the same change.
   so each active pitch event can be traced back to the original recorded audio
   slice. Edit-applied vocal renders must cut audio from those anchors, then
   place, stretch, and pitch-shift the slice according to the edited event.
+- Browser microphone recording should prefer compressed MediaRecorder Blob
+  output for upload size safety. The internal product contract remains
+  normalized mono 44.1 kHz PCM WAV after server decode, so editing, playback,
+  tuning, and scoring do not depend on browser container timing quirks.
+- Base64 upload fallback is a compatibility escape hatch for small transient
+  direct-upload failures only. Upload size-limit, validation, auth, permission,
+  and expired-target failures must stop with clear user feedback instead of
+  retrying as a larger JSON payload.
 - Edit-applied vocal render is a user-directed correction tool, not automatic
   vocal beautification. It must not invent lyrics, notes, or rhythm, and it
   should not impose musical safety limits that prevent the user's explicit edit
@@ -165,6 +173,10 @@ the same change.
 - The microphone should open slightly before the downbeat so early entrances are
   captured, while backend alignment keeps the registered material on the shared
   beat grid.
+- Track recording and scoring recording share the same capture/upload policy:
+  compressed Blob first, WAV fallback only when MediaRecorder is unavailable,
+  direct upload first, and shared server-side WAV normalization before voice
+  transcription.
 - Recording metronome, playback metronome, scoring count-in, and practice
   playhead must share the same timing helpers.
 

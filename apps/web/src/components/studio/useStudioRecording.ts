@@ -3,14 +3,16 @@ import { useEffect, useRef, useState } from 'react'
 import {
   createTrackRecordingUploadTarget,
   putDirectUpload,
+  readFileAsDataUrl,
+  shouldUseBase64UploadFallback,
   uploadTrackRecordingFile,
 } from '../../lib/api'
 import {
   beginMicrophoneCapture,
-  dataUrlToBlob,
   startMicrophoneRecorder,
   stopMicrophoneRecorder,
   type MicrophoneRecorder,
+  type RecordedAudioBlob,
 } from '../../lib/audio'
 import {
   COUNT_IN_FIRST_PULSE_DELAY_MS,
@@ -45,11 +47,15 @@ type TrackCountInState = {
 
 export type PendingTrackRecording = {
   allowOverwrite: boolean
-  audioDataUrl: string
+  audioBlob: Blob
+  audioObjectUrl: string
+  contentType: string
   createdAtMs: number
   durationSeconds: number
+  encoding: RecordedAudioBlob['encoding']
   expiresAtMs: number
   filename: string
+  sizeBytes: number
   slotId: number
   trackName: string
 }
@@ -157,6 +163,13 @@ export function useStudioRecording({
       trackRecordingAllowOverwriteRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    if (pendingTrackRecording === null) {
+      return undefined
+    }
+    return () => window.URL.revokeObjectURL(pendingTrackRecording.audioObjectUrl)
+  }, [pendingTrackRecording])
 
   useEffect(() => {
     if (recordingSlotId === null && trackCountIn === null) {
@@ -505,18 +518,22 @@ export function useStudioRecording({
       const trackLabel = formatTrackName(track.name)
       setActionState({ phase: 'busy', message: `${trackLabel} 녹음을 정리하는 중입니다.` })
       try {
-        const recordedAudioBase64 = await stopMicrophoneRecorder(recorder)
-        if (!recordedAudioBase64) {
+        const recordedAudio = await stopMicrophoneRecorder(recorder)
+        if (!recordedAudio) {
           throw new Error('녹음 오디오가 비어 있습니다. 마이크 입력을 확인하고 다시 녹음해 주세요.')
         }
         const createdAtMs = Date.now()
         setPendingTrackRecording({
           allowOverwrite,
-          audioDataUrl: recordedAudioBase64,
+          audioBlob: recordedAudio.blob,
+          audioObjectUrl: window.URL.createObjectURL(recordedAudio.blob),
+          contentType: recordedAudio.contentType,
           createdAtMs,
           durationSeconds: recordedDurationSeconds,
+          encoding: recordedAudio.encoding,
           expiresAtMs: createdAtMs + PENDING_RECORDING_RETENTION_MS,
-          filename: `${track.name}-recorded-take.wav`,
+          filename: `${track.name}-recorded-take${recordedAudio.extension}`,
+          sizeBytes: recordedAudio.sizeBytes,
           slotId: track.slot_id,
           trackName: track.name,
         })
@@ -603,23 +620,25 @@ export function useStudioRecording({
     }
     const succeeded = await runStudioAction(
       async () => {
-        const recordingBlob = dataUrlToBlob(pendingRecording.audioDataUrl)
         let uploadPayload:
           | { asset_path: string; content_base64?: never }
           | { content_base64: string; asset_path?: never } = {
-          content_base64: pendingRecording.audioDataUrl,
+          content_base64: '',
         }
         try {
           const uploadTarget = await createTrackRecordingUploadTarget(studio.studio_id, pendingRecording.slotId, {
             source_kind: 'audio',
             filename: pendingRecording.filename,
-            size_bytes: recordingBlob.size,
-            content_type: recordingBlob.type || 'audio/wav',
+            size_bytes: pendingRecording.audioBlob.size,
+            content_type: pendingRecording.contentType,
           })
-          await putDirectUpload(uploadTarget, recordingBlob)
+          await putDirectUpload(uploadTarget, pendingRecording.audioBlob)
           uploadPayload = { asset_path: uploadTarget.asset_path }
-        } catch {
-          uploadPayload = { content_base64: pendingRecording.audioDataUrl }
+        } catch (error) {
+          if (!shouldUseBase64UploadFallback(error, pendingRecording.audioBlob)) {
+            throw error
+          }
+          uploadPayload = { content_base64: await readFileAsDataUrl(pendingRecording.audioBlob) }
         }
         return uploadTrackRecordingFile(studio.studio_id, pendingRecording.slotId, {
           source_kind: 'audio',

@@ -53,7 +53,7 @@ def prepare_voice_analysis_wav(source_path: Path, *, timeout_seconds: int = 120)
     except FileNotFoundError as error:
         _remove_temp_file(output_path)
         raise VoiceTranscriptionError(
-            "Audio decoder is not available. Server runtime must include ffmpeg for MP3/M4A/OGG/FLAC analysis."
+            "Audio decoder is not available. Server runtime must include ffmpeg for MP3/M4A/MP4/AAC/OGG/WEBM/FLAC analysis."
         ) from error
     except subprocess.TimeoutExpired as error:
         _remove_temp_file(output_path)

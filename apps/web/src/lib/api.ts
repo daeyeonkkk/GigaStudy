@@ -26,6 +26,9 @@ const defaultApiBaseUrl = import.meta.env.DEV ? 'http://127.0.0.1:8000' : browse
 const apiBaseUrl = configuredApiBaseUrl || defaultApiBaseUrl || 'http://127.0.0.1:8000'
 const OWNER_TOKEN_STORAGE_KEY = 'gigastudy.ownerToken.v1'
 const ADMIN_SESSION_STORAGE_KEY = 'gigastudy.adminSession.v1'
+const BASE64_UPLOAD_FALLBACK_MAX_BYTES = 4 * 1024 * 1024
+const UPLOAD_TOO_LARGE_MESSAGE =
+  '업로드 파일이 서버 제한을 넘었습니다. 녹음이라면 압축 녹음이 지원되지 않는 브라우저이거나 녹음이 너무 길 수 있습니다.'
 
 export type AdminCredentials = {
   username: string
@@ -47,7 +50,17 @@ type AdminStorageQuery = {
   studioStatus?: 'active' | 'inactive' | 'all'
 }
 
-export function readFileAsDataUrl(file: File): Promise<string> {
+export class ApiRequestError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiRequestError'
+    this.status = status
+  }
+}
+
+export function readFileAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.addEventListener('load', () => {
@@ -67,21 +80,19 @@ async function readJson<T>(response: Response, fallbackMessage: string): Promise
     return (await response.json()) as T
   }
 
+  let message = fallbackMessage
   try {
     const payload = (await response.json()) as { detail?: unknown; message?: unknown }
     if (typeof payload.detail === 'string' && payload.detail.trim()) {
-      throw new Error(payload.detail.trim())
+      message = payload.detail.trim()
+    } else if (typeof payload.message === 'string' && payload.message.trim()) {
+      message = payload.message.trim()
     }
-    if (typeof payload.message === 'string' && payload.message.trim()) {
-      throw new Error(payload.message.trim())
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message !== fallbackMessage) {
-      throw error
-    }
+  } catch {
+    message = fallbackMessage
   }
 
-  throw new Error(fallbackMessage)
+  throw new ApiRequestError(normalizeApiErrorMessage(message, response.status), response.status)
 }
 
 async function requestJson<T>(
@@ -311,8 +322,28 @@ export async function putDirectUpload(target: DirectUploadTarget, blob: Blob): P
     body: blob,
   })
   if (!response.ok) {
-    throw new Error('파일 업로드에 실패했습니다.')
+    throw new ApiRequestError(
+      normalizeApiErrorMessage('파일 업로드에 실패했습니다.', response.status),
+      response.status,
+    )
   }
+}
+
+export function shouldUseBase64UploadFallback(error: unknown, blob: Blob): boolean {
+  if (blob.size > BASE64_UPLOAD_FALLBACK_MAX_BYTES) {
+    return false
+  }
+  if (!(error instanceof ApiRequestError)) {
+    return true
+  }
+  return ![400, 401, 403, 404, 409, 413, 422].includes(error.status)
+}
+
+function normalizeApiErrorMessage(message: string, status: number): string {
+  if (status === 413) {
+    return UPLOAD_TOO_LARGE_MESSAGE
+  }
+  return message
 }
 
 export function uploadTrackRecordingFile(

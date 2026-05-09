@@ -6,7 +6,7 @@ import type { PendingTrackRecording } from './useStudioRecording'
 
 type PendingRecordingReview = Pick<
   PendingTrackRecording,
-  'audioDataUrl' | 'durationSeconds' | 'expiresAtMs' | 'trackName'
+  'audioObjectUrl' | 'durationSeconds' | 'expiresAtMs' | 'trackName'
 >
 
 type PendingRecordingDialogProps = {
@@ -68,7 +68,7 @@ export function PendingRecordingDialog({
             <dd>{formatDurationSeconds(recording.durationSeconds)}</dd>
           </div>
         </dl>
-        <audio controls src={recording.audioDataUrl}>
+        <audio controls src={recording.audioObjectUrl}>
           녹음 미리듣기를 지원하지 않는 브라우저입니다.
         </audio>
         <div className="recording-review-panel__actions">

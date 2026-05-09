@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
@@ -13,9 +14,10 @@ from gigastudy_api.api.schemas.studios import (
 )
 from gigastudy_api.config import get_settings
 from gigastudy_api.domain.track_events import TrackPitchEvent
+from gigastudy_api.services.engine.audio_decode import cleanup_voice_analysis_audio, prepare_voice_analysis_wav
 from gigastudy_api.services.engine.extraction_plan import default_voice_extraction_plan
-from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.engine.timeline import registered_region_events_for_slot
+from gigastudy_api.services.engine.voice import VoiceTranscriptionError
 from gigastudy_api.services.llm.provider import plan_voice_extraction
 from gigastudy_api.services.studio_assets import StudioAssetService
 from gigastudy_api.services.studio_scoring import (
@@ -285,7 +287,7 @@ class StudioScoringCommands:
                     reference_slot_ids=reference_slot_ids or [],
                     source_label=filename,
                 )
-            return self._repository._transcribe_voice_file(
+            return self._extract_scoring_events_from_audio_path(
                 source_path,
                 bpm=bpm,
                 slot_id=slot_id,
@@ -333,7 +335,7 @@ class StudioScoringCommands:
                     reference_slot_ids=reference_slot_ids or [],
                     source_label=filename,
                 )
-            return self._repository._transcribe_voice_file(
+            return self._extract_scoring_events_from_audio_path(
                 source_path,
                 bpm=bpm,
                 slot_id=slot_id,
@@ -345,6 +347,32 @@ class StudioScoringCommands:
             return []
         finally:
             self._assets.delete_asset_file(relative_path)
+
+    def _extract_scoring_events_from_audio_path(
+        self,
+        source_path: Path,
+        *,
+        bpm: int,
+        slot_id: int,
+        time_signature_numerator: int,
+        time_signature_denominator: int,
+        extraction_plan: Any | None,
+    ) -> list[TrackPitchEvent]:
+        analysis_audio = prepare_voice_analysis_wav(
+            source_path,
+            timeout_seconds=get_settings().engine_processing_timeout_seconds,
+        )
+        try:
+            return self._repository._transcribe_voice_file(
+                analysis_audio.path,
+                bpm=bpm,
+                slot_id=slot_id,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+                extraction_plan=extraction_plan,
+            )
+        finally:
+            cleanup_voice_analysis_audio(analysis_audio)
 
     def _build_scoring_extraction_plan(
         self,

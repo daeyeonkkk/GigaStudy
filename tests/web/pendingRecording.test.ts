@@ -11,28 +11,38 @@ import {
 } from '../../apps/web/src/components/studio/useStudioScoring'
 
 function pendingRecording(createdAtMs: number): PendingTrackRecording {
+  const audioBlob = new Blob(['track'], { type: 'audio/webm' })
   return {
     allowOverwrite: false,
-    audioDataUrl: 'data:audio/wav;base64,AAAA',
+    audioBlob,
+    audioObjectUrl: 'blob:track-recording',
+    contentType: audioBlob.type,
     createdAtMs,
     durationSeconds: 1,
+    encoding: 'media_recorder',
     expiresAtMs: createdAtMs + PENDING_RECORDING_RETENTION_MS,
-    filename: 'take.wav',
+    filename: 'take.webm',
+    sizeBytes: audioBlob.size,
     slotId: 1,
     trackName: 'Soprano',
   }
 }
 
 function pendingScoreRecording(createdAtMs: number): PendingScoreRecording {
+  const audioBlob = new Blob(['score'], { type: 'audio/webm' })
   return {
-    audioDataUrl: 'data:audio/wav;base64,AAAA',
+    audioBlob,
+    audioObjectUrl: 'blob:score-recording',
+    contentType: audioBlob.type,
     createdAtMs,
     durationSeconds: 1,
+    encoding: 'media_recorder',
     expiresAtMs: createdAtMs + PENDING_RECORDING_RETENTION_MS,
-    filename: 'score-take.wav',
+    filename: 'score-take.webm',
     includeMetronome: true,
     referenceSlotIds: [1, 2],
     scoreMode: 'answer',
+    sizeBytes: audioBlob.size,
     slotId: 3,
     trackName: 'Tenor',
   }

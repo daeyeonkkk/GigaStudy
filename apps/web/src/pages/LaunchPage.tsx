@@ -9,6 +9,7 @@ import {
   putDirectUpload,
   readFileAsDataUrl,
   setOwnerTokenFromStudioPassword,
+  shouldUseBase64UploadFallback,
 } from '../lib/api'
 import { getFileExtension } from '../lib/audio'
 import { getStudioListRetryDelayMs } from '../lib/studioListRetry'
@@ -268,9 +269,12 @@ export function LaunchPage() {
         })
         await putDirectUpload(uploadTarget, preparedSource.blob)
         uploadedAssetPath = uploadTarget.asset_path
-      } catch {
+      } catch (error) {
+        if (!shouldUseBase64UploadFallback(error, preparedSource.blob)) {
+          throw error
+        }
         setSubmitState({ phase: 'submitting', label: '다른 방식으로 파일을 보내는 중' })
-        const contentBase64 = preparedSource.contentBase64 ?? (await readFileAsDataUrl(sourceFile))
+        const contentBase64 = preparedSource.contentBase64 ?? (await readFileAsDataUrl(preparedSource.blob))
         studio = await createStudio({
           title: normalizedTitle,
           client_request_id: clientRequestId,

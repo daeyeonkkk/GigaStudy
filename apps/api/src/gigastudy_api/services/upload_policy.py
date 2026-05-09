@@ -11,7 +11,7 @@ from gigastudy_api.config import get_settings
 DEFAULT_UPLOAD_BPM = 92
 DOCUMENT_IMAGE_SOURCE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SYMBOLIC_SOURCE_SUFFIXES = {".musicxml", ".xml", ".mxl", ".mid", ".midi"}
-AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
+AUDIO_SOURCE_SUFFIXES = {".wav", ".mp3", ".m4a", ".mp4", ".aac", ".ogg", ".webm", ".flac"}
 TRACK_UPLOAD_SUFFIXES = {
     "audio": tuple(AUDIO_SOURCE_SUFFIXES),
 }
@@ -22,7 +22,10 @@ AUDIO_MIME_TYPES = {
     ".wav": "audio/wav",
     ".mp3": "audio/mpeg",
     ".m4a": "audio/mp4",
+    ".mp4": "audio/mp4",
+    ".aac": "audio/aac",
     ".ogg": "audio/ogg",
+    ".webm": "audio/webm",
     ".flac": "audio/flac",
 }
 

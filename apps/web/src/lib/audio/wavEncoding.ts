@@ -29,7 +29,31 @@ export function encodeAudioChunksToWavDataUrl(chunks: Float32Array[], sampleRate
   return encodeMonoPcm16WavDataUrl(samples, sampleRate)
 }
 
+export function encodeAudioChunksToWavBlob(chunks: Float32Array[], sampleRate: number): Blob {
+  const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0)
+  const samples = new Float32Array(sampleCount)
+  let offset = 0
+
+  chunks.forEach((chunk) => {
+    samples.set(chunk, offset)
+    offset += chunk.length
+  })
+
+  return new Blob([encodeMonoPcm16WavBuffer(samples, sampleRate)], { type: 'audio/wav' })
+}
+
 function encodeMonoPcm16WavDataUrl(samples: Float32Array, sampleRate: number): string {
+  const buffer = encodeMonoPcm16WavBuffer(samples, sampleRate)
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
+  }
+
+  return `data:audio/wav;base64,${btoa(binary)}`
+}
+
+function encodeMonoPcm16WavBuffer(samples: Float32Array, sampleRate: number): ArrayBuffer {
   const bytesPerSample = 2
   const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample)
   const view = new DataView(buffer)
@@ -71,11 +95,5 @@ function encodeMonoPcm16WavDataUrl(samples: Float32Array, sampleRate: number): s
     offset += bytesPerSample
   }
 
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let index = 0; index < bytes.length; index += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
-  }
-
-  return `data:audio/wav;base64,${btoa(binary)}`
+  return buffer
 }

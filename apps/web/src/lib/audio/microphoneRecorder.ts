@@ -1,12 +1,26 @@
 import { getBrowserAudioContextConstructor } from './audioContext'
-import { encodeAudioChunksToWavDataUrl } from './wavEncoding'
+import { encodeAudioChunksToWavBlob } from './wavEncoding'
+
+type RecorderEncoding = 'media_recorder' | 'wav_fallback'
+
+export type RecordedAudioBlob = {
+  blob: Blob
+  contentType: string
+  encoding: RecorderEncoding
+  extension: string
+  sizeBytes: number
+}
 
 export type MicrophoneRecorder = {
   context: AudioContext
   source: MediaStreamAudioSourceNode
   processor: ScriptProcessorNode
   stream: MediaStream
-  chunks: Float32Array[]
+  wavChunks: Float32Array[]
+  mediaChunks: Blob[]
+  mediaRecorder: MediaRecorder | null
+  mediaType: string
+  extension: string
   sampleRate: number
   startedAt: number
   capturing: boolean
@@ -14,11 +28,19 @@ export type MicrophoneRecorder = {
   peakLevel: number
 }
 
+const MEDIA_RECORDER_CANDIDATES = [
+  { extension: '.webm', mimeType: 'audio/webm;codecs=opus' },
+  { extension: '.ogg', mimeType: 'audio/ogg;codecs=opus' },
+  { extension: '.mp4', mimeType: 'audio/mp4' },
+] as const
+
 export function getRecordingLevelPercent(level: number): number {
   return Math.round(Math.max(0, Math.min(1, level * 12)) * 100)
 }
 
-export async function startMicrophoneRecorder(options: { captureImmediately?: boolean } = {}): Promise<MicrophoneRecorder | null> {
+export async function startMicrophoneRecorder(
+  options: { captureImmediately?: boolean } = {},
+): Promise<MicrophoneRecorder | null> {
   if (!navigator.mediaDevices?.getUserMedia) {
     return null
   }
@@ -34,24 +56,46 @@ export async function startMicrophoneRecorder(options: { captureImmediately?: bo
     const context = new AudioContextConstructor()
     const source = context.createMediaStreamSource(stream)
     const processor = context.createScriptProcessor(4096, 1, 1)
-    const chunks: Float32Array[] = []
+    const wavChunks: Float32Array[] = []
+    const mediaChunks: Blob[] = []
+    let mediaConfig = getSupportedMediaRecorderConfig()
+    let mediaRecorder: MediaRecorder | null = null
+    if (mediaConfig) {
+      try {
+        mediaRecorder = new MediaRecorder(stream, { mimeType: mediaConfig.mimeType })
+      } catch {
+        mediaConfig = null
+      }
+    }
     const recorder: MicrophoneRecorder = {
       context,
       source,
       processor,
       stream,
-      chunks,
+      wavChunks,
+      mediaChunks,
+      mediaRecorder,
+      mediaType: mediaRecorder?.mimeType || mediaConfig?.mimeType || 'audio/wav',
+      extension: mediaConfig?.extension ?? '.wav',
       sampleRate: context.sampleRate,
       startedAt: performance.now(),
-      capturing: options.captureImmediately !== false,
+      capturing: false,
       rmsLevel: 0,
       peakLevel: 0,
     }
 
+    if (mediaRecorder) {
+      mediaRecorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size > 0) {
+          mediaChunks.push(event.data)
+        }
+      })
+    }
+
     processor.onaudioprocess = (event) => {
       const input = event.inputBuffer.getChannelData(0)
-      if (recorder.capturing) {
-        chunks.push(new Float32Array(input))
+      if (recorder.capturing && recorder.mediaRecorder === null) {
+        wavChunks.push(new Float32Array(input))
       }
 
       let peak = 0
@@ -69,6 +113,10 @@ export async function startMicrophoneRecorder(options: { captureImmediately?: bo
     processor.connect(context.destination)
     void context.resume().catch(() => undefined)
 
+    if (options.captureImmediately !== false) {
+      beginMicrophoneCapture(recorder)
+    }
+
     return recorder
   } catch {
     return null
@@ -79,30 +127,47 @@ export function beginMicrophoneCapture(recorder: MicrophoneRecorder | null): boo
   if (!recorder) {
     return false
   }
-  recorder.chunks.length = 0
+  recorder.wavChunks.length = 0
+  recorder.mediaChunks.length = 0
   recorder.startedAt = performance.now()
   recorder.capturing = true
+  if (recorder.mediaRecorder && recorder.mediaRecorder.state === 'inactive') {
+    try {
+      recorder.mediaRecorder.start(1000)
+    } catch {
+      recorder.mediaRecorder = null
+      recorder.mediaType = 'audio/wav'
+      recorder.extension = '.wav'
+    }
+  }
   return true
 }
 
 async function waitForInitialCapturedChunk(recorder: MicrophoneRecorder, timeoutMs = 300): Promise<void> {
   const deadline = performance.now() + timeoutMs
-  while (recorder.capturing && recorder.chunks.length === 0 && performance.now() < deadline) {
+  while (
+    recorder.capturing &&
+    recorder.mediaRecorder === null &&
+    recorder.wavChunks.length === 0 &&
+    performance.now() < deadline
+  ) {
     await new Promise<void>((resolve) => {
       window.setTimeout(resolve, 16)
     })
   }
 }
 
-export async function stopMicrophoneRecorder(recorder: MicrophoneRecorder | null): Promise<string | null> {
+export async function stopMicrophoneRecorder(recorder: MicrophoneRecorder | null): Promise<RecordedAudioBlob | null> {
   if (!recorder) {
     return null
   }
 
-  if (recorder.chunks.length === 0) {
+  if (recorder.wavChunks.length === 0 && recorder.mediaChunks.length === 0) {
     await waitForInitialCapturedChunk(recorder)
   }
 
+  recorder.capturing = false
+  await stopMediaRecorder(recorder)
   recorder.processor.disconnect()
   recorder.source.disconnect()
   recorder.stream.getTracks().forEach((track) => track.stop())
@@ -110,9 +175,62 @@ export async function stopMicrophoneRecorder(recorder: MicrophoneRecorder | null
     await recorder.context.close().catch(() => undefined)
   }
 
-  if (recorder.chunks.length === 0) {
+  if (recorder.mediaChunks.length > 0) {
+    const contentType = recorder.mediaType || recorder.mediaChunks[0]?.type || 'audio/webm'
+    const blob = new Blob(recorder.mediaChunks, { type: contentType })
+    if (blob.size > 0) {
+      return {
+        blob,
+        contentType,
+        encoding: 'media_recorder',
+        extension: recorder.extension,
+        sizeBytes: blob.size,
+      }
+    }
+  }
+
+  if (recorder.wavChunks.length === 0) {
     return null
   }
 
-  return encodeAudioChunksToWavDataUrl(recorder.chunks, recorder.sampleRate)
+  const blob = encodeAudioChunksToWavBlob(recorder.wavChunks, recorder.sampleRate)
+  return {
+    blob,
+    contentType: blob.type || 'audio/wav',
+    encoding: 'wav_fallback',
+    extension: '.wav',
+    sizeBytes: blob.size,
+  }
+}
+
+function getSupportedMediaRecorderConfig(): { extension: string; mimeType: string } | null {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return null
+  }
+  return MEDIA_RECORDER_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate.mimeType)) ?? null
+}
+
+function stopMediaRecorder(recorder: MicrophoneRecorder): Promise<void> {
+  const mediaRecorder = recorder.mediaRecorder
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) {
+        return
+      }
+      settled = true
+      window.clearTimeout(timeoutId)
+      resolve()
+    }
+    const timeoutId = window.setTimeout(finish, 2000)
+    mediaRecorder.addEventListener('stop', finish, { once: true })
+    try {
+      mediaRecorder.stop()
+    } catch {
+      finish()
+    }
+  })
 }

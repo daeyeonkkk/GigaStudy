@@ -5,6 +5,7 @@ import {
   generateTrack,
   putDirectUpload,
   readFileAsDataUrl,
+  shouldUseBase64UploadFallback,
   shiftRegisteredTrackSyncs,
   updateTrackSync,
   updateTrackVolumeMinimal,
@@ -73,7 +74,7 @@ export function useStudioTrackActions({
     const sourceKind = detectTrackRecordingUploadKind(file)
     const trackLabel = formatTrackName(track.name)
     if (!sourceKind) {
-      setActionState({ phase: 'error', message: '녹음파일(WAV, MP3, M4A, OGG, FLAC)을 선택하세요.' })
+      setActionState({ phase: 'error', message: '지원되는 오디오 파일(WAV, MP3, M4A, MP4, AAC, OGG, WEBM, FLAC)을 선택하세요.' })
       return
     }
 
@@ -90,8 +91,11 @@ export function useStudioTrackActions({
 
         try {
           await putDirectUpload(uploadTarget, preparedUpload.blob)
-        } catch {
-          const fallbackContentBase64 = await readFileAsDataUrl(file)
+        } catch (error) {
+          if (!shouldUseBase64UploadFallback(error, preparedUpload.blob)) {
+            throw error
+          }
+          const fallbackContentBase64 = await readFileAsDataUrl(preparedUpload.blob)
           return uploadTrackRecordingFile(studio.studio_id, track.slot_id, {
             source_kind: sourceKind,
             filename: preparedUpload.filename,

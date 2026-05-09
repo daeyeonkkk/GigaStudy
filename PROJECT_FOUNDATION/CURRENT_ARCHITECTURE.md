@@ -222,12 +222,14 @@ is excluded from persistence and remains an adapter detail.
   retries without making cached results part of product truth.
 - `apps/api/src/gigastudy_api/services/engine/audio_decode.py`
   Server-side audio normalization for voice analysis. Track recording uploads
-  may arrive as WAV/MP3/M4A/OGG/FLAC, but non-WAV files are decoded through
-  ffmpeg into temporary WAV before the voice engine runs. Studio-start uploads
-  are score/document sources only, not music audio. When a retained audio clip
-  was decoded or aligned, `studio_assets` writes a normalized WAV asset and
-  exposes that path/MIME to playback instead of pointing a track at mismatched
-  original bytes.
+  may arrive as WAV/MP3/M4A/MP4/AAC/OGG/WEBM/FLAC, but non-WAV files are
+  decoded through ffmpeg into temporary mono 44.1 kHz PCM WAV before the voice
+  engine runs. Studio-start uploads are score/document sources only, not music
+  audio. When a retained audio clip was decoded or aligned, `studio_assets`
+  writes a normalized WAV asset and exposes that path/MIME to playback instead
+  of pointing a track at mismatched original bytes. Scoring audio follows the
+  same decode path and must not send compressed containers directly to the voice
+  transcriber.
 - `apps/api/src/gigastudy_api/services/document_extraction_pipeline.py` and
   `apps/api/src/gigastudy_api/services/studio_engine_job_handlers.py`
   Shared queued import path for studio-start score files. PDF inputs first run
@@ -402,9 +404,12 @@ flowchart TD
    audio extraction.
 2. Browser sends the file via direct upload or inline fallback. Local
    direct-upload requests are streamed to storage instead of buffered in memory.
-   Studio creation requests include a browser-generated `client_request_id`; if the browser
-   loses the response and retries the same start data, the API returns the
-   existing studio instead of creating a duplicate.
+   Inline base64 fallback is only for small transient direct-upload failures;
+   size-limit, validation, auth, expired-target, and permission failures must
+   surface as errors instead of being retried as larger JSON payloads. Studio
+   creation requests include a browser-generated `client_request_id`; if the
+   browser loses the response and retries the same start data, the API returns
+   the existing studio instead of creating a duplicate.
 3. For score-file studio starts, API creates a `tempo_review_required` job and
    keeps tracks empty. The user confirms or edits BPM/meter; approval updates
    the studio clock and enqueues registration. If an approved queued/running
@@ -450,9 +455,16 @@ flowchart TD
 3. If no reference tracks are selected, the browser keeps the existing
    count-in-only path: metronome if selected, or silent visual count-in if not.
 4. The stopped take stays pending until the user registers or discards it.
+   Pending browser takes are stored as `Blob` plus object URL, filename,
+   content type, and byte size. MediaRecorder compressed containers are
+   preferred in this order: `audio/webm;codecs=opus`, `audio/ogg;codecs=opus`,
+   `audio/mp4`; the old WAV encoder is a fallback for browsers without usable
+   MediaRecorder support.
 5. Registration uses direct upload for the pending take when available, falling
-   back to base64 JSON only if direct upload fails. API stores retained audio
-   and starts voice extraction after registration.
+   back to base64 JSON only for small transient upload failures. HTTP 413, 422,
+   auth, permission, or expired-target failures must not retry through base64.
+   API stores retained audio as normalized WAV for analysis/edit/playback
+   consistency and starts voice extraction after registration.
 6. Extracted pitch material becomes a candidate or registered track. If the
    target slot already had score/imported/generated material, the active
    material is archived before the recording replaces it.
@@ -483,11 +495,14 @@ flowchart TD
    user deletes it or starts scoring. The pending take is browser-local and
    expires on the same 30-minute temporary retention window as track recording.
 5. After the user starts scoring, the browser submits recorded audio by
-   temporary direct upload when available, or falls back to base64 JSON; it may
-   also submit `performance_events`.
+   temporary direct upload when available, or falls back to base64 JSON only
+   under the same small transient-failure rule used by track recording. The
+   actual `performance_filename` reflects the Blob container extension.
 6. API stores a scoring job and returns quickly. The engine queue converts
    submitted performance events or uploaded audio to the internal pitch-event
-   adapter.
+   adapter. Uploaded scoring audio is first normalized through the shared
+   voice-analysis WAV decode path, so compressed browser recordings and direct
+   audio uploads are not passed straight to the WAV-only voice transcriber.
 7. Scoring compares those events with registered arrangement regions, preserving
    public answer-region focus IDs through the internal adapter boundary.
 8. Report summaries appear in the studio/practice feed after activity polling;

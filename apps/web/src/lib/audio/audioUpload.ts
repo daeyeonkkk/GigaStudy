@@ -1,4 +1,4 @@
-export const AUDIO_UPLOAD_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.flac'] as const
+export const AUDIO_UPLOAD_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.mp4', '.aac', '.ogg', '.webm', '.flac'] as const
 
 const AUDIO_UPLOAD_EXTENSION_SET = new Set<string>(AUDIO_UPLOAD_EXTENSIONS)
 
@@ -36,9 +36,14 @@ function contentTypeFromExtension(extension: string): string {
     case '.mp3':
       return 'audio/mpeg'
     case '.m4a':
+    case '.mp4':
       return 'audio/mp4'
+    case '.aac':
+      return 'audio/aac'
     case '.ogg':
       return 'audio/ogg'
+    case '.webm':
+      return 'audio/webm'
     case '.flac':
       return 'audio/flac'
     default:

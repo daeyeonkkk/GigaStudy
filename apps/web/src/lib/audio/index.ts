@@ -1,5 +1,4 @@
 export * from './audioContext'
 export * from './audioUpload'
-export * from './dataUrl'
 export * from './microphoneRecorder'
 export * from './wavEncoding'

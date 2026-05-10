@@ -388,6 +388,24 @@
   text-align: left;
 }
 
+.launch-recent__item-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.launch-recent__item-main strong,
+.launch-recent__item-main span {
+  overflow-wrap: anywhere;
+}
+
 .launch-recent__item:hover {
   border-color: #082fbd;
   background: #f0f4ff;
@@ -417,21 +435,31 @@
 .launch-studio-gate {
   display: grid;
   gap: 8px;
-  padding: 12px;
-  border: 1px solid #8ea0b0;
-  border-radius: 6px;
-  background: #f8fafb;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid #c8d1d8;
 }
 
 .launch-studio-gate label {
   display: grid;
   gap: 4px;
+  min-width: 0;
   color: #17212b;
   font-size: 0.82rem;
   font-weight: 800;
 }
 
+.launch-studio-gate__entry-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+
 .launch-studio-gate input {
+  width: 100%;
+  min-width: 0;
   min-height: 38px;
   border: 1px solid #aeb8c1;
   border-radius: 4px;
@@ -442,6 +470,9 @@
 .launch-studio-gate__actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: max-content;
 }
 
 .launch-studio-gate__actions button:not(.app-button) {
@@ -486,5 +517,13 @@
   .launch-actions,
   .launch-statusbar {
     grid-template-columns: 1fr;
+  }
+
+  .launch-studio-gate__entry-row {
+    grid-template-columns: 1fr;
+  }
+
+  .launch-studio-gate__actions {
+    justify-content: flex-start;
   }
 }

@@ -119,7 +119,8 @@
   left: 0;
   z-index: 8;
   display: grid;
-  grid-row: 1 / 3;
+  grid-column: 1;
+  grid-row: 1;
   grid-template-rows: auto auto auto;
   align-content: start;
   gap: 8px;
@@ -276,6 +277,8 @@
 }
 
 .track-card__region-lane {
+  grid-column: 2;
+  grid-row: 1;
   position: relative;
   min-height: var(--lane-min-height, 94px);
   padding: 12px;
@@ -377,28 +380,55 @@
   min-height: 56px;
 }
 
-.track-card__controls {
-  display: grid;
-  grid-template-columns: auto auto;
-  justify-content: start;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-  padding: 8px 12px;
-  border-top: 1px solid #d8dde2;
-  background: #ffffff;
+.track-card__row-scroll {
+  position: sticky;
+  left: var(--track-header-width);
+  z-index: 7;
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+  width: min(100%, calc(100vw - var(--track-header-width) - 64px));
+  max-width: calc(100vw - var(--track-header-width) - 64px);
+  min-width: 180px;
+  height: 18px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
+  background: #ffffff;
+}
+
+.track-card__row-scroll span {
+  display: block;
+  width: var(--timeline-width, 900px);
+  height: 1px;
+}
+
+.track-card__controls {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: end;
+  justify-content: stretch;
+  gap: 6px;
+  align-items: start;
+  min-width: 0;
+  padding: 8px 12px 10px 48px;
+  border-right: 1px solid #c5ccd2;
+  background: #f3f5f6;
 }
 
 .track-card__primary-actions,
 .track-card__secondary-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 5px;
   align-items: center;
   min-width: 0;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .track-card__secondary-actions {
@@ -905,14 +935,31 @@
     padding: 10px;
   }
 
+  .track-card__region-lane,
+  .track-card__row-scroll,
+  .track-card__controls {
+    grid-column: 1;
+  }
+
+  .track-card__row-scroll {
+    position: static;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
   .track-card__state {
     padding-left: 48px;
   }
 
   .track-card__controls {
+    position: static;
     grid-template-columns: 1fr;
     gap: 6px;
-    overflow-x: visible;
+    padding: 8px 10px;
+    border-top: 1px solid #d8dde2;
+    border-right: 0;
+    background: #ffffff;
   }
 
   .track-card__primary-actions,

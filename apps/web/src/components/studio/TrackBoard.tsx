@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, UIEvent } from 'react'
 
 import { getRecordingLevelPercent } from '../../lib/audio'
 import {
@@ -477,8 +477,56 @@ export function TrackBoard({
   } as CSSProperties
   const gridSeconds = getGridSeconds(bpm)
   const timelineScrollRef = useRef<HTMLDivElement | null>(null)
+  const trackScrollbarRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const syncingTimelineScrollRef = useRef(false)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+
+  const setTrackScrollbarRef = useCallback((slotId: number, element: HTMLDivElement | null) => {
+    if (element) {
+      trackScrollbarRefs.current.set(slotId, element)
+    } else {
+      trackScrollbarRefs.current.delete(slotId)
+    }
+  }, [])
+
+  const syncTimelineScroll = useCallback((scrollLeft: number, source: 'global' | number) => {
+    if (syncingTimelineScrollRef.current) {
+      return
+    }
+    syncingTimelineScrollRef.current = true
+    if (source !== 'global') {
+      const globalScroll = timelineScrollRef.current
+      if (globalScroll && Math.abs(globalScroll.scrollLeft - scrollLeft) > 1) {
+        globalScroll.scrollLeft = scrollLeft
+      }
+    }
+    trackScrollbarRefs.current.forEach((scrollbar, slotId) => {
+      if (source === slotId) {
+        return
+      }
+      if (Math.abs(scrollbar.scrollLeft - scrollLeft) > 1) {
+        scrollbar.scrollLeft = scrollLeft
+      }
+    })
+    window.requestAnimationFrame(() => {
+      syncingTimelineScrollRef.current = false
+    })
+  }, [])
+
+  const handleGlobalTimelineScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      syncTimelineScroll(event.currentTarget.scrollLeft, 'global')
+    },
+    [syncTimelineScroll],
+  )
+
+  const handleTrackScrollbarScroll = useCallback(
+    (slotId: number, event: UIEvent<HTMLDivElement>) => {
+      syncTimelineScroll(event.currentTarget.scrollLeft, slotId)
+    },
+    [syncTimelineScroll],
+  )
 
   const focusedRegionExists = focusedRegionId
     ? regions.some((region) => region.region_id === focusedRegionId)
@@ -522,10 +570,11 @@ export function TrackBoard({
       })
       if (Math.abs(scrollElement.scrollLeft - nextScrollLeft) > 2) {
         scrollElement.scrollLeft = nextScrollLeft
+        syncTimelineScroll(nextScrollLeft, 'global')
       }
     })
     return () => window.cancelAnimationFrame(animationFrameId)
-  }, [bpm, followPlayhead, playheadSeconds, timelineBounds])
+  }, [bpm, followPlayhead, playheadSeconds, syncTimelineScroll, timelineBounds])
 
   return (
     <section className={`studio-tracks studio-tracks--${mode}`} aria-label={isEditorMode ? '구간 편집기' : '6트랙 스튜디오'}>
@@ -538,7 +587,12 @@ export function TrackBoard({
         </div>
       </div>
 
-      <div className="track-timeline-scroll" ref={timelineScrollRef} style={timelineStyle}>
+      <div
+        className="track-timeline-scroll"
+        ref={timelineScrollRef}
+        style={timelineStyle}
+        onScroll={handleGlobalTimelineScroll}
+      >
         <div className="arrangement-ruler" aria-hidden="true">
           {measureStarts.map((measure) => (
             <span
@@ -738,6 +792,18 @@ export function TrackBoard({
               </div>
 
               {!isEditorMode ? (
+                <div
+                  aria-label={`${formatTrackName(track.name)} 타임라인 스크롤`}
+                  className="track-card__row-scroll"
+                  ref={(element) => setTrackScrollbarRef(track.slot_id, element)}
+                  role="group"
+                  onScroll={(event) => handleTrackScrollbarScroll(track.slot_id, event)}
+                >
+                  <span aria-hidden="true" />
+                </div>
+              ) : null}
+
+              {!isEditorMode ? (
               <div className="track-card__controls">
                 <div className="track-card__primary-actions">
                   <button
@@ -751,7 +817,7 @@ export function TrackBoard({
                     onClick={() => onRecord(track)}
                   >
                     <span aria-hidden="true">{isRecording ? '■' : isCountingIn || isSettingUpRecording ? '×' : '●'}</span>
-                    {isRecording ? '녹음 중' : isCountingIn || isSettingUpRecording ? '취소' : '녹음'}
+                    {isRecording ? '녹음 중' : isCountingIn || isSettingUpRecording ? '완료' : '녹음'}
                   </button>
                   <label className={`app-button app-button--secondary track-upload ${trackEditDisabled ? 'is-disabled' : ''}`}>
                     <span aria-hidden="true">↑</span>

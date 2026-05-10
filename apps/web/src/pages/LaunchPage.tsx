@@ -319,6 +319,9 @@ export function LaunchPage() {
   }
 
   function selectStudioFromList(studio: StudioListItem) {
+    if (selectedStudioId === studio.studio_id) {
+      return
+    }
     setSelectedStudioId(studio.studio_id)
     setSelectedStudioPassword('')
     setSelectedStudioMessage(null)
@@ -606,50 +609,58 @@ export function LaunchPage() {
               다시 확인
             </button>
           </div>
-          {recentStudios.map((studio) => (
-            <button
+          {recentStudios.map((studio) => {
+            const isSelected = selectedStudioId === studio.studio_id
+            return (
+            <article
               key={studio.studio_id}
               className={`launch-recent__item${selectedStudioId === studio.studio_id ? ' is-selected' : ''}`}
-              type="button"
-              onClick={() => selectStudioFromList(studio)}
             >
-              <strong>{studio.title}</strong>
-              <span>
-                {studio.bpm} BPM | {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} |
-                등록 {studio.registered_track_count}/6 | 리포트 {studio.report_count}
-              </span>
-            </button>
-          ))}
-          {selectedStudio ? (
-            <div className="launch-studio-gate" role="group" aria-label={`${selectedStudio.title} 입장 또는 삭제`}>
-              <strong>{selectedStudio.title}</strong>
-              <label>
-                <span>비밀번호</span>
-                <input
-                  type="password"
-                  value={selectedStudioPassword}
-                  onChange={(event) => {
-                    setSelectedStudioPassword(event.target.value)
-                    setSelectedStudioMessage(null)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      void enterSelectedStudio()
-                    }
-                  }}
-                />
-              </label>
-              <div className="launch-studio-gate__actions">
-                <button className="app-button" type="button" onClick={() => void enterSelectedStudio()}>
-                  진입
-                </button>
-                <button type="button" onClick={() => void deactivateSelectedStudio()}>
-                  삭제
-                </button>
-              </div>
-              {selectedStudioMessage ? <p>{selectedStudioMessage}</p> : null}
-            </div>
-          ) : null}
+              <button
+                className="launch-recent__item-main"
+                type="button"
+                onClick={() => selectStudioFromList(studio)}
+              >
+                <strong>{studio.title}</strong>
+                <span>
+                  {studio.bpm} BPM | {studio.time_signature_numerator ?? 4}/{studio.time_signature_denominator ?? 4} |
+                  등록 {studio.registered_track_count}/6 | 리포트 {studio.report_count}
+                </span>
+              </button>
+              {isSelected && selectedStudio ? (
+                <div className="launch-studio-gate" role="group" aria-label={`${selectedStudio.title} 입장 또는 삭제`}>
+                  <div className="launch-studio-gate__entry-row">
+                    <label>
+                      <span>비밀번호</span>
+                      <input
+                        type="password"
+                        value={selectedStudioPassword}
+                        onChange={(event) => {
+                          setSelectedStudioPassword(event.target.value)
+                          setSelectedStudioMessage(null)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            void enterSelectedStudio()
+                          }
+                        }}
+                      />
+                    </label>
+                    <div className="launch-studio-gate__actions">
+                      <button className="app-button" type="button" onClick={() => void enterSelectedStudio()}>
+                        진입
+                      </button>
+                      <button type="button" onClick={() => void deactivateSelectedStudio()}>
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                  {selectedStudioMessage ? <p>{selectedStudioMessage}</p> : null}
+                </div>
+              ) : null}
+            </article>
+            )
+          })}
         </section>
       ) : null}
     </main>

@@ -253,6 +253,7 @@ export function PracticePage() {
     loadState,
     registeredSlotIds,
     registeredTracks,
+    reloadStudio,
     setStudio,
     studio,
   } = useStudioResource(
@@ -361,6 +362,7 @@ export function PracticePage() {
   if (loadState.phase === 'loading') {
     return (
       <StudioRouteState
+        message={loadState.message}
         pulseCount={6}
         title="연습 화면을 준비하는 중입니다"
         tone="불러오는 중"
@@ -371,10 +373,12 @@ export function PracticePage() {
   if (loadState.phase === 'error' || !studio) {
     return (
       <StudioRouteState
+        actionLabel="지금 다시 확인"
         homeLabel="홈"
         message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
+        onAction={reloadStudio}
         title="연습 모드를 열 수 없습니다"
-        tone="오류"
+        tone={loadState.phase === 'error' && loadState.retrying ? '재시도 중' : '오류'}
       />
     )
   }

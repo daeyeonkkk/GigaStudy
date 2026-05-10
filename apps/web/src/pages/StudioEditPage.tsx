@@ -51,6 +51,7 @@ export function StudioEditPage() {
     loadState,
     pendingCandidates,
     registeredTracks,
+    reloadStudio,
     setStudio,
     studio,
     visibleExtractionJobs,
@@ -270,6 +271,7 @@ export function StudioEditPage() {
   if (loadState.phase === 'loading') {
     return (
       <StudioRouteState
+        message={loadState.message}
         pulseCount={6}
         title="구간 편집 화면을 준비하는 중입니다"
         tone="불러오는 중"
@@ -280,10 +282,12 @@ export function StudioEditPage() {
   if (loadState.phase === 'error' || !studio) {
     return (
       <StudioRouteState
+        actionLabel="지금 다시 확인"
         homeLabel="홈으로"
         message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
+        onAction={reloadStudio}
         title="구간 편집 화면을 열 수 없습니다"
-        tone="오류"
+        tone={loadState.phase === 'error' && loadState.retrying ? '재시도 중' : '오류'}
       />
     )
   }

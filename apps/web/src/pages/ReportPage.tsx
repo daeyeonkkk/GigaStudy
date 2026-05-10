@@ -4,6 +4,13 @@ import { Link, useParams } from 'react-router-dom'
 import { StudioPurposeNav } from '../components/studio/StudioPurposeNav'
 import { getScoringReport, getStudio } from '../lib/api'
 import {
+  buildApiLoadingNotice,
+  buildApiFailureNotice,
+  buildApiRetryNotice,
+  getApiRetryDelayMs,
+  shouldRetryApiRequest,
+} from '../lib/apiRetry'
+import {
   describeReferences,
   formatTrackName,
   formatNullableSeconds,
@@ -16,9 +23,9 @@ import type { ReportIssue, ScoringReport, Studio, TrackSlot } from '../types/stu
 import './ReportPage.css'
 
 type LoadState =
-  | { phase: 'loading' }
+  | { phase: 'loading'; message: string }
   | { phase: 'ready' }
-  | { phase: 'error'; message: string }
+  | { phase: 'error'; message: string; retrying: boolean }
 
 type MetricCard = {
   label: string
@@ -141,13 +148,17 @@ function getIssueFocusPath(studioId: string, issue: ReportIssue): string | null 
 }
 
 function ReportRouteState({
+  actionLabel,
   eyebrow,
+  onAction,
   title,
   body,
   to,
   buttonLabel,
 }: {
+  actionLabel?: string
   eyebrow: string
+  onAction?: () => void
   title: string
   body?: string
   to?: string
@@ -158,10 +169,19 @@ function ReportRouteState({
       <p className="eyebrow">{eyebrow}</p>
       <h1>{title}</h1>
       {body ? <p>{body}</p> : null}
-      {to && buttonLabel ? (
-        <Link className="app-button" to={to}>
-          {buttonLabel}
-        </Link>
+      {onAction || (to && buttonLabel) ? (
+        <div className="report-route-state__actions">
+          {onAction ? (
+            <button className="app-button" type="button" onClick={onAction}>
+              {actionLabel ?? '다시 시도'}
+            </button>
+          ) : null}
+          {to && buttonLabel ? (
+            <Link className="app-button app-button--secondary" to={to}>
+              {buttonLabel}
+            </Link>
+          ) : null}
+        </div>
       ) : null}
     </main>
   )
@@ -171,41 +191,88 @@ export function ReportPage() {
   const { studioId, reportId } = useParams()
   const [studio, setStudio] = useState<Studio | null>(null)
   const [report, setReport] = useState<ScoringReport | null>(null)
-  const [loadState, setLoadState] = useState<LoadState>({ phase: 'loading' })
+  const [loadState, setLoadState] = useState<LoadState>({
+    phase: 'loading',
+    message: buildApiLoadingNotice('채점 리포트').message,
+  })
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let ignore = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+    const clearRetryTimer = () => {
+      if (retryTimer !== null) {
+        clearTimeout(retryTimer)
+        retryTimer = null
+      }
+    }
 
     if (!studioId || !reportId) {
       return () => {
         ignore = true
+        clearRetryTimer()
       }
     }
 
-    Promise.all([
-      getStudio(studioId, { view: 'practice' }),
-      getScoringReport(studioId, reportId),
-    ])
-      .then(([nextStudio, nextReport]) => {
-        if (!ignore) {
-          setStudio(nextStudio)
-          setReport(nextReport)
-          setLoadState({ phase: 'ready' })
-        }
-      })
-      .catch((error) => {
-        if (!ignore) {
-          setLoadState({
-            phase: 'error',
-            message: error instanceof Error ? error.message : '리포트를 불러오지 못했습니다.',
-          })
-        }
-      })
+    const loadReport = (attemptIndex: number) => {
+      setLoadState((current) =>
+        attemptIndex === 0 || current.phase !== 'error'
+          ? {
+              phase: 'loading',
+              message: buildApiLoadingNotice('채점 리포트', attemptIndex > 0).message,
+            }
+          : { ...current, retrying: true },
+      )
+
+      Promise.all([
+        getStudio(studioId, { view: 'practice' }),
+        getScoringReport(studioId, reportId),
+      ])
+        .then(([nextStudio, nextReport]) => {
+          if (!ignore) {
+            clearRetryTimer()
+            setStudio(nextStudio)
+            setReport(nextReport)
+            setLoadState({ phase: 'ready' })
+          }
+        })
+        .catch((error) => {
+          if (ignore) {
+            return
+          }
+          if (!shouldRetryApiRequest(error)) {
+            const notice = buildApiFailureNotice('채점 리포트', error)
+            setLoadState({ phase: 'error', message: notice.message, retrying: false })
+            return
+          }
+          const delayMs = getApiRetryDelayMs(attemptIndex)
+          const notice = buildApiRetryNotice('채점 리포트', attemptIndex, delayMs, error)
+          setLoadState(
+            attemptIndex >= 2
+              ? { phase: 'error', message: notice.message, retrying: true }
+              : { phase: 'loading', message: notice.message },
+          )
+          clearRetryTimer()
+          retryTimer = setTimeout(() => loadReport(attemptIndex + 1), delayMs)
+        })
+    }
+
+    loadReport(0)
 
     return () => {
       ignore = true
+      clearRetryTimer()
     }
-  }, [reportId, studioId])
+  }, [reloadKey, reportId, studioId])
+
+  function reloadReport() {
+    setLoadState({
+      phase: 'loading',
+      message: buildApiLoadingNotice('채점 리포트', true).message,
+    })
+    setReloadKey((currentKey) => currentKey + 1)
+  }
 
   if (!studioId) {
     return (
@@ -220,15 +287,23 @@ export function ReportPage() {
   }
 
   if (loadState.phase === 'loading') {
-    return <ReportRouteState eyebrow="불러오는 중" title="리포트를 불러오는 중입니다" />
+    return (
+      <ReportRouteState
+        eyebrow="불러오는 중"
+        title="리포트를 불러오는 중입니다"
+        body={loadState.message}
+      />
+    )
   }
 
   if (loadState.phase === 'error' || !studio || !report) {
     return (
       <ReportRouteState
-        eyebrow="오류"
+        actionLabel="지금 다시 확인"
+        eyebrow={loadState.phase === 'error' && loadState.retrying ? '재시도 중' : '오류'}
         title="리포트를 찾을 수 없습니다"
         body={loadState.phase === 'error' ? loadState.message : '존재하지 않는 리포트입니다.'}
+        onAction={reloadReport}
         to={studioId ? `/studios/${studioId}` : '/'}
         buttonLabel="스튜디오로"
       />

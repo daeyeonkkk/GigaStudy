@@ -112,6 +112,33 @@ the same change.
   stored by the browser after login. Static admin tokens remain script/emergency
   fallback only.
 
+## API Feedback And Recovery
+
+- Every API-backed user flow must have an explicit lifecycle in the UI:
+  initial loading, in-progress work, success, delayed retry, excessive failure,
+  and manual retry when the user can reasonably act.
+- Page-entry data such as studio detail, practice state, edit state, scoring
+  reports, and public studio list should start loading as soon as the route
+  opens. Transient failures should retry with bounded backoff while the user
+  remains on the route.
+- After repeated page-entry failures, the route may show a failure state, but it
+  should keep automatic recovery alive and expose a "try now" control. The user
+  should not need a full page refresh to recover from a temporary API outage.
+- User-initiated mutations should show a specific pending message before the
+  request is sent and a specific success or failure message when it settles.
+  These messages should name the musical object or workflow being changed, not
+  just say "request failed".
+- Lightweight background refreshes may use compact notice lines instead of
+  blocking screens, but failures must not be silent when they affect visible
+  data, candidate review, playback material, scoring reports, or registration
+  state.
+- Retry behavior should be policy-driven and shared. Do not hardcode one-off
+  timers or messages for a single endpoint when the same route/data-loading
+  contract applies elsewhere.
+- Automatic retry is for transient failures. Validation, permission, missing
+  resource, conflict, and upload-size errors should stop with actionable
+  feedback instead of looping forever.
+
 ## Musical Normalization
 
 - All input routes should converge through the same musical normalization path:

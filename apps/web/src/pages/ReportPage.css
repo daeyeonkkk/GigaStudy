@@ -230,6 +230,13 @@
   width: fit-content;
 }
 
+.report-route-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 @media (max-width: 760px) {
   .report-document__top,
   .report-hero,

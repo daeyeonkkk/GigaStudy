@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildApiFailureNotice,
   buildApiRetryNotice,
   buildApiSuccessNotice,
   getApiRetryDelayMs,
+  shouldRetryApiRequest,
   getStudioListRetryDelayMs,
 } from '../../apps/web/src/lib/studioListRetry'
 
@@ -37,6 +39,17 @@ describe('studio list retry timing', () => {
 
   it('builds success messages with optional result counts', () => {
     expect(buildApiSuccessNotice('스튜디오 목록', 3).message).toContain('3개')
+  })
+
+  it('does not auto-retry non-recoverable request statuses', () => {
+    expect(shouldRetryApiRequest({ status: 404 })).toBe(false)
+    expect(shouldRetryApiRequest({ status: 413 })).toBe(false)
+    expect(shouldRetryApiRequest({ status: 500 })).toBe(true)
+    expect(shouldRetryApiRequest(new TypeError('network'))).toBe(true)
+  })
+
+  it('builds a stopped failure message when retrying would not help', () => {
+    expect(buildApiFailureNotice('스튜디오', { status: 404 }).tone).toBe('failed')
   })
 })
 

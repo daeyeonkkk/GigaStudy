@@ -16,6 +16,13 @@
 
 .studio-route-state .app-button {
   width: fit-content;
+}
+
+.studio-route-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
   margin-top: 18px;
 }
 

@@ -65,6 +65,7 @@ export function StudioPage() {
     pendingCandidates,
     registeredSlotIds,
     registeredTracks,
+    reloadStudio,
     setStudio,
     studio,
     visibleExtractionJobs,
@@ -142,7 +143,24 @@ export function StudioPage() {
               : current,
           )
         })
-        .catch(() => {
+        .catch((error) => {
+          if (!ignore) {
+            const detail = error instanceof Error ? error.message : undefined
+            setActionState((current) =>
+              current.phase === 'busy'
+                ? {
+                    ...current,
+                    detail: detail
+                      ? `후보 상세 정보를 다시 불러오지 못했습니다. ${detail}`
+                      : '후보 상세 정보를 다시 불러오지 못했습니다.',
+                  }
+                : {
+                    phase: 'warning',
+                    message: '후보 상세 정보를 아직 불러오지 못했습니다. 후보를 열면 다시 확인합니다.',
+                    detail,
+                  },
+            )
+          }
           candidateDetailRequestIdsRef.current.delete(candidate.candidate_id)
         })
     })
@@ -474,6 +492,7 @@ export function StudioPage() {
   if (loadState.phase === 'loading') {
     return (
       <StudioRouteState
+        message={loadState.message}
         pulseCount={6}
         title="트랙을 불러오는 중입니다"
         tone="불러오는 중"
@@ -484,10 +503,12 @@ export function StudioPage() {
   if (loadState.phase === 'error' || !studio) {
     return (
       <StudioRouteState
+        actionLabel="지금 다시 확인"
         homeLabel="홈으로"
         message={loadState.phase === 'error' ? loadState.message : '알 수 없는 오류가 발생했습니다.'}
+        onAction={reloadStudio}
         title="스튜디오를 찾을 수 없습니다"
-        tone="오류"
+        tone={loadState.phase === 'error' && loadState.retrying ? '재시도 중' : '오류'}
       />
     )
   }

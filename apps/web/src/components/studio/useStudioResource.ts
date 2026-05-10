@@ -1,15 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
+import {
+  buildApiLoadingNotice,
+  buildApiFailureNotice,
+  buildApiRetryNotice,
+  getApiRetryDelayMs,
+  shouldRetryApiRequest,
+} from '../../lib/apiRetry'
 import { getStudio, getStudioActivity, recoverStaleDocumentJobs } from '../../lib/api'
 import type { Studio, StudioActivity, TrackExtractionJob } from '../../types/studio'
 import type { StudioActionState } from './studioActionState'
 import { buildJobNotice, buildPollingDelayNotice } from './studioNoticePresenter'
 
 type StudioLoadState =
-  | { phase: 'loading' }
+  | { phase: 'loading'; message: string }
   | { phase: 'ready' }
-  | { phase: 'error'; message: string }
+  | { phase: 'error'; message: string; retrying: boolean }
 
 type StudioResourceState = {
   activeExtractionJobs: Studio['jobs']
@@ -17,6 +24,7 @@ type StudioResourceState = {
   pendingCandidates: Studio['candidates']
   registeredSlotIds: number[]
   registeredTracks: Studio['tracks']
+  reloadStudio: () => void
   setStudio: Dispatch<SetStateAction<Studio | null>>
   studio: Studio | null
   visibleExtractionJobs: Studio['jobs']
@@ -103,12 +111,24 @@ export function useStudioResource(
   view: 'full' | 'studio' | 'edit' | 'practice' = 'full',
 ): StudioResourceState {
   const [studio, setStudio] = useState<Studio | null>(null)
-  const [loadState, setLoadState] = useState<StudioLoadState>({ phase: 'loading' })
+  const [loadState, setLoadState] = useState<StudioLoadState>({
+    phase: 'loading',
+    message: buildApiLoadingNotice('스튜디오').message,
+  })
+  const [reloadKey, setReloadKey] = useState(0)
   const pollingIssueRef = useRef(onPollingIssue)
   const jobActivityRef = useRef(onJobActivity)
   const previousActiveJobCountRef = useRef(0)
   const studioRef = useRef<Studio | null>(null)
   const staleRecoveryAttemptedRef = useRef<Set<string>>(new Set())
+
+  const reloadStudio = useCallback(() => {
+    setLoadState({
+      phase: 'loading',
+      message: buildApiLoadingNotice('스튜디오', true).message,
+    })
+    setReloadKey((currentKey) => currentKey + 1)
+  }, [])
 
   useEffect(() => {
     pollingIssueRef.current = onPollingIssue
@@ -128,40 +148,84 @@ export function useStudioResource(
 
   useEffect(() => {
     let ignore = false
-    const controller = new AbortController()
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let controller: AbortController | null = null
+
+    const clearRetryTimer = () => {
+      if (retryTimer !== null) {
+        clearTimeout(retryTimer)
+        retryTimer = null
+      }
+    }
 
     if (!studioId) {
       return () => {
         ignore = true
+        clearRetryTimer()
       }
     }
 
-    getStudio(studioId, { signal: controller.signal, view })
-      .then((nextStudio) => {
-        if (!ignore) {
-          previousActiveJobCountRef.current = activeJobs(nextStudio.jobs).length
-          setStudio(nextStudio)
-          setLoadState({ phase: 'ready' })
-          const nextActiveJobs = activeJobs(nextStudio.jobs)
-          if (nextActiveJobs.length > 0) {
-            jobActivityRef.current?.(buildJobNotice(nextActiveJobs))
+    const loadStudio = (attemptIndex: number) => {
+      controller?.abort()
+      controller = new AbortController()
+      if (attemptIndex === 0) {
+        setLoadState({
+          phase: 'loading',
+          message: buildApiLoadingNotice('스튜디오').message,
+        })
+      } else {
+        setLoadState((current) =>
+          current.phase === 'error'
+            ? { ...current, retrying: true }
+            : {
+                phase: 'loading',
+                message: buildApiLoadingNotice('스튜디오', true).message,
+              },
+        )
+      }
+
+      getStudio(studioId, { signal: controller.signal, view })
+        .then((nextStudio) => {
+          if (!ignore) {
+            clearRetryTimer()
+            previousActiveJobCountRef.current = activeJobs(nextStudio.jobs).length
+            setStudio(nextStudio)
+            setLoadState({ phase: 'ready' })
+            const nextActiveJobs = activeJobs(nextStudio.jobs)
+            if (nextActiveJobs.length > 0) {
+              jobActivityRef.current?.(buildJobNotice(nextActiveJobs))
+            }
           }
-        }
-      })
-      .catch((error) => {
-        if (!ignore && !controller.signal.aborted) {
-          setLoadState({
-            phase: 'error',
-            message: error instanceof Error ? error.message : '스튜디오를 불러오지 못했습니다.',
-          })
-        }
-      })
+        })
+        .catch((error) => {
+          if (ignore || controller?.signal.aborted) {
+            return
+          }
+          if (!shouldRetryApiRequest(error)) {
+            const notice = buildApiFailureNotice('스튜디오', error)
+            setLoadState({ phase: 'error', message: notice.message, retrying: false })
+            return
+          }
+          const delayMs = getApiRetryDelayMs(attemptIndex)
+          const notice = buildApiRetryNotice('스튜디오', attemptIndex, delayMs, error)
+          setLoadState(
+            attemptIndex >= 2
+              ? { phase: 'error', message: notice.message, retrying: true }
+              : { phase: 'loading', message: notice.message },
+          )
+          clearRetryTimer()
+          retryTimer = setTimeout(() => loadStudio(attemptIndex + 1), delayMs)
+        })
+    }
+
+    loadStudio(0)
 
     return () => {
       ignore = true
-      controller.abort()
+      clearRetryTimer()
+      controller?.abort()
     }
-  }, [studioId, view])
+  }, [reloadKey, studioId, view])
 
   const registeredTracks = useMemo(
     () => studio?.tracks.filter((track) => track.status === 'registered') ?? [],
@@ -319,6 +383,7 @@ export function useStudioResource(
     pendingCandidates,
     registeredSlotIds,
     registeredTracks,
+    reloadStudio,
     setStudio,
     studio,
     visibleExtractionJobs,

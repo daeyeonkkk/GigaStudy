@@ -11,14 +11,16 @@ import {
   setOwnerTokenFromStudioPassword,
   shouldUseBase64UploadFallback,
 } from '../lib/api'
-import { getFileExtension } from '../lib/audio'
 import {
   buildApiLoadingNotice,
+  buildApiFailureNotice,
   buildApiRetryNotice,
   buildApiSuccessNotice,
-  getStudioListRetryDelayMs,
+  getApiRetryDelayMs,
+  shouldRetryApiRequest,
   type ApiRetryNotice,
-} from '../lib/studioListRetry'
+} from '../lib/apiRetry'
+import { getFileExtension } from '../lib/audio'
 import type { Studio, StudioListItem } from '../types/studio'
 import './LaunchPage.css'
 
@@ -115,7 +117,11 @@ export function LaunchPage() {
           if (ignore) {
             return
           }
-          const delayMs = getStudioListRetryDelayMs(attemptIndex)
+          if (!shouldRetryApiRequest(error)) {
+            setRecentNotice(buildApiFailureNotice('스튜디오 목록', error))
+            return
+          }
+          const delayMs = getApiRetryDelayMs(attemptIndex)
           setRecentNotice(buildApiRetryNotice('스튜디오 목록', attemptIndex, delayMs, error))
           clearRetryTimer()
           retryTimer = setTimeout(() => loadRecentStudios(attemptIndex + 1), delayMs)

@@ -35,6 +35,7 @@ import {
   getDurationPercent,
   getFollowScrollLeft,
   getMeasureStarts,
+  getPlayheadFollowLeadPixels,
   getRegionHitAreaStyle,
   getRegionLaneStyle,
   getTimelinePixelForSeconds,
@@ -479,6 +480,7 @@ export function TrackBoard({
   const timelineScrollRef = useRef<HTMLDivElement | null>(null)
   const trackScrollbarRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const syncingTimelineScrollRef = useRef(false)
+  const lockedScrollLeftRef = useRef(0)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
@@ -514,18 +516,63 @@ export function TrackBoard({
     })
   }, [])
 
+  const getPlayheadLockedScrollLeft = useCallback(
+    (scrollElement: HTMLDivElement): number | null => {
+      if (playheadSeconds === null) {
+        return null
+      }
+      const playheadPixels = getTimelinePixelForSeconds(playheadSeconds, timelineBounds, bpm)
+      return getFollowScrollLeft({
+        leadPixels: getPlayheadFollowLeadPixels(scrollElement.clientWidth),
+        playheadPixels,
+        scrollWidth: scrollElement.scrollWidth,
+        viewportWidth: scrollElement.clientWidth,
+      })
+    },
+    [bpm, playheadSeconds, timelineBounds],
+  )
+
+  const lockTimelineScrollToPlayhead = useCallback(
+    (source: 'global' | number = 'global'): boolean => {
+      if (!followPlayhead) {
+        return false
+      }
+      const scrollElement = timelineScrollRef.current
+      if (!scrollElement) {
+        return false
+      }
+      const nextScrollLeft = getPlayheadLockedScrollLeft(scrollElement)
+      if (nextScrollLeft === null) {
+        return false
+      }
+      lockedScrollLeftRef.current = nextScrollLeft
+      if (Math.abs(scrollElement.scrollLeft - nextScrollLeft) > 1) {
+        scrollElement.scrollLeft = nextScrollLeft
+      }
+      syncTimelineScroll(nextScrollLeft, source)
+      return true
+    },
+    [followPlayhead, getPlayheadLockedScrollLeft, syncTimelineScroll],
+  )
+
   const handleGlobalTimelineScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
+      if (lockTimelineScrollToPlayhead('global')) {
+        return
+      }
       syncTimelineScroll(event.currentTarget.scrollLeft, 'global')
     },
-    [syncTimelineScroll],
+    [lockTimelineScrollToPlayhead, syncTimelineScroll],
   )
 
   const handleTrackScrollbarScroll = useCallback(
     (slotId: number, event: UIEvent<HTMLDivElement>) => {
+      if (lockTimelineScrollToPlayhead(slotId)) {
+        return
+      }
       syncTimelineScroll(event.currentTarget.scrollLeft, slotId)
     },
-    [syncTimelineScroll],
+    [lockTimelineScrollToPlayhead, syncTimelineScroll],
   )
 
   const focusedRegionExists = focusedRegionId
@@ -557,27 +604,17 @@ export function TrackBoard({
     if (!followPlayhead || playheadSeconds === null) {
       return
     }
-    const scrollElement = timelineScrollRef.current
-    if (!scrollElement) {
-      return
-    }
     const animationFrameId = window.requestAnimationFrame(() => {
-      const playheadPixels = getTimelinePixelForSeconds(playheadSeconds, timelineBounds, bpm)
-      const nextScrollLeft = getFollowScrollLeft({
-        playheadPixels,
-        scrollWidth: scrollElement.scrollWidth,
-        viewportWidth: scrollElement.clientWidth,
-      })
-      if (Math.abs(scrollElement.scrollLeft - nextScrollLeft) > 2) {
-        scrollElement.scrollLeft = nextScrollLeft
-        syncTimelineScroll(nextScrollLeft, 'global')
-      }
+      lockTimelineScrollToPlayhead('global')
     })
     return () => window.cancelAnimationFrame(animationFrameId)
-  }, [bpm, followPlayhead, playheadSeconds, syncTimelineScroll, timelineBounds])
+  }, [followPlayhead, lockTimelineScrollToPlayhead, playheadSeconds])
 
   return (
-    <section className={`studio-tracks studio-tracks--${mode}`} aria-label={isEditorMode ? '구간 편집기' : '6트랙 스튜디오'}>
+    <section
+      className={`studio-tracks studio-tracks--${mode}${followPlayhead ? ' is-following-playhead' : ''}`}
+      aria-label={isEditorMode ? '구간 편집기' : '6트랙 스튜디오'}
+    >
       <div className="studio-tracks__header">
         <div className="studio-tracks__summary">
           <span>등록 {registeredTracks.length}</span>

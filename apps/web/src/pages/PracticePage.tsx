@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, UIEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ReportFeed } from '../components/studio/ReportFeed'
@@ -19,6 +19,7 @@ import type { StudioActionState } from '../components/studio/studioActionState'
 import {
   getBeatUnitWidthPixels,
   getFollowScrollLeft,
+  getPlayheadFollowLeadPixels,
   getTimelinePixelForSeconds,
   getTimelineWidthPixels,
 } from '../components/studio/TrackBoardTimelineLayout'
@@ -180,30 +181,70 @@ function PracticeWaterfallStage({
     [maxSeconds, minSeconds],
   )
 
-  useEffect(() => {
-    if (!followPlayhead || playheadSeconds === null) {
-      return
-    }
-    const scrollElement = stageRef.current
-    if (!scrollElement) {
-      return
-    }
-    const animationFrameId = window.requestAnimationFrame(() => {
+  const getLockedScrollLeft = useCallback(
+    (scrollElement: HTMLElement): number | null => {
+      if (playheadSeconds === null) {
+        return null
+      }
       const playheadPixels = getTimelinePixelForSeconds(playheadSeconds, timelineBounds, bpm)
-      const nextScrollLeft = getFollowScrollLeft({
+      return getFollowScrollLeft({
+        leadPixels: getPlayheadFollowLeadPixels(scrollElement.clientWidth),
         playheadPixels,
         scrollWidth: scrollElement.scrollWidth,
         viewportWidth: scrollElement.clientWidth,
       })
-      if (Math.abs(scrollElement.scrollLeft - nextScrollLeft) > 2) {
-        scrollElement.scrollLeft = nextScrollLeft
+    },
+    [bpm, playheadSeconds, timelineBounds],
+  )
+
+  const lockScrollToPlayhead = useCallback((): boolean => {
+    if (!followPlayhead) {
+      return false
+    }
+    const scrollElement = stageRef.current
+    if (!scrollElement) {
+      return false
+    }
+    const nextScrollLeft = getLockedScrollLeft(scrollElement)
+    if (nextScrollLeft === null) {
+      return false
+    }
+    if (Math.abs(scrollElement.scrollLeft - nextScrollLeft) > 1) {
+      scrollElement.scrollLeft = nextScrollLeft
+    }
+    return true
+  }, [followPlayhead, getLockedScrollLeft])
+
+  const handleStageScroll = useCallback(
+    (event: UIEvent<HTMLElement>) => {
+      if (!followPlayhead) {
+        return
       }
+      const nextScrollLeft = getLockedScrollLeft(event.currentTarget)
+      if (nextScrollLeft !== null && Math.abs(event.currentTarget.scrollLeft - nextScrollLeft) > 1) {
+        event.currentTarget.scrollLeft = nextScrollLeft
+      }
+    },
+    [followPlayhead, getLockedScrollLeft],
+  )
+
+  useEffect(() => {
+    if (!followPlayhead || playheadSeconds === null) {
+      return
+    }
+    const animationFrameId = window.requestAnimationFrame(() => {
+      lockScrollToPlayhead()
     })
     return () => window.cancelAnimationFrame(animationFrameId)
-  }, [bpm, followPlayhead, playheadSeconds, timelineBounds])
+  }, [followPlayhead, lockScrollToPlayhead, playheadSeconds])
 
   return (
-    <section className="practice-stage" ref={stageRef} aria-label="연습 화면">
+    <section
+      className={`practice-stage${followPlayhead ? ' practice-stage--following' : ''}`}
+      ref={stageRef}
+      aria-label="연습 화면"
+      onScroll={handleStageScroll}
+    >
       <div className="practice-stage__labels" aria-hidden="true">
         <span>{formatDurationSeconds(minSeconds)}</span>
         <span>
@@ -528,7 +569,7 @@ export function PracticePage() {
 
         <PracticeWaterfallStage
           bpm={studio.bpm}
-          followPlayhead={playbackActive}
+          followPlayhead={playbackTimeline !== null}
           maxSeconds={playbackTimeline?.maxSeconds ?? timelineBounds.maxSeconds}
           minSeconds={playbackTimeline?.minSeconds ?? timelineBounds.minSeconds}
           playheadSeconds={playheadSeconds}

@@ -585,7 +585,7 @@ export function StudioPage() {
               focusedRegionId={focusedRegionId}
               playingSlots={playingSlots}
               playheadSeconds={playheadSeconds}
-              followPlayhead={playbackTransportState === 'playing'}
+              followPlayhead={playbackTimeline !== null}
               arrangementRegions={studio.regions}
               activeJobSlotIds={activeJobSlotIds}
               editDisabled={arrangementEditDisabled}

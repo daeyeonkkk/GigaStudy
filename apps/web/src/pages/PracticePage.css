@@ -181,6 +181,11 @@
   overflow: auto;
 }
 
+.practice-stage--following {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .practice-stage__labels {
   display: grid;
   grid-template-columns: auto 1fr auto;

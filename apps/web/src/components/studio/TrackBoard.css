@@ -38,6 +38,10 @@
   padding-bottom: 4px;
 }
 
+.studio-tracks.is-following-playhead .track-timeline-scroll {
+  overflow-x: hidden;
+}
+
 .arrangement-ruler {
   position: relative;
   width: var(--timeline-width, 900px);
@@ -395,6 +399,11 @@
   overflow-y: hidden;
   scrollbar-width: thin;
   background: #ffffff;
+}
+
+.studio-tracks.is-following-playhead .track-card__row-scroll {
+  overflow-x: hidden;
+  pointer-events: none;
 }
 
 .track-card__row-scroll span {

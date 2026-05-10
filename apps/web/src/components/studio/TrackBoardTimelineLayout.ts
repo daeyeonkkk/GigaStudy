@@ -16,6 +16,9 @@ export type MeasureStart = {
 
 const BEAT_UNIT_WIDTH_PIXELS = 50
 const MIN_TIMELINE_WIDTH_PIXELS = 900
+const MIN_PLAYHEAD_LEAD_PIXELS = 110
+const MAX_PLAYHEAD_LEAD_PIXELS = 320
+const PLAYHEAD_LEAD_VIEWPORT_RATIO = 0.32
 
 export function getBeatUnitWidthPixels(): number {
   return BEAT_UNIT_WIDTH_PIXELS
@@ -57,6 +60,16 @@ export function getFollowScrollLeft({
   const maxScrollLeft = Math.max(0, scrollWidth - viewportWidth)
   const effectiveLeadPixels = Math.max(0, Math.min(leadPixels, viewportWidth * 0.4))
   return Math.max(0, Math.min(maxScrollLeft, playheadPixels - effectiveLeadPixels))
+}
+
+export function getPlayheadFollowLeadPixels(viewportWidth: number): number {
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) {
+    return MIN_PLAYHEAD_LEAD_PIXELS
+  }
+  return Math.max(
+    MIN_PLAYHEAD_LEAD_PIXELS,
+    Math.min(MAX_PLAYHEAD_LEAD_PIXELS, viewportWidth * PLAYHEAD_LEAD_VIEWPORT_RATIO),
+  )
 }
 
 export function getMeasureStarts(

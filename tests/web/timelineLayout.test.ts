@@ -4,6 +4,7 @@ import {
   getBeatUnitWidthPixels,
   getFollowScrollLeft,
   getMeasureWidthPixels,
+  getPlayheadFollowLeadPixels,
   getTimelinePixelForSeconds,
   getTimelineWidthPixels,
 } from '../../apps/web/src/components/studio/TrackBoardTimelineLayout'
@@ -64,5 +65,11 @@ describe('timeline layout scale', () => {
         viewportWidth: 500,
       }),
     ).toBe(1100)
+  })
+
+  it('keeps the playhead follow target in a readable viewport band', () => {
+    expect(getPlayheadFollowLeadPixels(240)).toBe(110)
+    expect(getPlayheadFollowLeadPixels(900)).toBe(288)
+    expect(getPlayheadFollowLeadPixels(1400)).toBe(320)
   })
 })

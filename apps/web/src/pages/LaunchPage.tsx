@@ -12,7 +12,13 @@ import {
   shouldUseBase64UploadFallback,
 } from '../lib/api'
 import { getFileExtension } from '../lib/audio'
-import { getStudioListRetryDelayMs } from '../lib/studioListRetry'
+import {
+  buildApiLoadingNotice,
+  buildApiRetryNotice,
+  buildApiSuccessNotice,
+  getStudioListRetryDelayMs,
+  type ApiRetryNotice,
+} from '../lib/studioListRetry'
 import type { Studio, StudioListItem } from '../types/studio'
 import './LaunchPage.css'
 
@@ -73,7 +79,7 @@ export function LaunchPage() {
   const [sourceInputKey, setSourceInputKey] = useState(0)
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
   const [recentStudios, setRecentStudios] = useState<StudioListItem[]>([])
-  const [recentMessage, setRecentMessage] = useState<string | null>('스튜디오 목록을 불러오는 중입니다.')
+  const [recentNotice, setRecentNotice] = useState<ApiRetryNotice>(buildApiLoadingNotice('스튜디오 목록'))
   const [recentReloadKey, setRecentReloadKey] = useState(0)
   const [selectedStudioId, setSelectedStudioId] = useState<string | null>(null)
   const [selectedStudioPassword, setSelectedStudioPassword] = useState('')
@@ -92,25 +98,25 @@ export function LaunchPage() {
 
     function loadRecentStudios(attemptIndex: number) {
       if (attemptIndex === 0) {
-        setRecentMessage('스튜디오 목록을 불러오는 중입니다.')
+        setRecentNotice(buildApiLoadingNotice('스튜디오 목록'))
       }
       listStudios(12, 0)
         .then((items) => {
           if (!ignore) {
             setRecentStudios(items)
-            setRecentMessage(items.length === 0 ? '아직 만든 스튜디오가 없습니다.' : null)
+            setRecentNotice(
+              items.length === 0
+                ? { tone: 'success', message: '아직 만든 스튜디오가 없습니다.' }
+                : buildApiSuccessNotice('스튜디오 목록', items.length),
+            )
           }
         })
-        .catch(() => {
+        .catch((error) => {
           if (ignore) {
             return
           }
           const delayMs = getStudioListRetryDelayMs(attemptIndex)
-          setRecentMessage(
-            attemptIndex <= 1
-              ? '스튜디오 목록 확인이 늦어지고 있습니다. 잠시 뒤 다시 확인합니다.'
-              : `${Math.round(delayMs / 1000)}초 뒤 스튜디오 목록을 다시 확인합니다.`,
-          )
+          setRecentNotice(buildApiRetryNotice('스튜디오 목록', attemptIndex, delayMs, error))
           clearRetryTimer()
           retryTimer = setTimeout(() => loadRecentStudios(attemptIndex + 1), delayMs)
         })
@@ -125,7 +131,7 @@ export function LaunchPage() {
   }, [recentReloadKey])
 
   function refreshRecentStudios() {
-    setRecentMessage('스튜디오 목록을 다시 확인합니다.')
+    setRecentNotice(buildApiLoadingNotice('스튜디오 목록', true))
     setRecentReloadKey((currentKey) => currentKey + 1)
   }
 
@@ -583,11 +589,13 @@ export function LaunchPage() {
         </footer>
       </section>
 
-      {recentStudios.length > 0 || recentMessage ? (
+      {recentStudios.length > 0 || recentNotice ? (
         <section className="launch-recent" aria-label="스튜디오 목록">
           <div>
             <p className="eyebrow">스튜디오 목록</p>
-            {recentMessage ? <p>{recentMessage}</p> : null}
+            <p className={`launch-recent__notice launch-recent__notice--${recentNotice.tone}`}>
+              {recentNotice.message}
+            </p>
             <button className="launch-recent__refresh" type="button" onClick={refreshRecentStudios}>
               다시 확인
             </button>

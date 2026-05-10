@@ -86,6 +86,15 @@ the same change.
 - The public entry page lists active studios so testers can find them, but
   entering or deleting a password-protected studio requires the matching
   password.
+- API-backed entry data must start loading as soon as the page opens, keep
+  retrying while the user remains there, and show dynamic loading, success,
+  delayed-retry, and excessive-failure notices. A manual retry control should
+  trigger an immediate new attempt without disabling the ongoing automatic
+  recovery loop.
+- Production Pages builds must use the deployed API origin, not the Pages origin
+  as an accidental `/api` fallback. If build-time API configuration is absent,
+  the client should prefer the known alpha API origin before trying same-origin
+  requests.
 - User-facing "delete" means deactivate: the studio disappears from the public
   list, but its metadata and assets remain available to admin recovery or
   cleanup.

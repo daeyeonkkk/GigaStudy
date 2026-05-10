@@ -22,8 +22,13 @@ import type {
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 const browserOrigin = typeof window === 'undefined' ? '' : window.location.origin
-const defaultApiBaseUrl = import.meta.env.DEV ? 'http://127.0.0.1:8000' : browserOrigin
-const apiBaseUrl = configuredApiBaseUrl || defaultApiBaseUrl || 'http://127.0.0.1:8000'
+const ALPHA_API_BASE_URL = 'https://gigastudy-api-alpha-387697530936.asia-northeast3.run.app'
+const apiBaseUrlCandidates = resolveApiBaseUrlCandidates(
+  configuredApiBaseUrl,
+  browserOrigin,
+  import.meta.env.DEV,
+)
+const apiBaseUrl = apiBaseUrlCandidates[0] ?? 'http://127.0.0.1:8000'
 const OWNER_TOKEN_STORAGE_KEY = 'gigastudy.ownerToken.v1'
 const ADMIN_SESSION_STORAGE_KEY = 'gigastudy.adminSession.v1'
 const BASE64_UPLOAD_FALLBACK_MAX_BYTES = 4 * 1024 * 1024
@@ -60,6 +65,28 @@ export class ApiRequestError extends Error {
   }
 }
 
+export function resolveApiBaseUrlCandidates(
+  configuredBaseUrl: string | undefined,
+  currentOrigin: string,
+  isDev: boolean,
+): string[] {
+  const candidates: string[] = []
+  if (configuredBaseUrl?.trim()) {
+    candidates.push(configuredBaseUrl.trim())
+  } else if (isDev) {
+    candidates.push('http://127.0.0.1:8000')
+  } else if (isAlphaPagesOrigin(currentOrigin)) {
+    candidates.push(ALPHA_API_BASE_URL)
+  }
+  if (currentOrigin) {
+    candidates.push(currentOrigin)
+  }
+  if (!isDev) {
+    candidates.push(ALPHA_API_BASE_URL)
+  }
+  return Array.from(new Set(candidates.map(normalizeApiBaseUrl).filter(Boolean)))
+}
+
 export function readFileAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -77,7 +104,11 @@ export function readFileAsDataUrl(file: Blob): Promise<string> {
 
 async function readJson<T>(response: Response, fallbackMessage: string): Promise<T> {
   if (response.ok) {
-    return (await response.json()) as T
+    try {
+      return (await response.json()) as T
+    } catch {
+      throw new ApiRequestError('API 응답을 읽지 못했습니다. 잠시 후 다시 시도해 주세요.', response.status)
+    }
   }
 
   let message = fallbackMessage
@@ -109,17 +140,30 @@ async function requestJson<T>(
     }
   }
   try {
-    const response = await fetch(new URL(path, apiBaseUrl), {
-      headers: {
-        'Content-Type': 'application/json',
-        ...ownerHeaders(),
-        ...storedAdminHeaders(),
-        ...options.headers,
-      },
-      ...options,
-    })
-    logTiming()
-    return await readJson<T>(response, fallbackMessage)
+    const bases = apiBaseUrlCandidates.length > 0 ? apiBaseUrlCandidates : [apiBaseUrl]
+    let lastError: unknown = null
+    for (let index = 0; index < bases.length; index += 1) {
+      const baseUrl = bases[index]
+      try {
+        const response = await fetch(new URL(path, baseUrl), {
+          headers: {
+            'Content-Type': 'application/json',
+            ...ownerHeaders(),
+            ...storedAdminHeaders(),
+            ...options.headers,
+          },
+          ...options,
+        })
+        logTiming()
+        return await readJson<T>(response, fallbackMessage)
+      } catch (error) {
+        lastError = error
+        if (!shouldTryNextApiBase(error, index, bases.length)) {
+          throw error
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(fallbackMessage)
   } catch (error) {
     logTiming()
     if (error instanceof TypeError) {
@@ -327,6 +371,29 @@ export async function putDirectUpload(target: DirectUploadTarget, blob: Blob): P
       response.status,
     )
   }
+}
+
+function isAlphaPagesOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname
+    return host === 'gigastudy-alpha.pages.dev' || host.endsWith('.gigastudy-alpha.pages.dev')
+  } catch {
+    return false
+  }
+}
+
+function normalizeApiBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, '')
+}
+
+function shouldTryNextApiBase(error: unknown, index: number, candidateCount: number): boolean {
+  if (index >= candidateCount - 1) {
+    return false
+  }
+  if (error instanceof ApiRequestError) {
+    return error.status === 200
+  }
+  return error instanceof SyntaxError
 }
 
 export function shouldUseBase64UploadFallback(error: unknown, blob: Blob): boolean {

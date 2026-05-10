@@ -339,6 +339,24 @@
   color: #54616c;
 }
 
+.launch-recent__notice {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.launch-recent__notice--loading,
+.launch-recent__notice--retrying {
+  color: #3d566a;
+}
+
+.launch-recent__notice--success {
+  color: #245945;
+}
+
+.launch-recent__notice--failed {
+  color: #8f2a24;
+}
+
 .launch-statusbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

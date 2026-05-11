@@ -498,6 +498,22 @@ export function approveJobTempo(
   )
 }
 
+export function updateStudioTempo(
+  studioId: string,
+  payload: {
+    bpm: number
+  },
+): Promise<Studio> {
+  return requestJson<Studio>(
+    `/api/studios/${studioId}/tempo`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+    '스튜디오 BPM을 저장하지 못했습니다.',
+  )
+}
+
 export function retryExtractionJob(studioId: string, jobId: string): Promise<Studio> {
   return requestJson<Studio>(
     `/api/studios/${studioId}/jobs/${jobId}/retry`,

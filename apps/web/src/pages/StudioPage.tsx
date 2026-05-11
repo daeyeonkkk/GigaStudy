@@ -32,6 +32,7 @@ import {
   getStudioMidiExportUrl,
   restoreTrackArchive,
   splitRegion,
+  updateStudioTempo,
 } from '../lib/api'
 import {
   DEFAULT_METER,
@@ -406,6 +407,51 @@ export function StudioPage() {
     : recordingInteractionLocked
       ? '녹음 중에는 일반 재생을 잠시 멈춥니다.'
       : null
+  const tempoReviewPending = visibleExtractionJobs.some((job) => job.status === 'tempo_review_required')
+  const tempoChangeDisabled =
+    actionBusy ||
+    recordingInteractionLocked ||
+    playbackInteractionLocked ||
+    activeExtractionJobs.length > 0 ||
+    tempoReviewPending
+  const tempoChangeDisabledReason = actionBusy
+    ? '현재 작업이 끝난 뒤 BPM을 바꿀 수 있습니다.'
+    : recordingInteractionLocked
+      ? '녹음 작업을 저장하거나 폐기한 뒤 BPM을 바꿀 수 있습니다.'
+      : playbackInteractionLocked
+        ? '재생을 정지한 뒤 BPM을 바꿀 수 있습니다.'
+        : activeExtractionJobs.length > 0
+          ? '업로드, AI 생성, 채점 작업이 끝난 뒤 BPM을 바꿀 수 있습니다.'
+          : tempoReviewPending
+            ? '업로드 BPM 확인을 먼저 완료해 주세요.'
+            : null
+
+  async function handleUpdateStudioTempo(nextBpm: number) {
+    if (!studio) {
+      return
+    }
+    if (tempoChangeDisabled) {
+      setActionState({
+        phase: 'error',
+        message: tempoChangeDisabledReason ?? '지금은 BPM을 바꿀 수 없습니다.',
+      })
+      return
+    }
+    if (
+      studio.reports.length > 0 &&
+      !window.confirm('기준 BPM을 바꾸면 기존 채점 리포트의 박자 기준이 맞지 않을 수 있습니다. BPM을 보정할까요?')
+    ) {
+      return
+    }
+    await runStudioAction(
+      () => updateStudioTempo(studio.studio_id, { bpm: nextBpm }),
+      '기준 BPM을 보정하는 중입니다.',
+      studio.reports.length > 0
+        ? '기준 BPM을 보정했습니다. 기존 채점 리포트는 다시 채점해야 정확합니다.'
+        : '기준 BPM을 보정했습니다.',
+      ['오디오 위치는 유지하고 박자 기준을 다시 계산하고 있습니다.'],
+    )
+  }
 
   async function handleCopyRegion(region: ArrangementRegion, targetSlotId: number, startSeconds: number) {
     if (!studio) {
@@ -540,6 +586,8 @@ export function StudioPage() {
           studioId={studio.studio_id}
           studioTitle={studio.title}
           syncStepSeconds={syncStepSeconds}
+          tempoChangeDisabled={tempoChangeDisabled}
+          tempoChangeDisabledReason={tempoChangeDisabledReason}
           transportDisabled={transportDisabled}
           transportDisabledReason={transportDisabledReason}
           onMetronomeChange={setMetronomeEnabled}
@@ -551,6 +599,7 @@ export function StudioPage() {
           onStopGlobalPlayback={stopGlobalPlayback}
           onShiftAllSync={(deltaSeconds) => void handleShiftAllSync(deltaSeconds)}
           onSyncStepChange={updateSyncStep}
+          onUpdateTempo={(nextBpm) => void handleUpdateStudioTempo(nextBpm)}
           onTogglePlaybackSelection={togglePlaybackSelection}
           onToggleGlobalPlayback={() => void toggleGlobalPlayback()}
         />

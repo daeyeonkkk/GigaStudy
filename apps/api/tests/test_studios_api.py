@@ -1304,6 +1304,48 @@ def test_studio_bpm_change_endpoint_is_not_exposed(tmp_path: Path, monkeypatch) 
     assert response.status_code == 404
 
 
+def test_update_studio_tempo_rebases_grid_without_moving_audio(tmp_path: Path, monkeypatch) -> None:
+    client = build_client(tmp_path, monkeypatch)
+    create_response = client.post(
+        "/api/studios",
+        json={
+            "title": "Tempo correction",
+            "bpm": 120,
+            "start_mode": "blank",
+        },
+    )
+    studio_id = create_response.json()["studio_id"]
+    original_payload = upload_musicxml_track(client, studio_id).json()
+    original_region = original_payload["regions"][0]
+    original_events = original_region["pitch_events"]
+
+    response = client.patch(
+        f"/api/studios/{studio_id}/tempo",
+        json={"bpm": 60},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["bpm"] == 60
+    rebased_region = payload["regions"][0]
+    rebased_events = rebased_region["pitch_events"]
+    assert rebased_region["start_seconds"] == original_region["start_seconds"]
+    assert rebased_region["duration_seconds"] == original_region["duration_seconds"]
+    assert [event["label"] for event in rebased_events] == [event["label"] for event in original_events]
+    assert [event["start_seconds"] for event in rebased_events] == [
+        event["start_seconds"] for event in original_events
+    ]
+    assert [event["duration_seconds"] for event in rebased_events] == [
+        event["duration_seconds"] for event in original_events
+    ]
+    assert abs(rebased_events[0]["start_beat"] - 1.0) < 0.0001
+    assert abs(rebased_events[0]["duration_beats"] - 0.5) < 0.0001
+    assert abs(rebased_events[1]["start_beat"] - 1.5) < 0.0001
+    assert abs(rebased_events[1]["duration_beats"] - 0.5) < 0.0001
+    assert rebased_events[1]["measure_index"] == 1
+    assert abs(rebased_events[1]["beat_in_measure"] - 1.5) < 0.0001
+
+
 def test_register_generate_sync_and_score_track(tmp_path: Path, monkeypatch) -> None:
     client = build_client(tmp_path, monkeypatch)
     create_response = client.post(

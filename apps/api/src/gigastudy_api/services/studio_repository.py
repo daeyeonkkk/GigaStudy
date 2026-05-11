@@ -4,6 +4,7 @@ import json
 import hashlib
 import re
 from datetime import UTC, datetime
+from math import isfinite
 from pathlib import Path
 from threading import Lock, RLock
 from typing import Any
@@ -23,11 +24,13 @@ from gigastudy_api.api.schemas.studios import (
     ApproveJobCandidatesRequest,
     ApproveJobTempoRequest,
     CopyRegionRequest,
+    CandidateRegion,
     DirectUploadRequest,
     DirectUploadTarget,
     ExtractionCandidate,
     ExtractionCandidateResponse,
     GenerateTrackRequest,
+    PitchEvent,
     ScoreTrackRequest,
     ScoringReport,
     SaveRegionRevisionRequest,
@@ -47,6 +50,7 @@ from gigastudy_api.api.schemas.studios import (
     UpdatePitchEventRequest,
     UpdateTrackMaterialArchiveRequest,
     UpdateRegionRequest,
+    UpdateStudioTempoRequest,
     UploadTrackRequest,
     VolumeTrackRequest,
     extraction_candidate_response,
@@ -90,6 +94,9 @@ from gigastudy_api.services.engine.audio_mix_export import (
     validate_audio_export_request,
 )
 from gigastudy_api.services.engine.music_theory import (
+    beat_in_measure_from_beat,
+    measure_index_from_beat,
+    seconds_per_beat,
     track_name,
 )
 from gigastudy_api.services.engine.audiveris_document import run_audiveris_document_extraction
@@ -115,6 +122,11 @@ from gigastudy_api.services.studio_upload_commands import StudioUploadCommands
 from gigastudy_api.services.studio_operation_guards import ensure_no_active_extraction_jobs
 from gigastudy_api.services.llm.provider import DeepSeekHarmonyPlan
 from gigastudy_api.services.studio_store import StudioStore, build_studio_store
+from gigastudy_api.services.studio_time import (
+    clamp_studio_duration_seconds,
+    round_studio_seconds,
+    studio_time_precision_beats,
+)
 from gigastudy_api.services.studio_resource_commands import StudioResourceCommands
 from gigastudy_api.services.studio_track_settings import (
     TrackSettingsError,
@@ -173,6 +185,210 @@ def _shift_explicit_regions_for_slot(
         region.sync_offset_seconds = round(region.start_seconds, 4)
         for event in region.pitch_events:
             event.start_seconds = round(event.start_seconds + delta_seconds, 4)
+
+
+def _global_beat_from_seconds(start_seconds: float, *, bpm: int) -> float:
+    beat_seconds = seconds_per_beat(max(1, bpm))
+    return round(max(1.0, 1 + (max(0.0, start_seconds) / beat_seconds)), 4)
+
+
+def _duration_beats_from_seconds(duration_seconds: float, *, bpm: int) -> float:
+    beat_seconds = seconds_per_beat(max(1, bpm))
+    return round(max(studio_time_precision_beats(beat_seconds), duration_seconds / beat_seconds), 4)
+
+
+def _event_measure_index(
+    beat: float,
+    *,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> int:
+    return measure_index_from_beat(
+        beat,
+        time_signature_numerator=time_signature_numerator,
+        time_signature_denominator=time_signature_denominator,
+    )
+
+
+def _event_beat_in_measure(
+    beat: float,
+    *,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> float:
+    return round(
+        beat_in_measure_from_beat(
+            beat,
+            time_signature_numerator=time_signature_numerator,
+            time_signature_denominator=time_signature_denominator,
+        ),
+        4,
+    )
+
+
+def _rebase_pitch_event_to_bpm(
+    event: PitchEvent,
+    *,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+    region_start_seconds: float | None = None,
+) -> PitchEvent:
+    beat_seconds = seconds_per_beat(max(1, bpm))
+    start_seconds = round_studio_seconds(event.start_seconds)
+    duration_seconds = clamp_studio_duration_seconds(event.duration_seconds)
+    global_beat = _global_beat_from_seconds(start_seconds, bpm=bpm)
+    if region_start_seconds is None:
+        start_beat = global_beat
+    else:
+        start_beat = round(
+            max(0.0, 1 + ((start_seconds - round_studio_seconds(region_start_seconds)) / beat_seconds)),
+            4,
+        )
+    return event.model_copy(
+        update={
+            "start_seconds": start_seconds,
+            "duration_seconds": duration_seconds,
+            "start_beat": start_beat,
+            "duration_beats": _duration_beats_from_seconds(duration_seconds, bpm=bpm),
+            "measure_index": _event_measure_index(
+                global_beat,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            ),
+            "beat_in_measure": _event_beat_in_measure(
+                global_beat,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            ),
+        }
+    )
+
+
+def _rebase_arrangement_region_to_bpm(
+    region: ArrangementRegion,
+    *,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> ArrangementRegion:
+    start_seconds = round_studio_seconds(region.start_seconds)
+    pitch_events = sorted(
+        [
+            _rebase_pitch_event_to_bpm(
+                event,
+                bpm=bpm,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+                region_start_seconds=start_seconds,
+            )
+            for event in region.pitch_events
+        ],
+        key=lambda event: (event.start_seconds, event.event_id),
+    )
+    event_end_seconds = max(
+        (event.start_seconds + event.duration_seconds for event in pitch_events),
+        default=start_seconds + region.duration_seconds,
+    )
+    duration_seconds = clamp_studio_duration_seconds(
+        max(round_studio_seconds(region.duration_seconds), event_end_seconds - start_seconds)
+    )
+    return region.model_copy(
+        update={
+            "start_seconds": start_seconds,
+            "duration_seconds": duration_seconds,
+            "sync_offset_seconds": start_seconds,
+            "pitch_events": pitch_events,
+        }
+    )
+
+
+def _rebase_candidate_region_to_bpm(
+    region: CandidateRegion,
+    *,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> CandidateRegion:
+    pitch_events = sorted(
+        [
+            _rebase_pitch_event_to_bpm(
+                event,
+                bpm=bpm,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+                region_start_seconds=None,
+            )
+            for event in region.pitch_events
+        ],
+        key=lambda event: (event.start_seconds, event.event_id),
+    )
+    start_seconds = round_studio_seconds(region.start_seconds)
+    event_end_seconds = max(
+        (event.start_seconds + event.duration_seconds for event in pitch_events),
+        default=start_seconds + region.duration_seconds,
+    )
+    return region.model_copy(
+        update={
+            "start_seconds": start_seconds,
+            "duration_seconds": clamp_studio_duration_seconds(
+                max(round_studio_seconds(region.duration_seconds), event_end_seconds - start_seconds)
+            ),
+            "pitch_events": pitch_events,
+        }
+    )
+
+
+def _track_event_timing_seconds(
+    event: TrackPitchEvent,
+    *,
+    fallback_bpm: int,
+) -> tuple[float, float]:
+    beat_seconds = seconds_per_beat(max(1, fallback_bpm))
+    onset_seconds = (
+        event.onset_seconds
+        if isfinite(event.onset_seconds) and event.onset_seconds > 0
+        else max(0.0, (event.beat - 1) * beat_seconds)
+    )
+    duration_seconds = (
+        event.duration_seconds
+        if isfinite(event.duration_seconds) and event.duration_seconds > 0
+        else event.duration_beats * beat_seconds
+    )
+    return (
+        round_studio_seconds(onset_seconds),
+        clamp_studio_duration_seconds(duration_seconds),
+    )
+
+
+def _rebase_track_pitch_event_to_bpm(
+    event: TrackPitchEvent,
+    *,
+    previous_bpm: int,
+    bpm: int,
+    time_signature_numerator: int,
+    time_signature_denominator: int,
+) -> TrackPitchEvent:
+    onset_seconds, duration_seconds = _track_event_timing_seconds(event, fallback_bpm=previous_bpm)
+    beat = _global_beat_from_seconds(onset_seconds, bpm=bpm)
+    return event.model_copy(
+        update={
+            "onset_seconds": onset_seconds,
+            "duration_seconds": duration_seconds,
+            "beat": beat,
+            "duration_beats": _duration_beats_from_seconds(duration_seconds, bpm=bpm),
+            "measure_index": _event_measure_index(
+                beat,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            ),
+            "beat_in_measure": _event_beat_in_measure(
+                beat,
+                time_signature_numerator=time_signature_numerator,
+                time_signature_denominator=time_signature_denominator,
+            ),
+        }
+    )
 
 
 def _safe_export_filename(title: str) -> str:
@@ -910,6 +1126,97 @@ class StudioRepository:
             background_tasks=background_tasks,
             owner_token=owner_token,
         )
+
+    def update_studio_tempo(
+        self,
+        studio_id: str,
+        request: UpdateStudioTempoRequest,
+        *,
+        owner_token: str | None = None,
+    ) -> Studio:
+        with self._lock:
+            studio = self._load_studio(studio_id)
+            if studio is None:
+                raise HTTPException(status_code=404, detail="Studio not found.")
+            require_studio_access(studio, owner_token)
+            if request.bpm == studio.bpm:
+                return studio
+            if any(job.status == "tempo_review_required" for job in studio.jobs):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Finish the pending BPM review before changing the studio BPM.",
+                )
+            ensure_no_active_extraction_jobs(
+                studio,
+                (track.slot_id for track in studio.tracks),
+                action_label="Studio BPM editing",
+            )
+
+            previous_bpm = studio.bpm
+            timestamp = _now()
+            studio.regions = sync_studio_arrangement_regions(studio)
+            numerator = studio.time_signature_numerator
+            denominator = studio.time_signature_denominator
+            studio.regions = [
+                _rebase_arrangement_region_to_bpm(
+                    region,
+                    bpm=request.bpm,
+                    time_signature_numerator=numerator,
+                    time_signature_denominator=denominator,
+                )
+                for region in studio.regions
+            ]
+            for archive in studio.track_material_archives:
+                archive.region_snapshots = [
+                    _rebase_arrangement_region_to_bpm(
+                        region,
+                        bpm=request.bpm,
+                        time_signature_numerator=numerator,
+                        time_signature_denominator=denominator,
+                    )
+                    for region in archive.region_snapshots
+                ]
+            for candidate in studio.candidates:
+                candidate.events = [
+                    _rebase_track_pitch_event_to_bpm(
+                        event,
+                        previous_bpm=previous_bpm,
+                        bpm=request.bpm,
+                        time_signature_numerator=numerator,
+                        time_signature_denominator=denominator,
+                    )
+                    for event in candidate.events
+                ]
+                if candidate.events and candidate.region is not None:
+                    candidate.region = None
+                elif candidate.region is not None:
+                    candidate.region = _rebase_candidate_region_to_bpm(
+                        candidate.region,
+                        bpm=request.bpm,
+                        time_signature_numerator=numerator,
+                        time_signature_denominator=denominator,
+                    )
+                candidate.updated_at = timestamp
+
+            studio.bpm = request.bpm
+            affected_slot_ids = {
+                region.track_slot_id
+                for region in studio.regions
+                if region.pitch_events or region.audio_source_path
+            }
+            if affected_slot_ids:
+                active_material_version_ids = {
+                    track.slot_id: track.active_material_version_id
+                    for track in studio.tracks
+                    if track.slot_id in affected_slot_ids
+                }
+                self._regions._sync_tracks_for_slots(studio, affected_slot_ids, timestamp=timestamp)
+                for track in studio.tracks:
+                    if track.slot_id in active_material_version_ids:
+                        track.active_material_version_id = active_material_version_ids[track.slot_id]
+            studio.updated_at = timestamp
+            self._save_studio(studio)
+        return studio
 
     def update_sync(
         self,

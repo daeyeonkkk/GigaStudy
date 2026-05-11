@@ -986,6 +986,10 @@ class ApproveJobTempoRequest(BaseModel):
     time_signature_denominator: TimeSignatureDenominator = 4
 
 
+class UpdateStudioTempoRequest(BaseModel):
+    bpm: int = Field(ge=40, le=240)
+
+
 class StudioSeedUploadRequest(SourceKindModel):
     source_kind: SeedSourceKind
     filename: str = Field(min_length=1, max_length=180)

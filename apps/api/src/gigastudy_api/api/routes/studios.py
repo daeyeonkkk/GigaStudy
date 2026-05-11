@@ -37,6 +37,7 @@ from gigastudy_api.api.schemas.studios import (
     TrackVolumeMinimalResponse,
     TrackTuningRenderRequest,
     UpdateTrackMaterialArchiveRequest,
+    UpdateStudioTempoRequest,
     build_studio_response,
     build_track_volume_minimal_response,
 )
@@ -136,6 +137,22 @@ def get_studio_activity(
         owner_token=owner_token,
         enforce_owner=True,
         admin_bypass=admin_bypass,
+    )
+
+
+@router.patch("/{studio_id}/tempo", response_model=StudioResponse)
+def update_studio_tempo(
+    studio_id: str,
+    request: UpdateStudioTempoRequest,
+    owner_token: str | None = Depends(studio_owner_token),
+    repository: StudioRepository = Depends(get_studio_repository),
+) -> StudioResponse:
+    return _studio_response(
+        repository.update_studio_tempo(
+            studio_id,
+            request,
+            owner_token=owner_token,
+        )
     )
 
 

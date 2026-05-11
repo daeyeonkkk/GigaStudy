@@ -23,6 +23,8 @@ type StudioToolbarProps = {
   studioId: string
   studioTitle: string
   syncStepSeconds: number
+  tempoChangeDisabled: boolean
+  tempoChangeDisabledReason: string | null
   transportDisabled: boolean
   transportDisabledReason: string | null
   onMetronomeChange: (enabled: boolean) => void
@@ -34,6 +36,7 @@ type StudioToolbarProps = {
   onStopGlobalPlayback: () => void
   onShiftAllSync: (deltaSeconds: number) => void
   onSyncStepChange: (seconds: number) => void
+  onUpdateTempo: (bpm: number) => void
   onTogglePlaybackSelection: (slotId: number) => void
   onToggleGlobalPlayback: () => void
 }
@@ -64,6 +67,8 @@ export function StudioToolbar({
   studioId,
   studioTitle,
   syncStepSeconds,
+  tempoChangeDisabled,
+  tempoChangeDisabledReason,
   transportDisabled,
   transportDisabledReason,
   onMetronomeChange,
@@ -75,11 +80,17 @@ export function StudioToolbar({
   onStopGlobalPlayback,
   onShiftAllSync,
   onSyncStepChange,
+  onUpdateTempo,
   onTogglePlaybackSelection,
   onToggleGlobalPlayback,
 }: StudioToolbarProps) {
+  const [bpmInput, setBpmInput] = useState(() => String(bpm))
   const [syncStepInput, setSyncStepInput] = useState(() => formatStepInput(syncStepSeconds))
   const [seekDraftSeconds, setSeekDraftSeconds] = useState<number | null>(null)
+
+  useEffect(() => {
+    setBpmInput(String(bpm))
+  }, [bpm])
 
   useEffect(() => {
     setSyncStepInput(formatStepInput(syncStepSeconds))
@@ -108,6 +119,9 @@ export function StudioToolbar({
   const playbackPaused = playbackTransportState === 'paused'
   const playbackIdle = playbackTransportState === 'idle'
   const editControlsDisabled = actionBusy || transportDisabled || !playbackIdle
+  const parsedBpm = Number.parseInt(bpmInput.trim(), 10)
+  const bpmInputValid = /^\d+$/.test(bpmInput.trim()) && parsedBpm >= 40 && parsedBpm <= 240
+  const tempoApplyDisabled = tempoChangeDisabled || !bpmInputValid || parsedBpm === bpm
   const mainPlayLabel = playbackPaused ? '이어 재생' : playbackActive ? '일시정지' : '재생'
 
   function updateSyncStep(rawValue: string) {
@@ -123,6 +137,19 @@ export function StudioToolbar({
     if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
       setSyncStepInput(formatStepInput(syncStepSeconds))
     }
+  }
+
+  function restoreBpmInput() {
+    if (!bpmInputValid) {
+      setBpmInput(String(bpm))
+    }
+  }
+
+  function commitBpmUpdate() {
+    if (tempoApplyDisabled) {
+      return
+    }
+    onUpdateTempo(parsedBpm)
   }
 
   function commitSeek(nextSeconds = seekDraftSeconds) {
@@ -175,7 +202,41 @@ export function StudioToolbar({
         </button>
         <div className="composer-bpm-control" aria-label="스튜디오 BPM">
           <span>BPM</span>
-          <strong>{bpm}</strong>
+          <input
+            aria-label="스튜디오 기준 BPM"
+            aria-invalid={!bpmInputValid}
+            disabled={tempoChangeDisabled}
+            inputMode="numeric"
+            maxLength={3}
+            pattern="[0-9]*"
+            title={tempoChangeDisabled ? tempoChangeDisabledReason ?? undefined : '40-240 사이의 BPM을 입력하세요.'}
+            type="text"
+            value={bpmInput}
+            onBlur={restoreBpmInput}
+            onChange={(event) => setBpmInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                commitBpmUpdate()
+              }
+            }}
+          />
+          <button
+            disabled={tempoApplyDisabled}
+            title={
+              tempoChangeDisabled
+                ? tempoChangeDisabledReason ?? undefined
+                : !bpmInputValid
+                  ? '40-240 사이의 BPM을 입력하세요.'
+                  : parsedBpm === bpm
+                    ? '이미 적용된 BPM입니다.'
+                    : undefined
+            }
+            type="button"
+            onClick={commitBpmUpdate}
+          >
+            적용
+          </button>
         </div>
         <label className="composer-sync-step">
           <span>싱크</span>

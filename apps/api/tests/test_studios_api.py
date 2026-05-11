@@ -1,5 +1,7 @@
 import base64
+from io import BytesIO
 from pathlib import Path
+import wave
 
 import fitz
 from fastapi.testclient import TestClient
@@ -769,6 +771,22 @@ def _performance_event_from_track_event(event: TrackPitchEvent | dict) -> dict:
         "beat_in_measure": payload.get("beat_in_measure"),
         "quality_warnings": payload.get("quality_warnings", []),
     }
+
+
+def _wav_bytes(
+    *,
+    channels: int = 1,
+    sample_width: int = 2,
+    sample_rate: int = 44_100,
+    frame_count: int = 128,
+) -> bytes:
+    output = BytesIO()
+    with wave.open(output, "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"\x00" * frame_count * channels * sample_width)
+    return output.getvalue()
 
 
 def test_blank_studio_has_six_empty_tracks(tmp_path: Path, monkeypatch) -> None:
@@ -1976,7 +1994,7 @@ def test_scoring_audio_extraction_uses_context_aware_plan(tmp_path: Path, monkey
     )
     studio_id = create_response.json()["studio_id"]
     upload_musicxml_track(client, studio_id)
-    encoded = base64.b64encode(b"RIFF....WAVEfmt scoring take").decode("ascii")
+    encoded = base64.b64encode(_wav_bytes()).decode("ascii")
 
     score_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/score",
@@ -2776,7 +2794,7 @@ def test_audio_upload_keeps_source_file_for_track_playback(tmp_path: Path, monke
         },
     )
     studio_id = create_response.json()["studio_id"]
-    audio_bytes = b"RIFF....WAVEfmt test audio"
+    audio_bytes = _wav_bytes()
     encoded = base64.b64encode(audio_bytes).decode("ascii")
 
     upload_response = client.post(
@@ -2966,7 +2984,7 @@ def test_audio_upload_requires_overwrite_confirmation_for_explicit_region(tmp_pa
     )
     studio_id = create_response.json()["studio_id"]
     upload_musicxml_track(client, studio_id)
-    encoded = base64.b64encode(b"RIFF....WAVEfmt replacement audio").decode("ascii")
+    encoded = base64.b64encode(_wav_bytes()).decode("ascii")
 
     blocked_response = client.post(
         f"/api/studios/{studio_id}/tracks/1/upload",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,10 +20,10 @@ def prepare_voice_analysis_wav(source_path: Path, *, timeout_seconds: int = 120)
     """Return a WAV file path that the voice extractor can read."""
 
     suffix = source_path.suffix.lower()
-    if suffix == ".wav":
-        return VoiceAnalysisAudio(path=source_path, converted=False, original_suffix=suffix)
     if not source_path.exists() or not source_path.is_file():
         raise VoiceTranscriptionError("Uploaded audio source was not found.")
+    if suffix == ".wav" and _wav_matches_analysis_contract(source_path):
+        return VoiceAnalysisAudio(path=source_path, converted=False, original_suffix=suffix)
 
     output_path = _temporary_wav_path(source_path)
     command = [
@@ -90,3 +91,18 @@ def _remove_temp_file(path: Path) -> None:
         path.unlink(missing_ok=True)
     except OSError:
         return
+
+
+def _wav_matches_analysis_contract(source_path: Path) -> bool:
+    try:
+        with wave.open(str(source_path), "rb") as wav_file:
+            return (
+                wav_file.getnchannels() == 1
+                and wav_file.getframerate() == 44100
+                and wav_file.getsampwidth() == 2
+                and wav_file.getcomptype() == "NONE"
+            )
+    except (OSError, wave.Error):
+        # Keep the legacy fallback path for malformed synthetic fixtures and
+        # let the downstream voice reader report the final decode problem.
+        return True

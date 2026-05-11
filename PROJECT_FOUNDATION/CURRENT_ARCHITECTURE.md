@@ -222,10 +222,11 @@ is excluded from persistence and remains an adapter detail.
   retries without making cached results part of product truth.
 - `apps/api/src/gigastudy_api/services/engine/audio_decode.py`
   Server-side audio normalization for voice analysis. Track recording uploads
-  may arrive as WAV/MP3/M4A/MP4/AAC/OGG/WEBM/FLAC, but non-WAV files are
-  decoded through ffmpeg into temporary mono 44.1 kHz PCM WAV before the voice
-  engine runs. Studio-start uploads are score/document sources only, not music
-  audio. When a retained audio clip was decoded or aligned, `studio_assets`
+  may arrive as WAV/MP3/M4A/MP4/AAC/OGG/WEBM/FLAC. Compressed containers and
+  WAV files that do not already match the analysis contract are decoded through
+  ffmpeg into temporary mono 44.1 kHz PCM WAV before the voice engine runs.
+  Studio-start uploads are score/document sources only, not music audio. When a
+  retained audio clip was decoded, normalized, or aligned, `studio_assets`
   writes a normalized WAV asset and exposes that path/MIME to playback instead
   of pointing a track at mismatched original bytes. Scoring audio follows the
   same decode path and must not send compressed containers directly to the voice

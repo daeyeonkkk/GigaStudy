@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from gigastudy_api.config import Settings
 from gigastudy_api.services.upload_policy import (
     guess_audio_mime_type,
     validate_track_upload_filename,
@@ -28,3 +29,9 @@ def test_unsupported_audio_upload_is_still_rejected() -> None:
         assert error.status_code == 422
     else:
         raise AssertionError("Expected unsupported audio upload to be rejected.")
+
+
+def test_default_upload_limit_accepts_typical_five_min_wav() -> None:
+    five_minute_stereo_48k_24bit_wav_bytes = 5 * 60 * 48_000 * 2 * 3
+
+    assert Settings().max_upload_bytes >= five_minute_stereo_48k_24bit_wav_bytes

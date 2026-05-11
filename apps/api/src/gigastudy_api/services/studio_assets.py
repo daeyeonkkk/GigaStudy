@@ -334,6 +334,16 @@ class StudioAssetService:
             )
         )
 
+    def _asset_size(self, relative_path: str) -> int:
+        try:
+            path = self._asset_storage.resolve_path(relative_path)
+        except (AssetStorageError, OSError):
+            return 0
+        try:
+            return path.stat().st_size
+        except OSError:
+            return 0
+
     def replace_audio_asset_with_aligned_wav(
         self,
         *,
@@ -343,31 +353,56 @@ class StudioAssetService:
         audio_mime_type: str,
         transcription: VoiceTranscriptionResult,
     ) -> Path:
-        if not transcription.alignment.applied or not relative_audio_path:
+        if not relative_audio_path:
             return source_path
-        aligned_content = build_metronome_aligned_wav_bytes(
-            source_path,
-            transcription.alignment.offset_seconds,
-        )
-        if aligned_content is None:
-            return source_path
-        old_size = source_path.stat().st_size if source_path.exists() else 0
-        self.ensure_capacity(max(0, len(aligned_content) - old_size))
-        try:
-            aligned_path = self._asset_storage.write_direct_upload(
-                relative_path=relative_audio_path,
-                content=aligned_content,
+
+        old_size = self._asset_size(relative_audio_path)
+        aligned_content = (
+            build_metronome_aligned_wav_bytes(
+                source_path,
+                transcription.alignment.offset_seconds,
             )
-        except AssetStorageError as error:
-            raise HTTPException(status_code=500, detail=str(error)) from error
+            if transcription.alignment.applied
+            else None
+        )
+        if aligned_content is not None:
+            self.ensure_capacity(max(0, len(aligned_content) - old_size))
+            try:
+                retained_path = self._asset_storage.write_direct_upload(
+                    relative_path=relative_audio_path,
+                    content=aligned_content,
+                )
+            except AssetStorageError as error:
+                raise HTTPException(status_code=500, detail=str(error)) from error
+            retained_size = len(aligned_content)
+        else:
+            retained_size = source_path.stat().st_size if source_path.exists() else 0
+            if self._asset_path_matches(relative_audio_path, source_path):
+                retained_path = source_path
+            else:
+                self.ensure_capacity(max(0, retained_size - old_size))
+                try:
+                    retained_path = self._asset_storage.write_direct_upload_file(
+                        relative_path=relative_audio_path,
+                        source_path=source_path,
+                    )
+                except AssetStorageError as error:
+                    raise HTTPException(status_code=500, detail=str(error)) from error
         self.register_asset(
             relative_path=relative_audio_path,
             kind="upload",
             filename=source_label,
-            size_bytes=len(aligned_content),
+            size_bytes=retained_size,
             content_type=audio_mime_type,
         )
-        return aligned_path
+        return retained_path
+
+    def _asset_path_matches(self, relative_path: str, source_path: Path) -> bool:
+        try:
+            existing_path = self._asset_storage.resolve_path(relative_path)
+            return existing_path.resolve() == source_path.resolve()
+        except (AssetStorageError, OSError):
+            return False
 
     def persist_voice_analysis_wav(
         self,

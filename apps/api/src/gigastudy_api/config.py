@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     s3_access_key_id: str | None = None
     s3_secret_access_key: str | None = None
     s3_addressing_style: str = "path"
-    max_upload_bytes: int = 15 * 1024 * 1024
+    max_upload_bytes: int = 128 * 1024 * 1024
     studio_soft_limit: int = 300
     studio_hard_limit: int = 500
     asset_warning_bytes: int = 7 * 1024 * 1024 * 1024

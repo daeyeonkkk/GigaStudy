@@ -120,8 +120,9 @@ For alpha deployment on free-plan infrastructure, keep Cloud Run stateless:
 - Default free-plan cleanup keeps pending browser recordings for 30 minutes,
   inactive studio assets for 7 days, and non-pinned track archives to the
   latest 3 per slot.
-- Use `GIGASTUDY_API_MAX_UPLOAD_BYTES` to keep base64 JSON uploads inside the
-  Cloud Run request and memory envelope.
+- Use `GIGASTUDY_API_MAX_UPLOAD_BYTES` as the direct-upload ceiling. Alpha
+  defaults leave room for a practical five-minute WAV; base64 JSON fallback is
+  still reserved for small transient retries only.
 - In S3/R2 mode, `GIGASTUDY_API_ASSET_CACHE_MAX_BYTES` and
   `GIGASTUDY_API_ASSET_CACHE_MAX_AGE_SECONDS` bound the temporary local object
   cache under `GIGASTUDY_API_STORAGE_ROOT`.

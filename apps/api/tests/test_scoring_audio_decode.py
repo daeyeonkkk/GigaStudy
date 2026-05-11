@@ -1,8 +1,10 @@
 from pathlib import Path
 from typing import Any
+import wave
 
 from gigastudy_api.domain.track_events import TrackPitchEvent
-from gigastudy_api.services.engine.audio_decode import VoiceAnalysisAudio
+from gigastudy_api.services.engine import audio_decode
+from gigastudy_api.services.engine.audio_decode import VoiceAnalysisAudio, prepare_voice_analysis_wav
 from gigastudy_api.services.studio_scoring_commands import StudioScoringCommands
 
 
@@ -98,3 +100,57 @@ def test_scoring_asset_uses_shared_wav_decode_path(monkeypatch, tmp_path: Path) 
     assert repository.transcribed_path == analysis_path
     assert cleaned == [VoiceAnalysisAudio(path=analysis_path, converted=True, original_suffix=".webm")]
     assert assets.deleted_asset_path == "uploads/studio-1/5/bass-score-take.webm"
+
+
+def test_voice_analysis_keeps_wav_that_already_matches_contract(tmp_path: Path) -> None:
+    source_path = tmp_path / "voice.wav"
+    _write_silence_wav(source_path, channels=1, sample_width=2, sample_rate=44_100, frame_count=256)
+
+    prepared = prepare_voice_analysis_wav(source_path)
+
+    assert prepared == VoiceAnalysisAudio(path=source_path, converted=False, original_suffix=".wav")
+
+
+def test_voice_analysis_normalizes_stereo_wav_before_extraction(monkeypatch, tmp_path: Path) -> None:
+    source_path = tmp_path / "voice.wav"
+    _write_silence_wav(source_path, channels=2, sample_width=2, sample_rate=48_000, frame_count=256)
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: Any) -> Any:
+        commands.append(command)
+        output_path = Path(command[-1])
+        _write_silence_wav(output_path, channels=1, sample_width=2, sample_rate=44_100, frame_count=128)
+
+        class _Completed:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        return _Completed()
+
+    monkeypatch.setattr(audio_decode.subprocess, "run", fake_run)
+
+    prepared = prepare_voice_analysis_wav(source_path)
+
+    assert prepared.converted is True
+    assert prepared.original_suffix == ".wav"
+    assert prepared.path != source_path
+    assert commands
+    assert "-ac" in commands[0]
+    assert "1" in commands[0]
+
+
+def _write_silence_wav(
+    path: Path,
+    *,
+    channels: int,
+    sample_width: int,
+    sample_rate: int,
+    frame_count: int,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"\x00" * frame_count * channels * sample_width)

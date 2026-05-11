@@ -278,11 +278,12 @@ the same change.
   should carry an idempotency key so retrying the same start data returns the
   existing studio rather than creating a duplicate.
 - Per-track recording-file upload accepts common audio containers
-  (WAV/MP3/M4A/OGG/FLAC). Non-WAV input must be decoded server-side into an
-  analysis WAV before voice transcription, and the retained playback asset must
-  point at a valid WAV when conversion or metronome alignment changed the
-  audio bytes. The low-level voice extractor may remain WAV-only; the upload
-  pipeline owns format normalization.
+  (WAV/MP3/M4A/MP4/AAC/OGG/WEBM/FLAC). Compressed input and WAV files that do
+  not already match the internal mono 44.1 kHz PCM contract must be normalized
+  server-side before voice transcription, and the retained playback asset must
+  point at a valid WAV when conversion, normalization, or metronome alignment
+  changed the audio bytes. The low-level voice extractor may remain WAV-only;
+  the upload pipeline owns format normalization.
 - Studio-start MIDI may register directly when the internal parts behave like
   singer lines after characterization. Track names, channel numbers, and MIDI
   programs are hints, not the source of truth: pitched monophonic parts should
@@ -574,9 +575,10 @@ the same change.
 - Non-pinned track material archives are bounded to the latest 3 snapshots per
   slot. Pinned original score material remains until an explicit admin cleanup
   or permanent studio deletion.
-- Large audio payloads should prefer direct upload. The browser should not
-  decode and re-encode MP3/M4A/OGG/FLAC just to submit a recording file; server
-  audio normalization owns analysis WAV creation.
+- Large audio payloads should prefer direct upload and be accepted up to a
+  practical five-minute WAV budget before failing. The browser should not
+  decode and re-encode MP3/M4A/MP4/AAC/OGG/WEBM/FLAC just to submit a
+  recording file; server audio normalization owns analysis WAV creation.
 - Repeated playback should avoid unnecessary refetch/decode work through
   bounded caches for original audio buffers and short-lived playback-instrument
   configuration.

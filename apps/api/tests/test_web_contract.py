@@ -119,6 +119,46 @@ def test_studio_response_includes_arrangement_regions() -> None:
     assert payload["regions"][0]["pitch_events"][0]["quality_warnings"] == ["range_checked"]
 
 
+def test_candidate_detail_rebuilds_stripped_region_from_internal_events() -> None:
+    candidate = ExtractionCandidate(
+        candidate_id="candidate-stripped-region",
+        suggested_slot_id=4,
+        source_kind="midi",
+        source_label="seed.mid",
+        method="midi_seed_review",
+        confidence=0.8,
+        events=[
+            TrackPitchEvent(
+                label="F3",
+                pitch_midi=53,
+                beat=1,
+                duration_beats=1,
+                onset_seconds=0,
+                duration_seconds=0.5,
+                extraction_method="contract_fixture",
+                source="midi",
+            )
+        ],
+        diagnostics={"event_count": 1},
+        region=CandidateRegion(
+            region_id="candidate-stripped-region-region-1",
+            suggested_slot_id=4,
+            source_kind="midi",
+            source_label="seed.mid",
+            start_seconds=0,
+            duration_seconds=0,
+            pitch_events=[],
+        ),
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+    detail = studio_schemas.extraction_candidate_response(candidate, include_region_events=True)
+
+    assert detail.region.pitch_events[0].label == "F3"
+    assert detail.region.pitch_events[0].track_slot_id == 4
+
+
 def test_studio_payload_persists_explicit_regions_from_internal_events() -> None:
     studio = Studio(
         studio_id="studio-persisted-region-contract",

@@ -39,6 +39,7 @@ import {
   formatSeconds,
   formatTrackName,
   getStudioMeter,
+  hasDeferredCandidateEvents,
 } from '../lib/studio'
 import type {
   ArrangementRegion,
@@ -117,10 +118,9 @@ export function StudioPage() {
     const missingCandidates = pendingCandidates
       .filter(
         (candidate) =>
-          candidate.region.pitch_events.length === 0 &&
+          hasDeferredCandidateEvents(candidate) &&
           !candidateDetailRequestIdsRef.current.has(candidate.candidate_id),
       )
-      .slice(0, 4)
     if (missingCandidates.length === 0) {
       return
     }
@@ -161,6 +161,8 @@ export function StudioPage() {
                   },
             )
           }
+        })
+        .finally(() => {
           candidateDetailRequestIdsRef.current.delete(candidate.candidate_id)
         })
     })

@@ -409,7 +409,10 @@ def build_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
 
 
 def extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:
-    return candidate.region or build_candidate_region(candidate)
+    if candidate.region is not None:
+        if not candidate.events or candidate.region.pitch_events:
+            return candidate.region
+    return sync_extraction_candidate_region(candidate)
 
 
 def sync_extraction_candidate_region(candidate: ExtractionCandidate) -> CandidateRegion:

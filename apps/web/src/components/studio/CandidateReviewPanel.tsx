@@ -3,7 +3,9 @@ import {
   formatSourceLabel,
   formatTrackName,
   getCandidateDecisionSummary,
+  getCandidateExpectedEventCount,
   getPitchedEvents,
+  hasDeferredCandidateEvents,
   statusLabels,
 } from '../../lib/studio'
 import type { ExtractionCandidate, TrackSlot } from '../../types/studio'
@@ -191,22 +193,26 @@ function CandidatePhrasePreview({
 }) {
   const events = getPitchedEvents(candidate.region.pitch_events)
   const eventCount = getCandidateEventCount(candidate)
+  const expectedEventCount = getCandidateExpectedEventCount(candidate)
+  const hasDeferredEvents = hasDeferredCandidateEvents(candidate)
   const firstEvent = events[0]
   const lastEvent = events[events.length - 1]
   const rangeText =
     firstEvent && lastEvent
       ? `${firstEvent.start_beat.toFixed(2)}박부터 ${lastEvent.start_beat.toFixed(2)}박까지`
+      : hasDeferredEvents
+        ? '상세 불러오는 중'
       : '음표 없음'
 
   return (
     <section className="candidate-review__phrase" data-testid={`candidate-region-${candidate.candidate_id}`}>
       <div className="candidate-review__phrase-header">
         <strong>음표 흐름</strong>
-        <span>{eventCount}개</span>
+        <span>{hasDeferredEvents ? expectedEventCount : eventCount}개</span>
       </div>
       <div className="candidate-review__phrase-line">
         {events.length === 0 ? (
-          <p>등록할 음표가 없습니다.</p>
+          <p>{hasDeferredEvents ? '후보 음표를 불러오는 중입니다.' : '등록할 음표가 없습니다.'}</p>
         ) : (
           <p>{decisionSummary.phrasePreview}</p>
         )}
@@ -397,11 +403,12 @@ export function CandidateReviewPanel({
           const allowOverwrite = candidateOverwriteApprovals[candidate.candidate_id] === true
           const decisionSummary = getCandidateDecisionSummary(candidate, targetTrack ?? null, beatsPerMeasure)
           const verdict = getCandidateVerdict(candidate, wouldOverwrite, targetTrack)
+          const hasDeferredEvents = hasDeferredCandidateEvents(candidate)
           const sourcePreviewUrl =
             candidate.job_id && shouldShowSourcePreview(candidate) && getJobSourcePreviewUrl
               ? getJobSourcePreviewUrl(candidate.job_id)
               : null
-          const approveDisabled = busy || targetLocked || (wouldOverwrite && !allowOverwrite)
+          const approveDisabled = busy || targetLocked || hasDeferredEvents || (wouldOverwrite && !allowOverwrite)
 
           return (
             <CandidateCard
@@ -436,6 +443,13 @@ function getCandidateVerdict(
   targetTrack?: TrackSlot,
 ): CandidateVerdict {
   const targetName = formatTrackName(targetTrack?.name ?? `트랙 ${candidate.suggested_slot_id}`)
+  if (hasDeferredCandidateEvents(candidate)) {
+    return {
+      label: '불러오는 중',
+      reason: '음표는 확인됐고, 등록 전에 후보 상세를 가져오는 중입니다.',
+      tone: 'review',
+    }
+  }
   if (candidate.region.pitch_events.length === 0) {
     return {
       label: candidate.source_kind === 'ai' ? '등록 불가' : '다시 확인',

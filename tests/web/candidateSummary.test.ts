@@ -123,6 +123,28 @@ describe('candidate decision summary', () => {
     expect(summary.technical.map((metric) => metric.label)).not.toContain('엔진')
   })
 
+  it('treats stripped summary candidates as deferred detail instead of empty', () => {
+    const summary = getCandidateDecisionSummary(
+      buildCandidate({
+        diagnostics: {
+          event_count: 310,
+          measure_count: 86,
+        },
+        region: {
+          ...buildCandidate().region,
+          pitch_events: [],
+        },
+      }),
+      { ...sopranoTrack, name: 'Baritone', slot_id: 4 },
+      4,
+    )
+
+    expect(summary.title).toBe('후보 상세 불러오는 중')
+    expect(summary.headline).toContain('음표 310개')
+    expect(summary.tags).toContain('상세 불러오는 중')
+    expect(summary.metrics).toContainEqual({ label: '음표', value: '310개' })
+  })
+
   it('keeps generated candidate summaries away from extraction confidence metrics', () => {
     const summary = getCandidateDecisionSummary(
       buildCandidate({

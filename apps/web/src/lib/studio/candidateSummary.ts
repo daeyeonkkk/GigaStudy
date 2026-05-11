@@ -121,6 +121,18 @@ function getCandidateDurationSeconds(candidate: ExtractionCandidate): number {
   return Math.max(...events.map((event) => event.start_seconds + event.duration_seconds))
 }
 
+export function getCandidateExpectedEventCount(candidate: ExtractionCandidate): number {
+  const diagnosticCount = candidate.diagnostics?.event_count
+  if (typeof diagnosticCount === 'number' && Number.isFinite(diagnosticCount)) {
+    return Math.max(0, Math.round(diagnosticCount))
+  }
+  return getPitchedEvents(candidate).length
+}
+
+export function hasDeferredCandidateEvents(candidate: ExtractionCandidate): boolean {
+  return getPitchedEvents(candidate).length === 0 && getCandidateExpectedEventCount(candidate) > 0
+}
+
 function getCandidatePitchRange(candidate: ExtractionCandidate): string {
   const pitchedEvents = getPitchedEvents(candidate)
   if (pitchedEvents.length === 0) {
@@ -137,6 +149,9 @@ function getCandidatePitchRange(candidate: ExtractionCandidate): string {
 export function getCandidatePreviewText(candidate: ExtractionCandidate): string {
   const events = getCandidateEvents(candidate)
   if (events.length === 0) {
+    if (hasDeferredCandidateEvents(candidate)) {
+      return '상세 불러오는 중'
+    }
     return '음표 없음'
   }
   return events
@@ -163,6 +178,7 @@ export function getCandidateDecisionSummary(
   const diagnostics = getCandidateDiagnostics(candidate)
   const reviewHint = getReviewHintSummary(candidate)
   const llmInsight = getGeneratedCandidateInsight(candidate)
+  const expectedEventCount = getCandidateExpectedEventCount(candidate)
   const metrics =
     candidate.source_kind === 'ai'
       ? getGeneratedCandidateMetrics({
@@ -185,6 +201,22 @@ export function getCandidateDecisionSummary(
         ]
 
   if (events.length === 0) {
+    if (expectedEventCount > 0) {
+      const measureCount = getDiagnosticNumber(candidate.diagnostics, 'measure_count')
+      return {
+        title: '후보 상세 불러오는 중',
+        headline: `음표 ${expectedEventCount}개가 확인되었습니다.`,
+        support: '업로드 요약은 준비됐고, 등록 전에 실제 음표 흐름을 불러오는 중입니다.',
+        tags: ['상세 불러오는 중'],
+        phrasePreview: '상세 불러오는 중',
+        metrics: [
+          { label: '음표', value: `${expectedEventCount}개` },
+          { label: '분량', value: measureCount !== null ? `${measureCount}마디` : '확인 중' },
+        ],
+        diagnostics,
+        technical: getTechnicalDiagnostics(candidate),
+      }
+    }
     return {
       title: '빈 후보',
       headline: '등록할 수 있는 음표가 없습니다.',

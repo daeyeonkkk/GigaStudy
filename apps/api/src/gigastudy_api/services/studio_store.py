@@ -290,10 +290,13 @@ class S3StudioStore:
     @_timed_metric("store_load_ms")
     def load_raw(self) -> dict[str, Any]:
         with self._lock:
-            return {
-                studio_id: self._merge_s3_sidecars(studio_id, studio_payload)
-                for studio_id, studio_payload in self._read_index().items()
-            }
+            index = self._read_index()
+            payload: dict[str, Any] = {}
+            for studio_id, index_payload in index.items():
+                studio_payload = self._read_s3_base_payload(studio_id, index_payload)
+                if studio_payload is not None:
+                    payload[studio_id] = self._merge_s3_sidecars(studio_id, studio_payload)
+            return payload
 
     @_timed_metric("store_load_ms")
     def list_raw(
@@ -304,19 +307,22 @@ class S3StudioStore:
         active_status: ActiveStatus = "all",
     ) -> list[tuple[str, Any]]:
         with self._lock:
+            index = self._read_index()
             rows = sorted(
                 [
-                    (studio_id, studio_payload)
-                    for studio_id, studio_payload in self._read_index().items()
-                    if _active_matches(studio_payload, active_status)
+                    (studio_id, index_payload)
+                    for studio_id, index_payload in index.items()
+                    if _active_matches(index_payload, active_status)
                 ],
                 key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
                 reverse=True,
             )
-            return [
-                (studio_id, self._merge_s3_sidecars(studio_id, studio_payload))
-                for studio_id, studio_payload in rows[offset : offset + limit]
-            ]
+            selected: list[tuple[str, Any]] = []
+            for studio_id, index_payload in rows[offset : offset + limit]:
+                studio_payload = self._read_s3_base_payload(studio_id, index_payload)
+                if studio_payload is not None:
+                    selected.append((studio_id, self._merge_s3_sidecars(studio_id, studio_payload)))
+            return selected
 
     @_timed_metric("store_load_ms")
     def list_summary_raw(
@@ -328,12 +334,13 @@ class S3StudioStore:
         active_status: ActiveStatus = "active",
     ) -> list[tuple[str, Any]]:
         with self._lock:
+            index = self._read_index()
             rows = sorted(
                 [
-                    (studio_id, studio_payload)
-                    for studio_id, studio_payload in self._read_index().items()
-                    if _owner_matches(studio_payload, owner_token_hash)
-                    and _active_matches(studio_payload, active_status)
+                    (studio_id, index_payload)
+                    for studio_id, index_payload in index.items()
+                    if _owner_matches(index_payload, owner_token_hash)
+                    and _active_matches(index_payload, active_status)
                 ],
                 key=lambda item: str(item[1].get("updated_at", "")) if isinstance(item[1], dict) else "",
                 reverse=True,
@@ -352,7 +359,10 @@ class S3StudioStore:
     @_timed_metric("store_load_ms")
     def load_one_raw(self, studio_id: str) -> Any | None:
         with self._lock:
-            studio_payload = self._read_index().get(studio_id)
+            index_payload = self._read_index().get(studio_id)
+            if index_payload is None:
+                return None
+            studio_payload = self._read_s3_base_payload(studio_id, index_payload)
             if studio_payload is None:
                 return None
             return self._merge_s3_sidecars(studio_id, studio_payload)
@@ -360,20 +370,34 @@ class S3StudioStore:
     @_timed_metric("store_load_ms")
     def load_activity_raw(self, studio_id: str) -> Any | None:
         with self._lock:
-            studio_payload = self._read_index().get(studio_id)
+            index_payload = self._read_index().get(studio_id)
+            if index_payload is None:
+                return None
+            studio_payload = self._read_s3_base_payload(studio_id, index_payload)
             if studio_payload is None:
                 return None
             payload = dict(studio_payload) if isinstance(studio_payload, dict) else studio_payload
-            candidates = self._read_s3_sidecar(studio_id, "candidates") or []
-            reports = self._read_s3_sidecar(studio_id, "reports") or []
             if isinstance(payload, dict):
-                payload["_activity_counts"] = {
-                    "pending_candidate_count": sum(
+                sidecar_counts = (
+                    index_payload.get("_sidecar_counts", {})
+                    if isinstance(index_payload, dict)
+                    else {}
+                )
+                pending_candidate_count = index_payload.get("pending_candidate_count") if isinstance(index_payload, dict) else None
+                report_count = sidecar_counts.get("reports") if isinstance(sidecar_counts, dict) else None
+                if not isinstance(pending_candidate_count, int):
+                    candidates = self._read_s3_sidecar(studio_id, "candidates") or []
+                    pending_candidate_count = sum(
                         1
                         for candidate in candidates
                         if isinstance(candidate, dict) and candidate.get("status") == "pending"
-                    ),
-                    "report_count": len(reports),
+                    )
+                if not isinstance(report_count, int):
+                    reports = self._read_s3_sidecar(studio_id, "reports") or []
+                    report_count = len(reports)
+                payload["_activity_counts"] = {
+                    "pending_candidate_count": pending_candidate_count,
+                    "report_count": report_count,
                 }
             return payload
 
@@ -385,7 +409,14 @@ class S3StudioStore:
             base_payload: dict[str, Any] = {}
             for studio_id, studio_payload in payload.items():
                 base_studio, reports, candidates, track_material_archives = _split_sidecars(studio_payload)
-                base_payload[studio_id] = base_studio
+                base_payload[studio_id] = _s3_index_summary(
+                    studio_id,
+                    base_studio,
+                    reports=reports,
+                    candidates=candidates,
+                    track_material_archives=track_material_archives,
+                )
+                self._write_s3_base_payload(studio_id, base_studio)
                 self._write_s3_sidecar(studio_id, "reports", reports)
                 self._write_s3_sidecar(studio_id, "candidates", candidates)
                 self._write_s3_sidecar(studio_id, "track_material_archives", track_material_archives)
@@ -397,14 +428,26 @@ class S3StudioStore:
     def save_one_raw(self, studio_id: str, payload: Any) -> None:
         with self._lock:
             raw_payload = self._read_index()
-            existing_payload = raw_payload.get(studio_id)
+            existing_index_payload = raw_payload.get(studio_id)
+            existing_payload = (
+                self._read_s3_base_payload(studio_id, existing_index_payload)
+                if existing_index_payload is not None
+                else None
+            )
             if existing_payload is not None:
                 payload = _merge_concurrent_studio_payload(
                     self._merge_s3_sidecars(studio_id, existing_payload),
                     payload,
                 )
             base_studio, reports, candidates, track_material_archives = _split_sidecars(payload)
-            raw_payload[studio_id] = base_studio
+            raw_payload[studio_id] = _s3_index_summary(
+                studio_id,
+                base_studio,
+                reports=reports,
+                candidates=candidates,
+                track_material_archives=track_material_archives,
+            )
+            self._write_s3_base_payload(studio_id, base_studio)
             self._write_s3_sidecar(studio_id, "reports", reports)
             self._write_s3_sidecar(studio_id, "candidates", candidates)
             self._write_s3_sidecar(studio_id, "track_material_archives", track_material_archives)
@@ -431,10 +474,56 @@ class S3StudioStore:
         payload = self._objects.read_json("studios/index.json", {})
         if not isinstance(payload, dict):
             return {}
-        return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+        index = {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+        return self._compact_legacy_index_payloads(index)
 
     def _write_index(self, payload: dict[str, Any]) -> None:
         self._objects.write_json("studios/index.json", payload)
+
+    def _compact_legacy_index_payloads(self, index: dict[str, Any]) -> dict[str, Any]:
+        compacted: dict[str, Any] = {}
+        changed = False
+        for studio_id, index_payload in index.items():
+            if not _looks_like_legacy_index_studio_payload(index_payload):
+                compacted[studio_id] = index_payload
+                continue
+
+            base_studio, index_reports, index_candidates, index_archives = _split_sidecars(index_payload)
+            reports = self._read_s3_sidecar(studio_id, "reports")
+            candidates = self._read_s3_sidecar(studio_id, "candidates")
+            track_material_archives = self._read_s3_sidecar(studio_id, "track_material_archives")
+
+            reports = index_reports if reports is None else reports
+            candidates = index_candidates if candidates is None else candidates
+            track_material_archives = index_archives if track_material_archives is None else track_material_archives
+
+            self._write_s3_base_payload(studio_id, base_studio)
+            self._write_s3_sidecar(studio_id, "reports", reports)
+            self._write_s3_sidecar(studio_id, "candidates", candidates)
+            self._write_s3_sidecar(studio_id, "track_material_archives", track_material_archives)
+            compacted[studio_id] = _s3_index_summary(
+                studio_id,
+                base_studio,
+                reports=reports,
+                candidates=candidates,
+                track_material_archives=track_material_archives,
+            )
+            changed = True
+
+        if changed:
+            self._write_index(compacted)
+        return compacted
+
+    def _read_s3_base_payload(self, studio_id: str, index_payload: Any | None = None) -> Any | None:
+        payload = self._objects.read_json(f"studios/{studio_id}/base.json", None)
+        if isinstance(payload, dict):
+            return payload
+        if _looks_like_legacy_index_studio_payload(index_payload):
+            return index_payload
+        return None
+
+    def _write_s3_base_payload(self, studio_id: str, payload: Any) -> None:
+        self._objects.write_json(f"studios/{studio_id}/base.json", payload)
 
     def _merge_s3_sidecars(self, studio_id: str, studio_payload: Any) -> Any:
         return _merge_sidecars(
@@ -892,6 +981,70 @@ def build_studio_store(
     if metadata_backend in {"s3", "r2"} and settings is not None:
         return S3StudioStore(S3JsonObjectStore(settings=settings, prefix=settings.metadata_prefix))
     return FileStudioStore(storage_root / "six_track_studios.json")
+
+
+def _s3_index_summary(
+    studio_id: str,
+    base_payload: Any,
+    *,
+    reports: list[Any],
+    candidates: list[Any],
+    track_material_archives: list[Any],
+) -> dict[str, Any]:
+    if not isinstance(base_payload, dict):
+        return {"studio_id": studio_id}
+
+    return {
+        "studio_id": str(base_payload.get("studio_id") or studio_id),
+        "title": base_payload.get("title"),
+        "bpm": base_payload.get("bpm"),
+        "time_signature_numerator": base_payload.get("time_signature_numerator", 4),
+        "time_signature_denominator": base_payload.get("time_signature_denominator", 4),
+        "is_active": base_payload.get("is_active", True),
+        "deactivated_at": base_payload.get("deactivated_at"),
+        "created_at": base_payload.get("created_at"),
+        "updated_at": base_payload.get("updated_at"),
+        "owner_token_hash": base_payload.get("owner_token_hash"),
+        "client_request_id": base_payload.get("client_request_id"),
+        "client_request_fingerprint": base_payload.get("client_request_fingerprint"),
+        "registered_track_count": _registered_track_count(base_payload),
+        "pending_candidate_count": _pending_candidate_count(candidates),
+        "report_count": len(reports),
+        "jobs": list(base_payload.get("jobs", []) or []),
+        "_sidecar_counts": {
+            "reports": len(reports),
+            "candidates": len(candidates),
+            "track_material_archives": len(track_material_archives),
+        },
+    }
+
+
+def _registered_track_count(payload: dict[str, Any]) -> int:
+    tracks = payload.get("tracks")
+    if not isinstance(tracks, list):
+        return 0
+    return sum(
+        1
+        for track in tracks
+        if isinstance(track, dict) and track.get("status") == "registered"
+    )
+
+
+def _pending_candidate_count(candidates: list[Any]) -> int:
+    return sum(
+        1
+        for candidate in candidates
+        if isinstance(candidate, dict) and candidate.get("status") == "pending"
+    )
+
+
+def _looks_like_legacy_index_studio_payload(payload: Any | None) -> bool:
+    return isinstance(payload, dict) and (
+        isinstance(payload.get("tracks"), list)
+        or isinstance(payload.get("regions"), list)
+        or isinstance(payload.get("reports"), list)
+        or isinstance(payload.get("candidates"), list)
+    )
 
 
 def _split_sidecars(payload: Any) -> tuple[Any, list[Any], list[Any], list[Any]]:

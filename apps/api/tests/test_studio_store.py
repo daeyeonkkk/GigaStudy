@@ -92,18 +92,54 @@ def test_s3_studio_store_roundtrips_base_payload_and_sidecars() -> None:
 
     store.save_one_raw("studio-1", payload)
 
-    index = objects.data["studios/index.json"]
-    assert index["studio-1"]["reports"] == []
-    assert index["studio-1"]["_sidecar_counts"] == {
+    index_entry = objects.data["studios/index.json"]["studio-1"]
+    assert "regions" not in index_entry
+    assert "tracks" not in index_entry
+    assert index_entry["registered_track_count"] == 0
+    assert index_entry["report_count"] == 1
+    assert index_entry["_sidecar_counts"] == {
         "reports": 1,
         "candidates": 1,
         "track_material_archives": 1,
     }
+    assert objects.data["studios/studio-1/base.json"]["reports"] == []
     assert objects.data["studios/studio-1/reports.json"] == [{"report_id": "report-1"}]
+    summary_rows = store.list_summary_raw(limit=10, offset=0)
+    assert summary_rows == [("studio-1", index_entry)]
     loaded = store.load_one_raw("studio-1")
     assert loaded["reports"] == [{"report_id": "report-1"}]
     activity = store.load_activity_raw("studio-1")
     assert activity["_activity_counts"] == {"pending_candidate_count": 1, "report_count": 1}
+
+
+def test_s3_studio_store_reads_legacy_full_index_payload() -> None:
+    objects = FakeJsonObjectStore()
+    store = S3StudioStore(objects)
+    objects.data["studios/index.json"] = {
+        "studio-1": {
+            "studio_id": "studio-1",
+            "title": "Legacy",
+            "updated_at": "2026-05-07T00:00:00+00:00",
+            "tracks": [{"slot_id": 1, "status": "registered"}],
+            "regions": [{"region_id": "r1"}],
+            "jobs": [],
+            "reports": [],
+            "candidates": [],
+            "track_material_archives": [],
+            "_sidecar_counts": {"reports": 1, "candidates": 0, "track_material_archives": 0},
+        }
+    }
+    objects.data["studios/studio-1/reports.json"] = [{"report_id": "report-1"}]
+
+    loaded = store.load_one_raw("studio-1")
+    assert loaded["regions"] == [{"region_id": "r1"}]
+    assert loaded["reports"] == [{"report_id": "report-1"}]
+
+    store.save_one_raw("studio-1", loaded)
+
+    index_entry = objects.data["studios/index.json"]["studio-1"]
+    assert "regions" not in index_entry
+    assert objects.data["studios/studio-1/base.json"]["regions"] == [{"region_id": "r1"}]
 
 
 def test_s3_engine_queue_claims_and_completes_jobs() -> None:

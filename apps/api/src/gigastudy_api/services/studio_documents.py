@@ -486,21 +486,24 @@ def encode_studio_payload(studio: Studio) -> dict[str, Any]:
 def studio_list_item_from_payload(studio_id: str, studio_payload: Any) -> StudioListItem:
     if not isinstance(studio_payload, dict):
         raise HTTPException(status_code=500, detail="Stored studio payload is invalid.")
-    shallow_payload = dict(studio_payload)
-    report_count = payload_sidecar_count(shallow_payload, "reports")
-    shallow_payload["reports"] = []
-    shallow_payload["candidates"] = []
-    shallow_payload["track_material_archives"] = []
-    studio = Studio.model_validate(shallow_payload)
+    report_count = payload_sidecar_count(studio_payload, "reports")
+    registered_track_count = studio_payload.get("registered_track_count")
+    if not isinstance(registered_track_count, int):
+        tracks = studio_payload.get("tracks")
+        registered_track_count = sum(
+            1
+            for track in tracks
+            if isinstance(track, dict) and track.get("status") == "registered"
+        ) if isinstance(tracks, list) else 0
     return StudioListItem(
         studio_id=studio_id,
-        title=studio.title,
-        bpm=studio.bpm,
-        time_signature_numerator=studio.time_signature_numerator,
-        time_signature_denominator=studio.time_signature_denominator,
-        registered_track_count=sum(1 for track in studio.tracks if track.status == "registered"),
+        title=str(studio_payload.get("title") or "Untitled Studio"),
+        bpm=int(studio_payload.get("bpm") or 113),
+        time_signature_numerator=int(studio_payload.get("time_signature_numerator") or 4),
+        time_signature_denominator=studio_payload.get("time_signature_denominator") or 4,
+        registered_track_count=registered_track_count,
         report_count=report_count,
-        updated_at=studio.updated_at,
+        updated_at=str(studio_payload.get("updated_at") or ""),
     )
 
 

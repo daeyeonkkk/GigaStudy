@@ -307,7 +307,11 @@ is excluded from persistence and remains an adapter detail.
   sidecar-storing reports, candidates, and track material archives; concurrent
   saves merge archive rows by `archive_id` so restore history is not lost by a
   racing save. Backends are local JSON, Postgres, or R2/S3 JSON metadata under
-  the configured metadata prefix.
+  the configured metadata prefix. In R2/S3 mode, `studios/index.json` is a
+  compact list/activity summary, while full base payloads live at
+  `studios/{studio_id}/base.json`. The store lazily reads legacy full-index
+  payloads so existing alpha studios can be rewritten into the compact layout on
+  their next save.
 - `apps/api/src/gigastudy_api/services/metadata_object_store.py`
   Small S3-compatible JSON object adapter used by R2 metadata stores, the
   engine queue, asset registry, and playback-instrument config.
@@ -632,6 +636,9 @@ The rebuild now follows the intended separation:
 - Alpha persistence: in R2 metadata mode, new studios, sidecars, queue state,
   asset registry, and custom guide-tone config are stored in object storage
   under `metadata/`. Cloud Run local disk remains cache/temp space.
+- Studio list reads use the compact R2 index and must not load region, report,
+  candidate, or archive detail. Full base payloads are loaded only for studio
+  entry, admin detail, activity, mutations, and exports.
 - Product surfaces: region lanes, selected-region piano roll, waterfall
   practice, playback, and report focus consume region/event payloads only.
 - Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,

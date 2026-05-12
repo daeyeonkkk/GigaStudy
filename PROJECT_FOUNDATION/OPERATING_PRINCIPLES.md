@@ -579,6 +579,10 @@ the same change.
 - R2/S3 metadata mode is a supported alpha persistence mode for new studios.
   Existing Postgres/file-store studios are not implicitly migrated into it; a
   deliberate reset or migration must choose that.
+- R2/S3 studio listing must use a compact summary index, not full studio
+  payloads. The public list should read title, clock, status, counts, owner
+  hash, and timestamps only; region/event, report, candidate, and archive detail
+  belongs behind studio/detail endpoints.
 - Production and alpha secrets belong in server-side secret storage such as
   Google Secret Manager, not in tracked env files or frontend builds. Client
   apps, including future native shells, must call the API instead of embedding

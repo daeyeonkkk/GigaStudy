@@ -31,6 +31,7 @@ import type { Studio, TrackSlot } from '../../types/studio'
 import type { SetStudioActionState } from './studioActionState'
 import {
   buildPlaybackTrackPlan,
+  getAudioDecodeFallbackEventTracks,
   getAudioTrackSchedule,
   getMaxBeatFromRegions,
   getPitchEventSchedule,
@@ -298,21 +299,10 @@ export function useStudioPlayback({
     try {
       let scheduledAnyTrack = false
       const audioTrackVolume = Math.max(0.28, Math.min(0.72, 0.72 / Math.sqrt(playableTracks.length)))
-      const eventToneVolume =
-        Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracks.length)))) * 0.4
       const preparedAudioTracks: PlaybackEngineAudioTrack[] = []
       const preparedEventTracks: PlaybackEngineEventTrack[] = []
+      let eventTracksForPlayback = [...eventTracks]
       let melodicInstrument: PlaybackInstrument = DEFAULT_MELODIC_INSTRUMENT
-      const eventPitchCount = eventTracks.reduce(
-        (sum, track) =>
-          sum + (regionsBySlot.get(track.slot_id)?.reduce(
-            (trackSum, region) => trackSum + region.pitch_events.length,
-            0,
-          ) ?? 0),
-        0,
-      )
-      const preferStableGuidePlayback =
-        eventTracks.length > 1 || eventPitchCount >= STABLE_GUIDE_TRACK_EVENT_THRESHOLD
 
       if (audioTracks.length > 0) {
         if (!activeContext) {
@@ -332,23 +322,68 @@ export function useStudioPlayback({
               : '오디오 파일을 재생 준비하는 중입니다.',
         })
 
-        const decodedAudioTracks = await Promise.all(
+        const decodedAudioTrackResults = await Promise.all(
           audioTracks.map(async (track) => {
-            const audioUrl = getTrackAudioUrl(studio.studio_id, track.slot_id)
-            const cacheKey = [
-              studio.studio_id,
-              track.slot_id,
-              track.audio_source_path ?? track.audio_source_label ?? 'audio',
-              track.updated_at,
-            ].join(':')
-            const buffer = await getCachedDecodedAudioBuffer(activeContext, cacheKey, audioUrl)
-            return {
-              buffer,
-              track,
-              trackStartSeconds: track.sync_offset_seconds,
+            try {
+              const audioUrl = getTrackAudioUrl(studio.studio_id, track.slot_id)
+              const cacheKey = [
+                studio.studio_id,
+                track.slot_id,
+                track.audio_source_path ?? track.audio_source_label ?? 'audio',
+                track.updated_at,
+              ].join(':')
+              const buffer = await getCachedDecodedAudioBuffer(activeContext, cacheKey, audioUrl)
+              return {
+                buffer,
+                status: 'fulfilled' as const,
+                track,
+                trackStartSeconds: track.sync_offset_seconds,
+              }
+            } catch (error) {
+              return {
+                error,
+                status: 'rejected' as const,
+                track,
+              }
             }
           }),
         )
+        const decodedAudioTracks = decodedAudioTrackResults.filter(
+          (
+            result,
+          ): result is Extract<(typeof decodedAudioTrackResults)[number], { status: 'fulfilled' }> =>
+            result.status === 'fulfilled',
+        )
+        const failedAudioTracks = decodedAudioTrackResults
+          .filter(
+            (result): result is Extract<(typeof decodedAudioTrackResults)[number], { status: 'rejected' }> =>
+              result.status === 'rejected',
+          )
+          .map((result) => result.track)
+        const fallbackEventTracks = getAudioDecodeFallbackEventTracks(
+          failedAudioTracks,
+          eventTracksForPlayback,
+          regionsBySlot,
+        )
+        if (fallbackEventTracks.length > 0) {
+          eventTracksForPlayback = [...eventTracksForPlayback, ...fallbackEventTracks]
+        }
+        const fallbackSlotIds = new Set(fallbackEventTracks.map((track) => track.slot_id))
+        const skippedAudioTracks = failedAudioTracks.filter((track) => !fallbackSlotIds.has(track.slot_id))
+        if (failedAudioTracks.length > 0 && playbackRunIdRef.current === runId) {
+          const fallbackMessage =
+            fallbackEventTracks.length > 0
+              ? `${fallbackEventTracks.length}개 원음을 준비하지 못해 같은 박자의 연주음으로 대체합니다.`
+              : ''
+          const skippedMessage =
+            skippedAudioTracks.length > 0
+              ? `${skippedAudioTracks.length}개 원음은 준비하지 못해 이번 재생에서 제외합니다.`
+              : ''
+          setActionState({
+            phase: 'busy',
+            message: [fallbackMessage, skippedMessage].filter(Boolean).join(' '),
+          })
+        }
 
         decodedAudioTracks.forEach(({ buffer, track, trackStartSeconds }) => {
           const trackSchedule = getAudioTrackSchedule({
@@ -381,9 +416,14 @@ export function useStudioPlayback({
         })
 
         if (requiresSynchronizedStart && playbackRunIdRef.current === runId) {
+          const alignedParts = [
+            preparedAudioTracks.length > 0 ? `원음 ${preparedAudioTracks.length}개` : null,
+            eventTracksForPlayback.length > 0 ? `연주음 ${eventTracksForPlayback.length}개` : null,
+            includeMetronome ? '메트로놈' : null,
+          ].filter(Boolean)
           setActionState({
             phase: 'busy',
-            message: `${synchronizedParts.join(', ')}를 재생 타임라인에 정렬하는 중입니다.`,
+            message: `${(alignedParts.length > 0 ? alignedParts : synchronizedParts).join(', ')}를 재생 타임라인에 정렬하는 중입니다.`,
           })
         }
       }
@@ -393,7 +433,20 @@ export function useStudioPlayback({
         return false
       }
 
-      if (eventTracks.length > 0 && activeContext && !preferStableGuidePlayback) {
+      const eventPitchCount = eventTracksForPlayback.reduce(
+        (sum, track) =>
+          sum + (regionsBySlot.get(track.slot_id)?.reduce(
+            (trackSum, region) => trackSum + region.pitch_events.length,
+            0,
+          ) ?? 0),
+        0,
+      )
+      const preferStableGuidePlayback =
+        eventTracksForPlayback.length > 1 || eventPitchCount >= STABLE_GUIDE_TRACK_EVENT_THRESHOLD
+      const eventToneVolume =
+        Math.max(0.5, Math.min(0.95, 0.95 / Math.sqrt(Math.max(1, eventTracksForPlayback.length)))) * 0.4
+
+      if (eventTracksForPlayback.length > 0 && activeContext && !preferStableGuidePlayback) {
         try {
           const customInstrument = await loadCustomGuideInstrument(activeContext)
           melodicInstrument = customInstrument ?? DEFAULT_MELODIC_INSTRUMENT
@@ -402,7 +455,7 @@ export function useStudioPlayback({
         }
       }
 
-      eventTracks.forEach((track) => {
+      eventTracksForPlayback.forEach((track) => {
         const trackRegions = regionsBySlot.get(track.slot_id)
         if (!trackRegions?.length) {
           return

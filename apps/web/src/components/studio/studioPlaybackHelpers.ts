@@ -218,6 +218,19 @@ export function buildPlaybackTrackPlan(
   return { audioTracks, eventTracks, playableTracks }
 }
 
+export function getAudioDecodeFallbackEventTracks(
+  failedAudioTracks: TrackSlot[],
+  currentEventTracks: TrackSlot[],
+  regionsBySlot: Map<number, ArrangementRegion[]>,
+): TrackSlot[] {
+  const currentEventSlotIds = new Set(currentEventTracks.map((track) => track.slot_id))
+  return failedAudioTracks.filter(
+    (track) =>
+      !currentEventSlotIds.has(track.slot_id) &&
+      regionsHavePlayableEvents(regionsBySlot.get(track.slot_id)),
+  )
+}
+
 export function getAudioTrackSchedule({
   bufferDurationSeconds,
   scheduledStart,

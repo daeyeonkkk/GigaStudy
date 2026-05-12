@@ -428,6 +428,11 @@ the same change.
   back to the built-in warm guide synth if the file is missing or unsupported.
 - Selected-track playback must prepare all required audio buffers, synthesized
   instruments, and metronome scheduling before starting together.
+- If retained original audio cannot be prepared for a selected track, playback
+  should fall back to that track's active region event synthesis when available
+  and keep the fallback on the same shared scheduled timeline. Only tracks with
+  neither usable audio nor playable events should be skipped or fail clearly
+  before the synchronized start.
 - Retained audio buffers may be decoded into a bounded browser memory cache so
   repeated playback of the same track does not refetch and redecode unchanged
   audio. The cache key must include studio, slot, source path, and track update

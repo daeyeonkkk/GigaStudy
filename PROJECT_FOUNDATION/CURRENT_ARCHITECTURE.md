@@ -557,7 +557,10 @@ flowchart TD
 2. Audio mode prefers retained audio clips when present.
    If the active track material is a user-selected corrected version, that
    corrected audio is the retained audio clip for playback. Inactive versions
-   are ignored.
+   are ignored. If a retained clip fails to fetch or decode but the active
+   region has playable events, browser playback converts that selected track to
+   guide-event playback inside the same synchronized session instead of failing
+   the whole mix.
 3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`
    with the warm guide tone by default. If admin has uploaded a custom guide
    sample, melodic event synthesis may use that sample transposed from its
@@ -574,7 +577,8 @@ flowchart TD
    a user-visible timeline translation; barlines stay on the shared grid.
 5. Audio clips are scheduled from `TrackSlot.sync_offset_seconds`. Region pitch
    events are scheduled from public `PitchEvent.start_seconds`, which is already
-   sync-resolved at the API boundary.
+   sync-resolved at the API boundary. Mixed original-audio and guide-event
+   sessions are prepared first, then started from one shared scheduled time.
 6. Playhead state drives region lane timing on the studio surface and
    waterfall visual timing on the practice surface.
 

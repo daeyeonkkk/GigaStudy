@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildPlaybackTrackPlan,
+  getAudioDecodeFallbackEventTracks,
   getAudioTrackSchedule,
   getPitchEventSchedule,
   getSustainedPitchEvents,
@@ -16,7 +18,7 @@ import {
   getVolumeScaleFromPercent,
 } from '../../apps/web/src/lib/studio'
 import type { TrackSlot } from '../../apps/web/src/types/studio'
-import type { PitchEvent } from '../../apps/web/src/types/studio'
+import type { ArrangementRegion, PitchEvent } from '../../apps/web/src/types/studio'
 
 describe('studio playback scheduling helpers', () => {
   it('keeps selected audio tracks aligned to one scheduled start', () => {
@@ -68,6 +70,63 @@ describe('studio playback scheduling helpers', () => {
     expect(schedule?.relativeStartSeconds).toBeCloseTo(1.5)
     expect(schedule?.remainingDurationSeconds).toBeCloseTo(0.75)
     expect(schedule?.scheduledStartSeconds).toBeCloseTo(11.5)
+  })
+
+  it('keeps original audio and guide events on the same shared start after sync trimming', () => {
+    const audioSchedule = getAudioTrackSchedule({
+      bufferDurationSeconds: 18,
+      scheduledStart: 10,
+      startSeconds: 0,
+      trackStartSeconds: -0.3,
+    })
+    const eventSchedule = getPitchEventSchedule({
+      durationSeconds: 0.75,
+      eventStartSeconds: 0,
+      precisionSeconds: STUDIO_TIME_PRECISION_SECONDS,
+      scheduledStart: 10,
+      startSeconds: 0,
+    })
+
+    expect(audioSchedule.sourceOffsetSeconds).toBeCloseTo(0.3)
+    expect(audioSchedule.relativeStartSeconds).toBe(0)
+    expect(audioSchedule.scheduledStartSeconds).toBe(10)
+    expect(eventSchedule?.relativeStartSeconds).toBe(0)
+    expect(eventSchedule?.scheduledStartSeconds).toBe(10)
+  })
+
+  it('uses guide events as a synchronized fallback when retained audio cannot be prepared', () => {
+    const audioTrack = {
+      audio_source_path: 'uploads/studio/track-1.wav',
+      slot_id: 1,
+      status: 'registered',
+    } as TrackSlot
+    const guideTrack = {
+      audio_source_path: null,
+      slot_id: 2,
+      status: 'registered',
+    } as TrackSlot
+    const playableRegion = {
+      pitch_events: [
+        {
+          is_rest: false,
+        } as PitchEvent,
+      ],
+    } as ArrangementRegion
+    const regionsBySlot = new Map<number, ArrangementRegion[]>([
+      [1, [playableRegion]],
+      [2, [playableRegion]],
+    ])
+
+    const plan = buildPlaybackTrackPlan([audioTrack, guideTrack], 'audio', regionsBySlot)
+    const fallbackTracks = getAudioDecodeFallbackEventTracks(
+      [audioTrack, guideTrack],
+      plan.eventTracks,
+      regionsBySlot,
+    )
+
+    expect(plan.audioTracks.map((track) => track.slot_id)).toEqual([1])
+    expect(plan.eventTracks.map((track) => track.slot_id)).toEqual([2])
+    expect(fallbackTracks.map((track) => track.slot_id)).toEqual([1])
   })
 
   it('trims synthesized events when playback starts inside the event', () => {

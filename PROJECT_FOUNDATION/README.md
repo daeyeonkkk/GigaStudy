@@ -42,7 +42,14 @@ They enter a project name, then choose one of two starts:
 - Start blank
 
 The score-file start appears only after a PDF, MIDI, or MusicXML source is
-selected. BPM and time signature are requested only for Start blank.
+selected. Start blank asks for BPM and time signature up front. Score-file
+starts create a tempo-review step: GigaStudy suggests BPM/meter when possible,
+then the user confirms or edits those values before registration begins.
+
+After creation, BPM can be corrected deliberately when the studio is idle. That
+repair keeps audio/event seconds in place and recalculates beat/measure
+coordinates. Existing scoring reports are not recalculated; after a BPM
+correction they are reference history until the user scores again.
 
 If the user uploads a score file, GigaStudy extracts track material into
 regions:

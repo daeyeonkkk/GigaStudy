@@ -49,6 +49,10 @@ the same change.
   active timeline and playback, practice, scoring, candidate review, and AI
   generation must ignore them until the user explicitly restores one into
   `Studio.regions`.
+- Track material archives and pending candidates are rebased when the studio BPM
+  is deliberately corrected. Their seconds/audio placement stays fixed, while
+  beat/measure coordinates are recalculated against the current studio BPM so
+  restore or approval cannot resurrect an old hidden tempo truth.
 - Track recording versions use the same inactive snapshot contract. The first
   registered recording for a slot is pinned as `원본 녹음`; edit-applied vocal
   renders are stored as `보정본 N` snapshots. A version becomes product truth
@@ -193,10 +197,21 @@ the same change.
 ## Clock, Count-In, And Timing
 
 - Studio BPM and time signature are absolute.
-- In alpha, studio BPM and meter are chosen only at studio creation. Score-file
-  starts may suggest BPM/meter from MIDI/MusicXML metadata, but the user must
-  confirm or edit those values before any track registration starts. After that
-  approval there is no user BPM edit flow and no persisted per-measure tempo map.
+- In alpha, studio BPM and meter are chosen at studio creation or score-file
+  tempo review. Score-file starts may suggest BPM/meter from MIDI/MusicXML
+  metadata, but the user must confirm or edit those values before any track
+  registration starts.
+- After creation, BPM correction is allowed only as an explicit studio-clock
+  repair. It preserves seconds, audio placement, sync offsets, and region starts,
+  then recalculates beat/measure coordinates for active regions, pending
+  candidates, and inactive restore snapshots. Meter correction and per-measure
+  tempo maps remain out of scope.
+- BPM correction must be blocked while playback, recording, tempo review,
+  extraction, generation, scoring, export, or other timeline-changing jobs are
+  active.
+- BPM correction does not recalculate old scoring reports. Existing reports
+  become reference-only after a BPM correction; users must score again for
+  accurate beat/measure evidence.
 - Recording analysis may estimate latency, drift, or entrance offset, but must
   not rewrite studio BPM or meter.
 - The metronome toggle controls audible clicks only; the internal clock remains
@@ -386,6 +401,10 @@ the same change.
   after activity polling observes completion.
 - Report feeds should carry summaries. Full issue/evidence detail belongs on
   the report detail endpoint and page.
+- If the studio BPM is corrected after a report is created, that report must be
+  treated as reference-only. Report evidence and beat/measure labels are not
+  silently rewritten; the UI should tell users to re-score when they need an
+  accurate report under the corrected BPM.
 - Harmony scoring should separate useful tension from true collisions. It
   should be helpful, not punishing for every non-triad color.
 

@@ -439,7 +439,9 @@ export function StudioPage() {
     }
     if (
       studio.reports.length > 0 &&
-      !window.confirm('기준 BPM을 바꾸면 기존 채점 리포트의 박자 기준이 맞지 않을 수 있습니다. BPM을 보정할까요?')
+      !window.confirm(
+        '기준 BPM을 바꾸면 기존 채점 리포트의 박자/마디 표시는 이전 BPM 기준으로 남습니다. 정확한 리포트가 필요하면 BPM 보정 후 다시 채점해야 합니다. BPM을 보정할까요?',
+      )
     ) {
       return
     }
@@ -447,7 +449,7 @@ export function StudioPage() {
       () => updateStudioTempo(studio.studio_id, { bpm: nextBpm }),
       '기준 BPM을 보정하는 중입니다.',
       studio.reports.length > 0
-        ? '기준 BPM을 보정했습니다. 기존 채점 리포트는 다시 채점해야 정확합니다.'
+        ? '기준 BPM을 보정했습니다. 기존 채점 리포트는 이전 BPM 기준이므로 참고용으로만 보고, 필요하면 다시 채점해 주세요.'
         : '기준 BPM을 보정했습니다.',
       ['오디오 위치는 유지하고 박자 기준을 다시 계산하고 있습니다.'],
     )

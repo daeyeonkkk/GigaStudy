@@ -64,9 +64,11 @@ is excluded from persistence and remains an adapter detail.
   which work belongs on the current page.
 - `apps/web/src/components/studio/StudioToolbar.tsx`
   Global transport, sync step, playback source, metronome, and selected-track
-  playback controls. BPM is shown as fixed studio context, not edited after
-  creation. Playback source is now audio clips or region events, not notation
-  rendering.
+  playback controls. BPM can be corrected deliberately when no playback,
+  recording, tempo review, extraction, generation, scoring, export, or other
+  timeline-changing job is active. The correction keeps seconds/audio placement
+  and recalculates beat/measure coordinates. Playback source is now audio clips
+  or region events, not notation rendering.
 - `apps/web/src/components/studio/useStudioPlayback.ts` and
   `apps/web/src/components/studio/studioPlaybackHelpers.ts`
   Browser playback orchestration plus pure playback-planning helpers for
@@ -140,6 +142,10 @@ is excluded from persistence and remains an adapter detail.
   omits regions, candidates, reports, and archive detail and does not schedule
   recovery or processing work. Track volume can return a minimal patch response
   for live mix commits while the legacy full response remains the default.
+  `PATCH /studios/{id}/tempo` performs explicit BPM correction: it preserves
+  seconds/audio placement and sync, recalculates beat/measure coordinates for
+  active regions, pending candidates, and track material archives, and leaves
+  existing scoring reports as reference-only until the user scores again.
   `GET /studios/{id}?view=studio|edit|practice` trims candidate/report detail
   for page loads, while candidate and report detail endpoints serve large
   review/evidence payloads lazily.
@@ -415,7 +421,8 @@ flowchart TD
    keeps tracks empty. The user confirms or edits BPM/meter; approval updates
    the studio clock and enqueues registration. If an approved queued/running
    import job loses its durable queue record, retry repairs the queue record and
-   schedules processing again.
+   schedules processing again. Later BPM correction is a separate repair action:
+   it does not reopen tempo review and does not change meter.
 4. PDF score jobs run preflight before expensive extraction. Text-only PDFs
    fail immediately with user-facing guidance. Born-digital score PDFs use a
    vector-first path and skip heavier recognition when the quality gate passes;
@@ -441,7 +448,9 @@ flowchart TD
    for the slot with the archived snapshots.
    Recording-origin versions follow the same restore path: pinned original
    recordings and inactive corrected versions do not affect the product
-   timeline until the user activates one.
+   timeline until the user activates one. When studio BPM is corrected, archive
+   snapshots are rebased to the current studio BPM so restoring a version keeps
+   the active shared clock instead of restoring an old hidden tempo.
 10. Reloaded studio response exposes the registered track from `Studio.regions`.
 
 ### Recording
@@ -510,6 +519,9 @@ flowchart TD
    the report detail endpoint returns issue/evidence detail on demand.
 9. Report detail links can reopen the region editor with query parameters that
    focus the matching region and piano-roll event.
+10. If the studio BPM is corrected after a report is created, existing reports
+    are not recalculated. They remain visible as reference history, but users
+    must score again for beat/measure-accurate evidence under the corrected BPM.
 
 ### AI Generation
 

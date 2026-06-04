@@ -1,0 +1,72 @@
+import type { Studio } from '../../types/studio'
+
+export type MeterContext = {
+  beatsPerMeasure: number
+  pulseQuarterBeats: number
+}
+
+const DEFAULT_BEATS_PER_MEASURE = 4
+const SIXTEENTH_NOTE_QUARTER_BEATS = 0.25
+export const STUDIO_TIME_PRECISION_SECONDS = 0.001
+export const STUDIO_TIME_PRECISION_DIGITS = 3
+export const DEFAULT_SYNC_STEP_SECONDS = 0.01
+export const DEFAULT_METER: MeterContext = {
+  beatsPerMeasure: DEFAULT_BEATS_PER_MEASURE,
+  pulseQuarterBeats: 1,
+}
+
+export function getBeatSeconds(bpm: number): number {
+  return 60 / Math.max(1, bpm)
+}
+
+export function getSixteenthNoteSeconds(bpm: number, meter: MeterContext = DEFAULT_METER): number {
+  const beatsPerMeasure = Math.max(SIXTEENTH_NOTE_QUARTER_BEATS, meter.beatsPerMeasure)
+  const sixteenthNotesPerMeasure = Math.max(1, beatsPerMeasure / SIXTEENTH_NOTE_QUARTER_BEATS)
+  return getBeatSeconds(bpm) * (beatsPerMeasure / sixteenthNotesPerMeasure)
+}
+
+export function roundStudioSeconds(value: number): number {
+  const scale = 10 ** STUDIO_TIME_PRECISION_DIGITS
+  return Math.round(value * scale) / scale
+}
+
+export function beatToSeconds(beat: number, bpm: number): number {
+  return Math.max(0, beat - 1) * getBeatSeconds(bpm)
+}
+
+function getQuarterBeatsPerMeasure(numerator: number, denominator: number): number {
+  return Math.max(0.25, numerator * (4 / Math.max(1, denominator)))
+}
+
+function getPulseQuarterBeats(denominator: number): number {
+  return Math.max(0.125, 4 / Math.max(1, denominator))
+}
+
+function getStudioBeatsPerMeasure(studio: Studio): number {
+  return getQuarterBeatsPerMeasure(studio.time_signature_numerator ?? 4, studio.time_signature_denominator ?? 4)
+}
+
+export function getStudioMeter(studio: Studio): MeterContext {
+  return {
+    beatsPerMeasure: getStudioBeatsPerMeasure(studio),
+    pulseQuarterBeats: getPulseQuarterBeats(studio.time_signature_denominator ?? 4),
+  }
+}
+
+export function isMeasureDownbeat(quarterBeatOffset: number, beatsPerMeasure: number): boolean {
+  const quotient = quarterBeatOffset / Math.max(0.25, beatsPerMeasure)
+  return Math.abs(quotient - Math.round(quotient)) < 0.001
+}
+
+export function getMeasureIndexFromBeat(beat: number, beatsPerMeasure: number): number {
+  return Math.floor((Math.max(1, beat) - 1) / beatsPerMeasure) + 1
+}
+
+function getBeatInMeasureFromBeat(beat: number, beatsPerMeasure: number): number {
+  return ((Math.max(1, beat) - 1) % beatsPerMeasure) + 1
+}
+
+export function formatBeatInMeasure(beat: number, beatsPerMeasure: number): string {
+  const rounded = Math.round(getBeatInMeasureFromBeat(beat, beatsPerMeasure) * 100) / 100
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0$/u, '')
+}

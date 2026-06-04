@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "GigaStudy Studio",
+  "short_name": "GigaStudy",
+  "description": "Six-track a cappella studio for arrangement, playback, practice, and scoring.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#e6edf4",
+  "theme_color": "#8bb9e2",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

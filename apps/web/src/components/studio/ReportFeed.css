@@ -1,0 +1,143 @@
+.report-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #aeb8c1;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.report-feed__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: end;
+  border-bottom: 1px solid #c4ccd3;
+  padding-bottom: 8px;
+}
+
+.report-feed__header h2 {
+  color: #111111;
+  font-size: 1.35rem;
+}
+
+.report-empty {
+  display: grid;
+  gap: 6px;
+  min-height: 104px;
+  place-content: center;
+  border: 1px dashed #aeb8c1;
+  border-radius: 6px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.report-empty p {
+  color: #54616c;
+}
+
+.report-list {
+  display: grid;
+  gap: 10px;
+}
+
+.report-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #b8c2ca;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.report-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.report-feed .report-card header > p,
+.report-feed .report-card__summary,
+.report-feed .report-card ul {
+  display: none;
+}
+
+.report-card__open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #a9b4bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #082fbd;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.report-card__open:hover {
+  border-color: #082fbd;
+  background: #f0f4ff;
+}
+
+.report-card header span,
+.report-card header p,
+.report-card__summary p,
+.report-card small {
+  color: #54616c;
+}
+
+.report-card__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.report-card__summary p {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #d6dde2;
+  border-radius: 4px;
+  background: #f8fafb;
+  font-weight: 700;
+}
+
+.report-card__summary strong {
+  color: #111111;
+}
+
+.report-card__summary span {
+  color: #082fbd;
+  font-weight: 900;
+}
+
+.report-card ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.report-card li {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 4px 10px;
+  padding: 10px;
+  border: 1px solid #e0e5e9;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.report-card li small {
+  grid-column: 2;
+}
+

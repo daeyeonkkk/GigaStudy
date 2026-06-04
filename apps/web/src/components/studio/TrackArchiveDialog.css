@@ -1,0 +1,94 @@
+.track-archive-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.track-archive-panel {
+  display: grid;
+  gap: 16px;
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  padding: 22px;
+  overflow: auto;
+  border: 1px solid #94a3b8;
+  background: #f8fafc;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.22);
+  color: #0f172a;
+}
+
+.track-archive-panel__heading h2 {
+  margin: 4px 0 0;
+  font-size: 1.55rem;
+}
+
+.track-archive-list {
+  display: grid;
+  gap: 10px;
+}
+
+.track-archive-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(260px, 1.4fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+}
+
+.track-archive-item > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.track-archive-item strong {
+  color: #111827;
+  font-weight: 900;
+}
+
+.track-archive-item span {
+  overflow: hidden;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-archive-item dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.track-archive-item dt {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.track-archive-item dd {
+  margin: 2px 0 0;
+  color: #111827;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.track-archive-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .track-archive-item {
+    grid-template-columns: 1fr;
+  }
+}

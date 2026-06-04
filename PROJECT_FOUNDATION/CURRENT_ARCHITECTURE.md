@@ -1,0 +1,671 @@
+# GigaStudy Current Architecture
+
+Date: 2026-05-06
+
+This is the current canonical architecture after the region/piano-roll rebuild.
+GigaStudy is a six-track vocal arrangement and practice workspace, not an
+engraved notation editor.
+
+## Product Center
+
+Canonical user-facing flow:
+
+`Studio -> Track -> Region -> PitchEvent/AudioClip -> Playback/Practice/Scoring`
+
+Internal engine flow:
+
+`TrackPitchEvent` lives in `gigastudy_api.domain.track_events` as an internal
+extraction, registration, storage-shadow, and scoring event type. It is not a
+legacy adapter and is not exported as a public contract. Internal event records
+are converted to `PitchEvent`/`ArrangementRegion` for the product UI, API
+response, and submitted scoring event input. When a scoring path consumes
+events that were derived from `ArrangementRegion`, `TrackPitchEvent` may carry
+transient report-focus metadata for the source region/event IDs; that metadata
+is excluded from persistence and remains an adapter detail.
+
+## Runtime Shape
+
+### Web
+
+- `apps/web/src/pages/LaunchPage.tsx`
+  Creates a blank studio or seeds one from PDF/MIDI/MusicXML document input.
+- `apps/web/src/pages/StudioPage.tsx`
+  Owns loaded studio state, transport state, recording state, candidate review
+  state, and action status for the studio assembly surface. It is the place for
+  track registration, upload/record/generate, sync, selected-track playback,
+  candidate review, and report history. It does not render the piano-roll
+  editor, practice waterfall, or scoring controls.
+- `apps/web/src/components/studio/useStudioResource.ts`
+  Loads a view-specific studio payload for the current page, then uses
+  `/api/studios/{id}/activity` while document, voice, generation, or scoring
+  jobs are active. Activity polling carries only job state and visible counts,
+  and the hook refreshes the current view once when jobs complete or
+  candidate/report/registered-track counts change. Route changes abort stale
+  fetches so old responses cannot overwrite the new page state. Activity
+  polling has a short client timeout and backs off failures; short failures do
+  not replace an in-progress notice with a red error.
+- `apps/web/src/components/studio/studioNoticePresenter.ts` and
+  `StudioNoticeLine.tsx`
+  Convert job/activity/action state into public status notices. The presenter
+  blocks implementation-language copy and only exposes progress percentages
+  when a job provides actual completed/total units.
+- `apps/web/src/pages/StudioEditPage.tsx`
+  Dedicated region-editing surface for region selection, region structure
+  actions, selected-region piano-roll editing, local draft save, and bounded
+  revision restore. Report focus links land here when they carry answer
+  region/event IDs.
+- `apps/web/src/pages/PracticePage.tsx`
+  Dedicated practice surface for selected-track playback controls, target
+  selection, scoring setup/count-in, scoring capture, report feed, and the
+  waterfall timing stage.
+- `apps/web/src/components/studio/StudioPurposeNav.tsx`
+  Shared purpose navigation for studio assembly, region editing, practice, and
+  report detail surfaces. It keeps page transitions explicit and reinforces
+  which work belongs on the current page.
+- `apps/web/src/components/studio/StudioToolbar.tsx`
+  Global transport, sync step, playback source, metronome, and selected-track
+  playback controls. BPM can be corrected deliberately when no playback,
+  recording, tempo review, extraction, generation, scoring, export, or other
+  timeline-changing job is active. The correction keeps seconds/audio placement
+  and recalculates beat/measure coordinates. Playback source is now audio clips
+  or region events, not notation rendering.
+- `apps/web/src/components/studio/useStudioPlayback.ts` and
+  `apps/web/src/components/studio/studioPlaybackHelpers.ts`
+  Browser playback orchestration plus pure playback-planning helpers for
+  region grouping, playable track selection, sustained event merging, and
+  metronome beat coverage. Long event-backed MIDI/MusicXML sessions schedule
+  guide-tone events in rolling lookahead chunks instead of constructing every
+  oscillator at playback start. Original-audio playback uses a bounded decoded
+  `AudioBuffer` LRU keyed by studio, slot, source path, and track update time
+  so repeat playback does not refetch/redecode unchanged clips.
+- `apps/web/src/lib/studio/instruments.ts`
+  Browser event synthesis. The default melodic event voice is a warm guide
+  synth tuned to sit beside human singing instead of a sampled organ or choir
+  soundfont.
+- `apps/web/src/components/studio/TrackBoard.tsx`
+  Main six-track arrangement component. In studio mode it renders six shared
+  timeline lanes with thin pitch-positioned event minis directly on the lane,
+  plus track registration/playback/sync controls. Region hit areas remain
+  selectable but are not visual cards. In editor mode it renders the same six
+  visible lanes plus selected-region tools, piano-roll editing, and per-track
+  material version controls. Recording versions are shown as a compact dropdown
+  with user labels such as `원본 녹음` or `보정본 1` plus creation time; the
+  adjacent actions are `이 Track을 사용`, `이름 변경`, and `삭제`. There is no
+  version preview button. Empty tracks remain visible as lanes with no event
+  minis. Practice waterfall rendering belongs to `PracticePage`.
+- `apps/web/src/components/studio/TrackArchiveDialog.tsx`
+  Restore-only track material archive dialog. It is opened from a track row
+  only when inactive snapshots exist, labels pinned score material as original
+  score, and restores by replacing the active track material after confirming
+  that the current material will be archived first.
+- `apps/web/src/components/studio/eventMiniLayout.ts`
+  Shared event-mini presentation helper for filtering renderable events,
+  positioning minis by pitch, sizing dense lanes by pitch span, and generating
+  hover/accessibility labels with pitch name, start, and duration. Track-board,
+  region editor, and practice waterfall views use the same thin-bar contract so
+  short MIDI events do not become oversized overlapping pills. Event mini width
+  is proportional to the visible shared timeline duration; pitch affects only
+  the vertical position, not the bar thickness.
+- `apps/web/src/components/studio/TrackBoardTimeline.tsx` and
+  `apps/web/src/components/studio/TrackBoardTimelineLayout.ts`
+  Waterfall practice preview rendering plus shared track-board timeline math,
+  fixed beat-width scaling, and region lane positioning. Studio lanes,
+  selected-region piano roll, and practice waterfall use 50 pixels per
+  quarter-note beat so BPM changes playhead speed rather than visual measure
+  width. TrackBoard uses these helpers instead of owning timeline layout
+  details inline.
+- `apps/web/src/components/studio/TrackBoardEditor.tsx` and
+  `apps/web/src/components/studio/TrackBoardEditorGrid.ts`
+  Region and pitch-event editing controls for the selected arrangement region.
+  The editor exposes direct numeric fields for region track/start/duration and
+  selected-event pitch/start/duration, keeps detailed edits in a local draft,
+  persists unsaved drafts in browser session storage across studio sub-page
+  navigation, saves them through one region revision command, and reads bounded
+  restore history from region diagnostics.
+- `apps/web/src/lib/studio/regions.ts`
+  Region utility helpers only. The web client consumes region payloads and must
+  not rebuild product regions from internal storage event arrays. Timeline
+  bounds can extend before 0 seconds so user-visible sync/early entrances are
+  displayed rather than clamped onto the downbeat.
+- `apps/web/public/manifest.webmanifest`, `apps/web/public/sw.js`, and
+  `apps/web/src/lib/registerServiceWorker.ts`
+  Provide installable PWA shell metadata and a minimal service worker. The
+  worker claims the app shell only and does not cache API responses or studio
+  data; persistence remains the API/R2 contract.
+
+### API
+
+- `apps/api/src/gigastudy_api/api/routes/studios.py`
+  FastAPI studio command/query endpoints, including single-field region/event
+  mutation endpoints and the batch region revision save/restore endpoints used
+  by the region editor. Job polling has a lightweight activity endpoint that
+  omits regions, candidates, reports, and archive detail and does not schedule
+  recovery or processing work. Track volume can return a minimal patch response
+  for live mix commits while the legacy full response remains the default.
+  `PATCH /studios/{id}/tempo` performs explicit BPM correction: it preserves
+  seconds/audio placement and sync, recalculates beat/measure coordinates for
+  active regions, pending candidates, and track material archives, and leaves
+  existing scoring reports as reference-only until the user scores again.
+  `GET /studios/{id}?view=studio|edit|practice` trims candidate/report detail
+  for page loads, while candidate and report detail endpoints serve large
+  review/evidence payloads lazily.
+- `apps/api/src/gigastudy_api/api/routes/admin.py` and
+  `apps/api/src/gigastudy_api/services/admin_auth.py`
+  Admin login creates a short-lived signed bearer session token. Admin command
+  endpoints accept that bearer token, while legacy static admin token/password
+  headers remain available for scripts and emergency access. The web admin page
+  stores only the short-lived token in browser session storage.
+- `apps/api/src/gigastudy_api/services/studio_repository.py`
+  Facade over storage, asset, queue, upload, candidate, generation, scoring,
+  and resource services.
+- `apps/api/src/gigastudy_api/api/schemas/studios.py`
+  Internal storage plus public response contracts. `Studio.regions` is the
+  product arrangement truth. New registration writes explicit
+  `ArrangementRegion` data and clears `TrackSlot.events`; track event shadows
+  are retained only as migration fallbacks for older payloads and as bounded
+  internal inputs before registration. `ExtractionCandidate.events` remains a
+  candidate-review shadow until approval. They accept only the current event
+  shape; obsolete pre-region payloads are rejected with the rest of the obsolete
+  storage shape. `Studio.track_material_archives` is loaded into the internal
+  model from a storage sidecar and stores inactive restore snapshots for
+  overwritten track material, pinned original recordings, and tuned recording
+  versions. Each archive stores `region_snapshots[]`, optional user label,
+  optional `based_on_archive_id`, and reason metadata. Old single
+  `region_snapshot` payloads are lazily migrated on read. `TrackSlot` may point
+  to the active version by `active_material_version_id`, but the playable truth
+  is still the active region snapshot in `Studio.regions`. Studio routes return
+  `StudioResponse`, whose tracks and candidates omit internal event arrays and
+  whose archive payload exposes summaries only, not stored event snapshots.
+  `TrackExtractionJob.progress` is optional and represents
+  user-facing stage/progress evidence; percent-capable fields are set only when
+  the job has real completed/total units. Non-full response views keep reports
+  as summaries and candidates
+  as metadata plus empty preview regions until a detail endpoint is requested.
+  `StudioResponse.regions` and `ExtractionCandidateResponse.region` expose the
+  arrangement data flow. Document imports use `source_kind: "document"`;
+  `"score"` is no longer accepted as a source-kind alias. `PitchEvent` carries
+  timing, source, extraction method, measure position, and quality warnings so
+  consumers do not need storage shadows for product behavior. Scoring reports
+  expose event IDs and event counts only.
+- `apps/api/src/gigastudy_api/domain/track_events.py`
+  Internal pitch-event adapter for extraction, registration, persistence, and
+  scoring. `TrackPitchEvent` belongs here instead of the API schema module.
+- `apps/api/src/gigastudy_api/services/engine/event_normalization.py`
+  Internal pitch-event preparation helpers for timing quantization, range
+  metadata, spelling, measure positions, and same-pitch contiguous fragment
+  merging. It exposes the beat-derived sixteenth-note unit used by automatic
+  registration, so cleanup is tied to BPM/meter rather than fixed seconds.
+- `apps/api/src/gigastudy_api/services/engine/registration_policy.py`
+  Shared automatic-registration policy. MIDI, MusicXML/PDF-derived material,
+  voice/audio transcription, and AI-generated candidates use it for
+  BPM/meter-derived grid size, minimum event length, same-pitch merge gap, and
+  micro-gap absorption. Manual editing, sync, playback, and scoring do not
+  apply this policy unless the user explicitly saves a registration-style
+  rewrite.
+- `apps/api/src/gigastudy_api/services/studio_region_commands.py`
+  Manual region editing, split/copy, save, and revision restore preserve the
+  user's explicit event fragments. They normalize IDs and timing fields but do
+  not apply registration-only same-pitch merging.
+- `apps/api/src/gigastudy_api/services/engine/event_quality.py`
+  The registration quality gate before extracted material becomes product
+  regions. It replaces the old notation quality layer. The final registration
+  contract forces recording, audio upload, MIDI/MusicXML/document import, and
+  AI-generated material onto the current BPM/meter-derived sixteenth-note unit,
+  merges same-pitch fragments, and absorbs import/export micro-gaps below that
+  unit while preserving real gaps and exempting sync, scoring, and manual region
+  editing.
+  Studio storage/edit precision remains 0.001 seconds; registration rhythm
+  normalization and storage precision are separate contracts.
+- `apps/api/src/gigastudy_api/services/engine/voice.py`
+  Voice pitch extraction with Basic Pitch/librosa/local fallback, fixed-BPM
+  metronome phase alignment, strict sung-segment cleanup, and a narrow rescue
+  pass for short stable sung contours. Rescued material is marked in event
+  warnings and diagnostics.
+- `apps/api/src/gigastudy_api/services/studio_repository.py`
+  Wraps voice transcription with a small in-process fingerprint cache keyed by
+  audio bytes, BPM/meter, slot, engine identity, and extraction-plan
+  diagnostics. This avoids repeating expensive voice analysis for identical
+  retries without making cached results part of product truth.
+- `apps/api/src/gigastudy_api/services/engine/audio_decode.py`
+  Server-side audio normalization for voice analysis. Track recording uploads
+  may arrive as WAV/MP3/M4A/MP4/AAC/OGG/WEBM/FLAC. Compressed containers and
+  WAV files that do not already match the analysis contract are decoded through
+  ffmpeg into temporary mono 44.1 kHz PCM WAV before the voice engine runs.
+  Studio-start uploads are score/document sources only, not music audio. When a
+  retained audio clip was decoded, normalized, or aligned, `studio_assets`
+  writes a normalized WAV asset and exposes that path/MIME to playback instead
+  of pointing a track at mismatched original bytes. Scoring audio follows the
+  same decode path and must not send compressed containers directly to the voice
+  transcriber.
+- `apps/api/src/gigastudy_api/services/document_extraction_pipeline.py` and
+  `apps/api/src/gigastudy_api/services/studio_engine_job_handlers.py`
+  Shared queued import path for studio-start score files. PDF inputs first run
+  a lightweight preflight (`services/engine/pdf_preflight.py`) over the first
+  pages and are classified as born-digital score, scanned-score possible,
+  text-only, or unknown. Text-only PDFs fail before expensive extraction.
+  Born-digital score PDFs try the PyMuPDF vector parser first; if its document
+  quality score is good enough, the pipeline skips heavier recognition. Scanned
+  or weak vector results use bounded recognition with Java heap limits, 4-page
+  PDF chunks by default, and at most one PyMuPDF grayscale/crop preprocessing
+  retry. Each extraction attempt is scored by mapped track count, event count,
+  grid fit, range fit, overlap rate, and measure consistency before candidates
+  are exposed. MIDI, MusicXML, MXL, and XML inputs are parsed directly in the
+  same engine queue; clear singer-line results register to regions, while
+  ambiguous symbolic material becomes review candidates. Studio-start score
+  files first create a
+  `tempo_review_required` job with suggested BPM/meter diagnostics. Only after
+  user approval does the API enqueue the document job, and the approved studio
+  BPM/meter is passed through the registration path; source-file tempo is
+  evidence, not an automatic override. Recognition timeout, memory, killed, and
+  no-output failures are mapped to user-facing retry/MIDI-MusicXML guidance.
+- `apps/api/src/gigastudy_api/services/document_job_recovery.py`
+  Lightweight stale document-job recovery. A running document job older than
+  the configured threshold is marked failed and retryable without running
+  extraction. Full studio reads may perform this bounded state repair before
+  scheduling old creation recovery; activity reads stay side-effect-free, and
+  the web client calls the explicit recovery mutation once when it sees a stale
+  running document job.
+- `apps/api/src/gigastudy_api/services/studio_tempo_review.py`
+  Reads light BPM/meter evidence from symbolic score files before registration
+  starts. PDF/image inputs cannot reliably expose tempo at this stage, so the
+  helper keeps the fallback values and tells the UI that user confirmation is
+  required.
+- `apps/api/src/gigastudy_api/services/engine/symbolic.py`
+  MusicXML/MIDI parsing and track-to-slot mapping. MIDI parsing splits
+  channel-packed tracks into per-channel parsed parts, records MIDI program/name
+  diagnostics, then characterizes each part by musical role. Pitched
+  singer-like parts are assigned by relative register and range fit, so generic
+  staff names can still become soprano/alto/tenor/baritone/bass material.
+  Channel-10 or clearly special rhythmic parts map to percussion. If no
+  percussion-like part exists, slot 6 stays empty and the document job is still
+  completed; the web activity notice clears the job-origin busy state when
+  activity or a view refresh reports no queued/running jobs. Candidate review
+  is kept for parts that still look like accompaniment, overly broad
+  special-purpose material, or otherwise ambiguous non-vocal content after
+  characterization.
+- `apps/api/src/gigastudy_api/services/registration_context.py`
+  The single provider for region-aware registration context. Registration
+  cleanup, LLM review, and ensemble gates use this instead of reading
+  `TrackSlot.events` directly.
+- `apps/api/src/gigastudy_api/services/engine/report_focus.py`
+  Maps internal scoring events back to public region/event IDs for report
+  deep-links.
+- `apps/api/src/gigastudy_api/services/llm/registration_review.py`
+  Optional bounded LLM review for registration cleanup; the model can only
+  choose deterministic repair directives and cannot author canonical events.
+- `apps/api/src/gigastudy_api/services/llm/midi_role_review.py`
+  Optional bounded LLM review for ambiguous MIDI singer-role assignment. It
+  receives compact per-part name/channel/program/range/polyphony summaries and
+  may choose existing visible slots or mark an existing part for candidate
+  review. It cannot create tracks, delete events, rewrite pitch material, or
+  change BPM/meter; invalid or low-confidence responses are ignored.
+- LLM provider calls are an adapter boundary. DeepSeek/OpenRouter may be the
+  current low-cost implementation, but product services should depend on
+  bounded review/planning functions rather than provider internals.
+- `apps/api/src/gigastudy_api/services/studio_store.py`
+  Studio persistence abstraction. Base studio payloads are kept small by
+  sidecar-storing reports, candidates, and track material archives; concurrent
+  saves merge archive rows by `archive_id` so restore history is not lost by a
+  racing save. Backends are local JSON, Postgres, or R2/S3 JSON metadata under
+  the configured metadata prefix. In R2/S3 mode, `studios/index.json` is a
+  compact list/activity summary, while full base payloads live at
+  `studios/{studio_id}/base.json`. The store lazily reads legacy full-index
+  payloads so existing alpha studios can be rewritten into the compact layout on
+  their next save.
+- `apps/api/src/gigastudy_api/services/metadata_object_store.py`
+  Small S3-compatible JSON object adapter used by R2 metadata stores, the
+  engine queue, asset registry, and playback-instrument config.
+- `apps/api/src/gigastudy_api/services/studio_assets.py`
+  Asset path, local/S3 storage, direct-upload lifecycle, staged cleanup, and
+  bounded deletion of unreferenced studio assets.
+- `apps/api/src/gigastudy_api/services/engine_queue.py`
+  Durable local/Postgres/R2 queue for document import, voice extraction, AI
+  generation, and scoring analysis work.
+- `apps/api/src/gigastudy_api/services/performance.py`
+  Per-request timing collector used by API middleware and store/response
+  builders. Slow request logs include total time, store load/save time,
+  response-build time, engine-job time when available, and payload lengths.
+
+## Data Flow
+
+```mermaid
+flowchart TD
+  User["User"]
+  Launch["Launch Page"]
+  StudioPage["Studio Page"]
+  StudioEditPage["Studio Edit Page"]
+  PracticePage["Practice Page"]
+  TrackBoard["TrackBoard: Region View + Piano Roll"]
+  Waterfall["Waterfall Practice Stage"]
+  API["FastAPI Studio API"]
+  Store["StudioStore"]
+  Assets["StudioAssets"]
+  Queue["Engine Queue"]
+  Engines["Document / Voice / MIDI Engines"]
+  Candidates["Review Candidates"]
+  Regions["ArrangementRegion + PitchEvent"]
+  Playback["Browser Playback Engine"]
+  Scoring["Scoring Pipeline"]
+  Reports["Practice Reports"]
+
+  User --> Launch
+  User --> StudioPage
+  User --> StudioEditPage
+  User --> PracticePage
+  Launch --> API
+  StudioPage --> API
+  StudioEditPage --> API
+  PracticePage --> API
+  API --> Store
+  API --> Assets
+  API --> Queue
+  Queue --> Engines
+  Engines --> Candidates
+  Candidates --> API
+  Store --> Regions
+  API --> Regions
+  Regions --> TrackBoard
+  Regions --> StudioEditPage
+  Regions --> Waterfall
+  StudioPage --> Playback
+  PracticePage --> Playback
+  Playback --> TrackBoard
+  Playback --> Waterfall
+  PracticePage --> Scoring
+  Scoring --> API
+  API --> Reports
+  Reports --> StudioPage
+  Reports --> PracticePage
+  Reports --> StudioEditPage
+```
+
+### Studio Load
+
+1. Web calls `GET /api/studios/{studio_id}?view=studio|edit|practice` for page
+   loads, or `view=full` only for compatibility/admin-style needs.
+2. API loads a `Studio` from `StudioStore`; activity polling uses a summary
+   read that avoids full sidecar/detail merge.
+3. API builds a `StudioResponse`, stripping internal event shadows from tracks
+   and candidates, exposing only track material archive summaries, and trimming
+   report/candidate detail on non-full views.
+4. `StudioResponse.regions` uses persisted explicit regions and derives a
+   fallback region from registered track event shadows only for older payloads
+   that have not yet been saved through the explicit-region path.
+5. Web passes `studio.regions` into `TrackBoard`, `StudioEditPage`, playback,
+   report focus, and practice waterfall surfaces.
+6. Studio assembly, region editing, playback, candidate review, practice
+   waterfall, and practice scoring consume pitch events from the same region
+   payload while staying on separate purpose-specific pages. All three visible
+   track surfaces keep the six track slots present; empty tracks have lanes
+   without event minis.
+7. The region editor may keep unsaved draft edits in browser session storage
+   while the user moves between studio sub-pages. Only `Save` mutates
+   `Studio.regions`, so other pages continue to reflect the last saved product
+   timeline; the API records the pre-save region material as a bounded restore
+   point in `ArrangementRegion.diagnostics.region_editor`.
+8. Lightweight UI choices stay local until commit. Candidate target choices,
+   overwrite checkboxes, tempo drafts, playback selection, recording-reference
+   selection, and live volume preview do not call the API until the user
+   approves, saves, registers, scores, restores, or commits the volume value.
+
+### Upload / Import
+
+1. Web requests an upload target. Studio creation exposes `PDF/MIDI/MusicXML`
+   score-file seeding, while each track row exposes recording-file upload for
+   audio extraction.
+2. Browser sends the file via direct upload or inline fallback. Local
+   direct-upload requests are streamed to storage instead of buffered in memory.
+   Inline base64 fallback is only for small transient direct-upload failures;
+   size-limit, validation, auth, expired-target, and permission failures must
+   surface as errors instead of being retried as larger JSON payloads. Studio
+   creation requests include a browser-generated `client_request_id`; if the
+   browser loses the response and retries the same start data, the API returns
+   the existing studio instead of creating a duplicate.
+3. For score-file studio starts, API creates a `tempo_review_required` job and
+   keeps tracks empty. The user confirms or edits BPM/meter; approval updates
+   the studio clock and enqueues registration. If an approved queued/running
+   import job loses its durable queue record, retry repairs the queue record and
+   schedules processing again. Later BPM correction is a separate repair action:
+   it does not reopen tempo review and does not change meter.
+4. PDF score jobs run preflight before expensive extraction. Text-only PDFs
+   fail immediately with user-facing guidance. Born-digital score PDFs use a
+   vector-first path and skip heavier recognition when the quality gate passes;
+   scanned/image-heavy PDFs run bounded recognition in page chunks with one
+   lightweight preprocessing retry. Timeout, memory, killed, no-output, and
+   below-quality results end as retryable failed jobs rather than long-running
+   pending work.
+5. API either registers clearly assigned symbolic seed parts directly or creates
+   an extraction job/candidate review path for ambiguous material. Audio
+   extraction first normalizes non-WAV containers into a WAV analysis source.
+6. Engine queue runs document/audio extraction when asynchronous extraction is
+   needed.
+7. Extracted or ambiguous material becomes reviewable candidates with
+   candidate-region previews.
+8. User approval registers candidates into explicit target-track regions and
+   clears target track event shadows. Bulk document approval registers every
+   unblocked valid part it can, leaves overwrite-blocked or failed parts
+   reviewable, and records the per-track outcome on the extraction job.
+9. If registration overwrites an existing track, API stores the previous active
+   material as an inactive track archive before replacing `Studio.regions`.
+   Original MIDI/MusicXML/PDF score material is pinned for that slot. Restore
+   first archives the current active material, then replaces all active regions
+   for the slot with the archived snapshots.
+   Recording-origin versions follow the same restore path: pinned original
+   recordings and inactive corrected versions do not affect the product
+   timeline until the user activates one. When studio BPM is corrected, archive
+   snapshots are rebased to the current studio BPM so restoring a version keeps
+   the active shared clock instead of restoring an old hidden tempo.
+10. Reloaded studio response exposes the registered track from `Studio.regions`.
+
+### Recording
+
+1. User clicks a track's recording control and chooses audible references for
+   that take: the six visible tracks remain listed, registered tracks can be
+   enabled, empty tracks are shown but disabled, and the metronome can be
+   toggled separately.
+2. Browser opens the microphone before the downbeat, then schedules selected
+   reference tracks and the metronome against studio timeline `0` so the
+   count-in and reference playback share one downbeat.
+3. If no reference tracks are selected, the browser keeps the existing
+   count-in-only path: metronome if selected, or silent visual count-in if not.
+4. The stopped take stays pending until the user registers or discards it.
+   Pending browser takes are stored as `Blob` plus object URL, filename,
+   content type, and byte size. MediaRecorder compressed containers are
+   preferred in this order: `audio/webm;codecs=opus`, `audio/ogg;codecs=opus`,
+   `audio/mp4`; the old WAV encoder is a fallback for browsers without usable
+   MediaRecorder support.
+5. Registration uses direct upload for the pending take when available, falling
+   back to base64 JSON only for small transient upload failures. HTTP 413, 422,
+   auth, permission, or expired-target failures must not retry through base64.
+   API stores retained audio as normalized WAV for analysis/edit/playback
+   consistency and starts voice extraction after registration.
+6. Extracted pitch material becomes a candidate or registered track. If the
+   target slot already had score/imported/generated material, the active
+   material is archived before the recording replaces it.
+7. The first registered recording for a slot is stored as a pinned `원본 녹음`
+   version. Recording/audio registration stores `audio_source_anchors` in the
+   active region diagnostics so each event can be traced back to its source
+   audio slice. Later edit-applied vocal renders cut source slices from those
+   anchors, then place, stretch, and pitch-shift them to the edited event
+   start, duration, and pitch. The output is saved as an inactive `보정본 N`
+   version and does not change playback, scoring, export, or the piano-roll
+   view until explicitly activated. The API render path prefers Rubber Band CLI
+   for pitch/time processing and falls back to librosa if the CLI is unavailable
+   or a segment fails to process.
+8. In Edit, selecting a version and pressing `이 Track을 사용` archives the
+   current active material as `previous_active`, restores the selected version's
+   snapshots into `Studio.regions`, and updates region and pitch-event views
+   from the studio response.
+
+### Scoring
+
+1. User opens scoring from the Practice page after choosing the target part.
+2. Reference tracks and metronome are selected in the scoring drawer; reference
+   selection is scoring input, while audible reference playback is practice UX.
+3. Browser records a take while selected audible references play on the shared
+   scheduled timeline. Scoring reference playback and microphone capture are
+   cancel/stop flows, not pause/resume flows.
+4. When recording stops, the take stays in a pending review dialog until the
+   user deletes it or starts scoring. The pending take is browser-local and
+   expires on the same 30-minute temporary retention window as track recording.
+5. After the user starts scoring, the browser submits recorded audio by
+   temporary direct upload when available, or falls back to base64 JSON only
+   under the same small transient-failure rule used by track recording. The
+   actual `performance_filename` reflects the Blob container extension.
+6. API stores a scoring job and returns quickly. The engine queue converts
+   submitted performance events or uploaded audio to the internal pitch-event
+   adapter. Uploaded scoring audio is first normalized through the shared
+   voice-analysis WAV decode path, so compressed browser recordings and direct
+   audio uploads are not passed straight to the WAV-only voice transcriber.
+7. Scoring compares those events with registered arrangement regions, preserving
+   public answer-region focus IDs through the internal adapter boundary.
+8. Report summaries appear in the studio/practice feed after activity polling;
+   the report detail endpoint returns issue/evidence detail on demand.
+9. Report detail links can reopen the region editor with query parameters that
+   focus the matching region and piano-roll event.
+10. If the studio BPM is corrected after a report is created, existing reports
+    are not recalculated. They remain visible as reference history, but users
+    must score again for beat/measure-accurate evidence under the corrected BPM.
+
+### AI Generation
+
+1. User asks a target track to generate from registered context tracks.
+2. API stores a generation job and returns quickly. The engine queue uses
+   deterministic harmony generation plus optional bounded LLM planning.
+3. The generator searches a slightly larger candidate pool, normalizes the
+   results, selects the most distinct candidates for review, and records context
+   and diversity diagnostics.
+   Percussion generation is routed to a dedicated rhythm engine instead of the
+   vocal harmony planner. It writes Kick/Snare/Clap/Hat/Rim-style unpitched hit
+   events on the same registration grid and bypasses LLM harmony planning.
+4. Generated candidates pass the shared registration rhythm contract before
+   review, so candidate and approved events use the same BPM/meter-derived
+   readable grid as imported material.
+5. Candidate review renders generated and imported material through the same
+   decision surface: target track, musical role/title, compact note-flow text,
+   compact facts, and concrete warnings. Raw diagnostic scores stay internal
+   unless they become a clear user-facing warning.
+6. Generated candidates remain reviewable until approved.
+7. Approved material becomes a region in the target track.
+8. If approval overwrites an active target track, the overwritten material is
+   archived first; generation, playback, and scoring still consume only the
+   restored or newly active `Studio.regions`.
+
+### Playback
+
+1. Toolbar or track controls choose source mode.
+2. Audio mode prefers retained audio clips when present.
+   If the active track material is a user-selected corrected version, that
+   corrected audio is the retained audio clip for playback. Inactive versions
+   are ignored. If a retained clip fails to fetch or decode but the active
+   region has playable events, browser playback converts that selected track to
+   guide-event playback inside the same synchronized session instead of failing
+   the whole mix.
+3. Event mode synthesizes playable events from `ArrangementRegion.pitch_events`
+   with the warm guide tone by default. If admin has uploaded a custom guide
+   sample, melodic event synthesis may use that sample transposed from its
+   configured root MIDI pitch; otherwise it falls back to the built-in synth.
+   Percussion events use the built-in percussion kit synth, while metronome
+   clicks keep the separate click voice.
+   Dense MIDI-style event sessions are scheduled by lookahead chunks against
+   the shared scheduled start so browser oscillator load does not mute playback.
+   Playback uses persisted event durations within studio precision and does not
+   stretch events to the registration rhythm grid. Custom guide instrument
+   configuration is cached briefly, while decoded original-audio buffers are
+   cached until the source path or track update time changes.
+4. Sync offset and volume are applied per track. Negative sync is preserved as
+   a user-visible timeline translation; barlines stay on the shared grid.
+5. Audio clips are scheduled from `TrackSlot.sync_offset_seconds`. Region pitch
+   events are scheduled from public `PitchEvent.start_seconds`, which is already
+   sync-resolved at the API boundary. Mixed original-audio and guide-event
+   sessions are prepared first, then started from one shared scheduled time.
+6. Playhead state drives region lane timing on the studio surface and
+   waterfall visual timing on the practice surface.
+
+### Export
+
+1. Studio exports provide MIDI and audio output from the active product
+   timeline. Export reads public `Studio.regions` and current track material,
+   not inactive archives, candidates, reports, or internal `TrackPitchEvent`
+   shadows.
+2. MIDI export creates one tempo track plus six visible track chunks so empty
+   lanes remain represented, while note events are written only for registered
+   pitch-event material.
+3. Audio export is requested through an export job. The user chooses MP3 or WAV
+   and selects 1-6 tracks. Each selected track uses either retained original
+   audio or synthesized guide sound when that source is available. If a tuned
+   recording version is active, it is the retained original-audio source for
+   that track; inactive versions are not exported.
+4. The server renders audio to WAV first. MP3 output is encoded from the
+   completed WAV mix. Output files are job artifacts under `jobs/{studio_id}/`
+   and are temporary cleanup targets.
+5. Negative effective starts are shifted together at export time so exported
+   MIDI/audio begins at time 0 without changing inter-track timing.
+
+## Removed Surface
+
+- Browser VexFlow rendering.
+- Engraved notation strip components.
+- Notation-specific rendering helpers.
+- PDF export endpoint and reportlab dependency.
+- Foundation documents that described the old notation UI as canonical.
+
+## Preserved Assets
+
+- FastAPI/Vite application shells.
+- Upload, asset, owner-token, admin, storage, direct-upload, and queue systems.
+- Admin UI is an operator console rather than a public product surface. It
+  uses explicit admin credentials, can rely on server-side password aliases for
+  IME/keyboard fallback, and exposes storage health, active/inactive studio
+  actions, stored-file cleanup, playback instrument replacement, and manual
+  queue recovery in one dense workspace.
+- Audio recording and playback primitives.
+- Voice pitch extraction math.
+- MIDI/MusicXML/PDF import adapters as extraction inputs.
+- MIDI export from region/event timeline.
+- Candidate review, diagnostics, AI generation, scoring, and report history.
+
+## Architecture Fitness Check
+
+The rebuild now follows the intended separation:
+
+- Product truth: `Studio.regions`, `ArrangementRegion.pitch_events`, and
+  `CandidateRegion.pitch_events`.
+- Restore snapshots: `Studio.track_material_archives` is inactive storage for
+  restoration and track material versions, stored outside the base studio
+  payload, and is not consumed by playback, scoring, practice, export, or AI
+  generation until restored into `Studio.regions`. Pinned original score and
+  original recording snapshots remain; non-pinned restore/tuned snapshots keep
+  the latest 3 per slot.
+- Alpha persistence: in R2 metadata mode, new studios, sidecars, queue state,
+  asset registry, and custom guide-tone config are stored in object storage
+  under `metadata/`. Cloud Run local disk remains cache/temp space.
+- Studio list reads use the compact R2 index and must not load region, report,
+  candidate, or archive detail. Full base payloads are loaded only for studio
+  entry, admin detail, activity, mutations, and exports.
+- Product surfaces: region lanes, selected-region piano roll, waterfall
+  practice, playback, and report focus consume region/event payloads only.
+- Bounded adapters: document, MIDI, PDF, voice, AI generation, registration,
+  and scoring can use `TrackPitchEvent` internally, then publish explicit
+  regions. Saved registered material should not keep a parallel
+  `TrackSlot.events` truth.
+- Active material checks: overwrite guards, queued placeholders, candidate
+  approval, generation, and job recovery check active `Studio.regions` first,
+  then only use legacy track shadows/audio metadata as a migration fallback.
+- No obsolete compatibility path: obsolete pre-region storage arrays, deprecated document source aliases,
+  and old report comparison IDs/counts are rejected
+  rather than translated.
+- Responsibility split: schemas own public/private contracts; repository and
+  command services orchestrate persistence and workflows; engines own
+  extraction, normalization, registration quality, generation, and scoring;
+  web consumes the public region contract.
+
+## Remaining Boundaries
+
+These are accepted residuals, not legacy UI anchors:
+
+- Report focus targets persisted answer regions. Performance-take focus remains
+  report-local until recorded takes become explicit persisted performance
+  regions.
+- PDF/MusicXML/MIDI ingestion should stay behind document-extraction naming and
+  never reintroduce notation rendering as a product surface.

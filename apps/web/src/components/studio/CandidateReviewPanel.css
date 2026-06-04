@@ -1,0 +1,359 @@
+.candidate-review {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid #c8cfd5;
+}
+
+.candidate-review__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: end;
+}
+
+.candidate-review__header h2 {
+  color: #111111;
+  font-size: 1.2rem;
+}
+
+.candidate-review__header strong {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #d6ad55;
+  border-radius: 4px;
+  background: #fff8e8;
+  color: #704400;
+  font-size: 0.86rem;
+}
+
+.candidate-review__list {
+  display: grid;
+  gap: 10px;
+}
+
+.candidate-review__item {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #c8cfd5;
+  border-left: 4px solid #b56b00;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.candidate-review__item--generated {
+  border-left-color: #247563;
+  background: #fbfdfc;
+}
+
+.candidate-review__topline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.candidate-review__title {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.candidate-review__title > span {
+  color: #246556;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.candidate-review__title h3 {
+  color: #111111;
+  font-size: 1.16rem;
+  line-height: 1.25;
+}
+
+.candidate-review__title p,
+.candidate-review__support {
+  color: #354450;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.candidate-review__verdict {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid #c8cfd5;
+  border-radius: 4px;
+  background: #f8fafb;
+}
+
+.candidate-review__verdict strong {
+  color: #111111;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.candidate-review__verdict span {
+  color: #44525e;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.candidate-review__verdict--recommended {
+  border-color: #74a66a;
+  background: #f0fbef;
+}
+
+.candidate-review__verdict--review {
+  border-color: #d6ad55;
+  background: #fff8e8;
+}
+
+.candidate-review__verdict--retry {
+  border-color: #c8706a;
+  background: #fff1ef;
+}
+
+.candidate-review__content {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(320px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.candidate-review__phrase {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.candidate-review__phrase-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.candidate-review__phrase-header strong {
+  color: #111111;
+  font-size: 0.92rem;
+}
+
+.candidate-review__phrase-header span,
+.candidate-review__phrase-note {
+  color: #64717c;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.candidate-review__phrase-line {
+  min-height: 72px;
+  padding: 12px 13px;
+  border: 1px solid #d6dde3;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.candidate-review__phrase-line p {
+  margin: 0;
+  color: #64717c;
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.candidate-review__review {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.candidate-review__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.candidate-review__facts div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid #dbe1e6;
+  border-radius: 4px;
+  background: #f8fafb;
+}
+
+.candidate-review__facts dt {
+  color: #54616c;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.candidate-review__facts dd {
+  margin: 0;
+  color: #111111;
+  font-size: 0.88rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.candidate-review__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate-review__tags li {
+  padding: 3px 7px;
+  border: 1px solid #b7d4cb;
+  border-radius: 999px;
+  background: #eef8f5;
+  color: #145f4d;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.candidate-review__notes {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid #d6ad55;
+  border-radius: 4px;
+  background: #fff8e8;
+}
+
+.candidate-review__notes strong {
+  color: #704400;
+  font-size: 0.84rem;
+}
+
+.candidate-review__notes ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate-review__notes li {
+  color: #384652;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.candidate-review__notes li span {
+  display: block;
+  color: #704400;
+  font-weight: 900;
+}
+
+.candidate-review__source-preview {
+  border: 1px solid #dbe1e6;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.candidate-review__source-preview summary {
+  width: fit-content;
+  cursor: pointer;
+  padding: 8px 10px;
+  color: #263541;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.candidate-review__source-preview div {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.candidate-review__source-preview img {
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border: 1px solid #c8cfd5;
+  background: #f8fafb;
+}
+
+.candidate-review__source-preview span {
+  color: #54616c;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.candidate-review__target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid #dbe1e6;
+  border-radius: 4px;
+  background: #f8fafb;
+}
+
+.candidate-review__target label {
+  display: grid;
+  gap: 5px;
+  min-width: min(100%, 260px);
+}
+
+.candidate-review__target label > span,
+.candidate-review__overwrite span {
+  color: #54616c;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.candidate-review__target select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #a9b4bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111111;
+  font-weight: 800;
+}
+
+.candidate-review__overwrite {
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+}
+
+.candidate-review__overwrite input {
+  width: 18px;
+  height: 18px;
+  accent-color: #b56b00;
+}
+
+.candidate-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 980px) {
+  .candidate-review__topline,
+  .candidate-review__content {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .candidate-review__facts {
+    grid-template-columns: 1fr;
+  }
+}

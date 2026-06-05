@@ -4,6 +4,18 @@ GigaStudy는 한 사람이 6성부 아카펠라 편곡을 만들고, 듣고, 연
 
 이 저장소는 공개 가능한 소스와 제품 문서를 담은 public repo입니다. 실제 개발 history, alpha 운영 credential, 업로드된 음원, 비공개 실험 데이터는 `GigaStudy-private`에서 관리합니다.
 
+## 커리어 근거로 읽는 법
+
+| 항목 | 내용 |
+| --- | --- |
+| 프로젝트 유형 | 개인 제품형 프로젝트 |
+| 내 역할 | 풀스택 개발, API/음악 이벤트 모델링, AI 기능 검증 기준 정리 |
+| 주력 기술 | FastAPI, React, TypeScript, Cloud Run, R2, PyMuPDF, librosa, LLM planning |
+| 보여주고 싶은 역량 | 복잡한 음악 입력을 하나의 product model과 검증 가능한 backend contract로 정리하는 역량 |
+| 대표 근거 | `PRODUCT_PURPOSE_AND_FUNCTIONS.md`, `CURRENT_ARCHITECTURE.md`, `EVALUATION_METRICS.md`, `AI_HARMONY_GENERATION_DESIGN.md` |
+
+제가 이 프로젝트에서 강조하고 싶은 부분은 음악 AI를 "그럴듯하게 생성"하는 것이 아니라, **PDF/MIDI/MusicXML/녹음/AI 후보가 같은 timeline truth를 공유하도록 만든 제품 모델링**입니다. `Studio -> Track -> Region -> PitchEvent` 계약을 중심에 두고 playback, practice, scoring, generation이 서로 다른 답을 내지 않도록 정리했습니다.
+
 ## 제품 정의
 
 GigaStudy는 악보 조판기가 아니라 연습 중심의 shared timeline studio입니다. PDF, MIDI, MusicXML, 직접 녹음, 파일 업로드, AI 생성 결과는 모두 같은 product model로 들어옵니다.
